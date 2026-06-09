@@ -1,0 +1,6 @@
+{
+  "name": "Inscripcions El Tast",
+  "description": "Gestió d'inscripcions i control de pagaments de les comparses de l'entitat El Tast de Vilanova i la Geltrú",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
