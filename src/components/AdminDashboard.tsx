@@ -279,7 +279,14 @@ export default function AdminDashboard({
         })
       });
 
-      const data = await response.json();
+      const responseText = await response.text();
+      let data: any = {};
+      try {
+        data = JSON.parse(responseText);
+      } catch (e) {
+        throw new Error(responseText.substring(0, 150) || `HTTP Error ${response.status}`);
+      }
+
       if (response.ok && data.success) {
         setSmtpTestStatus('success');
         setSmtpTestMsg(language === 'ca'

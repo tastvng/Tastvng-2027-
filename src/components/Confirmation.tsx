@@ -192,8 +192,15 @@ export default function Confirmation({ registration, onClear }: ConfirmationProp
       for (let i = 0; i < results.length; i++) {
         const res = results[i];
         if (!res.ok) {
-          const data = await res.json();
-          errorsList.push(`${emailList[i]}: ${data.error || 'SMTP Connection Error'}`);
+          const text = await res.text();
+          let errText = 'SMTP Connection Error';
+          try {
+            const data = JSON.parse(text);
+            errText = data.error || errText;
+          } catch {
+            errText = text.substring(0, 150) || `HTTP Error ${res.status}`;
+          }
+          errorsList.push(`${emailList[i]}: ${errText}`);
         }
       }
 
