@@ -207,12 +207,12 @@ export default function AdminDashboard({
   };
 
   // Test send mail with SMTP server
-  const handleTestSmtp = () => {
-    if (!smtpUsuari.trim() || !smtpContrasenya.trim()) {
+  const handleTestSmtp = async () => {
+    if (!smtpHost.trim() || !smtpPort.trim() || !smtpUsuari.trim() || !smtpContrasenya.trim()) {
       setSmtpTestStatus('error');
       setSmtpTestMsg(language === 'ca' 
-        ? "Si us plau, omple primer l'usuari i contrasenya per poder simular la connexió."
-        : "Por favor, rellena primero el usuario y contraseña para poder simular la conexión."
+        ? "Si us plau, omple tots els camps del servidor SMTP (host, port, usuari i contrasenya) abans de provar."
+        : "Por favor, rellena todos los campos del servidor SMTP (host, port, usuario y contraseña) antes de probar."
       );
       return;
     }
@@ -220,17 +220,89 @@ export default function AdminDashboard({
     setSmtpTestStatus('loading');
     setSmtpTestMsg('');
 
-    setTimeout(() => {
-      // Simulate real verification
-      setSmtpTestStatus('success');
-      setSmtpTestMsg(language === 'ca'
-        ? `Connexió SMTP establerta amb èxit! Enviat correu de prova a ${smtpTestDestinatari} a través de TLS amb el túnel SSL segur obert.`
-        : `¡Conexión SMTP establecida con éxito! Enviado correo de prueba a ${smtpTestDestinatari} a través de TLS con el túnel SSL seguro abierto.`
-      );
-      if (onAddLog) {
-        onAddLog(`📧 SMTP Test: S'ha enviat un correu de prova correctament a ${smtpTestDestinatari}`);
+    try {
+      const response = await fetch('/api/send-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          smtpConfig: {
+            host: smtpHost,
+            port: smtpPort,
+            user: smtpUsuari,
+            pass: smtpContrasenya,
+            senderName: language === 'ca' ? "Inscripcions El Tast" : "Inscripciones El Tast"
+          },
+          emailData: {
+            to: smtpTestDestinatari || smtpUsuari,
+            subject: language === 'ca' ? "Provador de Connexió SMTP - El Tast" : "Probador de Conexión SMTP - El Tast",
+            html: `
+              <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 30px; border: 1px solid #e1e1e6; border-radius: 20px; background-color: #ffffff;">
+                <div style="text-align: center; margin-bottom: 20px;">
+                  <span style="background-color: #ff0090; color: #ffffff; padding: 10px 20px; font-size: 14px; font-weight: bold; border-radius: 12px; letter-spacing: 1px; display: inline-block; text-transform: uppercase;">
+                    El Tast 2026
+                  </span>
+                </div>
+                <h2 style="color: #111115; font-size: 22px; font-weight: 800; text-align: center; margin-top: 15px; text-transform: uppercase;">
+                  ${language === 'ca' ? "Connexió SMTP Reeixida" : "Conexión SMTP Exitosa"}
+                </h2>
+                <div style="border-top: 2px solid #ff0090; margin: 20px 0;"></div>
+                <p style="font-size: 14px; line-height: 1.6; color: #333333;">
+                  ${language === 'ca'
+                    ? "Hola! Aquest és un correu real enviat de manera automàtica pel sistema d'inscripcions de la teva entitat <strong>El Tast de Vilanova i la Geltrú</strong> per comprovar el servei SMTP d'enviaments."
+                    : "¡Hola! Este es un correo real enviado de manera automática por el sistema de inscripciones de tu entidad <strong>El Tast de Vilanova i la Geltrú</strong> para comprobar el servicio SMTP de envíos."}
+                </p>
+                <div style="background-color: #f8f9fa; padding: 20px; border-radius: 14px; font-family: monospace; font-size: 12px; border: 1px solid #ebd4e0; color: #333333; margin: 25px 0;">
+                  <strong style="color: #ff0090;">⚙️ DETALLS DE CONNEXIÓ:</strong><br/>
+                  • Servidor: ${smtpHost}<br/>
+                  • Port: ${smtpPort}<br/>
+                  • Usuari: ${smtpUsuari}<br/>
+                  • Data/Hora: ${new Date().toLocaleString()}<br/>
+                  • Control: TLS Cryptographic Tunnel Actiu
+                </div>
+                <p style="font-size: 14px; line-height: 1.6; color: #333333;">
+                  ${language === 'ca'
+                    ? "Com que has rebut aquest missatge electrònic correctament, el canal SMTP està llest. A partir d'ara, els teus usuaris rebran automàticament els seus PDF/QR oficials d'inscripció al seu correu de forma instantània!"
+                    : "Puesto que has recibido este mensaje electrónico correctamente, el canal SMTP está listo. ¡A partir de ahora, tus usuarios recibirán automáticamente sus PDF/QR oficiales de inscripción en su correo de forma instantánea!"}
+                </p>
+                <div style="border-top: 1px solid #eaeaea; margin: 25px 0; padding-top: 15px; text-align: center;">
+                  <p style="font-size: 11px; color: #999999; margin: 0;">
+                    Desenvolupat per a l'Associació Cultural El Tast de Vilanova i la Geltrú.<br/>
+                    Aquest és un correu de control tècnic autoritzat pel vostre propi SMTP.
+                  </p>
+                </div>
+              </div>
+            `
+          }
+        })
+      });
+
+      const data = await response.json();
+      if (response.ok && data.success) {
+        setSmtpTestStatus('success');
+        setSmtpTestMsg(language === 'ca'
+          ? `Connexió de prova reeixida! S'ha enviat un correu real a ${smtpTestDestinatari || smtpUsuari} (MessageID: ${data.messageId}).`
+          : `¡Conexión de prueba exitosa! Se ha enviado un correo real a ${smtpTestDestinatari || smtpUsuari} (MessageID: ${data.messageId}).`
+        );
+        if (onAddLog) {
+          onAddLog(`📧 SMTP Real Test: S'ha enviat correctament un correu real a ${smtpTestDestinatari || smtpUsuari}`);
+        }
+      } else {
+        setSmtpTestStatus('error');
+        setSmtpTestMsg(language === 'ca'
+          ? `Error al connectar/autenticar en el servidor SMTP: ${data.error || 'Detall desconegut'}`
+          : `Error al conectar/autenticar en el servidor SMTP: ${data.error || 'Detalle desconocido'}`
+        );
       }
-    }, 2000);
+    } catch (err: any) {
+      console.error("Test SMTP error:", err);
+      setSmtpTestStatus('error');
+      setSmtpTestMsg(language === 'ca'
+        ? `Error de xarxa en provar SMTP backend: ${err.message || err}`
+        : `Error de red al probar SMTP backend: ${err.message || err}`
+      );
+    }
   };
 
   // Open oauth simulation modal

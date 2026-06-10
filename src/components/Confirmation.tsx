@@ -3,9 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { CheckCircle, Download, Mail, Calendar, MapPin, Printer, ArrowLeft, RefreshCw, Sparkle, ChevronDown, ChevronUp, Send, Inbox } from 'lucide-react';
+import { CheckCircle, Download, Mail, Calendar, MapPin, Printer, ArrowLeft, RefreshCw, Sparkle, ChevronDown, ChevronUp, Send, Inbox, AlertTriangle } from 'lucide-react';
 import { Inscripcio, CategoriaParella } from '../types';
 import { useLanguage } from '../LanguageContext';
 
@@ -17,7 +17,202 @@ interface ConfirmationProps {
 export default function Confirmation({ registration, onClear }: ConfirmationProps) {
   const { language, t } = useLanguage();
   const [showEmailPreview, setShowEmailPreview] = useState(false);
+  const [smtpStatus, setSmtpStatus] = useState<'idle' | 'sending' | 'success' | 'error' | 'not_configured'>('idle');
+  const [smtpError, setSmtpError] = useState('');
+
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&color=e6007e&data=${encodeURIComponent(registration.id)}`;
+
+  const sendRealEmail = async () => {
+    const host = localStorage.getItem('tast_smtp_host');
+    const port = localStorage.getItem('tast_smtp_port');
+    const user = localStorage.getItem('tast_smtp_usuari');
+    const pass = localStorage.getItem('tast_smtp_contrasenya');
+
+    if (!host || !port || !user || !pass) {
+      setSmtpStatus('not_configured');
+      return;
+    }
+
+    setSmtpStatus('sending');
+    setSmtpError('');
+
+    try {
+      const emailList = [registration.c1Email, registration.c2Email].filter(Boolean).filter(email => email.includes('@'));
+      if (emailList.length === 0) {
+        setSmtpStatus('error');
+        setSmtpError(language === 'ca' 
+          ? "S'ha trobat cap adreça de correu vàlida per als participants." 
+          : "No se encontró ninguna dirección de correo válida para los participantes.");
+        return;
+      }
+
+      const emailSubject = language === 'ca' 
+        ? `🎟️ El Tast Comparses 2026 - Confirmació d'Inscripció ${registration.codiSeguiment}`
+        : `🎟️ El Tast Comparses 2026 - Confirmación de Inscripción ${registration.codiSeguiment}`;
+
+      const extrasHtml = `
+        ${registration.teDomasBalco ? `<li>• 1x ${language === 'ca' ? 'Domàs de Balcó (Domás de Balcón)' : 'Colgadura de Balcón'}</li>` : ''}
+        ${registration.teMocadorsExtra > 0 ? `<li>• ${registration.teMocadorsExtra}x ${language === 'ca' ? 'Mocador oficial extra (Pañuelo extra)' : 'Pañuelo oficial extra'}</li>` : ''}
+      `;
+
+      const emailHtml = `
+        <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 30px; border: 1px solid #e1e1e6; border-radius: 24px; background-color: #ffffff; color: #111115;">
+          <div style="text-align: center; margin-bottom: 25px;">
+            <span style="background-color: #ff0090; color: #ffffff; padding: 10px 24px; font-size: 13px; font-weight: bold; border-radius: 50px; letter-spacing: 1px; display: inline-block; text-transform: uppercase;">
+              Associació Cultural El Tast
+            </span>
+          </div>
+          
+          <h1 style="color: #111115; font-size: 24px; font-weight: 800; text-align: center; margin: 15px 0 5px 0; text-transform: uppercase; letter-spacing: -0.5px;">
+            ${language === 'ca' ? "Preinscripció Confirmada!" : "¡Preinscripción Confirmada!"}
+          </h1>
+          <p style="font-size: 14px; text-align: center; color: #666670; margin-top: 0; margin-bottom: 25px;">
+            ${language === 'ca' 
+              ? "S'ha generat correctament el vostre comprovant per a les comparses 2026." 
+              : "Se ha generado correctamente vuestro comprobante para las comparsas 2026."}
+          </p>
+
+          <div style="border-top: 2px solid #ff0090; margin: 20px 0;"></div>
+
+          <div style="background-color: #fcf6fa; border: 1px dashed #ff0090; padding: 20px; border-radius: 18px; text-align: center; margin-bottom: 30px;">
+            <p style="font-size: 11px; font-family: monospace; color: #cc0073; margin: 0 0 5px 0; text-transform: uppercase; letter-spacing: 1.5px; font-weight: bold;">
+              ${language === 'ca' ? 'CODI DE SEGUIMENT OFICIAL' : 'CÓDIGO DE SEGUIMIENTO OFICIAL'}
+            </p>
+            <p style="font-size: 28px; font-family: monospace; font-weight: 900; color: #ff0090; margin: 0; letter-spacing: 1px;">
+              ${registration.codiSeguiment}
+            </p>
+          </div>
+
+          <!-- QR Container -->
+          <div style="text-align: center; margin: 30px 0;">
+            <div style="display: inline-block; padding: 15px; background-color: #f8f9fa; border: 1px solid #e1e1e6; border-radius: 20px;">
+              <img src="https://api.qrserver.com/v1/create-qr-code/?size=250x250&color=e6007e&data=${encodeURIComponent(registration.id)}" 
+                   alt="QR Code" width="180" height="180" style="display: block; border-radius: 10px;" />
+            </div>
+            <p style="font-size: 11px; color: #888890; margin-top: 10px; font-family: monospace; text-transform: uppercase; letter-spacing: 0.5px;">
+              ${language === 'ca' ? 'Presenteu aquest QR a Secretaria per pagar' : 'Presenten este QR en Secretaría para pagar'}
+            </p>
+          </div>
+
+          <!-- Couples and details table -->
+          <div style="border-top: 1px solid #e1e1e6; border-bottom: 1px solid #e1e1e6; padding: 15px 0; margin-bottom: 30px;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+              <tr>
+                <td style="padding: 8px 0; color: #666670; font-weight: bold; text-transform: uppercase; font-size: 11px;">
+                  ${language === 'ca' ? 'Parella:' : 'Pareja:'}
+                </td>
+                <td style="padding: 8px 0; text-align: right; font-weight: bold; color: #111115;">
+                  ${registration.c1Nom} &amp; ${registration.c2Nom}
+                </td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 0; color: #666670; font-weight: bold; text-transform: uppercase; font-size: 11px;">
+                  ${language === 'ca' ? 'Categoria (Categoría):' : 'Categoría:'}
+                </td>
+                <td style="padding: 8px 0; text-align: right; color: #111115; font-family: monospace;">
+                  ${registration.categoria === CategoriaParella.ADULT 
+                    ? (language === 'ca' ? 'PARELLA ADULTA' : 'PAREJA ADULTA') 
+                    : (language === 'ca' ? 'PARELLA JUVENIL' : 'PAREJA JUVENIL')}
+                </td>
+              </tr>
+              ${extrasHtml ? `
+              <tr>
+                <td style="padding: 8px 0; color: #666670; font-weight: bold; text-transform: uppercase; font-size: 11px; vertical-align: top;">
+                  ${language === 'ca' ? 'Complements:' : 'Complementos:'}
+                </td>
+                <td style="padding: 8px 0; text-align: right; color: #333338;">
+                  <ul style="margin: 0; padding: 0; list-style: none; line-height: 1.4;">
+                    ${extrasHtml}
+                  </ul>
+                </td>
+              </tr>
+              ` : ''}
+              <tr style="border-top: 1px dashed #e1e1e6;">
+                <td style="padding: 15px 0 8px 0; color: #111110; font-weight: 950; font-size: 14px; text-transform: uppercase;">
+                  ${language === 'ca' ? 'Total a Pagar:' : 'Total a Pagar:'}
+                </td>
+                <td style="padding: 15px 0 8px 0; text-align: right; font-weight: 950; color: #ff0090; font-size: 22px;">
+                  ${registration.preuCalculat}€
+                </td>
+              </tr>
+            </table>
+          </div>
+
+          <!-- Next Steps -->
+          <div style="background-color: #f8f9fa; padding: 20px; border-radius: 18px; margin-bottom: 30px;">
+            <h3 style="margin-top: 0; margin-bottom: 12px; font-size: 13px; color: #111115; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 850;">
+              ${language === 'ca' ? '📦 PROXIMS PASOS I RECOLLIDA:' : '📦 PRÓXIMOS PASOS Y RECOGIDA:'}
+            </h3>
+            <div style="font-size: 13px; color: #44444f; line-height: 1.6;">
+              <p style="margin: 0 0 8px 0;">
+                <strong>1. ${language === 'ca' ? "Sede d'El Tast" : "Sede de El Tast"}:</strong><br/>
+                ${language === 'ca'
+                  ? "Presenteu-vos a la secretaria de l'associació cultural amb el codi QR adjunt."
+                  : "Preséntense en la secretaría de la asociación cultural mostrando el código QR adjunto."}
+              </p>
+              <p style="margin: 0;">
+                <strong>2. ${language === 'ca' ? 'Dies de lliurament i caixa' : 'Días de entrega y cobro'}:</strong><br/>
+                ${language === 'ca'
+                  ? "Dimecres i divendres previs als dards de comparses, de 18:00h a 21:30h."
+                  : "Miércoles y viernes previos a los días de comparsas, de 18:00h a 21:30h."}
+              </p>
+            </div>
+          </div>
+
+          <div style="border-top: 1px solid #eaeaea; padding-top: 20px; text-align: center;">
+            <p style="font-size: 11px; color: #99999f; margin: 0; line-height: 1.5;">
+              <strong>Associació Cultural El Tast de Vilanova i la Geltrú</strong><br/>
+              Carrer de l'Aigua, 12, Vilanova i la Geltrú &bull; <a href="mailto:secretaria@eltast.cat" style="color: #ff0090; text-decoration: none;">secretaria@eltast.cat</a>
+            </p>
+          </div>
+        </div>
+      `;
+
+      // Dispatch to all emails
+      const sendPromises = emailList.map(emailTo => {
+        return fetch('/api/send-email', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            smtpConfig: { host, port, user, pass, senderName: language === 'ca' ? "Inscripcions El Tast" : "Inscripciones El Tast" },
+            emailData: {
+              to: emailTo,
+              subject: emailSubject,
+              html: emailHtml
+            }
+          })
+        });
+      });
+
+      const results = await Promise.all(sendPromises);
+      const errorsList: string[] = [];
+
+      for (let i = 0; i < results.length; i++) {
+        const res = results[i];
+        if (!res.ok) {
+          const data = await res.json();
+          errorsList.push(`${emailList[i]}: ${data.error || 'SMTP Connection Error'}`);
+        }
+      }
+
+      if (errorsList.length === 0) {
+        setSmtpStatus('success');
+      } else {
+        setSmtpStatus('error');
+        setSmtpError(errorsList.join(', '));
+      }
+    } catch (err: any) {
+      console.error("Error sending registration SMTP mail:", err);
+      setSmtpStatus('error');
+      setSmtpError(err.message || 'Error de conexión');
+    }
+  };
+
+  useEffect(() => {
+    sendRealEmail();
+  }, [registration.id]);
 
   const handlePrint = () => {
     window.print();
@@ -206,43 +401,94 @@ export default function Confirmation({ registration, onClear }: ConfirmationProp
         <div className="absolute top-[82px] -right-3 w-6 h-6 bg-[#fafafa] border-l border-zinc-200/80 rounded-full z-10 print:hidden" />
       </motion.div>
 
-      {/* Automated Email SMTP Live Simulation Banner/Panel */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 mb-6 text-white text-xs relative overflow-hidden shadow-2xl print:hidden animate-fade-in">
+      {/* Automated Email SMTP Live Status Banner/Panel */}
+      <div className={`border rounded-3xl p-5 mb-6 text-white text-xs relative overflow-hidden shadow-2xl print:hidden animate-fade-in transition-all duration-300 ${
+        smtpStatus === 'not_configured' ? 'bg-amber-950/80 border-amber-800' :
+        smtpStatus === 'sending' ? 'bg-zinc-900 border-zinc-800 animate-pulse' :
+        smtpStatus === 'success' ? 'bg-emerald-950/80 border-emerald-800' :
+        'bg-rose-950/80 border-rose-800'
+      }`}>
         {/* Glow effect */}
-        <div className="absolute top-0 right-0 w-32 h-32 bg-fuchsia-600/10 rounded-full blur-2xl pointer-events-none" />
+        <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full blur-2xl pointer-events-none" />
         
-        <div className="flex items-center justify-between gap-4 flex-wrap pb-3 border-b border-zinc-800/80">
-          <div className="flex items-center gap-2">
-            <span className="flex h-2.5 w-2.5 relative">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-            </span>
+        <div className="flex items-center justify-between gap-4 flex-wrap pb-3 border-b border-white/10">
+          <div className="flex items-center gap-3">
+            {smtpStatus === 'not_configured' && (
+              <span className="flex h-2.5 w-2.5 relative">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-amber-500"></span>
+              </span>
+            )}
+            {smtpStatus === 'sending' && (
+              <span className="flex h-2.5 w-2.5 relative">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-zinc-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-zinc-400"></span>
+              </span>
+            )}
+            {smtpStatus === 'success' && (
+              <span className="flex h-2.5 w-2.5 relative">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+              </span>
+            )}
+            {smtpStatus === 'error' && (
+              <span className="flex h-2.5 w-2.5 relative">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-450 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500 animate-pulse"></span>
+              </span>
+            )}
             <div>
-              <p className="font-bold text-zinc-200 flex items-center gap-1">
-                <Send size={12} className="text-emerald-400 animate-pulse" />
-                {language === 'ca' ? 'Servidor SMTP El Tast: Enviat' : 'Servidor SMTP El Tast: Enviado'}
+              <p className="font-bold text-zinc-100 flex items-center gap-1.5">
+                <Send size={12} className="text-fuchsia-400 animate-pulse" />
+                {smtpStatus === 'not_configured' && (language === 'ca' ? 'SMTP: Rebut simulador (Sense configurar)' : 'SMTP: Recibo simulado (Sin configurar)')}
+                {smtpStatus === 'sending' && (language === 'ca' ? 'Enviant correu real...' : 'Enviando correo real...')}
+                {smtpStatus === 'success' && (language === 'ca' ? 'Servidor SMTP El Tast: Enviat Real' : 'Servidor SMTP El Tast: Enviado Real')}
+                {smtpStatus === 'error' && (language === 'ca' ? "Error en l'enviament SMTP Real" : "Error en el envío SMTP Real")}
               </p>
-              <p className="text-[10px] text-zinc-500 font-mono">
-                {language === 'ca' ? 'Correu de confirmació enviat automàticament' : 'Correo de confirmación enviado automáticamente'}
+              <p className="text-[10px] text-zinc-400 font-mono">
+                {smtpStatus === 'not_configured' && (language === 'ca' ? 'Configureu el correu d’oficina al menú d’administrador per enviar-ne de reals' : 'Configure el correo de oficina en el menú de administrador de forma real')}
+                {smtpStatus === 'sending' && (language === 'ca' ? 'Connectant amb el servidor SMTP i autenticant...' : 'Conectando con el servidor SMTP y autenticando...')}
+                {smtpStatus === 'success' && (language === 'ca' ? 'Correu de confirmació lliurat correctament de forma real als participants' : 'Correo de confirmación entregado correctamente de forma real')}
+                {smtpStatus === 'error' && (language === 'ca' ? "No s'ha pogut enviar el correu" : "No se ha podido enviar el correo")}
               </p>
             </div>
           </div>
           
           <button
             onClick={() => setShowEmailPreview(!showEmailPreview)}
-            className="flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 active:bg-zinc-750 text-white font-bold py-1.5 px-3 rounded-lg border border-zinc-700 transition cursor-pointer text-[10px]"
+            className="flex items-center gap-1.5 bg-white/10 hover:bg-white/20 active:bg-white/15 text-white font-bold py-1.5 px-3 rounded-lg border border-white/10 transition cursor-pointer text-[10px]"
           >
             <Inbox size={12} className="text-fuchsia-400 animate-bounce" />
-            {language === 'ca' ? 'Veure correu rebut' : 'Ver correo recibido'}
+            {language === 'ca' ? 'Veure correu redactat' : 'Ver correo redactado'}
             {showEmailPreview ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
           </button>
         </div>
 
         {/* Real-time micro details */}
         <div className="mt-3 space-y-1 font-mono text-[10px] text-zinc-400">
-          <p><span className="text-zinc-600 font-bold">DE:</span> <span className="text-fuchsia-400 font-bold">secretaria@eltast.cat</span> <span className="text-[8px] bg-white/5 border border-white/10 px-1 py-0.5 rounded text-zinc-500 uppercase ml-1">Tast Server</span></p>
+          <p><span className="text-zinc-600 font-bold">DE:</span> <span className="text-fuchsia-400 font-bold">{localStorage.getItem('tast_smtp_usuari') || 'secretaria@eltast.cat'}</span> <span className="text-[8px] bg-white/5 border border-white/10 px-1 py-0.5 rounded text-zinc-300 uppercase ml-1 uppercase">Live Connection</span></p>
           <p><span className="text-zinc-600 font-bold">A:</span> <span className="text-zinc-200 font-bold">{registration.c1Email}</span>, <span className="text-zinc-200 font-bold">{registration.c2Email}</span></p>
-          <p><span className="text-zinc-600 font-bold">ASSUMPTE / ASUNTO:</span> <span className="text-zinc-300 font-sans">{language === 'ca' ? `🎟️ El Tast Comparses 2026 - Registre d'Inscripció ${registration.codiSeguiment}` : `🎟️ El Tast Comparses 2026 - Registro de Inscripción ${registration.codiSeguiment}`}</span></p>
+          <p><span className="text-zinc-600 font-bold">ASSUMPTE / ASUNTO:</span> <span className="text-zinc-200 font-sans">{language === 'ca' ? `🎟️ El Tast Comparses 2026 - Confirmació d'Inscripció ${registration.codiSeguiment}` : `🎟️ El Tast Comparses 2026 - Confirmación de Inscripción ${registration.codiSeguiment}`}</span></p>
+          
+          {smtpStatus === 'error' && (
+            <div className="mt-3 p-3 bg-red-950/40 border border-red-900 rounded-xl space-y-1 text-left font-sans text-xs">
+              <p className="font-sans font-bold text-red-300 flex items-center gap-1.5">
+                <AlertTriangle size={14} className="text-red-450" />
+                {language === 'ca' ? 'Motiu del rebuig del servidor:' : 'Motivo del rechazo del servidor:'}
+              </p>
+              <p className="text-red-200 select-all font-mono break-all text-[10px] bg-black/20 p-2 rounded-lg my-1">
+                {smtpError}
+              </p>
+              <div className="text-red-450 text-[10px] pt-1 leading-relaxed space-y-1">
+                <p className="font-bold">{language === 'ca' ? '💡 Com solucionar la incidència:' : '💡 Cómo solucionar la incidencia:'}</p>
+                <ul className="list-disc pl-4 space-y-0.5">
+                  <li>{language === 'ca' ? "S'està utilitzant Gmail? Cal activar la Verificació en 2 passos i generar una \"Contrasenya d'aplicació\"." : "¿Se está usando Gmail? Se debe activar la Verificación en 2 pasos y configurar una \"Contraseña de aplicación\"."}</li>
+                  <li>{language === 'ca' ? "Comproveu si l'Host i el Port coincideixen (ex: Gmail té l'host smtp.gmail.com i port 587)." : "Comprobad si el Host y Puerto coinciden (ej: Gmail tiene el host smtp.gmail.com y el puerto 587)."}</li>
+                  <li>{language === 'ca' ? "Assegureu-vos que l'usuari coincideix exactament amb l'adreça de correu remitent." : "Aseguraos de que el usuario coincide exactamente con la dirección de correo remitente."}</li>
+                </ul>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Toggleable high-fidelity Email body inside simulated browser frame */}
