@@ -110,9 +110,7 @@ async function startServer() {
 
   // Vite development server / static production delivery
   const distPath = path.join(process.cwd(), 'dist');
-  const hasDist = fs.existsSync(path.join(distPath, 'index.html'));
-  const isCjsBundle = typeof __filename !== "undefined" && __filename.endsWith("server.cjs");
-  const isProduction = process.env.NODE_ENV === "production" || isCjsBundle || (hasDist && process.env.NODE_ENV !== "development");
+  const isProduction = process.env.NODE_ENV !== "development";
 
   if (!isProduction) {
     console.log("Starting server in development mode with Vite middleware...");
@@ -131,7 +129,7 @@ async function startServer() {
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server listening on port ${PORT} with environment ${process.env.NODE_ENV || 'development'} (detected ${isProduction ? 'production' : 'development'} mode)`);
+    console.log(`Server listening on port ${PORT} with environment ${process.env.NODE_ENV || 'production'} (detected ${isProduction ? 'production' : 'development'} mode)`);
   });
 }
 
