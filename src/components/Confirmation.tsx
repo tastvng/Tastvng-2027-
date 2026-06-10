@@ -3,9 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { CheckCircle, Download, Mail, Calendar, MapPin, Printer, ArrowLeft, RefreshCw, Sparkle } from 'lucide-react';
+import { CheckCircle, Download, Mail, Calendar, MapPin, Printer, ArrowLeft, RefreshCw, Sparkle, ChevronDown, ChevronUp, Send, Inbox } from 'lucide-react';
 import { Inscripcio, CategoriaParella } from '../types';
 import { useLanguage } from '../LanguageContext';
 
@@ -16,6 +16,7 @@ interface ConfirmationProps {
 
 export default function Confirmation({ registration, onClear }: ConfirmationProps) {
   const { language, t } = useLanguage();
+  const [showEmailPreview, setShowEmailPreview] = useState(false);
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&color=e6007e&data=${encodeURIComponent(registration.id)}`;
 
   const handlePrint = () => {
@@ -204,6 +205,134 @@ export default function Confirmation({ registration, onClear }: ConfirmationProp
         <div className="absolute top-[82px] -left-3 w-6 h-6 bg-[#fafafa] border-r border-zinc-200/80 rounded-full z-10 print:hidden" />
         <div className="absolute top-[82px] -right-3 w-6 h-6 bg-[#fafafa] border-l border-zinc-200/80 rounded-full z-10 print:hidden" />
       </motion.div>
+
+      {/* Automated Email SMTP Live Simulation Banner/Panel */}
+      <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 mb-6 text-white text-xs relative overflow-hidden shadow-2xl print:hidden animate-fade-in">
+        {/* Glow effect */}
+        <div className="absolute top-0 right-0 w-32 h-32 bg-fuchsia-600/10 rounded-full blur-2xl pointer-events-none" />
+        
+        <div className="flex items-center justify-between gap-4 flex-wrap pb-3 border-b border-zinc-800/80">
+          <div className="flex items-center gap-2">
+            <span className="flex h-2.5 w-2.5 relative">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+            </span>
+            <div>
+              <p className="font-bold text-zinc-200 flex items-center gap-1">
+                <Send size={12} className="text-emerald-400 animate-pulse" />
+                {language === 'ca' ? 'Servidor SMTP El Tast: Enviat' : 'Servidor SMTP El Tast: Enviado'}
+              </p>
+              <p className="text-[10px] text-zinc-500 font-mono">
+                {language === 'ca' ? 'Correu de confirmació enviat automàticament' : 'Correo de confirmación enviado automáticamente'}
+              </p>
+            </div>
+          </div>
+          
+          <button
+            onClick={() => setShowEmailPreview(!showEmailPreview)}
+            className="flex items-center gap-1.5 bg-zinc-800 hover:bg-zinc-700 active:bg-zinc-750 text-white font-bold py-1.5 px-3 rounded-lg border border-zinc-700 transition cursor-pointer text-[10px]"
+          >
+            <Inbox size={12} className="text-fuchsia-400 animate-bounce" />
+            {language === 'ca' ? 'Veure correu rebut' : 'Ver correo recibido'}
+            {showEmailPreview ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+          </button>
+        </div>
+
+        {/* Real-time micro details */}
+        <div className="mt-3 space-y-1 font-mono text-[10px] text-zinc-400">
+          <p><span className="text-zinc-600 font-bold">DE:</span> <span className="text-fuchsia-400 font-bold">secretaria@eltast.cat</span> <span className="text-[8px] bg-white/5 border border-white/10 px-1 py-0.5 rounded text-zinc-500 uppercase ml-1">Tast Server</span></p>
+          <p><span className="text-zinc-600 font-bold">A:</span> <span className="text-zinc-200 font-bold">{registration.c1Email}</span>, <span className="text-zinc-200 font-bold">{registration.c2Email}</span></p>
+          <p><span className="text-zinc-600 font-bold">ASSUMPTE / ASUNTO:</span> <span className="text-zinc-300 font-sans">{language === 'ca' ? `🎟️ El Tast Comparses 2026 - Registre d'Inscripció ${registration.codiSeguiment}` : `🎟️ El Tast Comparses 2026 - Registro de Inscripción ${registration.codiSeguiment}`}</span></p>
+        </div>
+
+        {/* Toggleable high-fidelity Email body inside simulated browser frame */}
+        {showEmailPreview && (
+          <motion.div 
+            initial={{ opacity: 0, y: -5 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mt-4 border border-zinc-805 rounded-2xl overflow-hidden bg-white text-zinc-900 w-full"
+          >
+            {/* Mock browser chrome window header bar */}
+            <div className="bg-zinc-50 px-4 py-2 border-b border-zinc-200/70 flex items-center justify-between">
+              <div className="flex gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-red-400 block" />
+                <span className="w-2.5 h-2.5 rounded-full bg-yellow-400 block" />
+                <span className="w-2.5 h-2.5 rounded-full bg-green-400 block" />
+              </div>
+              <span className="text-[9px] font-mono text-zinc-400 tracking-tight">https://secretaria.eltast.cat/inbox/webmail-viewer</span>
+              <span className="w-6" />
+            </div>
+
+            {/* Email design frame */}
+            <div className="p-4 sm:p-6 space-y-4 font-sans text-xs bg-zinc-100">
+              <div className="bg-white p-5 rounded-2xl border border-zinc-200/70 shadow-md max-w-sm mx-auto space-y-4">
+                {/* Email logo header */}
+                <div className="text-center pb-3 border-b border-zinc-100 flex items-center justify-center gap-1.5 flex-col">
+                  <div className="w-10 h-10 rounded-xl bg-fuchsia-600 text-white flex items-center justify-center font-black tracking-wider text-sm shadow-md">
+                    T
+                  </div>
+                  <h3 className="font-black text-xs tracking-tight text-zinc-900 mt-1">
+                    EL TAST <span className="text-fuchsia-600">VILANOVA</span>
+                  </h3>
+                  <span className="text-[8px] font-mono font-bold tracking-wider text-zinc-400 uppercase">
+                    {language === 'ca' ? "SESSió INFORMATIVA 2026" : "SESIÓN INFORMATIVA 2026"}
+                  </span>
+                </div>
+
+                {/* Email text body */}
+                <div className="space-y-3 leading-relaxed text-zinc-650">
+                  <p className="font-black text-zinc-900 text-center text-xs">
+                    {language === 'ca' ? `Hola, ${registration.c1Nom} i ${registration.c2Nom}!` : `¡Hola, ${registration.c1Nom} y ${registration.c2Nom}!`}
+                  </p>
+                  <p className="text-center text-[11px] leading-relaxed">
+                    {language === 'ca' 
+                      ? "La vostra preinscripció ha estat rebuda amb èxit. A continuació us facilitem el vostre codi de seguiment oficial i comprobat QR." 
+                      : "Vuestra preinscripción ha sido recibida con éxito. A continuación os facilitamos vuestro código de seguimiento oficial y comprobante QR."}
+                  </p>
+
+                  <div className="bg-zinc-50 border border-zinc-200/50 rounded-xl p-3.5 text-center space-y-1">
+                    <p className="text-[8px] font-mono text-zinc-400 uppercase font-black tracking-widest leading-none">
+                      {language === 'ca' ? 'CODI DE SEGUIMENT' : 'CÓDIGO DE SEGUIMIENTO'}
+                    </p>
+                    <p className="text-base font-mono font-black text-fuchsia-600 tracking-tight">{registration.codiSeguiment}</p>
+                    <div className="pt-2 border-t border-zinc-200/40 flex justify-between text-[10px]">
+                      <span className="text-zinc-500 font-bold">{language === 'ca' ? 'Total preu de parella:' : 'Total precio de pareja:'}</span>
+                      <span className="font-mono font-black text-zinc-800">{registration.preuCalculat}€</span>
+                    </div>
+                  </div>
+
+                  {/* Embedded small QR */}
+                  <div className="flex flex-col items-center justify-center py-2 bg-zinc-50 rounded-xl border border-zinc-150 p-2.5 gap-2">
+                    <img 
+                      src={qrUrl} 
+                      alt="QR" 
+                      className="w-24 h-24 block opacity-90 border border-zinc-200 p-1 bg-white rounded-lg"
+                      referrerPolicy="no-referrer"
+                    />
+                    <span className="text-[8px] font-mono text-zinc-400 font-bold uppercase text-center tracking-wider">
+                      {language === 'ca' ? 'Mostreu el QR dels mòbils a secretaria' : 'Muestren el QR de los móviles en secretaría'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Email Button Mock */}
+                <div className="text-center pt-2">
+                  <div className="inline-block bg-fuchsia-600 hover:bg-fuchsia-700 text-white font-bold text-[10px] px-4 py-2 rounded-xl uppercase tracking-wider font-sans">
+                    {language === 'ca' ? 'Anar a la meva fitxa' : 'Ir a mi ficha'}
+                  </div>
+                </div>
+
+                {/* Email Footer disclaimer */}
+                <div className="text-center text-[8px] text-zinc-400 pt-3 border-t border-zinc-100 leading-normal space-y-0.5">
+                  <p className="font-bold">Secretaria General d'Associació Cultural El Tast de Vilanova</p>
+                  <p>Carrer de l'Aigua, 12, Vilanova i la Geltrú</p>
+                  <p className="font-bold text-fuchsia-650">secretaria@eltast.cat</p>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </div>
 
       {/* Buttons actions row */}
       <div className="flex flex-col sm:flex-row gap-3 print:hidden">

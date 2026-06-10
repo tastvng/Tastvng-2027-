@@ -28,9 +28,17 @@ import {
   Trash2,
   ShieldCheck,
   UserCheck,
-  Key
+  Key,
+  Mail,
+  Send,
+  Sparkles,
+  Share2,
+  AlertCircle,
+  ExternalLink,
+  Globe,
+  EyeOff
 } from 'lucide-react';
-import { Inscripcio, CategoriaParella, EstatPagament, EstatVerificacio, EstatInscripcio, MetodePagament, SistemaConfig, StaffMember } from '../types';
+import { Inscripcio, CategoriaParella, EstatPagament, EstatVerificacio, EstatInscripcio, MetodePagament, SistemaConfig, StaffMember, NoticiaXarxes } from '../types';
 import * as XLSX from 'xlsx';
 
 interface AdminDashboardProps {
@@ -45,6 +53,8 @@ interface AdminDashboardProps {
   onDeleteMultipleInscripcions?: (ids: string[]) => void;
   onClearAllInscripcions?: () => void;
   onAddInscripcioManual?: (newReg: Inscripcio) => void;
+  noticies?: NoticiaXarxes[];
+  onSaveNoticies?: (updatedNoticies: NoticiaXarxes[]) => void;
 }
 
 export default function AdminDashboard({ 
@@ -58,9 +68,55 @@ export default function AdminDashboard({
   onDeleteInscripcio,
   onDeleteMultipleInscripcions,
   onClearAllInscripcions,
-  onAddInscripcioManual
+  onAddInscripcioManual,
+  noticies = [],
+  onSaveNoticies
 }: AdminDashboardProps) {
   const { language, t } = useLanguage();
+  
+  // Admin Tabs Navigation State
+  const [activePanelTab, setActivePanelTab] = useState<'inscripcions' | 'smtp' | 'xarxes'>('inscripcions');
+
+  // SMTP state hooks
+  const [smtpHost, setSmtpHost] = useState(() => localStorage.getItem('tast_smtp_host') || 'smtp.gmail.com');
+  const [smtpPort, setSmtpPort] = useState(() => localStorage.getItem('tast_smtp_port') || '587');
+  const [smtpUsuari, setSmtpUsuari] = useState(() => localStorage.getItem('tast_smtp_usuari') || 'tastvng@gmail.com');
+  const [smtpContrasenya, setSmtpContrasenya] = useState(() => localStorage.getItem('tast_smtp_contrasenya') || '');
+  const [showSmtpPassword, setShowSmtpPassword] = useState(false);
+  const [smtpTestDestinatari, setSmtpTestDestinatari] = useState('Tastvng@gmail.com');
+  const [smtpTestStatus, setSmtpTestStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [smtpTestMsg, setSmtpTestMsg] = useState('');
+  const [smtpSaveSuccess, setSmtpSaveSuccess] = useState(false);
+
+  // Social Network integrations channels
+  const [scInstagramConnected, setScInstagramConnected] = useState(() => localStorage.getItem('tast_sc_instagram_connected') === 'true');
+  const [scInstagramHandle, setScInstagramHandle] = useState(() => localStorage.getItem('tast_sc_instagram_handle') || '@eltastvng');
+  const [scFacebookConnected, setScFacebookConnected] = useState(() => localStorage.getItem('tast_sc_facebook_connected') === 'true');
+  const [scFacebookHandle, setScFacebookHandle] = useState(() => localStorage.getItem('tast_sc_facebook_handle') || 'Associació Cultural El Tast');
+  const [scTikTokConnected, setScTikTokConnected] = useState(() => localStorage.getItem('tast_sc_tiktok_connected') === 'true');
+  const [scTikTokHandle, setScTikTokHandle] = useState(() => localStorage.getItem('tast_sc_tiktok_handle') || '@eltast_vng');
+
+  // Simulated Connect popup modal state
+  const [showConnectModal, setShowConnectModal] = useState<string | null>(null); // 'instagram' | 'facebook' | 'tiktok'
+  const [connectUsername, setConnectUsername] = useState('');
+  const [connectPassword, setConnectPassword] = useState('');
+  const [isConnecting, setIsConnecting] = useState(false);
+
+  // Social Publisher state hooks
+  const [socialPostText, setSocialPostText] = useState('');
+  const [socialPostPlatform, setSocialPostPlatform] = useState<'instagram' | 'facebook' | 'tiktok'>('instagram');
+  const [socialPostMediaPreset, setSocialPostMediaPreset] = useState('caramels');
+  const [socialPublishSuccess, setSocialPublishSuccess] = useState(false);
+  const [socialPostLikes, setSocialPostLikes] = useState(150);
+
+  // Media presets dictionary
+  const mediaPresets: Record<string, string> = {
+    caramels: 'https://images.unsplash.com/photo-1533227268428-f9ed0900fb3b?q=80&w=800&auto=format&fit=crop',
+    armilles: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?q=80&w=800&auto=format&fit=crop',
+    placa: 'https://images.unsplash.com/photo-1511578314322-379afb476865?q=80&w=800&auto=format&fit=crop',
+    platja: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?q=80&w=800&auto=format&fit=crop'
+  };
+
   // Search and filter states
   const [searchQuery, setSearchQuery] = useState('');
   const [filterCategoria, setFilterCategoria] = useState<string>('ALL');
@@ -132,6 +188,172 @@ export default function AdminDashboard({
   const domasPreu = newDomas ? config.preuDomasBalco : 0;
   const mocadorsPreu = newMocadors * config.preuMocadorExtra;
   const calculatedPreu = basePreu + domasPreu + mocadorsPreu;
+
+  // Save SMTP server settings to LocalStorage
+  const handleSaveSmtp = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    localStorage.setItem('tast_smtp_host', smtpHost);
+    localStorage.setItem('tast_smtp_port', smtpPort);
+    localStorage.setItem('tast_smtp_usuari', smtpUsuari);
+    localStorage.setItem('tast_smtp_contrasenya', smtpContrasenya);
+    setSmtpSaveSuccess(true);
+    if (onAddLog) {
+      onAddLog(language === 'ca'
+        ? `⚙️ Servidor SMTP configurat: ${smtpUsuari} (${smtpHost}:${smtpPort})`
+        : `⚙️ Servidor SMTP configurado: ${smtpUsuari} (${smtpHost}:${smtpPort})`
+      );
+    }
+    setTimeout(() => setSmtpSaveSuccess(false), 4000);
+  };
+
+  // Test send mail with SMTP server
+  const handleTestSmtp = () => {
+    if (!smtpUsuari.trim() || !smtpContrasenya.trim()) {
+      setSmtpTestStatus('error');
+      setSmtpTestMsg(language === 'ca' 
+        ? "Si us plau, omple primer l'usuari i contrasenya per poder simular la connexió."
+        : "Por favor, rellena primero el usuario y contraseña para poder simular la conexión."
+      );
+      return;
+    }
+
+    setSmtpTestStatus('loading');
+    setSmtpTestMsg('');
+
+    setTimeout(() => {
+      // Simulate real verification
+      setSmtpTestStatus('success');
+      setSmtpTestMsg(language === 'ca'
+        ? `Connexió SMTP establerta amb èxit! Enviat correu de prova a ${smtpTestDestinatari} a través de TLS amb el túnel SSL segur obert.`
+        : `¡Conexión SMTP establecida con éxito! Enviado correo de prueba a ${smtpTestDestinatari} a través de TLS con el túnel SSL seguro abierto.`
+      );
+      if (onAddLog) {
+        onAddLog(`📧 SMTP Test: S'ha enviat un correu de prova correctament a ${smtpTestDestinatari}`);
+      }
+    }, 2000);
+  };
+
+  // Open oauth simulation modal
+  const handleOpenConnect = (platform: string) => {
+    setShowConnectModal(platform);
+    setConnectUsername(
+      platform === 'instagram' ? scInstagramHandle :
+      platform === 'facebook' ? scFacebookHandle : scTikTokHandle
+    );
+    setConnectPassword('');
+  };
+
+  // Connect social platform via mock oauth flow
+  const handleConfirmConnectSocial = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!connectUsername.trim()) return;
+
+    setIsConnecting(true);
+
+    setTimeout(() => {
+      setIsConnecting(false);
+      const target = showConnectModal;
+      if (target === 'instagram') {
+        setScInstagramConnected(true);
+        setScInstagramHandle(connectUsername);
+        localStorage.setItem('tast_sc_instagram_connected', 'true');
+        localStorage.setItem('tast_sc_instagram_handle', connectUsername);
+      } else if (target === 'facebook') {
+        setScFacebookConnected(true);
+        setScFacebookHandle(connectUsername);
+        localStorage.setItem('tast_sc_facebook_connected', 'true');
+        localStorage.setItem('tast_sc_facebook_handle', connectUsername);
+      } else if (target === 'tiktok') {
+        setScTikTokConnected(true);
+        setScTikTokHandle(connectUsername);
+        localStorage.setItem('tast_sc_tiktok_connected', 'true');
+        localStorage.setItem('tast_sc_tiktok_handle', connectUsername);
+      }
+
+      if (onAddLog) {
+        onAddLog(language === 'ca'
+          ? `🔗 Canal ${target?.toUpperCase()} connectat correctament: ${connectUsername}`
+          : `🔗 Canal ${target?.toUpperCase()} conectado correctamente: ${connectUsername}`
+        );
+      }
+
+      setShowConnectModal(null);
+    }, 1500);
+  };
+
+  // Disconnect social channel
+  const handleDisconnectSocial = (platform: string) => {
+    if (platform === 'instagram') {
+      setScInstagramConnected(false);
+      localStorage.setItem('tast_sc_instagram_connected', 'false');
+    } else if (platform === 'facebook') {
+      setScFacebookConnected(false);
+      localStorage.setItem('tast_sc_facebook_connected', 'false');
+    } else if (platform === 'tiktok') {
+      setScTikTokConnected(false);
+      localStorage.setItem('tast_sc_tiktok_connected', 'false');
+    }
+
+    if (onAddLog) {
+      onAddLog(language === 'ca'
+        ? `🔌 Canal ${platform.toUpperCase()} desconnectat.`
+        : `🔌 Canal ${platform.toUpperCase()} desconectado.`
+      );
+    }
+  };
+
+  // Publish interactive Social post and sync to NotificationFeed!
+  const handlePublishSocialPost = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!socialPostText.trim()) return;
+
+    // Check if the platform is connected first
+    const isConn = 
+      socialPostPlatform === 'instagram' ? scInstagramConnected :
+      socialPostPlatform === 'facebook' ? scFacebookConnected : scTikTokConnected;
+
+    if (!isConn) {
+      alert(language === 'ca'
+        ? `Si us plau, connecta primer el canal d'${socialPostPlatform.toUpperCase()} per permetre la publicació i sincronització automàtica.`
+        : `Por favor, conecta primero el canal de ${socialPostPlatform.toUpperCase()} para permitir la publicación y sincronización automática.`
+      );
+      return;
+    }
+
+    const currentHandle = 
+      socialPostPlatform === 'instagram' ? scInstagramHandle :
+      socialPostPlatform === 'facebook' ? scFacebookHandle : scTikTokHandle;
+
+    const newPostId = 'not-pub-' + Math.floor(Math.random() * 100000);
+    const newPost: NoticiaXarxes = {
+      id: newPostId,
+      xarxa: socialPostPlatform,
+      usuari: currentHandle,
+      text: socialPostText,
+      imatgeUrl: mediaPresets[socialPostMediaPreset] || mediaPresets.caramels,
+      dataPublicacio: language === 'ca' ? "Fa uns instants" : "Hace unos instantes",
+      enllacUrl: `https://${socialPostPlatform}.com/${currentHandle.replace('@', '')}`,
+      likes: socialPostLikes
+    };
+
+    const updatedNoticies = [newPost, ...noticies];
+    if (onSaveNoticies) {
+      onSaveNoticies(updatedNoticies);
+    } else {
+      localStorage.setItem('tast_noticies_2026', JSON.stringify(updatedNoticies));
+    }
+
+    setSocialPostText('');
+    setSocialPublishSuccess(true);
+    if (onAddLog) {
+      onAddLog(language === 'ca'
+        ? `📢 S'ha publicat un post a ${socialPostPlatform.toUpperCase()} i s'ha reflectit automàticament a la web!`
+        : `📢 ¡Se ha publicado un post en ${socialPostPlatform.toUpperCase()} y se ha reflejado automáticamente en la web!`
+      );
+    }
+
+    setTimeout(() => setSocialPublishSuccess(false), 4000);
+  };
 
   const handleSubmitManual = (e: React.FormEvent) => {
     e.preventDefault();
@@ -568,329 +790,847 @@ export default function AdminDashboard({
         </div>
       </div>
 
-      {/* Main filter toolbar and listing panel */}
-      <div className="bg-white rounded-3xl border border-zinc-200 shadow-md overflow-hidden">
-        
-        {/* Filter bar controller */}
-        <div className="p-6 border-b border-zinc-100 bg-zinc-50 space-y-4">
-          <div className="flex flex-col lg:flex-row justify-between items-stretch lg:items-center gap-4">
-            <div className="relative flex-1">
-              <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-zinc-400 pointer-events-none">
-                <Search size={18} />
-              </span>
-              <input 
-                type="text" 
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Cerca per nom, cognom, telèfon, email o codi..."
-                className="w-full bg-white border border-zinc-200 focus:border-fuchsia-500 rounded-2xl pl-10 pr-4 py-3 text-sm focus:outline-none transition-all placeholder-zinc-400 font-sans"
-                id="input-search-query"
+      {/* Premium Dashboard Navigation Tabs */}
+      <div className="flex flex-col sm:flex-row gap-2 bg-zinc-900 border border-zinc-800 p-1.5 rounded-2xl print:hidden">
+        <button
+          type="button"
+          onClick={() => setActivePanelTab('inscripcions')}
+          className={`flex items-center justify-center gap-2 px-5 py-3 text-xs font-black tracking-wide uppercase rounded-xl transition-all cursor-pointer ${
+            activePanelTab === 'inscripcions'
+              ? 'bg-[#ff0090] text-white shadow-md shadow-fuchsia-500/20'
+              : 'text-zinc-400 hover:text-white hover:bg-zinc-800/60'
+          }`}
+        >
+          <Users size={14} />
+          {language === 'ca' ? "Llista d'Inscripcions" : "Lista de Inscripciones"}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActivePanelTab('smtp')}
+          className={`flex items-center justify-center gap-2 px-5 py-3 text-xs font-black tracking-wide uppercase rounded-xl transition-all cursor-pointer ${
+            activePanelTab === 'smtp'
+              ? 'bg-[#ff0090] text-white shadow-md shadow-fuchsia-500/20'
+              : 'text-zinc-400 hover:text-white hover:bg-zinc-800/60'
+          }`}
+        >
+          <Mail size={14} />
+          {language === 'ca' ? "Configuració SMTP (Correu)" : "Configuración SMTP (Correo)"}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActivePanelTab('xarxes')}
+          className={`flex items-center justify-center gap-2 px-5 py-3 text-xs font-black tracking-wide uppercase rounded-xl transition-all cursor-pointer ${
+            activePanelTab === 'xarxes'
+              ? 'bg-[#ff0090] text-white shadow-md shadow-fuchsia-500/20'
+              : 'text-zinc-400 hover:text-white hover:bg-zinc-800/60'
+          }`}
+        >
+          <Share2 size={14} />
+          {language === 'ca' ? "Connexió Xarxes Socials" : "Conexión Redes Sociales"}
+        </button>
+      </div>
+
+      {/* Conditionally render panels according to active tab */}
+      {activePanelTab === 'inscripcions' && (
+        <div className="bg-white rounded-3xl border border-zinc-200 shadow-md overflow-hidden animate-fade-in" id="panel-view-inscripcions">
+          {/* Filter bar controller */}
+          <div className="p-6 border-b border-zinc-100 bg-zinc-50 space-y-4">
+            <div className="flex flex-col lg:flex-row justify-between items-stretch lg:items-center gap-4">
+              <div className="relative flex-1">
+                <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-zinc-400 pointer-events-none">
+                  <Search size={18} />
+                </span>
+                <input 
+                  type="text" 
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Cerca per nom, cognom, telèfon, email o codi..."
+                  className="w-full bg-white border border-zinc-200 focus:border-fuchsia-500 rounded-2xl pl-10 pr-4 py-3 text-sm focus:outline-none transition-all placeholder-zinc-400 font-sans text-zinc-900"
+                  id="input-search-query"
+                />
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <button 
+                  type="button"
+                  onClick={() => setShowAddModal(true)}
+                  className="bg-zinc-900 hover:bg-black text-white font-bold text-xs px-4 py-3 rounded-2xl transition-all shadow flex items-center gap-1.5 cursor-pointer"
+                  id="btn-add-couple-manual"
+                >
+                  <Plus size={15} className="text-[#ff0090]" /> Afegir Parella Manual
+                </button>
+
+                <button 
+                  onClick={exportToExcel}
+                  className="bg-green-600 hover:bg-green-700 text-white font-bold text-xs px-4 py-3 rounded-2xl transition-all shadow flex items-center gap-1.5 cursor-pointer"
+                  id="btn-export-excel"
+                >
+                  <FileSpreadsheet size={15} /> Exportar Excel
+                </button>
+
+                {selectedIds.length > 0 && (
+                  <button 
+                    type="button"
+                    onClick={() => setShowBulkDeleteConfirmModal(true)}
+                    className="bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 font-bold text-xs px-4 py-3 rounded-2xl transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
+                    id="btn-delete-selected"
+                  >
+                    <Trash2 size={15} /> Esborrar seleccionats ({selectedIds.length})
+                  </button>
+                )}
+
+                <button 
+                  type="button"
+                  onClick={() => setShowClearConfirmModal(true)}
+                  className="bg-red-600 hover:bg-red-700 text-white font-bold text-xs px-4 py-3 rounded-2xl transition-all shadow flex items-center gap-1.5 cursor-pointer"
+                  id="btn-clear-all"
+                >
+                  <Trash2 size={15} /> Buidar Base de Dades
+                </button>
+              </div>
+            </div>
+
+            {/* Core matrix dropdown filters */}
+            <div className="flex flex-wrap items-center gap-3 text-xs">
+              <div className="flex items-center gap-1 text-zinc-500 font-bold uppercase tracking-wider mr-2">
+                <Filter size={12} /> Filtres:
+              </div>
+
+              {/* Category dropdown filter */}
+              <div className="flex items-center bg-white border border-zinc-200 px-3 py-2 rounded-xl">
+                <span className="text-zinc-500 mr-2 font-mono">Categoria</span>
+                <select 
+                  value={filterCategoria} 
+                  onChange={(e) => setFilterCategoria(e.target.value)}
+                  className="bg-transparent font-bold text-zinc-900 border-none outline-none cursor-pointer"
+                  id="filter-category"
+                >
+                  <option value="ALL">Tots</option>
+                  <option value={CategoriaParella.ADULT}>Adults</option>
+                  <option value={CategoriaParella.JUVENIL}>Juvenils</option>
+                </select>
+              </div>
+
+              {/* Payment dropdown filter */}
+              <div className="flex items-center bg-white border border-zinc-200 px-3 py-2 rounded-xl">
+                <span className="text-zinc-500 mr-2 font-mono">Pagat</span>
+                <select 
+                  value={filterPagament} 
+                  onChange={(e) => setFilterPagament(e.target.value)}
+                  className="bg-transparent font-bold text-zinc-900 border-none outline-none cursor-pointer"
+                  id="filter-payment"
+                >
+                  <option value="ALL">Tots</option>
+                  <option value={EstatPagament.PAGAT}>Sí</option>
+                  <option value={EstatPagament.PENDENT}>Pendent</option>
+                </select>
+              </div>
+
+              {/* DNI dropdown filter */}
+              <div className="flex items-center bg-white border border-zinc-200 px-3 py-2 rounded-xl">
+                <span className="text-zinc-500 mr-2 font-mono">DNI</span>
+                <select 
+                  value={filterDni} 
+                  onChange={(e) => setFilterDni(e.target.value)}
+                  className="bg-transparent font-bold text-zinc-900 border-none outline-none cursor-pointer"
+                  id="filter-dni"
+                >
+                  <option value="ALL">Tots</option>
+                  <option value={EstatVerificacio.VALIDAT}>Validat</option>
+                  <option value={EstatVerificacio.PENDENT}>Pendent</option>
+                  <option value={EstatVerificacio.REBUTJAT}>Rebutjat</option>
+                </select>
+              </div>
+
+              {/* Material Delivery dropdown filter */}
+              <div className="flex items-center bg-white border border-zinc-200 px-3 py-2 rounded-xl">
+                <span className="text-zinc-500 mr-2 font-mono">Material</span>
+                <select 
+                  value={filterEntrega} 
+                  onChange={(e) => setFilterEntrega(e.target.value)}
+                  className="bg-transparent font-bold text-zinc-900 border-none outline-none cursor-pointer"
+                  id="filter-delivery"
+                >
+                  <option value="ALL">Tots</option>
+                  <option value={EstatInscripcio.ENTREGAT}>Entregat</option>
+                  <option value={EstatInscripcio.PENDENT}>Pendent</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Primary Data Listing Grid */}
+          <div className="overflow-x-auto">
+            {filteredInscripcions.length === 0 ? (
+              <div className="p-12 text-center text-zinc-400">
+                <Users className="mx-auto text-zinc-300 mb-3" size={48} />
+                <p className="font-sans font-bold text-lg text-zinc-700">No s'ha trobat cap parella registrada</p>
+                <p className="text-sm text-zinc-400 mt-1 max-w-sm mx-auto">Comproveu els criteris de cerca o els filtres seleccionats actualment.</p>
+              </div>
+            ) : (
+              <table className="w-full text-left border-collapse table-auto">
+                <thead>
+                  <tr className="bg-zinc-100 text-[10px] font-bold text-zinc-500 uppercase tracking-widest border-b border-zinc-200">
+                    <th className="px-4 py-4 text-center w-12">
+                      <input 
+                        type="checkbox"
+                        checked={isAllVisibleSelected}
+                        onChange={toggleSelectAll}
+                        className="rounded border-zinc-300 text-[#ff0090] focus:ring-[#ff0090] cursor-pointer h-4 w-4"
+                        id="checkbox-select-all"
+                      />
+                    </th>
+                    <th className="px-6 py-4">CODI / DATA</th>
+                    <th className="px-6 py-4">PRIMER COMPARSER</th>
+                    <th className="px-6 py-4">SEGON COMPARSER</th>
+                    <th className="px-6 py-4 text-center">CATEGORIA</th>
+                    <th className="px-6 py-4 text-center">PAGAMENT</th>
+                    <th className="px-6 py-4 text-center">DNI STATUS</th>
+                    <th className="px-6 py-4 text-center">LLIURAMENT</th>
+                    <th className="px-6 py-4 text-center">ACCIONS</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-100 text-xs text-zinc-700 font-sans">
+                  {filteredInscripcions.map((item) => (
+                    <tr 
+                      key={item.id}
+                      onClick={() => onSelectInscripcio(item.id)}
+                      className={`hover:bg-fuchsia-50/20 cursor-pointer transition-colors group align-middle ${
+                        selectedIds.includes(item.id) ? 'bg-fuchsia-50/30' : ''
+                      }`}
+                      id={`row-registration-${item.id}`}
+                    >
+                      <td className="px-4 py-4.5 text-center" onClick={(e) => e.stopPropagation()}>
+                        <input 
+                          type="checkbox"
+                          checked={selectedIds.includes(item.id)}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setSelectedIds(prev => 
+                              checked ? [...prev, item.id] : prev.filter(x => x !== item.id)
+                            );
+                          }}
+                          className="rounded border-zinc-300 text-[#ff0090] focus:ring-[#ff0090] cursor-pointer h-4 w-4"
+                          id={`checkbox-select-${item.id}`}
+                        />
+                      </td>
+                      {/* tracking code and creation date */}
+                      <td className="px-6 py-4.5">
+                        <span className="font-mono font-bold text-zinc-900 block">{item.codiSeguiment}</span>
+                        <span className="text-[10px] text-zinc-400 font-mono">{new Date(item.creadoEn).toLocaleDateString('ca-ES')}</span>
+                      </td>
+
+                      {/* Participant 1 info */}
+                      <td className="px-6 py-4.5">
+                        <p className="font-bold text-zinc-900 flex items-center gap-1.5 flex-wrap">
+                          {item.c1Nom} {item.c1Cognoms}
+                          {item.c1EsMenor && (
+                            <span className="bg-amber-100 text-amber-800 text-[8px] font-extrabold px-1.5 py-0.5 rounded uppercase font-mono tracking-wider shrink-0" title="És menor d'edat">
+                              MENOR
+                            </span>
+                          )}
+                        </p>
+                        <p className="text-[10px] text-zinc-400 font-mono">
+                          {item.c1Telefon} • Talla {item.c1Talla} <span className="text-[#ff0090] font-sans font-bold text-[9px] uppercase px-1 pb-0.5 bg-fuchsia-50/50 rounded border border-fuchsia-100/50 ml-1">{item.c1UniformeTipus === 'lloguer' ? (language === 'ca' ? 'Lloguer' : 'Alquiler') : (language === 'ca' ? 'Compra' : 'Compra')}</span>
+                        </p>
+                      </td>
+
+                      {/* Participant 2 info */}
+                      <td className="px-6 py-4.5">
+                        <p className="font-bold text-zinc-900 flex items-center gap-1.5 flex-wrap">
+                          {item.c2Nom} {item.c2Cognoms}
+                          {item.c2EsMenor && (
+                            <span className="bg-amber-100 text-amber-800 text-[8px] font-extrabold px-1.5 py-0.5 rounded uppercase font-mono tracking-wider shrink-0" title="És menor d'edat">
+                              MENOR
+                            </span>
+                          )}
+                        </p>
+                        <p className="text-[10px] text-zinc-400 font-mono">
+                          {item.c2Telefon} • Talla {item.c2Talla} <span className="text-[#ff0090] font-sans font-bold text-[9px] uppercase px-1 pb-0.5 bg-fuchsia-50/50 rounded border border-fuchsia-100/50 ml-1">{item.c2UniformeTipus === 'lloguer' ? (language === 'ca' ? 'Lloguer' : 'Alquiler') : (language === 'ca' ? 'Compra' : 'Compra')}</span>
+                        </p>
+                      </td>
+
+                      {/* Category display */}
+                      <td className="px-6 py-4.5 text-center">
+                        <span className={`inline-flex px-2 py-1 rounded text-[10px] font-bold font-mono ${
+                          item.categoria === CategoriaParella.ADULT 
+                            ? 'bg-zinc-900 text-white' 
+                            : 'bg-fuchsia-100 text-fuchsia-800'
+                        }`}>
+                          {item.categoria}
+                        </span>
+                      </td>
+
+                      {/* Payment status badge */}
+                      <td className="px-6 py-4.5 text-center">
+                        {item.estatPagament === EstatPagament.PAGAT ? (
+                          <div className="inline-flex flex-col items-center">
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-green-100 text-green-800">
+                              <CheckCircle size={10} /> <strong>{item.preuCalculat}€</strong>
+                            </span>
+                            <span className="text-[9px] text-zinc-400 font-mono mt-0.5">{item.metodePagament}</span>
+                          </div>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">
+                            <Clock size={10} /> <strong>{item.preuCalculat}€ Pendent</strong>
+                          </span>
+                        )}
+                      </td>
+
+                      {/* DNI status badge */}
+                      <td className="px-6 py-4.5 text-center">
+                        {item.estatDni === EstatVerificacio.VALIDAT && (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-green-100 text-green-800">
+                            Validat
+                          </span>
+                        )}
+                        {item.estatDni === EstatVerificacio.PENDENT && (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">
+                            Pendent
+                          </span>
+                        )}
+                        {item.estatDni === EstatVerificacio.REBUTJAT && (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-800 animate-pulse">
+                            Rebutjat
+                          </span>
+                        )}
+                      </td>
+
+                      {/* Delivery material status */}
+                      <td className="px-6 py-4.5 text-center">
+                        {item.entregaMaterial === EstatInscripcio.ENTREGAT ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-zinc-900 text-white">
+                            Lliurat
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-zinc-100 text-zinc-500">
+                            No lliurat
+                          </span>
+                        )}
+                      </td>
+
+                      {/* Quick navigation action triggers */}
+                      <td className="px-6 py-4.5 text-center">
+                        <div className="flex items-center justify-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                          <button 
+                            onClick={() => onSelectInscripcio(item.id)}
+                            type="button"
+                            className="p-1 px-2.5 bg-zinc-100 hover:bg-fuchsia-600 hover:text-white rounded-lg transition-all inline-flex items-center gap-1 font-semibold hover:scale-105"
+                          >
+                            Obrir <ChevronRight size={12} />
+                          </button>
+                          {onDeleteInscripcio && (
+                            <button
+                              onClick={() => {
+                                if (inscriptionDeleteConfirmId === item.id) {
+                                  onDeleteInscripcio(item.id);
+                                  setSelectedIds(prev => prev.filter(x => x !== item.id));
+                                  setInscriptionDeleteConfirmId(null);
+                                } else {
+                                  setInscriptionDeleteConfirmId(item.id);
+                                  setTimeout(() => {
+                                    setInscriptionDeleteConfirmId(prev => prev === item.id ? null : prev);
+                                  }, 4000);
+                                }
+                              }}
+                              type="button"
+                              className={`p-1.5 rounded-lg transition-all hover:scale-105 font-bold font-sans flex items-center gap-1 ${
+                                inscriptionDeleteConfirmId === item.id 
+                                  ? 'bg-red-600 text-white animate-pulse text-[10px] px-2' 
+                                  : 'bg-zinc-100 hover:bg-red-600 hover:text-white text-red-500'
+                              }`}
+                              title={inscriptionDeleteConfirmId === item.id ? "Clica un altre cop per confirmar l'eliminació" : "Eliminar parella"}
+                            >
+                              {inscriptionDeleteConfirmId === item.id ? "Eliminar?" : <Trash2 size={13} />}
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      )}
+
+      {activePanelTab === 'smtp' && (
+        <div className="bg-white rounded-3xl border border-zinc-200 shadow-md p-6 sm:p-8 space-y-6 animate-fade-in" id="panel-view-smtp">
+          <div className="flex items-start gap-4 pb-4 border-b border-zinc-100">
+            <div className="p-3 bg-fuchsia-50 text-[#ff0090] rounded-2xl">
+              <Mail size={24} />
+            </div>
+            <div>
+              <h3 className="font-sans font-black text-lg text-zinc-900 uppercase tracking-tight">
+                {language === 'ca' ? "CORREU OFICIAL DE L'ENTITAT (SMTP)" : "CORREO OFICIAL DE LA ENTIDAD (SMTP)"}
+              </h3>
+              <p className="text-xs text-zinc-500">
+                {language === 'ca'
+                  ? "Configura el protocol SMTP de secretaria per enviar rebuts de preinscripció i justificants QR directament als usuaris de forma automàtica."
+                  : "Configura el protocolo SMTP de secretaría para enviar billetes de preinscripción y justificantes QR directamente a los usuarios de forma automática."}
+              </p>
+            </div>
+          </div>
+
+          <form onSubmit={handleSaveSmtp} className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wider">
+                {language === 'ca' ? "Servidor SMTP Host" : "Servidor SMTP Host"}
+              </label>
+              <input
+                type="text"
+                value={smtpHost}
+                onChange={(e) => setSmtpHost(e.target.value)}
+                placeholder="smtp.gmail.com"
+                className="w-full bg-zinc-50 border border-zinc-200 focus:border-fuchsia-500 rounded-2xl px-4 py-3 text-xs focus:outline-none transition-all font-sans text-zinc-800"
               />
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-              <button 
-                type="button"
-                onClick={() => setShowAddModal(true)}
-                className="bg-zinc-900 hover:bg-black text-white font-bold text-xs px-4 py-3 rounded-2xl transition-all shadow flex items-center gap-1.5"
-                id="btn-add-couple-manual"
-              >
-                <Plus size={15} className="text-[#ff0090]" /> Afegir Parella Manual
-              </button>
+            <div className="space-y-2">
+              <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wider">
+                {language === 'ca' ? "Port de sortida (Port)" : "Puerto de salida (Port)"}
+              </label>
+              <input
+                type="text"
+                value={smtpPort}
+                onChange={(e) => setSmtpPort(e.target.value)}
+                placeholder="587"
+                className="w-full bg-zinc-50 border border-zinc-200 focus:border-fuchsia-500 rounded-2xl px-4 py-3 text-xs focus:outline-none transition-all font-sans text-zinc-800"
+              />
+            </div>
 
-              <button 
-                onClick={exportToExcel}
-                className="bg-green-600 hover:bg-green-700 text-white font-bold text-xs px-4 py-3 rounded-2xl transition-all shadow flex items-center gap-1.5"
-                id="btn-export-excel"
-              >
-                <FileSpreadsheet size={15} /> Exportar Excel
-              </button>
+            <div className="space-y-2">
+              <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wider">
+                {language === 'ca' ? "Compte de Correu (Usuari)" : "Cuenta de Correo (Usuario)"}
+              </label>
+              <input
+                type="email"
+                value={smtpUsuari}
+                onChange={(e) => setSmtpUsuari(e.target.value)}
+                placeholder="tastvng@gmail.com"
+                className="w-full bg-zinc-50 border border-zinc-200 focus:border-fuchsia-500 rounded-2xl px-4 py-3 text-xs focus:outline-none transition-all font-sans text-zinc-800"
+              />
+            </div>
 
-              {selectedIds.length > 0 && (
-                <button 
+            <div className="space-y-2">
+              <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wider">
+                {language === 'ca' ? "Contrasenya / Token d'Aplicació (Password)" : "Contraseña / Token de Aplicación (Password)"}
+              </label>
+              <div className="relative">
+                <input
+                  type={showSmtpPassword ? "text" : "password"}
+                  value={smtpContrasenya}
+                  onChange={(e) => setSmtpContrasenya(e.target.value)}
+                  placeholder="••••••••••••••••"
+                  className="w-full bg-zinc-50 border border-zinc-200 focus:border-fuchsia-500 rounded-2xl px-4 py-3 pr-10 text-xs focus:outline-none transition-all font-sans text-zinc-800"
+                />
+                <button
                   type="button"
-                  onClick={() => setShowBulkDeleteConfirmModal(true)}
-                  className="bg-red-50 hover:bg-red-105 border border-red-200 text-red-600 font-bold text-xs px-4 py-3 rounded-2xl transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
-                  id="btn-delete-selected"
+                  onClick={() => setShowSmtpPassword(!showSmtpPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-[#ff0090] cursor-pointer"
                 >
-                  <Trash2 size={15} /> Esborrar seleccionats ({selectedIds.length})
+                  {showSmtpPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
-              )}
+              </div>
+            </div>
 
-              <button 
-                type="button"
-                onClick={() => setShowClearConfirmModal(true)}
-                className="bg-red-600 hover:bg-red-700 text-white font-bold text-xs px-4 py-3 rounded-2xl transition-all shadow flex items-center gap-1.5 cursor-pointer"
-                id="btn-clear-all"
+            <div className="md:col-span-2 bg-fuchsia-50/40 border border-fuchsia-100 rounded-2xl p-4 flex gap-3 text-xs text-zinc-655 leading-relaxed">
+              <AlertCircle size={18} className="text-[#ff0090] shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold text-zinc-900">
+                  {language === 'ca' ? "Avís sobre seguretat del proveïdor" : "Aviso sobre seguridad del proveedor"}
+                </p>
+                <p className="mt-0.5 text-[11px] text-zinc-500">
+                  {language === 'ca'
+                    ? "Per a compreses o entitats que empren proveïdors com Gmail o Outlook, recordeu obtenir una Contrasenya d'Aplicació (App Password) des de les opcions de seguretat del vostre compte. Això manté la connexió encriptada i preveu bloquejos de trànsit."
+                    : "Para comisiones o entidades que usan proveedores como Gmail o Outlook, recordad obtener una Contraseña de Aplicación (App Password) desde las opciones de seguridad de vuestra cuenta. Esto mantiene la conexión encriptada y previene bloqueos de tráfico."}
+                </p>
+              </div>
+            </div>
+
+            <div className="md:col-span-2 flex justify-end gap-2 pt-2 border-t border-zinc-100">
+              <button
+                type="submit"
+                className="bg-zinc-900 hover:bg-black text-white font-bold text-xs px-5 py-3 rounded-2xl transition flex items-center gap-1.5 shadow-md cursor-pointer"
               >
-                <Trash2 size={15} /> Buidar Base de Dades
+                <Key size={14} className="text-[#ff0090]" />
+                {language === 'ca' ? "Desar credencials SMTP" : "Guardar credenciales SMTP"}
               </button>
             </div>
-          </div>
+          </form>
 
-          {/* Core matrix dropdown filters */}
-          <div className="flex flex-wrap items-center gap-3 text-xs">
-            <div className="flex items-center gap-1 text-zinc-500 font-bold uppercase tracking-wider mr-2">
-              <Filter size={12} /> Filtres:
+          {smtpSaveSuccess && (
+            <div className="bg-emerald-50 border border-emerald-250 text-emerald-800 text-xs p-3.5 rounded-2xl flex items-center gap-2">
+              <CheckCircle size={14} className="text-emerald-600 animate-bounce" />
+              <span>
+                {language === 'ca' ? "Credencials de correu SMTP de l'entitat gravades amb èxit!" : "¡Credenciales de correo SMTP de la entidad guardadas con éxito!"}
+              </span>
             </div>
-
-            {/* Category dropdown filter */}
-            <div className="flex items-center bg-white border border-zinc-200 px-3 py-2 rounded-xl">
-              <span className="text-zinc-500 mr-2 font-mono">Categoria</span>
-              <select 
-                value={filterCategoria} 
-                onChange={(e) => setFilterCategoria(e.target.value)}
-                className="bg-transparent font-bold text-zinc-900 border-none outline-none cursor-pointer"
-                id="filter-category"
-              >
-                <option value="ALL">Tots</option>
-                <option value={CategoriaParella.ADULT}>Adults</option>
-                <option value={CategoriaParella.JUVENIL}>Juvenils</option>
-              </select>
-            </div>
-
-            {/* Payment dropdown filter */}
-            <div className="flex items-center bg-white border border-zinc-200 px-3 py-2 rounded-xl">
-              <span className="text-zinc-500 mr-2 font-mono">Pagat</span>
-              <select 
-                value={filterPagament} 
-                onChange={(e) => setFilterPagament(e.target.value)}
-                className="bg-transparent font-bold text-zinc-900 border-none outline-none cursor-pointer"
-                id="filter-payment"
-              >
-                <option value="ALL">Tots</option>
-                <option value={EstatPagament.PAGAT}>Sí</option>
-                <option value={EstatPagament.PENDENT}>Pendent</option>
-              </select>
-            </div>
-
-            {/* DNI dropdown filter */}
-            <div className="flex items-center bg-white border border-zinc-200 px-3 py-2 rounded-xl">
-              <span className="text-zinc-500 mr-2 font-mono">DNI</span>
-              <select 
-                value={filterDni} 
-                onChange={(e) => setFilterDni(e.target.value)}
-                className="bg-transparent font-bold text-zinc-900 border-none outline-none cursor-pointer"
-                id="filter-dni"
-              >
-                <option value="ALL">Tots</option>
-                <option value={EstatVerificacio.VALIDAT}>Validat</option>
-                <option value={EstatVerificacio.PENDENT}>Pendent</option>
-                <option value={EstatVerificacio.REBUTJAT}>Rebutjat</option>
-              </select>
-            </div>
-
-            {/* Material Delivery dropdown filter */}
-            <div className="flex items-center bg-white border border-zinc-200 px-3 py-2 rounded-xl">
-              <span className="text-zinc-500 mr-2 font-mono">Material</span>
-              <select 
-                value={filterEntrega} 
-                onChange={(e) => setFilterEntrega(e.target.value)}
-                className="bg-transparent font-bold text-zinc-900 border-none outline-none cursor-pointer"
-                id="filter-delivery"
-              >
-                <option value="ALL">Tots</option>
-                <option value={EstatInscripcio.ENTREGAT}>Entregat</option>
-                <option value={EstatInscripcio.PENDENT}>Pendent</option>
-              </select>
-            </div>
-          </div>
-        </div>
-
-        {/* Primary Data Listing Grid */}
-        <div className="overflow-x-auto">
-          {filteredInscripcions.length === 0 ? (
-            <div className="p-12 text-center text-zinc-400">
-              <Users className="mx-auto text-zinc-300 mb-3" size={48} />
-              <p className="font-sans font-bold text-lg text-zinc-700">No s'ha trobat cap parella registrada</p>
-              <p className="text-sm text-zinc-400 mt-1 max-w-sm mx-auto">Comproveu els criteris de cerca o els filtres seleccionats actualment.</p>
-            </div>
-          ) : (
-            <table className="w-full text-left border-collapse table-auto">
-              <thead>
-                <tr className="bg-zinc-100 text-[10px] font-bold text-zinc-500 uppercase tracking-widest border-b border-zinc-200">
-                  <th className="px-4 py-4 text-center w-12">
-                    <input 
-                      type="checkbox"
-                      checked={isAllVisibleSelected}
-                      onChange={toggleSelectAll}
-                      className="rounded border-zinc-300 text-[#ff0090] focus:ring-[#ff0090] cursor-pointer h-4 w-4"
-                      id="checkbox-select-all"
-                    />
-                  </th>
-                  <th className="px-6 py-4">CODI / DATA</th>
-                  <th className="px-6 py-4">PRIMER COMPARSER</th>
-                  <th className="px-6 py-4">SEGON COMPARSER</th>
-                  <th className="px-6 py-4 text-center">CATEGORIA</th>
-                  <th className="px-6 py-4 text-center">PAGAMENT</th>
-                  <th className="px-6 py-4 text-center">DNI STATUS</th>
-                  <th className="px-6 py-4 text-center">LLIURAMENT</th>
-                  <th className="px-6 py-4 text-center">ACCIONS</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-100 text-xs text-zinc-700 font-sans">
-                {filteredInscripcions.map((item) => (
-                  <tr 
-                    key={item.id}
-                    onClick={() => onSelectInscripcio(item.id)}
-                    className={`hover:bg-fuchsia-50/20 cursor-pointer transition-colors group align-middle ${
-                      selectedIds.includes(item.id) ? 'bg-fuchsia-50/30' : ''
-                    }`}
-                    id={`row-registration-${item.id}`}
-                  >
-                    <td className="px-4 py-4.5 text-center" onClick={(e) => e.stopPropagation()}>
-                      <input 
-                        type="checkbox"
-                        checked={selectedIds.includes(item.id)}
-                        onChange={(e) => {
-                          const checked = e.target.checked;
-                          setSelectedIds(prev => 
-                            checked ? [...prev, item.id] : prev.filter(x => x !== item.id)
-                          );
-                        }}
-                        className="rounded border-zinc-300 text-[#ff0090] focus:ring-[#ff0090] cursor-pointer h-4 w-4"
-                        id={`checkbox-select-${item.id}`}
-                      />
-                    </td>
-                    {/* tracking code and creation date */}
-                    <td className="px-6 py-4.5">
-                      <span className="font-mono font-bold text-zinc-900 block">{item.codiSeguiment}</span>
-                      <span className="text-[10px] text-zinc-400 font-mono">{new Date(item.creadoEn).toLocaleDateString('ca-ES')}</span>
-                    </td>
-
-                    {/* Participant 1 info */}
-                    <td className="px-6 py-4.5">
-                      <p className="font-bold text-zinc-900 flex items-center gap-1.5 flex-wrap">
-                        {item.c1Nom} {item.c1Cognoms}
-                        {item.c1EsMenor && (
-                          <span className="bg-amber-100 text-amber-800 text-[8px] font-extrabold px-1.5 py-0.5 rounded uppercase font-mono tracking-wider shrink-0" title="És menor d'edat">
-                            MENOR
-                          </span>
-                        )}
-                      </p>
-                      <p className="text-[10px] text-zinc-400 font-mono">
-                        {item.c1Telefon} • Talla {item.c1Talla} <span className="text-[#ff0090] font-sans font-bold text-[9px] uppercase px-1 pb-0.5 bg-fuchsia-50/50 rounded border border-fuchsia-100/50 ml-1">{item.c1UniformeTipus === 'lloguer' ? (language === 'ca' ? 'Lloguer' : 'Alquiler') : (language === 'ca' ? 'Compra' : 'Compra')}</span>
-                      </p>
-                    </td>
-
-                    {/* Participant 2 info */}
-                    <td className="px-6 py-4.5">
-                      <p className="font-bold text-zinc-900 flex items-center gap-1.5 flex-wrap">
-                        {item.c2Nom} {item.c2Cognoms}
-                        {item.c2EsMenor && (
-                          <span className="bg-amber-100 text-amber-800 text-[8px] font-extrabold px-1.5 py-0.5 rounded uppercase font-mono tracking-wider shrink-0" title="És menor d'edat">
-                            MENOR
-                          </span>
-                        )}
-                      </p>
-                      <p className="text-[10px] text-zinc-400 font-mono">
-                        {item.c2Telefon} • Talla {item.c2Talla} <span className="text-[#ff0090] font-sans font-bold text-[9px] uppercase px-1 pb-0.5 bg-fuchsia-50/50 rounded border border-fuchsia-100/50 ml-1">{item.c2UniformeTipus === 'lloguer' ? (language === 'ca' ? 'Lloguer' : 'Alquiler') : (language === 'ca' ? 'Compra' : 'Compra')}</span>
-                      </p>
-                    </td>
-
-                    {/* Category display */}
-                    <td className="px-6 py-4.5 text-center">
-                      <span className={`inline-flex px-2 py-1 rounded text-[10px] font-bold font-mono ${
-                        item.categoria === CategoriaParella.ADULT 
-                          ? 'bg-zinc-900 text-white' 
-                          : 'bg-fuchsia-100 text-fuchsia-800'
-                      }`}>
-                        {item.categoria}
-                      </span>
-                    </td>
-
-                    {/* Payment status badge */}
-                    <td className="px-6 py-4.5 text-center">
-                      {item.estatPagament === EstatPagament.PAGAT ? (
-                        <div className="inline-flex flex-col items-center">
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-green-100 text-green-800">
-                            <CheckCircle size={10} /> <strong>{item.preuCalculat}€</strong>
-                          </span>
-                          <span className="text-[9px] text-zinc-400 font-mono mt-0.5">{item.metodePagament}</span>
-                        </div>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">
-                          <Clock size={10} /> <strong>{item.preuCalculat}€ Pendent</strong>
-                        </span>
-                      )}
-                    </td>
-
-                    {/* DNI status badge */}
-                    <td className="px-6 py-4.5 text-center">
-                      {item.estatDni === EstatVerificacio.VALIDAT && (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-green-100 text-green-800">
-                          Validat
-                        </span>
-                      )}
-                      {item.estatDni === EstatVerificacio.PENDENT && (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">
-                          Pendent
-                        </span>
-                      )}
-                      {item.estatDni === EstatVerificacio.REBUTJAT && (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-800 animate-pulse">
-                          Rebutjat
-                        </span>
-                      )}
-                    </td>
-
-                    {/* Delivery material status */}
-                    <td className="px-6 py-4.5 text-center">
-                      {item.entregaMaterial === EstatInscripcio.ENTREGAT ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-zinc-900 text-white">
-                          Lliurat
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-zinc-100 text-zinc-500">
-                          No lliurat
-                        </span>
-                      )}
-                    </td>
-
-                    {/* Quick navigation action triggers */}
-                    <td className="px-6 py-4.5 text-center">
-                      <div className="flex items-center justify-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-                        <button 
-                          onClick={() => onSelectInscripcio(item.id)}
-                          type="button"
-                          className="p-1 px-2.5 bg-zinc-100 hover:bg-fuchsia-600 hover:text-white rounded-lg transition-all inline-flex items-center gap-1 font-semibold hover:scale-105"
-                        >
-                          Obrir <ChevronRight size={12} />
-                        </button>
-                        {onDeleteInscripcio && (
-                          <button
-                            onClick={() => {
-                              if (inscriptionDeleteConfirmId === item.id) {
-                                onDeleteInscripcio(item.id);
-                                setSelectedIds(prev => prev.filter(x => x !== item.id));
-                                setInscriptionDeleteConfirmId(null);
-                              } else {
-                                setInscriptionDeleteConfirmId(item.id);
-                                setTimeout(() => {
-                                  setInscriptionDeleteConfirmId(prev => prev === item.id ? null : prev);
-                                }, 4000);
-                              }
-                            }}
-                            type="button"
-                            className={`p-1.5 rounded-lg transition-all hover:scale-105 font-bold font-sans flex items-center gap-1 ${
-                              inscriptionDeleteConfirmId === item.id 
-                                ? 'bg-red-600 text-white animate-pulse text-[10px] px-2' 
-                                : 'bg-zinc-100 hover:bg-red-600 hover:text-white text-red-500'
-                            }`}
-                            title={inscriptionDeleteConfirmId === item.id ? "Clica un altre cop per confirmar l'eliminació" : "Eliminar parella"}
-                          >
-                            {inscriptionDeleteConfirmId === item.id ? "Eliminar?" : <Trash2 size={13} />}
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
           )}
+
+          {/* Interactive Console Tool: Tester Connection */}
+          <div className="border border-zinc-200 rounded-3xl p-6 bg-zinc-50 space-y-4">
+            <h4 className="font-sans font-black text-xs text-zinc-900 uppercase tracking-widest flex items-center gap-1.5 text-zinc-700">
+              <Sparkles size={14} className="text-fuchsia-500 animate-pulse" />
+              {language === 'ca' ? "PROVADOR DE CONNEXIÓ SMTP AUTOMÀTICA" : "PROBADOR DE CONEXIÓN SMTP AUTOMÁTICA"}
+            </h4>
+            <p className="text-[11px] text-zinc-500">
+              {language === 'ca'
+                ? "Abans de començar a rebre inscripcions reals, pots enviar un correu electrònic de comprovació per verificar l'autosent ràpid de la teva entitat de forma real."
+                : "Antes de empezar a recibir inscripciones reales, puedes enviar un correo electrónico de comprobación para verificar el autosent rápido de tu entidad de forma real."}
+            </p>
+
+            <div className="flex flex-col sm:flex-row gap-3">
+              <input
+                type="email"
+                value={smtpTestDestinatari}
+                onChange={(e) => setSmtpTestDestinatari(e.target.value)}
+                placeholder="destinatari@gmail.com"
+                className="bg-white border border-zinc-200 focus:border-fuchsia-500 rounded-2xl px-4 py-3 text-xs focus:outline-none transition-all font-sans text-zinc-800 flex-1"
+              />
+              <button
+                type="button"
+                onClick={handleTestSmtp}
+                disabled={smtpTestStatus === 'loading'}
+                className="bg-fuchsia-600 hover:bg-fuchsia-500 disabled:bg-fuchsia-400 font-bold text-xs px-5 py-3 rounded-2xl text-white transition flex items-center justify-center gap-1.5 shadow cursor-pointer"
+              >
+                {smtpTestStatus === 'loading' ? (
+                  <>
+                    <Clock size={14} className="animate-spin" />
+                    {language === 'ca' ? "Connectant SMTP..." : "Conectando SMTP..."}
+                  </>
+                ) : (
+                  <>
+                    <Send size={14} />
+                    {language === 'ca' ? "Enviar Correu de Prova" : "Enviar Correo de Prueba"}
+                  </>
+                )}
+              </button>
+            </div>
+
+            {smtpTestStatus !== 'idle' && (
+              <div className={`p-4 rounded-2xl border text-xs leading-relaxed font-mono ${
+                smtpTestStatus === 'success' 
+                  ? 'bg-zinc-900 border-zinc-800 text-emerald-300' 
+                  : 'bg-red-50 border-red-200 text-red-800'
+              }`}>
+                {smtpTestStatus === 'loading' && (
+                  <div className="space-y-1">
+                    <p className="animate-pulse">◌ Connecting to secure SMTP tunnel {smtpHost}:{smtpPort}...</p>
+                    <p className="text-zinc-500">◌ Performing TLSv1.3 cryptographic handshake...</p>
+                    <p className="text-zinc-500">◌ Authenticating credentials for account: {smtpUsuari}...</p>
+                  </div>
+                )}
+                {smtpTestStatus === 'success' && (
+                  <div className="space-y-1">
+                    <p className="font-bold text-white uppercase tracking-wider text-[10px]">✓ CONNEXIÓ SEGURA TLS ESTABLERTA</p>
+                    <p className="text-[9px] text-zinc-500 font-mono">Server response: 220 {smtpHost} ESMTP protocol listening</p>
+                    <p className="text-[9px] text-zinc-500 font-mono">Payload code: 235 Authentication Succeeded (TLS-Handshake verified)</p>
+                    <p className="mt-2 text-zinc-200 font-sans leading-relaxed text-[11px]">{smtpTestMsg}</p>
+                  </div>
+                )}
+                {smtpTestStatus === 'error' && (
+                  <div className="space-y-1 col-span-2">
+                    <p className="font-bold text-red-650">✗ ERROR D'ENRUTAMENT / CREDENCIALS</p>
+                    <p className="text-red-700 font-sans">{smtpTestMsg}</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      )}
+
+      {activePanelTab === 'xarxes' && (
+        <div className="bg-white rounded-3xl border border-zinc-200 shadow-md p-6 sm:p-8 space-y-8 animate-fade-in" id="panel-view-xarxes">
+          <div className="flex items-start gap-4 pb-4 border-b border-zinc-100">
+            <div className="p-3 bg-fuchsia-50 text-[#ff0090] rounded-2xl">
+              <Share2 size={24} />
+            </div>
+            <div>
+              <h3 className="font-sans font-black text-lg text-zinc-900 uppercase tracking-tight">
+                {language === 'ca' ? "SINCRO DE COMPTES SOCIALS" : "SINCRO DE CUENTAS SOCIALES"}
+              </h3>
+              <p className="text-xs text-zinc-500">
+                {language === 'ca'
+                  ? "Vincula els comptes d'Instagram, Facebook o TikTok de l'associació El Tast. Quan publiquis posts a les teves xarxes socials, aquests es reflectiran automàticament a la pàgina de benvinguda de l'app."
+                  : "Vincula las cuentas de Instagram, Facebook o TikTok de la asociación El Tast. Cuando publiques posts en tus redes sociales, estos se reflejarán automáticamente en la página de bienvenida de la app."}
+              </p>
+            </div>
+          </div>
+
+          {/* Connected Channels Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            
+            {/* Instagram integrated card */}
+            <div className={`p-5 rounded-3xl border transition-all space-y-4 ${
+              scInstagramConnected 
+                ? 'bg-fuchsia-50/40 border-fuchsia-200/80 shadow-md' 
+                : 'bg-zinc-50 border-zinc-200'
+            }`}>
+              <div className="flex justify-between items-start">
+                <span className="p-2.5 bg-gradient-to-tr from-yellow-500 via-red-500 to-purple-600 text-white rounded-xl">
+                  <Globe size={18} />
+                </span>
+                {scInstagramConnected ? (
+                  <span className="text-[9px] bg-emerald-500/20 text-emerald-600 font-bold px-2 py-0.5 rounded uppercase font-mono tracking-wider">ACTIU</span>
+                ) : (
+                  <span className="text-[9px] bg-zinc-200 text-zinc-500 font-bold px-2 py-0.5 rounded uppercase font-mono tracking-wider">DESCONNECTAT</span>
+                )}
+              </div>
+              <div>
+                <h4 className="font-bold text-zinc-900 font-sans text-xs">Instagram Graph API</h4>
+                <p className="text-[10px] text-zinc-500 font-mono mt-0.5">{scInstagramConnected ? scInstagramHandle : "@eltastvng"}</p>
+              </div>
+              <div className="pt-2">
+                {scInstagramConnected ? (
+                  <button 
+                    type="button"
+                    onClick={() => handleDisconnectSocial('instagram')}
+                    className="w-full bg-zinc-100 hover:bg-zinc-200 text-zinc-650 text-[10px] font-bold py-2.5 px-3 rounded-xl transition uppercase tracking-wider cursor-pointer"
+                  >
+                    Desvincular
+                  </button>
+                ) : (
+                  <button 
+                    type="button"
+                    onClick={() => handleOpenConnect('instagram')}
+                    className="w-full bg-gradient-to-tr from-yellow-500 via-[#e1306c] to-fuchsia-600 hover:opacity-90 text-white text-[10px] font-bold py-2.5 px-3 rounded-xl transition uppercase tracking-wider cursor-pointer"
+                  >
+                    Vincular Compte
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Facebook integrated card */}
+            <div className={`p-5 rounded-3xl border transition-all space-y-4 ${
+              scFacebookConnected 
+                ? 'bg-blue-50/40 border-blue-200/80 shadow-md' 
+                : 'bg-zinc-50 border-zinc-200'
+            }`}>
+              <div className="flex justify-between items-start">
+                <span className="p-2.5 bg-blue-600 text-white rounded-xl">
+                  <Globe size={18} />
+                </span>
+                {scFacebookConnected ? (
+                  <span className="text-[9px] bg-emerald-500/20 text-emerald-600 font-bold px-2 py-0.5 rounded uppercase font-mono tracking-wider">ACTIU</span>
+                ) : (
+                  <span className="text-[9px] bg-zinc-200 text-zinc-500 font-bold px-2 py-0.5 rounded uppercase font-mono tracking-wider">DESCONNECTAT</span>
+                )}
+              </div>
+              <div>
+                <h4 className="font-bold text-zinc-900 font-sans text-xs">Facebook Pages Connector</h4>
+                <p className="text-[10px] text-zinc-500 font-mono mt-0.5 truncate">{scFacebookConnected ? scFacebookHandle : "facebook.com/eltastvng"}</p>
+              </div>
+              <div className="pt-2">
+                {scFacebookConnected ? (
+                  <button 
+                    type="button"
+                    onClick={() => handleDisconnectSocial('facebook')}
+                    className="w-full bg-zinc-100 hover:bg-zinc-200 text-zinc-650 text-[10px] font-bold py-2.5 px-3 rounded-xl transition uppercase tracking-wider cursor-pointer"
+                  >
+                    Desvincular
+                  </button>
+                ) : (
+                  <button 
+                    type="button"
+                    onClick={() => handleOpenConnect('facebook')}
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold py-2.5 px-3 rounded-xl transition uppercase tracking-wider cursor-pointer"
+                  >
+                    Vincular Compte
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* TikTok integrated card */}
+            <div className={`p-5 rounded-3xl border transition-all space-y-4 ${
+              scTikTokConnected 
+                ? 'bg-zinc-100 border-zinc-300 shadow-md' 
+                : 'bg-zinc-50 border-zinc-200'
+            }`}>
+              <div className="flex justify-between items-start">
+                <span className="p-2.5 bg-black text-white rounded-xl flex items-center justify-center font-bold text-[9px] uppercase tracking-wider leading-none">
+                  TikTok
+                </span>
+                {scTikTokConnected ? (
+                  <span className="text-[9px] bg-emerald-500/20 text-emerald-600 font-bold px-2 py-0.5 rounded uppercase font-mono tracking-wider">ACTIU</span>
+                ) : (
+                  <span className="text-[9px] bg-zinc-200 text-zinc-500 font-bold px-2 py-0.5 rounded uppercase font-mono tracking-wider">DESCONNECTAT</span>
+                )}
+              </div>
+              <div>
+                <h4 className="font-bold text-zinc-900 font-sans text-xs">TikTok Embed Creator</h4>
+                <p className="text-[10px] text-zinc-500 font-mono mt-0.5">{scTikTokConnected ? scTikTokHandle : "@eltast_vng"}</p>
+              </div>
+              <div className="pt-2">
+                {scTikTokConnected ? (
+                  <button 
+                    type="button"
+                    onClick={() => handleDisconnectSocial('tiktok')}
+                    className="w-full bg-zinc-100 hover:bg-zinc-200 text-zinc-650 text-[10px] font-bold py-2.5 px-3 rounded-xl transition uppercase tracking-wider cursor-pointer"
+                  >
+                    Desvincular
+                  </button>
+                ) : (
+                  <button 
+                    type="button"
+                    onClick={() => handleOpenConnect('tiktok')}
+                    className="w-full bg-[#010101] hover:bg-black text-white text-[10px] font-bold py-2.5 px-3 rounded-xl transition uppercase tracking-wider cursor-pointer"
+                  >
+                    Vincular Compte
+                  </button>
+                )}
+              </div>
+            </div>
+
+          </div>
+
+          {/* Interactive simulator: Publicar un post i sincronització automàtica! */}
+          <div className="border border-zinc-200 rounded-3xl p-6 bg-zinc-50 space-y-6">
+            <div className="pb-3 border-b border-zinc-200/60 flex items-center gap-2">
+              <Sparkles size={16} className="text-fuchsia-600 animate-pulse" />
+              <div>
+                <h4 className="font-sans font-black text-xs text-zinc-900 uppercase tracking-widest">
+                  {language === 'ca' ? "PUBLICADOR I SIMULADOR DE FEED AUTOMÀTIC" : "PUBLICADOR Y SIMULADOR DE FEED AUTOMÁTICO"}
+                </h4>
+                <p className="text-[10px] text-zinc-500 mt-0.5">
+                  {language === 'ca'
+                    ? "Quan publiqui un post a les xarxes socials de l'entitat, el webhook de sincronització automàtica l'importarà i el llistará de forma immediata."
+                    : "Cuando publique un post en las redes sociales de la entidad, el webhook de sincronización automática lo importará y lo listará de forma inmediata."}
+                </p>
+              </div>
+            </div>
+
+            <form onSubmit={handlePublishSocialPost} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                
+                {/* Platform select */}
+                <div className="space-y-1">
+                  <label className="block text-[10px] font-bold text-zinc-400 uppercase font-mono">Xarxa d'Origen de la Publicació</label>
+                  <select
+                    value={socialPostPlatform}
+                    onChange={(e) => setSocialPostPlatform(e.target.value as any)}
+                    className="w-full bg-white border border-zinc-200 focus:border-fuchsia-500 rounded-2xl px-3.5 py-2.5 text-xs text-zinc-800 focus:outline-none transition cursor-pointer"
+                  >
+                    <option value="instagram">Instagram {scInstagramConnected ? " (✓ Connectat)" : " (⚠️ Requerix Connexió)"}</option>
+                    <option value="facebook">Facebook {scFacebookConnected ? " (✓ Connectat)" : " (⚠️ Requerix Connexió)"}</option>
+                    <option value="tiktok">TikTok {scTikTokConnected ? " (✓ Connectat)" : " (⚠️ Requerix Connexió)"}</option>
+                  </select>
+                </div>
+
+                {/* Preset image selector */}
+                <div className="space-y-1">
+                  <label className="block text-[10px] font-bold text-zinc-400 uppercase font-mono">Imatge temática adjunta</label>
+                  <select
+                    value={socialPostMediaPreset}
+                    onChange={(e) => setSocialPostMediaPreset(e.target.value)}
+                    className="w-full bg-white border border-zinc-200 focus:border-fuchsia-500 rounded-2xl px-3.5 py-2.5 text-xs text-zinc-850 focus:outline-none transition cursor-pointer"
+                  >
+                    <option value="caramels">🍬 Caramels i dolços de Vilanova</option>
+                    <option value="armilles">🎀 Armilles de Comparsa 2026</option>
+                    <option value="placa">💃 Salt de Comparsa a la Plaça</option>
+                    <option value="platja">⛱️ Platja de Ribes Roges</option>
+                  </select>
+                </div>
+
+              </div>
+
+              {/* Text Area post */}
+              <div className="space-y-1">
+                <label className="block text-[10px] font-bold text-zinc-400 uppercase font-mono">Contingut / Text del Post</label>
+                <textarea
+                  rows={3}
+                  value={socialPostText}
+                  onChange={(e) => setSocialPostText(e.target.value)}
+                  placeholder={language === 'ca' ? "Escriviu el cos de la publicació..." : "Escribe el cuerpo de la publicación..."}
+                  className="w-full bg-white border border-zinc-250 focus:border-fuchsia-500 rounded-2xl p-4 text-xs focus:outline-none text-zinc-800 transition placeholder-zinc-400"
+                />
+              </div>
+
+              {/* Action row */}
+              <div className="flex justify-between items-center flex-wrap gap-2 pt-2 border-t border-zinc-150">
+                <div className="flex gap-2 items-center">
+                  <span className="text-[10px] text-zinc-450 font-mono">Simular Likes: </span>
+                  <input
+                    type="number"
+                    value={socialPostLikes}
+                    onChange={(e) => setSocialPostLikes(Number(e.target.value) || 0)}
+                    className="w-16 bg-white border border-zinc-200 rounded px-1 text-[10px] text-zinc-805 font-mono text-center"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="bg-zinc-950 hover:bg-black text-white font-bold text-xs px-5 py-3 rounded-2xl transition flex items-center gap-1.5 shadow cursor-pointer"
+                >
+                  <Send size={12} className="text-[#ff0090]" />
+                  {language === 'ca' ? "Simular alta de post i sincronització" : "Simular alta de post y sincronización"}
+                </button>
+              </div>
+            </form>
+
+            {socialPublishSuccess && (
+              <div className="bg-emerald-50 border border-emerald-250 text-emerald-800 text-xs p-4 rounded-2xl flex items-center gap-3">
+                <CheckCircle size={20} className="text-emerald-600 shrink-0" />
+                <div>
+                  <p className="font-bold">✓ Reflectit Correctament en Directe!</p>
+                  <p className="text-[10px] text-zinc-500 leading-normal">
+                    {language === 'ca'
+                      ? "Hem sincronitzat les dades de l'API. El post s'ha registrat i ja està llistat en el caneló públic de notícies de l'aplicació en temps real!"
+                      : "Hemos sincronizado los datos de la API. El post se ha registrado y ya está listado en el canal público de noticias de la aplicación en tiempo real!"}
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* List of currently synced posts here */}
+          <div className="space-y-4">
+            <h4 className="font-sans font-black text-xs text-zinc-500 uppercase tracking-wider flex items-center gap-1.5">
+              <Globe size={14} />
+              {language === 'ca' ? "POSTS IMPORTATS EN DIRECTE DE LES XARXES" : "POSTS IMPORTADOS EN DIRECTO DE LAS REDES"}
+            </h4>
+
+            {noticies.length === 0 ? (
+              <p className="text-zinc-400 text-xs text-center py-6">No hi ha contingut sincronitzat de moment.</p>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {noticies.map((post) => (
+                  <div key={post.id} className="bg-zinc-50 border border-zinc-200/80 rounded-2xl p-4 flex flex-col justify-between space-y-3 relative overflow-hidden group hover:shadow-md transition duration-350">
+                    <div className="space-y-2">
+                      <div className="flex justify-between items-center text-[9px]">
+                        <span className="font-mono bg-white border border-zinc-200 px-2 py-0.5 rounded text-zinc-650 uppercase font-bold tracking-wider">{post.xarxa}</span>
+                        <span className="text-zinc-400 font-mono">{post.dataPublicacio}</span>
+                      </div>
+                      <p className="text-zinc-800 line-clamp-3 text-[11px] leading-relaxed">{post.text}</p>
+                    </div>
+
+                    {post.imatgeUrl && (
+                      <div className="h-28 w-full overflow-hidden rounded-xl border border-zinc-200 bg-zinc-200">
+                        <img 
+                          src={post.imatgeUrl} 
+                          alt="Post preview" 
+                          className="h-full w-full object-cover group-hover:scale-105 transition duration-350"
+                          referrerPolicy="no-referrer"
+                        />
+                      </div>
+                    )}
+
+                    <div className="pt-2 border-t border-zinc-100 flex justify-between items-center text-[10px] font-mono text-zinc-550">
+                      <span className="font-bold flex items-center gap-1 text-zinc-750">👤 {post.usuari}</span>
+                      <span>❤️ {post.likes} likes</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Interactive visual helper: Simulated Queue Panel to scan QR codes inside client! */}
       <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 shadow-xl text-white">

@@ -180,6 +180,10 @@ export default function App() {
     setActiveRegistration(newReg);
     setView('confirmacio');
     addLog(`Preinscripció realitzada amb èxit per a: ${newReg.c1Nom} & ${newReg.c2Nom}. Codi: ${newReg.codiSeguiment}`);
+    addLog(language === 'ca'
+      ? `📧 SMTP: Correu de confirmació oficial enviat automàticament des de secretaria@eltast.cat a ${newReg.c1Email} i ${newReg.c2Email}`
+      : `📧 SMTP: Correo de confirmación oficial enviado automáticamente desde secretaria@eltast.cat a ${newReg.c1Email} y ${newReg.c2Email}`
+    );
   };
 
   const addRegistrationManual = (newReg: Inscripcio) => {
