@@ -2366,6 +2366,111 @@ export default function AdminDashboard({
           </div>
         </div>
       )}
+
+      {/* Social Network Connection Modal */}
+      {showConnectModal && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl border border-zinc-200 shadow-2xl max-w-sm w-full overflow-hidden p-6 space-y-6 animate-in fade-in zoom-in-95 duration-150 font-sans">
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-3">
+                <span className={`p-3 text-white rounded-2xl ${
+                  showConnectModal === 'instagram' ? 'bg-gradient-to-tr from-yellow-500 via-[#e1306c] to-fuchsia-600' :
+                  showConnectModal === 'facebook' ? 'bg-blue-600' : 'bg-black'
+                }`}>
+                  <Globe size={18} />
+                </span>
+                <div>
+                  <h3 className="font-sans font-black text-sm text-zinc-900 uppercase tracking-tight">
+                    {language === 'ca' ? `Vincular ${showConnectModal.toUpperCase()}` : `Vincular ${showConnectModal.toUpperCase()}`}
+                  </h3>
+                  <p className="text-[9px] text-zinc-500 font-mono font-bold uppercase tracking-wider">
+                    {language === 'ca' ? "Sincronització de canal" : "Sincronización de canal"}
+                  </p>
+                </div>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setShowConnectModal(null)}
+                className="text-zinc-450 hover:text-zinc-600 p-1 cursor-pointer transition-colors"
+              >
+                <XCircle size={18} />
+              </button>
+            </div>
+
+            <div className="bg-zinc-50 border border-zinc-150 p-3.5 rounded-2.5xl text-[10px] text-zinc-650 leading-relaxed">
+              {language === 'ca' ? (
+                <span>
+                  Connecta el compte d'<strong>El Tast Vilanova</strong> amb la plataforma per poder llegir, publicar i auto-llistar contingut de forma centralitzada.
+                </span>
+              ) : (
+                <span>
+                  Conecta la cuenta de <strong>El Tast Vilanova</strong> con la plataforma para poder leer, publicar y auto-listar contenido de forma centralizada.
+                </span>
+              )}
+            </div>
+
+            <form onSubmit={handleConfirmConnectSocial} className="space-y-4">
+              <div className="space-y-1">
+                <label className="block text-[9px] font-bold text-zinc-400 uppercase font-mono">
+                  {language === 'ca' ? "Nom d'Usuari / Handle" : "Nombre de Usuario / Handle"}
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400 font-mono text-xs">@</span>
+                  <input
+                    type="text"
+                    required
+                    value={connectUsername}
+                    onChange={(e) => setConnectUsername(e.target.value)}
+                    placeholder="eltastvng"
+                    className="w-full bg-zinc-50 text-zinc-900 border border-zinc-200 focus:border-[#ff0090] focus:bg-white rounded-xl pl-8 pr-3.5 py-2.5 text-xs focus:outline-none transition-all font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="block text-[9px] font-bold text-zinc-400 uppercase font-mono">
+                  {language === 'ca' ? "Contrasenya o Token d'Accés" : "Contraseña o Token de Acceso"}
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={connectPassword}
+                  onChange={(e) => setConnectPassword(e.target.value)}
+                  placeholder="••••••••••••••••"
+                  className="w-full bg-zinc-50 text-zinc-900 border border-zinc-200 focus:border-[#ff0090] focus:bg-white rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all font-mono"
+                />
+              </div>
+
+              <div className="flex gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowConnectModal(null)}
+                  className="flex-1 py-2.5 px-4 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold text-xs rounded-xl transition cursor-pointer"
+                >
+                  {language === 'ca' ? "Cancel·lar" : "Cancelar"}
+                </button>
+                <button
+                  type="submit"
+                  disabled={isConnecting}
+                  className={`flex-1 py-2.5 px-4 font-bold text-xs rounded-xl transition text-white flex items-center justify-center gap-1.5 cursor-pointer ${
+                    showConnectModal === 'instagram' ? 'bg-gradient-to-tr from-yellow-500 via-[#e1306c] to-fuchsia-600 hover:opacity-90' :
+                    showConnectModal === 'facebook' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-black hover:bg-zinc-900'
+                  }`}
+                >
+                  {isConnecting ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      <span>{language === 'ca' ? "Vinculant..." : "Vinculando..."}</span>
+                    </>
+                  ) : (
+                    <span>{language === 'ca' ? "Vincular" : "Vincular"}</span>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
