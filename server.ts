@@ -7,8 +7,20 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  // Middleware to parse JSON payloads
+  // Middleware to parse payload sizes
   app.use(express.json({ limit: '10mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+  // CORS and OPTIONS request preflight handling for routing compatibility
+  app.use((req, res, next) => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, PATCH, DELETE");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
+    if (req.method === "OPTIONS") {
+      return res.sendStatus(200);
+    }
+    next();
+  });
 
   // API Route to send a real SMTP email
   app.post("/api/send-email", async (req, res) => {
