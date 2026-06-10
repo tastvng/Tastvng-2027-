@@ -1,6 +1,5 @@
 import express from "express";
 import path from "path";
-import { createServer as createViteServer } from "vite";
 import nodemailer from "nodemailer";
 
 async function startServer() {
@@ -110,7 +109,8 @@ async function startServer() {
 
   // Vite development server / static production delivery
   if (process.env.NODE_ENV !== "production") {
-    const vite = await createViteServer({
+    const { createServer } = await eval('import("vite")');
+    const vite = await createServer({
       server: { middlewareMode: true },
       appType: "spa",
     });
