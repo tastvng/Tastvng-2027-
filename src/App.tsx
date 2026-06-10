@@ -45,14 +45,56 @@ import AdminConfig from './components/AdminConfig';
 import AdminScanner from './components/AdminScanner';
 import NotificationFeed from './components/NotificationFeed';
 import MobileRemoteScanner from './components/MobileRemoteScanner';
+import PortadaPage, { PortadaConfig } from './components/PortadaPage';
+import { PORTADA_CONFIG_DEFAULTS } from './components/AdminPortada';
 
 export default function App() {
   const { language, setLanguage, t } = useLanguage();
 
+  // Portada Configuration State
+  const [portadaConfig, setPortadaConfig] = useState<PortadaConfig>(() => {
+    try {
+      const saved = localStorage.getItem('tast_portada_config_2026');
+      if (saved) {
+        return { ...PORTADA_CONFIG_DEFAULTS, ...JSON.parse(saved) };
+      }
+    } catch (e) {}
+    return PORTADA_CONFIG_DEFAULTS;
+  });
+
   // Navigation Routing States
-  // 'public' | 'confirmacio' | 'login' | 'admin-dashboard' | 'admin-ficha' | 'admin-config' | 'admin-scanner' | 'mobile-scanner'
-  const [view, setView] = useState<string>('public');
+  // 'portada' | 'public' | 'confirmacio' | 'login' | 'admin-dashboard' | 'admin-ficha' | 'admin-config' | 'admin-scanner' | 'mobile-scanner'
+  const [view, setView] = useState<string>(() => {
+    try {
+      const saved = localStorage.getItem('tast_portada_config_2026');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.activa === false) {
+          return 'public';
+        }
+      }
+    } catch (e) {}
+    return 'portada';
+  });
   const [mobileScannerSyncKey, setMobileScannerSyncKey] = useState<string | null>(null);
+
+  // Sync Portada state dynamically with localStorage changes
+  useEffect(() => {
+    const handlePortadaChange = () => {
+      try {
+        const saved = localStorage.getItem('tast_portada_config_2026');
+        if (saved) {
+          setPortadaConfig({ ...PORTADA_CONFIG_DEFAULTS, ...JSON.parse(saved) });
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    window.addEventListener('portadaConfigChanged', handlePortadaChange);
+    return () => {
+      window.removeEventListener('portadaConfigChanged', handlePortadaChange);
+    };
+  }, []);
 
   // Persistence States
   const [config, setConfig] = useState<SistemaConfig>(CONFIG_INICIAL);
@@ -237,7 +279,7 @@ export default function App() {
   const handleAdminLogout = () => {
     setIsAdminLoggedIn(false);
     localStorage.setItem('tast_admin_session_2026', 'false');
-    setView('public');
+    setView(portadaConfig.activa ? 'portada' : 'public');
     addLog("Sessió de secretaria tancada de manera segura.");
   };
 
@@ -380,6 +422,19 @@ export default function App() {
             transition={{ duration: 0.25 }}
             className="w-full"
           >
+            {/* 0. Custom Landing Page / Portada */}
+            {view === 'portada' && (
+              <PortadaPage 
+                config={portadaConfig}
+                globalLogoColor={config.logoColor}
+                globalLogoText={config.logoText}
+                globalLogoUseImage={config.logoUseImage}
+                globalLogoImgUrl={config.logoImgUrl}
+                onEnterForm={() => setView('public')}
+                onGoToLogin={() => setView('login')}
+              />
+            )}
+
             {/* 1. Public Questionnaire form flow (with Feed on the side) */}
             {view === 'public' && (
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -428,7 +483,7 @@ export default function App() {
             {view === 'login' && (
               <AdminLogin 
                 onLoginSuccess={handleAdminLogin}
-                onBackToPublic={() => setView('public')}
+                onBackToPublic={() => setView(portadaConfig.activa ? 'portada' : 'public')}
               />
             )}
 
@@ -498,7 +553,7 @@ export default function App() {
                 onBack={() => {
                   // clean URL parameters and go back to public
                   window.history.pushState({}, '', window.location.pathname);
-                  setView('public');
+                  setView(portadaConfig.activa ? 'portada' : 'public');
                 }}
               />
             )}

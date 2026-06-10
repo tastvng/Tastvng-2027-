@@ -40,6 +40,7 @@ import {
 } from 'lucide-react';
 import { Inscripcio, CategoriaParella, EstatPagament, EstatVerificacio, EstatInscripcio, MetodePagament, SistemaConfig, StaffMember, NoticiaXarxes } from '../types';
 import * as XLSX from 'xlsx';
+import AdminPortada from './AdminPortada';
 
 interface AdminDashboardProps {
   inscripcions: Inscripcio[];
@@ -75,7 +76,7 @@ export default function AdminDashboard({
   const { language, t } = useLanguage();
   
   // Admin Tabs Navigation State
-  const [activePanelTab, setActivePanelTab] = useState<'inscripcions' | 'smtp' | 'xarxes'>('inscripcions');
+  const [activePanelTab, setActivePanelTab] = useState<'inscripcions' | 'smtp' | 'xarxes' | 'portada'>('inscripcions');
 
   // SMTP state hooks
   const [smtpHost, setSmtpHost] = useState(() => localStorage.getItem('tast_smtp_host') || 'smtp.gmail.com');
@@ -902,6 +903,19 @@ export default function AdminDashboard({
           <Share2 size={14} />
           {language === 'ca' ? "Connexió Xarxes Socials" : "Conexión Redes Sociales"}
         </button>
+
+        <button
+          type="button"
+          onClick={() => setActivePanelTab('portada')}
+          className={`flex items-center justify-center gap-2 px-5 py-3 text-xs font-black tracking-wide uppercase rounded-xl transition-all cursor-pointer ${
+            activePanelTab === 'portada'
+              ? 'bg-[#ff0090] text-white shadow-md shadow-fuchsia-500/20'
+              : 'text-zinc-400 hover:text-white hover:bg-zinc-800/60'
+          }`}
+        >
+          <Compass size={14} />
+          {language === 'ca' ? "Portada" : "Portada"}
+        </button>
       </div>
 
       {/* Conditionally render panels according to active tab */}
@@ -1702,6 +1716,10 @@ export default function AdminDashboard({
             )}
           </div>
         </div>
+      )}
+
+      {activePanelTab === 'portada' && (
+        <AdminPortada language={language} onAddLog={onAddLog} />
       )}
 
       {/* Interactive visual helper: Simulated Queue Panel to scan QR codes inside client! */}

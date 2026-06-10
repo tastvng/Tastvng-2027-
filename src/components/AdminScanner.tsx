@@ -78,15 +78,38 @@ export default function AdminScanner({
     const processIncomingPayload = (rawData: string) => {
       try {
         const payload = JSON.parse(rawData);
+        // Ignore keepalive or non-message events
+        if (payload.event && payload.event !== 'message') return;
+
+        // Use ntfy's unique message ID or fallback to constructed key
+        const uniqueMsgId = payload.id || `${payload.message || ''}_${payload.time || ''}`;
+        if (processedMessages.has(uniqueMsgId)) return;
+        processedMessages.add(uniqueMsgId);
+
+        let messageText = '';
         if (payload.message) {
-          const info = JSON.parse(payload.message);
-          if (info.scannedId) {
-            const messageKey = `${info.scannedId}_${info.timestamp || ''}`;
-            if (!processedMessages.has(messageKey)) {
-              processedMessages.add(messageKey);
-              triggerSynchronousScan(info.scannedId);
-            }
+          messageText = payload.message;
+        } else if (payload.text) {
+          messageText = payload.text;
+        } else if (typeof payload === 'string') {
+          messageText = payload;
+        }
+
+        if (!messageText) return;
+
+        let scannedId = '';
+        try {
+          const info = JSON.parse(messageText);
+          if (info && info.scannedId) {
+            scannedId = info.scannedId;
           }
+        } catch (e) {
+          // Fallback if raw text (not JSON) was published
+          scannedId = messageText.trim();
+        }
+
+        if (scannedId) {
+          triggerSynchronousScan(scannedId);
         }
       } catch (err) {
         // parsing issues
@@ -116,12 +139,14 @@ export default function AdminScanner({
       console.warn("EventSource is not supported on this client. Relying on API polling.");
     }
 
-    // 2. Establish high-frequency HTTPS Polling Fallback (every 1200ms)
-    // This totally bypasses iframe and EventSource sandboxing blocks by doing pure fetch!
+    // 2. Establish high-frequency HTTPS Polling Fallback with non-blocking poll=1 (every 1500ms)
+    // This totally bypasses iframe and EventSource sandboxing blocks by doing pure non-blocking fetch!
+    let polling = false;
     fallbackInterval = setInterval(async () => {
-      if (!active) return;
+      if (!active || polling) return;
+      polling = true;
       try {
-        const res = await fetch(`https://ntfy.sh/tast_sync_${syncKey}/json?since=15s`, {
+        const res = await fetch(`https://ntfy.sh/tast_sync_${syncKey}/json?since=15s&poll=1`, {
           cache: 'no-store'
         });
         if (!res.ok) return;
@@ -137,8 +162,10 @@ export default function AdminScanner({
         }
       } catch (err) {
         // network offline silent
+      } finally {
+        polling = false;
       }
-    }, 1200);
+    }, 1500);
 
     return () => {
       active = false;
