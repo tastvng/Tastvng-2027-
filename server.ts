@@ -1,6 +1,7 @@
 import express from "express";
 import path from "path";
 import nodemailer from "nodemailer";
+import fs from "fs";
 
 async function startServer() {
   const app = express();
@@ -108,7 +109,13 @@ async function startServer() {
   });
 
   // Vite development server / static production delivery
-  if (process.env.NODE_ENV !== "production") {
+  const distPath = path.join(process.cwd(), 'dist');
+  const hasDist = fs.existsSync(path.join(distPath, 'index.html'));
+  const isCjsBundle = typeof __filename !== "undefined" && __filename.endsWith("server.cjs");
+  const isProduction = process.env.NODE_ENV === "production" || isCjsBundle || (hasDist && process.env.NODE_ENV !== "development");
+
+  if (!isProduction) {
+    console.log("Starting server in development mode with Vite middleware...");
     const { createServer } = await eval('import("vite")');
     const vite = await createServer({
       server: { middlewareMode: true },
@@ -116,7 +123,7 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    const distPath = path.join(process.cwd(), 'dist');
+    console.log(`Starting server in production mode. Serving static files from: ${distPath}`);
     app.use(express.static(distPath));
     app.get('*', (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
@@ -124,7 +131,7 @@ async function startServer() {
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server listening on port ${PORT} with environment ${process.env.NODE_ENV || 'development'}`);
+    console.log(`Server listening on port ${PORT} with environment ${process.env.NODE_ENV || 'development'} (detected ${isProduction ? 'production' : 'development'} mode)`);
   });
 }
 
