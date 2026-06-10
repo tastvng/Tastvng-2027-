@@ -118,6 +118,9 @@ export default function AdminDashboard({
   const [newC2Email, setNewC2Email] = useState('');
   const [newC2Telefon, setNewC2Telefon] = useState('');
   const [newC2Talla, setNewC2Talla] = useState('M');
+  
+  const [newC1UniformeTipus, setNewC1UniformeTipus] = useState<'compra' | 'lloguer'>('compra');
+  const [newC2UniformeTipus, setNewC2UniformeTipus] = useState<'compra' | 'lloguer'>('compra');
 
   const [newDomas, setNewDomas] = useState(false);
   const [newMocadors, setNewMocadors] = useState(0);
@@ -149,12 +152,14 @@ export default function AdminDashboard({
       c1Telefon: newC1Telefon.trim() || '600000000',
       c1Talla: newC1Talla,
       c1DniUrl: 'https://images.unsplash.com/photo-1554080353-a576cf803bda?q=80&w=600&auto=format&fit=crop',
+      c1UniformeTipus: newC1UniformeTipus,
       c2Nom: newC2Nom.trim(),
       c2Cognoms: newC2Cognoms.trim(),
       c2Email: newC2Email.trim() || 'secretaria@eltast.cat',
       c2Telefon: newC2Telefon.trim() || '600000000',
       c2Talla: newC2Talla,
       c2DniUrl: 'https://images.unsplash.com/photo-1554080353-a576cf803bda?q=80&w=600&auto=format&fit=crop',
+      c2UniformeTipus: newC2UniformeTipus,
       respostesCuestionari: {},
       preuCalculat: calculatedPreu,
       teDomasBalco: newDomas,
@@ -289,7 +294,11 @@ export default function AdminDashboard({
       item.c2Nom,
       item.c2Cognoms,
       item.c2Email,
-      item.c2Telefon
+      item.c2Telefon,
+      item.c1UniformeTipus || 'compra',
+      item.c2UniformeTipus || 'compra',
+      (item.c1UniformeTipus === 'lloguer' ? 'lloguer alquiler renta rent' : 'compra venta sale buy'),
+      (item.c2UniformeTipus === 'lloguer' ? 'lloguer alquiler renta rent' : 'compra venta sale buy')
     ].map(f => f.toLowerCase());
     
     const matchesSearch = searchQuery.trim() === '' || textFields.some(f => f.includes(searchQuery.toLowerCase()));
@@ -355,6 +364,7 @@ export default function AdminDashboard({
       'EMAIL COMPARSER 1',
       'TELEFON COMPARSER 1',
       'TALLA COMPARSER 1',
+      'ADQUISICIÓ UNIFORME 1',
       'C1 MENOR D\'EDAT?',
       'C1 NOM TUTOR',
       'C1 COGNOMS TUTOR',
@@ -365,6 +375,7 @@ export default function AdminDashboard({
       'EMAIL COMPARSER 2',
       'TELEFON COMPARSER 2',
       'TALLA COMPARSER 2',
+      'ADQUISICIÓ UNIFORME 2',
       'C2 MENOR D\'EDAT?',
       'C2 NOM TUTOR',
       'C2 COGNOMS TUTOR',
@@ -388,6 +399,7 @@ export default function AdminDashboard({
       i.c1Email,
       i.c1Telefon,
       i.c1Talla,
+      i.c1UniformeTipus === 'lloguer' ? (language === 'ca' ? 'LLOGUER' : 'ALQUILER') : (language === 'ca' ? 'COMPRA' : 'COMPRA'),
       i.c1EsMenor ? 'SÍ' : 'NO',
       i.c1EsMenor ? (i.c1TutorNom || '') : '',
       i.c1EsMenor ? (i.c1TutorCognoms || '') : '',
@@ -398,6 +410,7 @@ export default function AdminDashboard({
       i.c2Email,
       i.c2Telefon,
       i.c2Talla,
+      i.c2UniformeTipus === 'lloguer' ? (language === 'ca' ? 'LLOGUER' : 'ALQUILER') : (language === 'ca' ? 'COMPRA' : 'COMPRA'),
       i.c2EsMenor ? 'SÍ' : 'NO',
       i.c2EsMenor ? (i.c2TutorNom || '') : '',
       i.c2EsMenor ? (i.c2TutorCognoms || '') : '',
@@ -755,7 +768,9 @@ export default function AdminDashboard({
                           </span>
                         )}
                       </p>
-                      <p className="text-[10px] text-zinc-400 font-mono">{item.c1Telefon} • Talla {item.c1Talla}</p>
+                      <p className="text-[10px] text-zinc-400 font-mono">
+                        {item.c1Telefon} • Talla {item.c1Talla} <span className="text-[#ff0090] font-sans font-bold text-[9px] uppercase px-1 pb-0.5 bg-fuchsia-50/50 rounded border border-fuchsia-100/50 ml-1">{item.c1UniformeTipus === 'lloguer' ? (language === 'ca' ? 'Lloguer' : 'Alquiler') : (language === 'ca' ? 'Compra' : 'Compra')}</span>
+                      </p>
                     </td>
 
                     {/* Participant 2 info */}
@@ -768,7 +783,9 @@ export default function AdminDashboard({
                           </span>
                         )}
                       </p>
-                      <p className="text-[10px] text-zinc-400 font-mono">{item.c2Telefon} • Talla {item.c2Talla}</p>
+                      <p className="text-[10px] text-zinc-400 font-mono">
+                        {item.c2Telefon} • Talla {item.c2Talla} <span className="text-[#ff0090] font-sans font-bold text-[9px] uppercase px-1 pb-0.5 bg-fuchsia-50/50 rounded border border-fuchsia-100/50 ml-1">{item.c2UniformeTipus === 'lloguer' ? (language === 'ca' ? 'Lloguer' : 'Alquiler') : (language === 'ca' ? 'Compra' : 'Compra')}</span>
+                      </p>
                     </td>
 
                     {/* Category display */}
@@ -1004,7 +1021,7 @@ export default function AdminDashboard({
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-3 gap-2">
                     <div>
                       <label className="block text-[10px] text-zinc-500 uppercase font-mono mb-0.5">Mòbil (Opcional)</label>
                       <input 
@@ -1012,7 +1029,7 @@ export default function AdminDashboard({
                         value={newC1Telefon}
                         onChange={(e) => setNewC1Telefon(e.target.value)}
                         placeholder="600000000"
-                        className="w-full bg-white border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3 py-2 text-xs focus:outline-none"
+                        className="w-full bg-white border border-zinc-200 focus:border-[#ff0090] rounded-xl px-2.5 py-2 text-[11px] focus:outline-none"
                       />
                     </div>
                     <div>
@@ -1020,14 +1037,25 @@ export default function AdminDashboard({
                       <select
                         value={newC1Talla}
                         onChange={(e) => setNewC1Talla(e.target.value)}
-                        className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2 text-xs focus:outline-none cursor-pointer font-bold"
+                        className="w-full bg-white border border-zinc-200 rounded-xl px-2.5 py-2 text-[11px] focus:outline-none cursor-pointer font-bold"
                       >
-                        <option value="XS">XS</option>
+                        <option value="XS font-bold">XS</option>
                         <option value="S">S</option>
                         <option value="M">M</option>
                         <option value="L">L</option>
                         <option value="XL">XL</option>
                         <option value="XXL">XXL</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-zinc-500 uppercase font-mono mb-0.5">Adquisició</label>
+                      <select
+                        value={newC1UniformeTipus}
+                        onChange={(e) => setNewC1UniformeTipus(e.target.value as 'compra' | 'lloguer')}
+                        className="w-full bg-white border border-zinc-200 rounded-xl px-2.5 py-2 text-[11px] focus:outline-none cursor-pointer font-bold text-[#ff0090]"
+                      >
+                        <option value="compra">Compra</option>
+                        <option value="lloguer">Lloguer</option>
                       </select>
                     </div>
                   </div>
@@ -1072,7 +1100,7 @@ export default function AdminDashboard({
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-3 gap-2">
                     <div>
                       <label className="block text-[10px] text-zinc-500 uppercase font-mono mb-0.5">Mòbil (Opcional)</label>
                       <input 
@@ -1080,7 +1108,7 @@ export default function AdminDashboard({
                         value={newC2Telefon}
                         onChange={(e) => setNewC2Telefon(e.target.value)}
                         placeholder="611000000"
-                        className="w-full bg-white border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3 py-2 text-xs focus:outline-none"
+                        className="w-full bg-white border border-zinc-200 focus:border-[#ff0090] rounded-xl px-2.5 py-2 text-[11px] focus:outline-none"
                       />
                     </div>
                     <div>
@@ -1088,7 +1116,7 @@ export default function AdminDashboard({
                       <select
                         value={newC2Talla}
                         onChange={(e) => setNewC2Talla(e.target.value)}
-                        className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2 text-xs focus:outline-none cursor-pointer font-bold"
+                        className="w-full bg-white border border-zinc-200 rounded-xl px-2.5 py-2 text-[11px] focus:outline-none cursor-pointer font-bold"
                       >
                         <option value="XS">XS</option>
                         <option value="S">S</option>
@@ -1096,6 +1124,17 @@ export default function AdminDashboard({
                         <option value="L">L</option>
                         <option value="XL">XL</option>
                         <option value="XXL">XXL</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-zinc-500 uppercase font-mono mb-0.5">Adquisició</label>
+                      <select
+                        value={newC2UniformeTipus}
+                        onChange={(e) => setNewC2UniformeTipus(e.target.value as 'compra' | 'lloguer')}
+                        className="w-full bg-white border border-zinc-200 rounded-xl px-2.5 py-2 text-[11px] focus:outline-none cursor-pointer font-bold text-[#ff0090]"
+                      >
+                        <option value="compra">Compra</option>
+                        <option value="lloguer">Lloguer</option>
                       </select>
                     </div>
                   </div>

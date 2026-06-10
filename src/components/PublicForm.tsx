@@ -44,6 +44,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
   const [c1TutorDni, setC1TutorDni] = useState('');
   const [c1TutorTelefon, setC1TutorTelefon] = useState('');
   const [c1TutorAccepta, setC1TutorAccepta] = useState(false);
+  const [c1UniformeTipus, setC1UniformeTipus] = useState<'compra' | 'lloguer'>('compra');
   
   // Comparser 2 state
   const [c2Nom, setC2Nom] = useState('');
@@ -58,6 +59,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
   const [c2TutorDni, setC2TutorDni] = useState('');
   const [c2TutorTelefon, setC2TutorTelefon] = useState('');
   const [c2TutorAccepta, setC2TutorAccepta] = useState(false);
+  const [c2UniformeTipus, setC2UniformeTipus] = useState<'compra' | 'lloguer'>('compra');
 
   // Dynamic uniform/equipment selections state
   const [seleccionsUniforme, setSeleccionsUniforme] = useState<Record<string, { c1Talla: string; c2Talla: string; quantitat: number }>>(() => {
@@ -383,6 +385,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
         c1TutorCognoms: c1EsMenor ? c1TutorCognoms : '',
         c1TutorDni: c1EsMenor ? c1TutorDni : '',
         c1TutorTelefon: c1EsMenor ? c1TutorTelefon : '',
+        c1UniformeTipus,
         c2Nom,
         c2Cognoms,
         c2Email,
@@ -394,6 +397,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
         c2TutorCognoms: c2EsMenor ? c2TutorCognoms : '',
         c2TutorDni: c2EsMenor ? c2TutorDni : '',
         c2TutorTelefon: c2EsMenor ? c2TutorTelefon : '',
+        c2UniformeTipus,
         respostesCuestionari,
         seleccionsUniforme,
         preuCalculat: totalCalculat,
@@ -852,6 +856,29 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
                         </div>
                       )}
                     </div>
+
+                    {/* Casilla o Toggles per triar Venda o Lloguer */}
+                    <div className="mt-2 text-left pt-2 border-t border-zinc-200/50 flex items-center justify-between gap-3">
+                      <span className="text-[10px] font-bold text-zinc-500 uppercase font-mono tracking-tight">
+                        {language === 'ca' ? "Tipus d'Adquisició:" : "Tipo de Adquisición:"}
+                      </span>
+                      <div className="flex bg-white rounded-lg overflow-hidden border border-zinc-200 p-0.5 shrink-0" id="c1-uniform-adquisicio-container">
+                        <button
+                          type="button"
+                          onClick={() => setC1UniformeTipus('compra')}
+                          className={`text-[10px] px-2.5 py-1 font-bold rounded-md transition-all cursor-pointer ${c1UniformeTipus === 'compra' ? 'bg-fuchsia-100 text-fuchsia-700 shadow-sm' : 'text-zinc-550 hover:text-zinc-855'}`}
+                        >
+                          {language === 'ca' ? "Compra" : "Compra (Venta)"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setC1UniformeTipus('lloguer')}
+                          className={`text-[10px] px-2.5 py-1 font-bold rounded-md transition-all cursor-pointer ${c1UniformeTipus === 'lloguer' ? 'bg-fuchsia-600 text-white shadow-sm' : 'text-zinc-550 hover:text-zinc-855'}`}
+                        >
+                          {language === 'ca' ? "Lloguer" : "Alquiler"}
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 );
               })}
@@ -1167,6 +1194,29 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
                           </select>
                         </div>
                       )}
+                    </div>
+
+                    {/* Casilla o Toggles per triar Venda o Lloguer */}
+                    <div className="mt-2 text-left pt-2 border-t border-zinc-200/50 flex items-center justify-between gap-3">
+                      <span className="text-[10px] font-bold text-zinc-500 uppercase font-mono tracking-tight">
+                        {language === 'ca' ? "Tipus d'Adquisició:" : "Tipo de Adquisición:"}
+                      </span>
+                      <div className="flex bg-white rounded-lg overflow-hidden border border-zinc-200 p-0.5 shrink-0" id="c2-uniform-adquisicio-container">
+                        <button
+                          type="button"
+                          onClick={() => setC2UniformeTipus('compra')}
+                          className={`text-[10px] px-2.5 py-1 font-bold rounded-md transition-all cursor-pointer ${c2UniformeTipus === 'compra' ? 'bg-fuchsia-100 text-fuchsia-700 shadow-sm' : 'text-zinc-550 hover:text-zinc-855'}`}
+                        >
+                          {language === 'ca' ? "Compra" : "Compra (Venta)"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setC2UniformeTipus('lloguer')}
+                          className={`text-[10px] px-2.5 py-1 font-bold rounded-md transition-all cursor-pointer ${c2UniformeTipus === 'lloguer' ? 'bg-fuchsia-600 text-white shadow-sm' : 'text-zinc-550 hover:text-zinc-855'}`}
+                        >
+                          {language === 'ca' ? "Lloguer" : "Alquiler"}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 );

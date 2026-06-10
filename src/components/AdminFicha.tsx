@@ -38,6 +38,31 @@ export default function AdminFicha({ registration, config, onBack, onSave }: Adm
   const [metodePagament, setMetodePagament] = useState<MetodePagament | null>(registration.metodePagament);
   const [estatDni, setEstatDni] = useState<EstatVerificacio>(registration.estatDni);
   const [entregaMaterial, setEntregaMaterial] = useState<EstatInscripcio>(registration.entregaMaterial);
+
+  // Participant Editable configurations
+  const [c1Nom, setC1Nom] = useState(registration.c1Nom);
+  const [c1Cognoms, setC1Cognoms] = useState(registration.c1Cognoms);
+  const [c1Email, setC1Email] = useState(registration.c1Email);
+  const [c1Telefon, setC1Telefon] = useState(registration.c1Telefon);
+  const [c1Talla, setC1Talla] = useState(registration.c1Talla);
+  const [c1UniformeTipus, setC1UniformeTipus] = useState<'compra' | 'lloguer'>(registration.c1UniformeTipus || 'compra');
+
+  const [c1TutorNom, setC1TutorNom] = useState(registration.c1TutorNom || '');
+  const [c1TutorCognoms, setC1TutorCognoms] = useState(registration.c1TutorCognoms || '');
+  const [c1TutorDni, setC1TutorDni] = useState(registration.c1TutorDni || '');
+  const [c1TutorTelefon, setC1TutorTelefon] = useState(registration.c1TutorTelefon || '');
+
+  const [c2Nom, setC2Nom] = useState(registration.c2Nom);
+  const [c2Cognoms, setC2Cognoms] = useState(registration.c2Cognoms);
+  const [c2Email, setC2Email] = useState(registration.c2Email);
+  const [c2Telefon, setC2Telefon] = useState(registration.c2Telefon);
+  const [c2Talla, setC2Talla] = useState(registration.c2Talla);
+  const [c2UniformeTipus, setC2UniformeTipus] = useState<'compra' | 'lloguer'>(registration.c2UniformeTipus || 'compra');
+
+  const [c2TutorNom, setC2TutorNom] = useState(registration.c2TutorNom || '');
+  const [c2TutorCognoms, setC2TutorCognoms] = useState(registration.c2TutorCognoms || '');
+  const [c2TutorDni, setC2TutorDni] = useState(registration.c2TutorDni || '');
+  const [c2TutorTelefon, setC2TutorTelefon] = useState(registration.c2TutorTelefon || '');
   
   // DNI image manipulation states (rotation degrees)
   const [rotacio1, setRotacio1] = useState(0);
@@ -69,10 +94,39 @@ export default function AdminFicha({ registration, config, onBack, onSave }: Adm
       return;
     }
 
+    if (!c1Nom.trim() || !c2Nom.trim()) {
+      setValidationError(
+        language === 'ca'
+          ? "El nom dels participants no pot estar buit."
+          : "El nombre de los participantes no puede estar vacío."
+      );
+      return;
+    }
+
     setValidationError(null);
 
     const updatedInscripcio: Inscripcio = {
       ...registration,
+      c1Nom: c1Nom.trim(),
+      c1Cognoms: c1Cognoms.trim(),
+      c1Email: c1Email.trim(),
+      c1Telefon: c1Telefon.trim(),
+      c1Talla,
+      c1UniformeTipus,
+      c1TutorNom: c1TutorNom.trim(),
+      c1TutorCognoms: c1TutorCognoms.trim(),
+      c1TutorDni: c1TutorDni.trim(),
+      c1TutorTelefon: c1TutorTelefon.trim(),
+      c2Nom: c2Nom.trim(),
+      c2Cognoms: c2Cognoms.trim(),
+      c2Email: c2Email.trim(),
+      c2Telefon: c2Telefon.trim(),
+      c2Talla,
+      c2UniformeTipus,
+      c2TutorNom: c2TutorNom.trim(),
+      c2TutorCognoms: c2TutorCognoms.trim(),
+      c2TutorDni: c2TutorDni.trim(),
+      c2TutorTelefon: c2TutorTelefon.trim(),
       estatPagament,
       metodePagament: estatPagament === EstatPagament.PAGAT ? metodePagament : null,
       estatDni,
@@ -157,120 +211,290 @@ export default function AdminFicha({ registration, config, onBack, onSave }: Adm
             {/* Participants mirror block cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               {/* Comparser 1 profile card */}
-              <div className="bg-zinc-50 rounded-2xl p-4.5 border border-zinc-100 space-y-3 relative overflow-hidden">
-                <span className="absolute top-2 right-2 text-[10px] text-zinc-400 font-mono font-bold">C1</span>
-                <h4 className="font-sans font-black text-sm text-zinc-900 pr-4 flex items-center gap-1.5 flex-wrap">
-                  <User size={14} className="text-fuchsia-500" />
-                  {registration.c1Nom} {registration.c1Cognoms}
-                  {registration.c1EsMenor && (
-                    <span className="bg-amber-100 text-amber-800 text-[8px] font-black px-1.5 py-0.5 rounded font-mono tracking-wider uppercase shrink-0">
-                      MENOR
-                    </span>
-                  )}
-                </h4>
+              <div className="bg-zinc-50 rounded-2xl p-4.5 border border-zinc-200/60 space-y-3 relative overflow-hidden" id="c1-profile-card">
+                <span className="absolute top-2 right-2 text-[10px] text-zinc-400 font-mono font-bold">C1 (Editable)</span>
                 
-                <div className="space-y-1.5 text-xs text-zinc-600 font-sans">
-                  <a href={`tel:${registration.c1Telefon}`} className="flex items-center gap-1.5 hover:text-zinc-950">
-                    <Phone className="text-zinc-400" size={12} /> {registration.c1Telefon}
-                  </a>
-                  <a href={`mailto:${registration.c1Email}`} className="flex items-center gap-1.5 hover:text-zinc-950 truncate block">
-                    <Mail className="text-zinc-400" size={12} /> {registration.c1Email}
-                  </a>
+                <div className="space-y-3 pt-1">
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <div>
+                      <label className="block text-[9px] text-zinc-500 uppercase font-mono mb-0.5">Nom</label>
+                      <input 
+                        type="text" 
+                        value={c1Nom} 
+                        onChange={(e) => setC1Nom(e.target.value)}
+                        className="w-full bg-white border border-zinc-200 focus:border-[#ff0090] rounded-lg px-2.5 py-1.5 text-xs font-bold font-sans focus:outline-none" 
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[9px] text-zinc-500 uppercase font-mono mb-0.5">Cognoms</label>
+                      <input 
+                        type="text" 
+                        value={c1Cognoms} 
+                        onChange={(e) => setC1Cognoms(e.target.value)}
+                        className="w-full bg-white border border-zinc-200 focus:border-[#ff0090] rounded-lg px-2.5 py-1.5 text-xs font-bold font-sans focus:outline-none" 
+                      />
+                    </div>
+                  </div>
 
-                  {registration.seleccionsUniforme && Object.keys(registration.seleccionsUniforme).length > 0 ? (
-                    <div className="space-y-1 bg-white p-2.5 rounded-xl border border-zinc-200 shadow-sm mt-2">
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <div>
+                      <label className="block text-[9px] text-zinc-500 uppercase font-mono mb-0.5">Telèfon</label>
+                      <input 
+                        type="tel" 
+                        value={c1Telefon} 
+                        onChange={(e) => setC1Telefon(e.target.value)}
+                        className="w-full bg-white border border-zinc-200 focus:border-[#ff0090] rounded-lg px-2.5 py-1.5 text-xs font-bold font-sans focus:outline-none" 
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[9px] text-zinc-500 uppercase font-mono mb-0.5">E-mail</label>
+                      <input 
+                        type="email" 
+                        value={c1Email} 
+                        onChange={(e) => setC1Email(e.target.value)}
+                        className="w-full bg-white border border-zinc-200 focus:border-[#ff0090] rounded-lg px-2.5 py-1.5 text-xs font-bold font-sans focus:outline-none truncate" 
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <div>
+                      <label className="block text-[9px] text-zinc-500 uppercase font-mono mb-0.5">Talla</label>
+                      <select
+                        value={c1Talla}
+                        onChange={(e) => setC1Talla(e.target.value)}
+                        className="w-full bg-white border border-zinc-200 rounded-lg px-2 py-1.5 text-xs font-bold font-sans focus:outline-none cursor-pointer"
+                      >
+                        <option value="XS">XS</option>
+                        <option value="S">S</option>
+                        <option value="M">M</option>
+                        <option value="L">L</option>
+                        <option value="XL">XL</option>
+                        <option value="XXL">XXL</option>
+                        <option value="3XL">3XL</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[9px] text-zinc-500 uppercase font-mono mb-0.5">Adquisició</label>
+                      <select
+                        value={c1UniformeTipus}
+                        onChange={(e) => setC1UniformeTipus(e.target.value as 'compra' | 'lloguer')}
+                        className="w-full bg-white border border-[#ff0090]/40 rounded-lg px-2 py-1.5 text-xs font-bold text-[#ff0090] font-sans focus:outline-none cursor-pointer"
+                      >
+                        <option value="compra">{language === 'ca' ? 'Compra' : 'Compra (Venta)'}</option>
+                        <option value="lloguer">{language === 'ca' ? 'Lloguer (Alquiler)' : 'Alquiler'}</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {registration.seleccionsUniforme && Object.keys(registration.seleccionsUniforme).length > 0 && (
+                    <div className="space-y-1 bg-white p-2 border border-zinc-150 rounded-xl">
                       <span className="block text-[8px] font-mono text-zinc-400 uppercase font-bold tracking-wider mb-1">
-                        {language === 'ca' ? "Equipament & Marxandatge:" : "Equipamiento & Merchandising:"}
+                        {language === 'ca' ? "Comanda d'Equipament (Detalls):" : "Pedido de Equipamiento (Detalles):"}
                       </span>
                       {Object.entries(registration.seleccionsUniforme).map(([liniaId, sel]) => {
                         const linia = config?.liniisUniforme?.find(l => l.id === liniaId);
                         const nomLinia = linia ? linia.nom : liniaId;
                         return (
-                          <div key={liniaId} className="flex justify-between items-center text-[11px] py-0.5 border-b border-zinc-100 last:border-0">
-                            <span className="text-zinc-500 font-bold truncate pr-2">{nomLinia}:</span>
-                            <span className="font-mono text-zinc-900 font-extrabold flex items-center gap-1">
-                              {sel.c1Talla}
-                              {linia?.requeixQuantitat && <span className="text-fuchsia-600 font-black">({sel.quantitat} u)</span>}
+                          <div key={liniaId} className="flex justify-between items-center text-[10px] py-0.5">
+                            <span className="text-zinc-500 truncate pr-1">{nomLinia}:</span>
+                            <span className="font-mono text-zinc-900 font-extrabold">
+                              {sel.c1Talla} {linia?.requeixQuantitat && `(${sel.quantitat} u)`}
                             </span>
                           </div>
                         );
                       })}
                     </div>
-                  ) : (
-                    <p className="flex items-center gap-1.5 mt-2">
-                      <span className="font-mono text-[9px] bg-zinc-200 text-zinc-700 px-2.5 py-0.5 rounded font-extrabold uppercase">
-                        {language === 'ca' ? "TALLA DE ROBA:" : "TALLA DE ROPA:"}
-                      </span>
-                      <strong className="text-zinc-900 text-sm">{registration.c1Talla}</strong>
-                    </p>
                   )}
 
                   {registration.c1EsMenor && (
-                    <div className="bg-amber-50/60 border border-amber-200/60 rounded-xl p-3 mt-2 space-y-1">
-                      <span className="block text-[8px] font-mono text-amber-800 uppercase font-black tracking-wider mb-1">TUTOR LEGAL:</span>
-                      <p className="font-bold text-zinc-900 leading-tight">{registration.c1TutorNom} {registration.c1TutorCognoms}</p>
-                      <p className="text-[10px] text-zinc-500 font-mono mt-0.5">DNI: <span className="font-bold text-zinc-700">{registration.c1TutorDni}</span></p>
-                      <p className="text-[10px] text-zinc-500 font-mono mt-0.5">Tel: <span className="font-bold text-zinc-700">{registration.c1TutorTelefon}</span></p>
+                    <div className="bg-amber-50/60 border border-amber-200/60 rounded-xl p-2.5 space-y-2 mt-1">
+                      <span className="block text-[8px] font-mono text-amber-800 uppercase font-black tracking-wider">TUTOR (Editable):</span>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <div>
+                          <label className="block text-[8px] text-zinc-400 uppercase font-mono">Nom</label>
+                          <input 
+                            type="text" 
+                            value={c1TutorNom} 
+                            onChange={(e) => setC1TutorNom(e.target.value)} 
+                            className="w-full bg-white border border-zinc-200 rounded px-1.5 py-0.5 text-[10px] focus:outline-none" 
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[8px] text-zinc-400 uppercase font-mono">Cognoms</label>
+                          <input 
+                            type="text" 
+                            value={c1TutorCognoms} 
+                            onChange={(e) => setC1TutorCognoms(e.target.value)} 
+                            className="w-full bg-white border border-zinc-200 rounded px-1.5 py-0.5 text-[10px] focus:outline-none" 
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <div>
+                          <label className="block text-[8px] text-zinc-400 uppercase font-mono">DNI</label>
+                          <input 
+                            type="text" 
+                            value={c1TutorDni} 
+                            onChange={(e) => setC1TutorDni(e.target.value)} 
+                            className="w-full bg-white border border-zinc-200 rounded px-1.5 py-0.5 text-[10px] font-mono focus:outline-none" 
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[8px] text-zinc-400 uppercase font-mono">Mòbil</label>
+                          <input 
+                            type="tel" 
+                            value={c1TutorTelefon} 
+                            onChange={(e) => setC1TutorTelefon(e.target.value)} 
+                            className="w-full bg-white border border-zinc-200 rounded px-1.5 py-0.5 text-[10px] font-mono focus:outline-none" 
+                          />
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>
               </div>
 
               {/* Comparser 2 profile card */}
-              <div className="bg-zinc-50 rounded-2xl p-4.5 border border-zinc-100 space-y-3 relative overflow-hidden">
-                <span className="absolute top-2 right-2 text-[10px] text-zinc-400 font-mono font-bold">C2</span>
-                <h4 className="font-sans font-black text-sm text-zinc-900 pr-4 flex items-center gap-1.5 flex-wrap">
-                  <User size={14} className="text-fuchsia-500" />
-                  {registration.c2Nom} {registration.c2Cognoms}
-                  {registration.c2EsMenor && (
-                    <span className="bg-amber-100 text-amber-800 text-[8px] font-black px-1.5 py-0.5 rounded font-mono tracking-wider uppercase shrink-0">
-                      MENOR
-                    </span>
-                  )}
-                </h4>
+              <div className="bg-zinc-50 rounded-2xl p-4.5 border border-zinc-200/60 space-y-3 relative overflow-hidden" id="c2-profile-card">
+                <span className="absolute top-2 right-2 text-[10px] text-zinc-400 font-mono font-bold">C2 (Editable)</span>
+                
+                <div className="space-y-3 pt-1">
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <div>
+                      <label className="block text-[9px] text-zinc-500 uppercase font-mono mb-0.5">Nom</label>
+                      <input 
+                        type="text" 
+                        value={c2Nom} 
+                        onChange={(e) => setC2Nom(e.target.value)}
+                        className="w-full bg-white border border-zinc-200 focus:border-[#ff0090] rounded-lg px-2.5 py-1.5 text-xs font-bold font-sans focus:outline-none" 
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[9px] text-zinc-500 uppercase font-mono mb-0.5">Cognoms</label>
+                      <input 
+                        type="text" 
+                        value={c2Cognoms} 
+                        onChange={(e) => setC2Cognoms(e.target.value)}
+                        className="w-full bg-white border border-zinc-200 focus:border-[#ff0090] rounded-lg px-2.5 py-1.5 text-xs font-bold font-sans focus:outline-none" 
+                      />
+                    </div>
+                  </div>
 
-                <div className="space-y-1.5 text-xs text-zinc-600 font-sans">
-                  <a href={`tel:${registration.c2Telefon}`} className="flex items-center gap-1.5 hover:text-zinc-950">
-                    <Phone className="text-zinc-400" size={12} /> {registration.c2Telefon}
-                  </a>
-                  <a href={`mailto:${registration.c2Email}`} className="flex items-center gap-1.5 hover:text-zinc-950 truncate block">
-                    <Mail className="text-zinc-400" size={12} /> {registration.c2Email}
-                  </a>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <div>
+                      <label className="block text-[9px] text-zinc-500 uppercase font-mono mb-0.5">Telèfon</label>
+                      <input 
+                        type="tel" 
+                        value={c2Telefon} 
+                        onChange={(e) => setC2Telefon(e.target.value)}
+                        className="w-full bg-white border border-zinc-200 focus:border-[#ff0090] rounded-lg px-2.5 py-1.5 text-xs font-bold font-sans focus:outline-none" 
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[9px] text-zinc-500 uppercase font-mono mb-0.5">E-mail</label>
+                      <input 
+                        type="email" 
+                        value={c2Email} 
+                        onChange={(e) => setC2Email(e.target.value)}
+                        className="w-full bg-white border border-zinc-200 focus:border-[#ff0090] rounded-lg px-2.5 py-1.5 text-xs font-bold font-sans focus:outline-none truncate" 
+                      />
+                    </div>
+                  </div>
 
-                  {registration.seleccionsUniforme && Object.keys(registration.seleccionsUniforme).length > 0 ? (
-                    <div className="space-y-1 bg-white p-2.5 rounded-xl border border-zinc-200 shadow-sm mt-2">
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <div>
+                      <label className="block text-[9px] text-zinc-500 uppercase font-mono mb-0.5">Talla</label>
+                      <select
+                        value={c2Talla}
+                        onChange={(e) => setC2Talla(e.target.value)}
+                        className="w-full bg-white border border-zinc-200 rounded-lg px-2 py-1.5 text-xs font-bold font-sans focus:outline-none cursor-pointer"
+                      >
+                        <option value="XS">XS</option>
+                        <option value="S">S</option>
+                        <option value="M">M</option>
+                        <option value="L">L</option>
+                        <option value="XL">XL</option>
+                        <option value="XXL">XXL</option>
+                        <option value="3XL">3XL</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[9px] text-zinc-500 uppercase font-mono mb-0.5">Adquisició</label>
+                      <select
+                        value={c2UniformeTipus}
+                        onChange={(e) => setC2UniformeTipus(e.target.value as 'compra' | 'lloguer')}
+                        className="w-full bg-white border border-[#ff0090]/40 rounded-lg px-2 py-1.5 text-xs font-bold text-[#ff0090] font-sans focus:outline-none cursor-pointer"
+                      >
+                        <option value="compra">{language === 'ca' ? 'Compra' : 'Compra (Venta)'}</option>
+                        <option value="lloguer">{language === 'ca' ? 'Lloguer (Alquiler)' : 'Alquiler'}</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {registration.seleccionsUniforme && Object.keys(registration.seleccionsUniforme).length > 0 && (
+                    <div className="space-y-1 bg-white p-2 border border-zinc-150 rounded-xl">
                       <span className="block text-[8px] font-mono text-zinc-400 uppercase font-bold tracking-wider mb-1">
-                        {language === 'ca' ? "Equipament & Marxandatge:" : "Equipamiento & Merchandising:"}
+                        {language === 'ca' ? "Comanda d'Equipament (Detalls):" : "Pedido de Equipamiento (Detalles):"}
                       </span>
                       {Object.entries(registration.seleccionsUniforme).map(([liniaId, sel]) => {
                         const linia = config?.liniisUniforme?.find(l => l.id === liniaId);
                         const nomLinia = linia ? linia.nom : liniaId;
                         return (
-                          <div key={liniaId} className="flex justify-between items-center text-[11px] py-0.5 border-b border-zinc-100 last:border-0">
-                            <span className="text-zinc-500 font-bold truncate pr-2">{nomLinia}:</span>
-                            <span className="font-mono text-zinc-900 font-extrabold flex items-center gap-1">
-                              {sel.c2Talla}
-                              {linia?.requeixQuantitat && <span className="text-fuchsia-600 font-black">({sel.quantitat} u)</span>}
+                          <div key={liniaId} className="flex justify-between items-center text-[10px] py-0.5">
+                            <span className="text-zinc-500 truncate pr-1">{nomLinia}:</span>
+                            <span className="font-mono text-zinc-900 font-extrabold font-sans">
+                              {sel.c2Talla} {linia?.requeixQuantitat && `(${sel.quantitat} u)`}
                             </span>
                           </div>
                         );
                       })}
                     </div>
-                  ) : (
-                    <p className="flex items-center gap-1.5 mt-2">
-                      <span className="font-mono text-[9px] bg-zinc-200 text-zinc-700 px-2.5 py-0.5 rounded font-extrabold uppercase">
-                        {language === 'ca' ? "TALLA DE ROBA:" : "TALLA DE ROPA:"}
-                      </span>
-                      <strong className="text-zinc-900 text-sm">{registration.c2Talla}</strong>
-                    </p>
                   )}
 
                   {registration.c2EsMenor && (
-                    <div className="bg-amber-50/60 border border-amber-200/60 rounded-xl p-3 mt-2 space-y-1">
-                      <span className="block text-[8px] font-mono text-amber-800 uppercase font-black tracking-wider mb-1">TUTOR LEGAL:</span>
-                      <p className="font-bold text-zinc-900 leading-tight">{registration.c2TutorNom} {registration.c2TutorCognoms}</p>
-                      <p className="text-[10px] text-zinc-500 font-mono mt-0.5">DNI: <span className="font-bold text-zinc-700">{registration.c2TutorDni}</span></p>
-                      <p className="text-[10px] text-zinc-500 font-mono mt-0.5">Tel: <span className="font-bold text-zinc-700">{registration.c2TutorTelefon}</span></p>
+                    <div className="bg-amber-50/60 border border-amber-200/60 rounded-xl p-2.5 space-y-2 mt-1">
+                      <span className="block text-[8px] font-mono text-amber-800 uppercase font-black tracking-wider">TUTOR (Editable):</span>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <div>
+                          <label className="block text-[8px] text-zinc-400 uppercase font-mono">Nom</label>
+                          <input 
+                            type="text" 
+                            value={c2TutorNom} 
+                            onChange={(e) => setC2TutorNom(e.target.value)} 
+                            className="w-full bg-white border border-zinc-200 rounded px-1.5 py-0.5 text-[10px] focus:outline-none" 
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[8px] text-zinc-400 uppercase font-mono">Cognoms</label>
+                          <input 
+                            type="text" 
+                            value={c2TutorCognoms} 
+                            onChange={(e) => setC2TutorCognoms(e.target.value)} 
+                            className="w-full bg-white border border-zinc-200 rounded px-1.5 py-0.5 text-[10px] focus:outline-none" 
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <div>
+                          <label className="block text-[8px] text-zinc-400 uppercase font-mono">DNI</label>
+                          <input 
+                            type="text" 
+                            value={c2TutorDni} 
+                            onChange={(e) => setC2TutorDni(e.target.value)} 
+                            className="w-full bg-white border border-zinc-200 rounded px-1.5 py-0.5 text-[10px] font-mono focus:outline-none" 
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[8px] text-zinc-400 uppercase font-mono">Mòbil</label>
+                          <input 
+                            type="tel" 
+                            value={c2TutorTelefon} 
+                            onChange={(e) => setC2TutorTelefon(e.target.value)} 
+                            className="w-full bg-white border border-zinc-200 rounded px-1.5 py-0.5 text-[10px] font-mono focus:outline-none" 
+                          />
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>
