@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Compass, Sparkles, CheckCircle2, RotateCcw, Image, Video, Palette, Play, Eye, FileText, LayoutTemplate, Sliders } from 'lucide-react';
+import { Compass, Sparkles, CheckCircle2, RotateCcw, Image, Video, Palette, Play, Eye, FileText, LayoutTemplate, Sliders, Upload, Trash2 } from 'lucide-react';
 import { PortadaConfig } from './PortadaPage';
 
 export const PORTADA_CONFIG_DEFAULTS: PortadaConfig = {
@@ -78,6 +78,180 @@ export default function AdminPortada({ language, onAddLog }: AdminPortadaProps) 
 
   const updateField = <K extends keyof PortadaConfig>(field: K, value: PortadaConfig[K]) => {
     setConfig(prev => ({ ...prev, [field]: value }));
+  };
+
+  const FileOrUrlInput = ({
+    labelCa,
+    labelEs,
+    id,
+    value,
+    onChange,
+    type,
+    placeholder
+  }: {
+    labelCa: string;
+    labelEs: string;
+    id: string;
+    value: string;
+    onChange: (val: string) => void;
+    type: 'image' | 'video';
+    placeholder: string;
+  }) => {
+    const [isDragging, setIsDragging] = useState(false);
+
+    const handleDragOver = (e: React.DragEvent) => {
+      e.preventDefault();
+      setIsDragging(true);
+    };
+
+    const handleDragLeave = () => {
+      setIsDragging(false);
+    };
+
+    const handleDrop = (e: React.DragEvent) => {
+      e.preventDefault();
+      setIsDragging(false);
+      const file = e.dataTransfer.files?.[0];
+      if (file) {
+        processFile(file);
+      }
+    };
+
+    const processFile = (file: File) => {
+      const isTypeOk = type === 'image' 
+        ? file.type.startsWith('image/') 
+        : file.type.startsWith('video/');
+      
+      if (!isTypeOk) {
+        alert(language === 'ca' 
+          ? `El fitxer ha de ser un format de ${type === 'image' ? 'imatge' : 'vídeo'}.` 
+          : `El archivo debe ser un formato de ${type === 'image' ? 'imagen' : 'video'}.`
+        );
+        return;
+      }
+
+      // Max size check: warn of localstorage constraint
+      const maxMb = type === 'image' ? 1.5 : 4.0;
+      if (file.size > maxMb * 1024 * 1024) {
+        const confirmGo = window.confirm(language === 'ca'
+          ? `⚠️ Avís: El fitxer pesa ${(file.size / (1024*1024)).toFixed(1)}MB. Per problemes de límit d'emmagatzematge LocalStorage al navegador, es recomana utilitzar fitxers de menys de ${maxMb}MB o fer servir enllaços/URLs. Desitgeu continuar de totes maneres?`
+          : `⚠️ Aviso: El archivo pesa ${(file.size / (1024*1024)).toFixed(1)}MB. Por límites de capacidad de LocalStorage en el navegador, se recomienda usar archivos de menos de ${maxMb}MB o usar enlaces/URLs. ¿Deseas continuar de todas formas?`
+        );
+        if (!confirmGo) return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        if (event.target?.result) {
+          onChange(event.target.result as string);
+        }
+      };
+      reader.readAsDataURL(file);
+    };
+
+    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file) {
+        processFile(file);
+      }
+    };
+
+    const isBase64 = value && value.startsWith('data:');
+
+    return (
+      <div className="space-y-2 text-left" id={`container-${id}`}>
+        <label className="block text-[10px] text-zinc-550 uppercase font-mono mb-1 font-extrabold" htmlFor={id}>
+          {language === 'ca' ? labelCa : labelEs}
+        </label>
+        
+        {/* URL Input field matching target selector */}
+        <div className="flex gap-2">
+          <input 
+            type="url"
+            id={id}
+            required
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder={placeholder}
+            className="flex-1 bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all font-mono"
+          />
+          {value && (
+            <button
+              type="button"
+              onClick={() => onChange("")}
+              className="px-2.5 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl transition flex items-center justify-center cursor-pointer border border-rose-200"
+              title={language === 'ca' ? "Netejar" : "Limpiar"}
+            >
+              <Trash2 size={13} />
+            </button>
+          )}
+        </div>
+
+        {/* Drag and Drop Zone */}
+        <div
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          onClick={() => {
+            const el = document.getElementById(`file-picker-${id}`);
+            el?.click();
+          }}
+          className={`border border-dashed rounded-xl p-3 text-center flex flex-col items-center justify-center transition-all cursor-pointer ${
+            isDragging 
+              ? 'border-[#ff0090] bg-fuchsia-50/20' 
+              : isBase64
+                ? 'border-emerald-300 bg-emerald-50/5' 
+                : 'border-zinc-200 bg-white hover:border-[#ff0090]'
+          }`}
+        >
+          <input 
+            type="file"
+            id={`file-picker-${id}`}
+            accept={type === 'image' ? 'image/*' : 'video/*'}
+            className="hidden"
+            onChange={handleFileSelect}
+          />
+          
+          {isBase64 ? (
+            <div className="flex items-center gap-2 text-xs">
+              {type === 'image' ? (
+                <img 
+                  src={value} 
+                  alt="thumbnail" 
+                  className="w-10 h-8 rounded object-cover border bg-white" 
+                />
+              ) : (
+                <div className="w-10 h-8 rounded bg-zinc-900 flex items-center justify-center text-fuchsia-400 font-mono text-[7px] font-bold">Base64</div>
+              )}
+              <div className="text-left leading-none">
+                <span className="text-[10px] text-emerald-600 font-bold block">
+                  ✓ {language === 'ca' ? "FITXER LOCAL PUJAT" : "ARCHIVO LOCAL CARGADO"}
+                </span>
+                <span className="text-[8px] text-zinc-400 font-mono mt-0.5 block italic">
+                  {(value.length * 0.75 / (1024 * 1024)).toFixed(2)} MB {language === 'ca' ? "(Base64)" : "(Base64)"}
+                </span>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 justify-center py-2.5">
+              <Upload size={14} className="text-[#ff0090] animate-bounce shrink-0" />
+              <div className="text-left leading-tight">
+                <span className="text-[10px] font-bold text-zinc-700 block">
+                  {language === 'ca' 
+                    ? "Arrossegueu o pugeu fitxer local d'imatge/vídeo" 
+                    : "Arrastrad o subid archivo local de imagen/video"}
+                </span>
+                <span className="text-[8px] text-zinc-400 block font-mono">
+                  {type === 'image' 
+                    ? "Formats suportats: PNG, JPG, BMP, WEBP, SVG" 
+                    : "Formats suportats: MP4, WEBM, MOV, etc."}
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
   };
 
   return (
@@ -327,35 +501,28 @@ export default function AdminPortada({ language, onAddLog }: AdminPortadaProps) 
                 </div>
               </div>
             )}
-
             {config.bgTipus === 'imatge' && (
-              <div>
-                <label className="block text-[10px] text-zinc-550 uppercase font-mono mb-1 font-extrabold">Enllaç de la Foto de Fons (URL d'Unsplash o similar) *</label>
-                <input 
-                  type="url"
-                  required
-                  value={config.bgImatgeUrl}
-                  onChange={(e) => updateField('bgImatgeUrl', e.target.value)}
-                  placeholder="https://images.unsplash.com/photo-..."
-                  className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all font-mono"
-                />
-                <span className="text-[10px] text-zinc-400 mt-1 block">Afegeix l'URL de qualsevol imatge d'Internet. Recomanem fotos horitzontals i amb bona qualitat.</span>
-              </div>
+              <FileOrUrlInput 
+                id="bgImatgeUrl"
+                labelCa="Enllaç / Fitxer de la Foto de Fons *"
+                labelEs="Enlace / Archivo de la Foto de Fondo *"
+                type="image"
+                value={config.bgImatgeUrl}
+                onChange={(val) => updateField('bgImatgeUrl', val)}
+                placeholder="https://images.unsplash.com/photo-... o puja un fitxer"
+              />
             )}
 
             {config.bgTipus === 'video' && (
-              <div>
-                <label className="block text-[10px] text-zinc-550 uppercase font-mono mb-1 font-extrabold">Enllaç del Vídeo de Fons (Directe .mp4 o YouTube URL) *</label>
-                <input 
-                  type="text"
-                  required
-                  value={config.bgVideoUrl}
-                  onChange={(e) => updateField('bgVideoUrl', e.target.value)}
-                  placeholder="https://www.youtube.com/watch?v=..."
-                  className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all font-mono"
-                />
-                <span className="text-[10px] text-zinc-400 mt-1 block">Suporta tant fitxers de vídeo directe .mp4 com enllaços estàndard de reproducció de YouTube!</span>
-              </div>
+              <FileOrUrlInput 
+                id="bgVideoUrl"
+                labelCa="Enllaç / Fitxer del Vídeo de Fons *"
+                labelEs="Enlace / Archivo del Vídeo del Fondo *"
+                type="video"
+                value={config.bgVideoUrl}
+                onChange={(val) => updateField('bgVideoUrl', val)}
+                placeholder="https://www.youtube.com/watch?v=... o puja un fitxer"
+              />
             )}
           </div>
 
@@ -365,7 +532,7 @@ export default function AdminPortada({ language, onAddLog }: AdminPortadaProps) 
               <LayoutTemplate size={14} className="text-[#ff0090]" />
               {language === 'ca' ? "Targeta de Contingut Destacat" : "Tarjeta de Contenido Destacado"}
             </h4>
-            <p className="text-[11px] text-zinc-500 leading-normal mb-3">
+            <p className="text-[11px] text-zinc-550 leading-normal mb-3">
               Configureu si voleu mostrar una targeta visual de suport (a la banda dreta en pantalles d'escriptori) amb una imatge clau o un reproductor de vídeo del festival.
             </p>
 
@@ -409,31 +576,27 @@ export default function AdminPortada({ language, onAddLog }: AdminPortadaProps) 
             </div>
 
             {config.contingutTipus === 'imatge' && (
-              <div>
-                <label className="block text-[10px] text-zinc-550 uppercase font-mono mb-1 font-extrabold">Enllaç de l'imatge del Spotlight *</label>
-                <input 
-                  type="url"
-                  required
-                  value={config.contingutImatgeUrl}
-                  onChange={(e) => updateField('contingutImatgeUrl', e.target.value)}
-                  placeholder="https://images.unsplash.com/photo-..."
-                  className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all font-mono"
-                />
-              </div>
+              <FileOrUrlInput 
+                id="contingutImatgeUrl"
+                labelCa="Enllaç / Fitxer del Spotlight *"
+                labelEs="Enlace / Archivo del Spotlight *"
+                type="image"
+                value={config.contingutImatgeUrl}
+                onChange={(val) => updateField('contingutImatgeUrl', val)}
+                placeholder="https://images.unsplash.com/photo-... o puja un fitxer"
+              />
             )}
 
             {config.contingutTipus === 'video' && (
-              <div>
-                <label className="block text-[10px] text-zinc-550 uppercase font-mono mb-1 font-extrabold font-bold">Enllaç del vídeo del Spotlight (Directe .mp4 o YouTube URL) *</label>
-                <input 
-                  type="text"
-                  required
-                  value={config.contingutVideoUrl}
-                  onChange={(e) => updateField('contingutVideoUrl', e.target.value)}
-                  placeholder="https://www.youtube.com/watch?v=..."
-                  className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all font-mono"
-                />
-              </div>
+              <FileOrUrlInput 
+                id="contingutVideoUrl"
+                labelCa="Enllaç / Fitxer del Vídeo del Spotlight *"
+                labelEs="Enlace / Archivo del Vídeo del Spotlight *"
+                type="video"
+                value={config.contingutVideoUrl}
+                onChange={(val) => updateField('contingutVideoUrl', val)}
+                placeholder="https://www.youtube.com/watch?v=... o puja un fitxer"
+              />
             )}
           </div>
 
