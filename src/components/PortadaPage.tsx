@@ -46,6 +46,23 @@ export default function PortadaPage({
 }: PortadaPageProps) {
   const { language, setLanguage } = useLanguage();
 
+  const [customLogo, setCustomLogo] = React.useState(() => localStorage.getItem('tast_email_logo') || "");
+
+  React.useEffect(() => {
+    const loadLogo = () => {
+      setCustomLogo(localStorage.getItem('tast_email_logo') || "");
+    };
+    loadLogo();
+    window.addEventListener('storage', loadLogo);
+    window.addEventListener('hoursConfigChanged', loadLogo);
+    window.addEventListener('localStorage', loadLogo);
+    return () => {
+      window.removeEventListener('storage', loadLogo);
+      window.removeEventListener('hoursConfigChanged', loadLogo);
+      window.removeEventListener('localStorage', loadLogo);
+    };
+  }, []);
+
   const titol = language === 'ca' ? config.titolCA : config.titolES;
   const subtitol = language === 'ca' ? config.subtitolCA : config.subtitolES;
   const descripcio = language === 'ca' ? config.descripcioCA : config.descripcioES;
@@ -137,11 +154,18 @@ export default function PortadaPage({
       {/* Header bar within the landing layout */}
       <div className="relative z-10 w-full flex justify-between items-center pb-6 border-b border-white/10">
         <div className="flex items-center gap-2.5">
-          {globalLogoUseImage && globalLogoImgUrl ? (
+          {customLogo ? (
+            <img 
+              src={customLogo} 
+              alt="Logo El Tast" 
+              className="w-8 h-8 object-contain rounded-lg border border-white/20 shadow-lg bg-white p-0.5"
+              referrerPolicy="no-referrer"
+            />
+          ) : globalLogoUseImage && globalLogoImgUrl ? (
             <img 
               src={globalLogoImgUrl} 
               alt="Logo El Tast" 
-              className="w-8 h-8 object-contain rounded-lg border border-white/20 shadow-lg"
+              className="w-8 h-8 object-contain rounded-lg border border-white/20 shadow-lg bg-white p-0.5"
               referrerPolicy="no-referrer"
             />
           ) : (

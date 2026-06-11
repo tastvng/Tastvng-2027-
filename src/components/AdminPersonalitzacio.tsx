@@ -84,7 +84,18 @@ export default function AdminPersonalitzacio({ language, onAddLog }: AdminPerson
     const reader = new FileReader();
     reader.onload = (event) => {
       if (event.target?.result) {
-        setEmailLogo(event.target.result as string);
+        const logoData = event.target.result as string;
+        setEmailLogo(logoData);
+        // Save immediately and notify all components/pages
+        localStorage.setItem('tast_email_logo', logoData);
+        window.dispatchEvent(new Event('hoursConfigChanged'));
+        window.dispatchEvent(new Event('localStorage'));
+        if (onAddLog) {
+          onAddLog(language === 'ca' 
+            ? "Mòdul de Personalització: Imatge de logotip actualitzada i aplicada a tot el sistema." 
+            : "Módulo de Personalización: Imagen de logotipo actualizada y aplicada a todo el sistema."
+          );
+        }
       }
     };
     reader.readAsDataURL(file);
@@ -334,6 +345,15 @@ export default function AdminPersonalitzacio({ language, onAddLog }: AdminPerson
                           onClick={(e) => {
                             e.stopPropagation();
                             setEmailLogo("");
+                            localStorage.setItem('tast_email_logo', "");
+                            window.dispatchEvent(new Event('hoursConfigChanged'));
+                            window.dispatchEvent(new Event('localStorage'));
+                            if (onAddLog) {
+                              onAddLog(language === 'ca' 
+                                ? "Mòdul de Personalització: Logotip personalitzat eliminat amb èxit." 
+                                : "Módulo de Personalización: Logotipo personalizado eliminado con éxito."
+                              );
+                            }
                           }}
                           className="p-1.5 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-lg transition cursor-pointer"
                           title={language === 'ca' ? "Eliminar imatge" : "Eliminar imagen"}

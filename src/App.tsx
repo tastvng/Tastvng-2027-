@@ -110,21 +110,26 @@ export default function App() {
     es: "Miércoles y viernes, de 18:00h a 21:30h directamente en la sede social de la Asociación Cultural El Tast."
   });
 
+  const [emailLogo, setEmailLogo] = useState(() => localStorage.getItem('tast_email_logo') || "");
+
   useEffect(() => {
-    const loadHours = () => {
+    const loadHoursAndLogo = () => {
       const savedCa = localStorage.getItem('tast_secretaria_hours_ca');
       const savedEs = localStorage.getItem('tast_secretaria_hours_es');
       setHoursConfig({
         ca: savedCa || "Dimecres i divendres, de 18:00h a 21:30h directament a la seu social de l'Associació Cultural El Tast.",
         es: savedEs || "Miércoles y viernes, de 18:00h a 21:30h directamente en la sede social de la Asociación Cultural El Tast."
       });
+      setEmailLogo(localStorage.getItem('tast_email_logo') || "");
     };
-    loadHours();
-    window.addEventListener('storage', loadHours);
-    window.addEventListener('hoursConfigChanged', loadHours);
+    loadHoursAndLogo();
+    window.addEventListener('storage', loadHoursAndLogo);
+    window.addEventListener('hoursConfigChanged', loadHoursAndLogo);
+    window.addEventListener('localStorage', loadHoursAndLogo);
     return () => {
-      window.removeEventListener('storage', loadHours);
-      window.removeEventListener('hoursConfigChanged', loadHours);
+      window.removeEventListener('storage', loadHoursAndLogo);
+      window.removeEventListener('hoursConfigChanged', loadHoursAndLogo);
+      window.removeEventListener('localStorage', loadHoursAndLogo);
     };
   }, []);
 
@@ -353,11 +358,18 @@ export default function App() {
         <div className="absolute top-0 left-0 right-0 h-1" style={{ backgroundColor: logoColor }} />
         
         <div className="flex items-center gap-2.5">
-          {config.logoUseImage && config.logoImgUrl ? (
+          {emailLogo ? (
+            <img 
+              src={emailLogo} 
+              alt="Logo El Tast" 
+              className="w-9 h-9 object-contain rounded-lg shadow-lg border border-white/10 shrink-0 bg-white p-0.5"
+              referrerPolicy="no-referrer"
+            />
+          ) : config.logoUseImage && config.logoImgUrl ? (
             <img 
               src={config.logoImgUrl} 
               alt="Logo El Tast" 
-              className="w-9 h-9 object-contain rounded-lg shadow-lg border border-white/10 shrink-0"
+              className="w-9 h-9 object-contain rounded-lg shadow-lg border border-white/10 shrink-0 bg-white p-0.5"
               referrerPolicy="no-referrer"
             />
           ) : (
