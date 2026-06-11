@@ -23,6 +23,18 @@ export interface PortadaConfig {
   
   botoTextCA: string;
   botoTextES: string;
+
+  // New photo framing & color adjustment options (optional for safety with older state)
+  bgImatgeX?: number; // 0-100% position
+  bgImatgeY?: number; // 0-100% position
+  bgImatgeScale?: 'cover' | 'contain' | 'auto';
+  bgImatgeOpacity?: number; // 0-100%
+  bgImatgeSaturacio?: number; // 0-200% (default 100 for normal color, replace mix-blend-luminosity)
+  bgImatgeBrightness?: number; // 0-200%
+  
+  contingutImatgeX?: number; // 0-100% position
+  contingutImatgeY?: number; // 0-100% position
+  contingutImatgeScale?: 'cover' | 'contain' | 'fill';
 }
 
 interface PortadaPageProps {
@@ -114,7 +126,13 @@ export default function PortadaPage({
         <img 
           src={config.bgImatgeUrl} 
           alt="Portada Background" 
-          className="absolute inset-0 w-full h-full object-cover z-0 opacity-40 mix-blend-luminosity hover:opacity-45 transition-opacity duration-700"
+          className="absolute inset-0 w-full h-full z-0 transition-all duration-700"
+          style={{
+            objectPosition: `${config.bgImatgeX ?? 50}% ${config.bgImatgeY ?? 50}%`,
+            objectFit: config.bgImatgeScale || 'cover',
+            opacity: (config.bgImatgeOpacity ?? 40) / 100,
+            filter: `saturate(${config.bgImatgeSaturacio ?? 100}%) brightness(${config.bgImatgeBrightness ?? 100}%)`
+          }}
           referrerPolicy="no-referrer"
         />
       )}
@@ -293,7 +311,11 @@ export default function PortadaPage({
                   <img 
                     src={config.contingutImatgeUrl} 
                     alt="Portada Spotlight content" 
-                    className="w-full h-full object-cover group-hover:scale-103 transition duration-1000"
+                    className="w-full h-full group-hover:scale-103 transition duration-1000"
+                    style={{
+                      objectPosition: `${config.contingutImatgeX ?? 50}% ${config.contingutImatgeY ?? 50}%`,
+                      objectFit: config.contingutImatgeScale || 'cover'
+                    }}
                     referrerPolicy="no-referrer"
                   />
                 </div>

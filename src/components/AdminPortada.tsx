@@ -21,7 +21,19 @@ export const PORTADA_CONFIG_DEFAULTS: PortadaConfig = {
   contingutVideoUrl: '',
   
   botoTextCA: 'Inscripció en línia',
-  botoTextES: 'Inscripción en línea'
+  botoTextES: 'Inscripción en línea',
+
+  // Defaults for image crop and colors
+  bgImatgeX: 50,
+  bgImatgeY: 50,
+  bgImatgeScale: 'cover',
+  bgImatgeOpacity: 40,
+  bgImatgeSaturacio: 100,
+  bgImatgeBrightness: 100,
+
+  contingutImatgeX: 50,
+  contingutImatgeY: 50,
+  contingutImatgeScale: 'cover'
 };
 
 interface AdminPortadaProps {
@@ -502,15 +514,147 @@ export default function AdminPortada({ language, onAddLog }: AdminPortadaProps) 
               </div>
             )}
             {config.bgTipus === 'imatge' && (
-              <FileOrUrlInput 
-                id="bgImatgeUrl"
-                labelCa="Enllaç / Fitxer de la Foto de Fons *"
-                labelEs="Enlace / Archivo de la Foto de Fondo *"
-                type="image"
-                value={config.bgImatgeUrl}
-                onChange={(val) => updateField('bgImatgeUrl', val)}
-                placeholder="https://images.unsplash.com/photo-... o puja un fitxer"
-              />
+              <div className="space-y-4">
+                <FileOrUrlInput 
+                  id="bgImatgeUrl"
+                  labelCa="Enllaç / Fitxer de la Foto de Fons *"
+                  labelEs="Enlace / Archivo de la Foto de Fondo *"
+                  type="image"
+                  value={config.bgImatgeUrl}
+                  onChange={(val) => updateField('bgImatgeUrl', val)}
+                  placeholder="https://images.unsplash.com/photo-... o puja un fitxer"
+                />
+
+                {config.bgImatgeUrl && (
+                  <div className="bg-zinc-100 rounded-2xl p-4 border border-zinc-200 text-left space-y-3.5">
+                    <div className="flex items-center gap-1.5 border-b border-zinc-200 pb-1.5">
+                      <Sliders size={13} className="text-[#ff0090]" />
+                      <span className="text-[10px] font-mono font-bold text-zinc-700 uppercase tracking-widest">
+                        {language === 'ca' ? "Ajustaments de la Foto de Fons" : "Ajustes de la Foto de Fondo"}
+                      </span>
+                    </div>
+
+                    {/* Framing / Alignments row */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                      {/* Vertical Crop slider */}
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-[9px] font-mono">
+                          <span className="text-zinc-550 font-bold">{language === 'ca' ? "Enquadrament Vertical" : "Encuadre Vertical"}</span>
+                          <span className="text-[#ff0090] font-bold">{config.bgImatgeY ?? 50}%</span>
+                        </div>
+                        <input 
+                          type="range"
+                          min="0"
+                          max="100"
+                          value={config.bgImatgeY ?? 50}
+                          onChange={(e) => updateField('bgImatgeY', parseInt(e.target.value))}
+                          className="w-full accent-[#ff0090] cursor-pointer h-1.5 bg-zinc-250 rounded-lg"
+                        />
+                        <div className="flex justify-between text-[8px] text-zinc-400 font-mono">
+                          <span>{language === 'ca' ? "Dalt" : "Arriba"} (0%)</span>
+                          <span>{language === 'ca' ? "Baix" : "Abajo"} (100%)</span>
+                        </div>
+                      </div>
+
+                      {/* Horizontal Crop slider */}
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-[9px] font-mono">
+                          <span className="text-zinc-550 font-bold">{language === 'ca' ? "Enquadrament Horizontal" : "Encuadre Horizontal"}</span>
+                          <span className="text-[#ff0090] font-bold">{config.bgImatgeX ?? 50}%</span>
+                        </div>
+                        <input 
+                          type="range"
+                          min="0"
+                          max="100"
+                          value={config.bgImatgeX ?? 50}
+                          onChange={(e) => updateField('bgImatgeX', parseInt(e.target.value))}
+                          className="w-full accent-[#ff0090] cursor-pointer h-1.5 bg-zinc-250 rounded-lg"
+                        />
+                        <div className="flex justify-between text-[8px] text-zinc-400 font-mono">
+                          <span>{language === 'ca' ? "Esquerra" : "Izquierda"} (0%)</span>
+                          <span>{language === 'ca' ? "Dreta" : "Derecha"} (100%)</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Mode of Scaling dropdown & Opacity slider row */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                      <div className="space-y-1">
+                        <label className="block text-[9px] text-zinc-550 font-mono font-bold">{language === 'ca' ? "Mida d'ajust d'escala" : "Ajuste de escala"}</label>
+                        <select
+                          value={config.bgImatgeScale || 'cover'}
+                          onChange={(e) => updateField('bgImatgeScale', e.target.value as any)}
+                          className="w-full bg-white text-zinc-800 border border-zinc-200 rounded-xl px-2 py-1.5 text-[11px] focus:outline-none focus:border-[#ff0090]"
+                        >
+                          <option value="cover">{language === 'ca' ? "Emplenar (Cover - Recomanat)" : "Rellenar (Cover - Recomendado)"}</option>
+                          <option value="contain">{language === 'ca' ? "Encaixar (Contain)" : "Encajar (Contain)"}</option>
+                          <option value="auto">{language === 'ca' ? "Mida original" : "Tamaño original"}</option>
+                        </select>
+                      </div>
+
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-[9px] font-mono">
+                          <span className="text-zinc-550 font-bold">{language === 'ca' ? "Opacitat / Brillantor" : "Opacidad / Luminosidad"}</span>
+                          <span className="text-[#ff0090] font-bold">{config.bgImatgeOpacity ?? 40}%</span>
+                        </div>
+                        <input 
+                          type="range"
+                          min="10"
+                          max="100"
+                          value={config.bgImatgeOpacity ?? 40}
+                          onChange={(e) => updateField('bgImatgeOpacity', parseInt(e.target.value))}
+                          className="w-full accent-[#ff0090] cursor-pointer h-1.5 bg-zinc-250 rounded-lg"
+                        />
+                        <div className="flex justify-between text-[8px] text-zinc-400 font-mono">
+                          <span>{language === 'ca' ? "Més fosc" : "Más oscuro"}</span>
+                          <span>{language === 'ca' ? "Més clar" : "Más claro"}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Saturation and Brightness correction sliders (to keep natural color or tweak it) */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-[9px] font-mono">
+                          <span className="text-zinc-550 font-bold">{language === 'ca' ? "Intensitat del Color (Saturació)" : "Intensidad del Color (Saturación)"}</span>
+                          <span className="text-[#ff0090] font-bold">{config.bgImatgeSaturacio ?? 100}%</span>
+                        </div>
+                        <input 
+                          type="range"
+                          min="0"
+                          max="200"
+                          value={config.bgImatgeSaturacio ?? 100}
+                          onChange={(e) => updateField('bgImatgeSaturacio', parseInt(e.target.value))}
+                          className="w-full accent-[#ff0090] cursor-pointer h-1.5 bg-zinc-250 rounded-lg"
+                        />
+                        <div className="flex justify-between text-[8px] text-zinc-400 font-mono">
+                          <span>{language === 'ca' ? "Blanc i Negre" : "Blanco y Negro"} (0%)</span>
+                          <span>{language === 'ca' ? "Viu" : "Vivo"} (200%)</span>
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-[9px] font-mono">
+                          <span className="text-zinc-550 font-bold">{language === 'ca' ? "Correcció de Brillantor" : "Corrección de Brillo"}</span>
+                          <span className="text-[#ff0090] font-bold">{config.bgImatgeBrightness ?? 100}%</span>
+                        </div>
+                        <input 
+                          type="range"
+                          min="50"
+                          max="150"
+                          value={config.bgImatgeBrightness ?? 100}
+                          onChange={(e) => updateField('bgImatgeBrightness', parseInt(e.target.value))}
+                          className="w-full accent-[#ff0090] cursor-pointer h-1.5 bg-zinc-250 rounded-lg"
+                        />
+                        <div className="flex justify-between text-[8px] text-zinc-400 font-mono">
+                          <span>{language === 'ca' ? "Fosc" : "Oscuro"}</span>
+                          <span>{language === 'ca' ? "Brillant" : "Brillante"}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
 
             {config.bgTipus === 'video' && (
@@ -576,15 +720,84 @@ export default function AdminPortada({ language, onAddLog }: AdminPortadaProps) 
             </div>
 
             {config.contingutTipus === 'imatge' && (
-              <FileOrUrlInput 
-                id="contingutImatgeUrl"
-                labelCa="Enllaç / Fitxer del Spotlight *"
-                labelEs="Enlace / Archivo del Spotlight *"
-                type="image"
-                value={config.contingutImatgeUrl}
-                onChange={(val) => updateField('contingutImatgeUrl', val)}
-                placeholder="https://images.unsplash.com/photo-... o puja un fitxer"
-              />
+              <div className="space-y-4">
+                <FileOrUrlInput 
+                  id="contingutImatgeUrl"
+                  labelCa="Enllaç / Fitxer del Spotlight *"
+                  labelEs="Enlace / Archivo del Spotlight *"
+                  type="image"
+                  value={config.contingutImatgeUrl}
+                  onChange={(val) => updateField('contingutImatgeUrl', val)}
+                  placeholder="https://images.unsplash.com/photo-... o puja un fitxer"
+                />
+
+                {config.contingutImatgeUrl && (
+                  <div className="bg-zinc-100 rounded-2xl p-4 border border-zinc-200 text-left space-y-3.5">
+                    <div className="flex items-center gap-1.5 border-b border-zinc-200 pb-1.5 font-bold">
+                      <Sliders size={13} className="text-[#ff0090]" />
+                      <span className="text-[10px] font-mono text-zinc-700 uppercase tracking-widest">
+                        {language === 'ca' ? "Ajustaments de la Targeta Spotlight" : "Ajustes de la Tarjeta Spotlight"}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                      {/* Vertical alignment */}
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-[9px] font-mono">
+                          <span className="text-zinc-550 font-bold">{language === 'ca' ? "Enquadrament Vertical" : "Encuadre Vertical"}</span>
+                          <span className="text-[#ff0090] font-bold">{config.contingutImatgeY ?? 50}%</span>
+                        </div>
+                        <input 
+                          type="range"
+                          min="0"
+                          max="100"
+                          value={config.contingutImatgeY ?? 50}
+                          onChange={(e) => updateField('contingutImatgeY', parseInt(e.target.value))}
+                          className="w-full accent-[#ff0090] cursor-pointer h-1.5 bg-zinc-250 rounded-lg"
+                        />
+                        <div className="flex justify-between text-[8px] text-zinc-400 font-mono">
+                          <span>{language === 'ca' ? "Dalt" : "Arriba"} (0%)</span>
+                          <span>{language === 'ca' ? "Baix" : "Abajo"} (100%)</span>
+                        </div>
+                      </div>
+
+                      {/* Horizontal alignment */}
+                      <div className="space-y-1">
+                        <div className="flex justify-between text-[9px] font-mono">
+                          <span className="text-zinc-550 font-bold">{language === 'ca' ? "Enquadrament Horizontal" : "Encuadre Horizontal"}</span>
+                          <span className="text-[#ff0090] font-bold">{config.contingutImatgeX ?? 50}%</span>
+                        </div>
+                        <input 
+                          type="range"
+                          min="0"
+                          max="100"
+                          value={config.contingutImatgeX ?? 50}
+                          onChange={(e) => updateField('contingutImatgeX', parseInt(e.target.value))}
+                          className="w-full accent-[#ff0090] cursor-pointer h-1.5 bg-zinc-250 rounded-lg"
+                        />
+                        <div className="flex justify-between text-[8px] text-zinc-400 font-mono">
+                          <span>{language === 'ca' ? "Esquerra" : "Izquierda"} (0%)</span>
+                          <span>{language === 'ca' ? "Dreta" : "Derecha"} (100%)</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Scale Mode Selector */}
+                    <div className="space-y-1">
+                      <label className="block text-[9px] text-zinc-550 font-mono font-bold">{language === 'ca' ? "Mida d'ajust d'escala" : "Ajuste de escala"}</label>
+                      <select
+                        value={config.contingutImatgeScale || 'cover'}
+                        onChange={(e) => updateField('contingutImatgeScale', e.target.value as any)}
+                        className="w-full bg-white text-zinc-800 border border-zinc-200 rounded-xl px-2 py-1.5 text-[11px] focus:outline-none focus:border-[#ff0090]"
+                      >
+                        <option value="cover">{language === 'ca' ? "Retallar i Emplenar (Cover)" : "Recortar y Rellenar (Cover)"}</option>
+                        <option value="contain">{language === 'ca' ? "Encaixar completament (Contain)" : "Encajar por completo (Contain)"}</option>
+                        <option value="fill">{language === 'ca' ? "Ajustar forçat (Stretch Fill)" : "Ajustar forzado (Stretch Fill)"}</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
 
             {config.contingutTipus === 'video' && (
@@ -645,7 +858,13 @@ export default function AdminPortada({ language, onAddLog }: AdminPortadaProps) 
                 <img 
                   src={config.bgImatgeUrl} 
                   alt="Ambient Preview" 
-                  className="absolute inset-0 w-full h-full object-cover z-0 opacity-20 mix-blend-luminosity"
+                  className="absolute inset-0 w-full h-full z-0 transition-all duration-300"
+                  style={{
+                    objectPosition: `${config.bgImatgeX ?? 50}% ${config.bgImatgeY ?? 50}%`,
+                    objectFit: config.bgImatgeScale || 'cover',
+                    opacity: (config.bgImatgeOpacity ?? 40) / 100,
+                    filter: `saturate(${config.bgImatgeSaturacio ?? 100}%) brightness(${config.bgImatgeBrightness ?? 100}%)`
+                  }}
                   referrerPolicy="no-referrer"
                 />
               )}
@@ -690,11 +909,15 @@ export default function AdminPortada({ language, onAddLog }: AdminPortadaProps) 
                 {config.contingutTipus !== 'none' && (
                   <div className="bg-black/60 p-1.5 aspect-[16/10] rounded-xl border border-white/5 overflow-hidden flex items-center justify-center text-[8px] text-zinc-500 font-mono">
                     {config.contingutTipus === 'imatge' ? (
-                      config.contingutImatgeUrl ? (
+                       config.contingutImatgeUrl ? (
                         <img 
                           src={config.contingutImatgeUrl} 
                           alt="preview" 
-                          className="w-full h-full object-cover rounded-lg"
+                          className="w-full h-full rounded-lg transition-all duration-300"
+                          style={{
+                            objectPosition: `${config.contingutImatgeX ?? 50}% ${config.contingutImatgeY ?? 50}%`,
+                            objectFit: config.contingutImatgeScale || 'cover'
+                          }}
                         />
                       ) : 'Falta enllaç...'
                     ) : (
