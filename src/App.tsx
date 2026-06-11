@@ -104,6 +104,30 @@ export default function App() {
   const [editId, setEditId] = useState<string | null>(null);
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean>(false);
 
+  // Practical guidance card hours state
+  const [hoursConfig, setHoursConfig] = useState({
+    ca: "Dimecres i divendres, de 18:00h a 21:30h directament a la seu social de l'Associació Cultural El Tast.",
+    es: "Miércoles y viernes, de 18:00h a 21:30h directamente en la sede social de la Asociación Cultural El Tast."
+  });
+
+  useEffect(() => {
+    const loadHours = () => {
+      const savedCa = localStorage.getItem('tast_secretaria_hours_ca');
+      const savedEs = localStorage.getItem('tast_secretaria_hours_es');
+      setHoursConfig({
+        ca: savedCa || "Dimecres i divendres, de 18:00h a 21:30h directament a la seu social de l'Associació Cultural El Tast.",
+        es: savedEs || "Miércoles y viernes, de 18:00h a 21:30h directamente en la sede social de la Asociación Cultural El Tast."
+      });
+    };
+    loadHours();
+    window.addEventListener('storage', loadHours);
+    window.addEventListener('hoursConfigChanged', loadHours);
+    return () => {
+      window.removeEventListener('storage', loadHours);
+      window.removeEventListener('hoursConfigChanged', loadHours);
+    };
+  }, []);
+
   // Operations activity logs for demonstration realism inside iframe
   const [operationLogs, setOperationLogs] = useState<string[]>([]);
 
@@ -353,16 +377,20 @@ export default function App() {
         </div>
 
         {/* Dynamic Staff Quick Indicator matchingFocused CSS Selector */}
-        <div className="hidden sm:flex items-center gap-2 px-3 py-1 bg-white/5 border border-white/10 rounded-lg text-[10px] text-zinc-400 font-mono">
-          <ShieldCheck size={12} className="text-fuchsia-500 animate-pulse" />
-          <span>{t('staff_count', { count: staffCount })}</span>
-        </div>
+        {isAdminLoggedIn && (
+          <div className="hidden sm:flex items-center gap-2 px-3 py-1 bg-white/5 border border-white/10 rounded-lg text-[10px] text-zinc-400 font-mono">
+            <ShieldCheck size={12} className="text-fuchsia-500 animate-pulse" />
+            <span>{t('staff_count', { count: staffCount })}</span>
+          </div>
+        )}
 
         {/* Live operational log display (real-time feedback logger in page margin) */}
-        <div className="hidden lg:flex items-center gap-2 px-3 py-1 bg-white/5 border border-white/10 rounded-lg max-w-sm text-[10px] text-zinc-400 font-mono">
-          <Terminal size={12} className="text-brand shrink-0" />
-          <span className="truncate">{operationLogs[0] || t('official_server')}</span>
-        </div>
+        {isAdminLoggedIn && (
+          <div className="hidden lg:flex items-center gap-2 px-3 py-1 bg-white/5 border border-white/10 rounded-lg max-w-sm text-[10px] text-zinc-400 font-mono">
+            <Terminal size={12} className="text-brand shrink-0" />
+            <span className="truncate">{operationLogs[0] || t('official_server')}</span>
+          </div>
+        )}
 
         <div className="flex items-center gap-3">
           {/* Selector d'Idioma Castellà / Català */}
@@ -456,9 +484,7 @@ export default function App() {
                       <Clock size={14} className="text-brand" /> {language === 'ca' ? 'Horaris de secretaria:' : 'Horarios de secretaría:'}
                     </h4>
                     <p className="text-xs text-zinc-400 leading-relaxed font-sans">
-                      {language === 'ca' 
-                        ? "Dimecres i divendres, de 18:00h a 21:30h directament a la seu social de l'Associació Cultural El Tast."
-                        : "Miércoles y viernes, de 18:00h a 21:30h directamente en la sede social de la Asociación Cultural El Tast."}
+                      {language === 'ca' ? hoursConfig.ca : hoursConfig.es}
                     </p>
                     <div className="pt-2 border-t border-white/10 flex items-center justify-between text-[10px] text-zinc-500 font-mono">
                       <span>{language === 'ca' ? "Inscripció lliure, parelles d'Adults/Juvenils sota reglament" : "Inscripción libre, parejas de Adultos/Juveniles bajo reglamento"}</span>

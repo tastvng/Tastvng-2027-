@@ -1,0 +1,408 @@
+import React, { useState, useEffect } from 'react';
+import { 
+  Compass, 
+  Sparkles, 
+  CheckCircle2, 
+  RotateCcw, 
+  Image, 
+  Video, 
+  Palette, 
+  Play, 
+  Eye, 
+  FileText, 
+  LayoutTemplate, 
+  Sliders,
+  Mail,
+  Clock,
+  Inbox,
+  AlertCircle,
+  Save,
+  ArrowRight
+} from 'lucide-react';
+import AdminPortada from './AdminPortada';
+
+interface AdminPersonalitzacioProps {
+  language: 'ca' | 'es';
+  onAddLog?: (txt: string) => void;
+}
+
+export default function AdminPersonalitzacio({ language, onAddLog }: AdminPersonalitzacioProps) {
+  const [activeSubTab, setActiveSubTab] = useState<'correu' | 'horari' | 'portada'>('correu');
+
+  // Correu states
+  const [emailSubjectCa, setEmailSubjectCa] = useState(() => localStorage.getItem('tast_email_subject_ca') || "🎟️ El Tast Comparses 2026 - Confirmació d'Inscripció");
+  const [emailSubjectEs, setEmailSubjectEs] = useState(() => localStorage.getItem('tast_email_subject_es') || "🎟️ El Tast Comparses 2026 - Confirmación de Inscripción");
+  const [emailBodyCa, setEmailBodyCa] = useState(() => localStorage.getItem('tast_email_body_ca') || "S'ha generat correctament el vostre comprovant per a les comparses 2026.");
+  const [emailBodyEs, setEmailBodyEs] = useState(() => localStorage.getItem('tast_email_body_es') || "Se ha generado correctamente vuestro comprobante para las comparsas 2026.");
+
+  // Horari states
+  const [hoursCa, setHoursCa] = useState(() => localStorage.getItem('tast_secretaria_hours_ca') || "Dimecres i divendres, de 18:00h a 21:30h directament a la seu social de l'Associació Cultural El Tast.");
+  const [hoursEs, setHoursEs] = useState(() => localStorage.getItem('tast_secretaria_hours_es') || "Miércoles y viernes, de 18:00h a 21:30h directamente en la sede social de la Asociación Cultural El Tast.");
+
+  const [activeLangTab, setActiveLangTab] = useState<'ca' | 'es'>('ca');
+  const [saveSuccess, setSaveSuccess] = useState(false);
+
+  const handleSaveCorreuIHorari = (e: React.FormEvent) => {
+    e.preventDefault();
+    localStorage.setItem('tast_email_subject_ca', emailSubjectCa);
+    localStorage.setItem('tast_email_subject_es', emailSubjectEs);
+    localStorage.setItem('tast_email_body_ca', emailBodyCa);
+    localStorage.setItem('tast_email_body_es', emailBodyEs);
+    localStorage.setItem('tast_secretaria_hours_ca', hoursCa);
+    localStorage.setItem('tast_secretaria_hours_es', hoursEs);
+
+    // Dispatch events to let Confirmation & App components refresh state in real-time
+    window.dispatchEvent(new Event('hoursConfigChanged'));
+    window.dispatchEvent(new Event('localStorage'));
+
+    setSaveSuccess(true);
+    if (onAddLog) {
+      onAddLog(language === 'ca' 
+        ? "Personalització de text de correu i horaris de secretaria desada amb èxit." 
+        : "Personalización de texto de correo y horarios de secretaría guardada con éxito."
+      );
+    }
+    setTimeout(() => setSaveSuccess(false), 3000);
+  };
+
+  const handleResetCorreuIHorari = () => {
+    if (window.confirm(language === 'ca' 
+      ? "Segur que vols restaurar els valors de correu i horaris per defecte?" 
+      : "¿Seguro que quieres restaurar los valores de correo y horarios por defecto?")) {
+      
+      const defSubjectCa = "🎟️ El Tast Comparses 2026 - Confirmació d'Inscripció";
+      const defSubjectEs = "🎟️ El Tast Comparses 2026 - Confirmación de Inscripción";
+      const defBodyCa = "S'ha generat correctament el vostre comprovant per a les comparses 2026.";
+      const defBodyEs = "Se ha generado correctamente vuestro comprobante para las comparsas 2026.";
+      const defHoursCa = "Dimecres i divendres, de 18:00h a 21:30h directament a la seu social de l'Associació Cultural El Tast.";
+      const defHoursEs = "Miércoles y viernes, de 18:00h a 21:30h directamente en la sede social de la Asociación Cultural El Tast.";
+
+      setEmailSubjectCa(defSubjectCa);
+      setEmailSubjectEs(defSubjectEs);
+      setEmailBodyCa(defBodyCa);
+      setEmailBodyEs(defBodyEs);
+      setHoursCa(defHoursCa);
+      setHoursEs(defHoursEs);
+
+      localStorage.setItem('tast_email_subject_ca', defSubjectCa);
+      localStorage.setItem('tast_email_subject_es', defSubjectEs);
+      localStorage.setItem('tast_email_body_ca', defBodyCa);
+      localStorage.setItem('tast_email_body_es', defBodyEs);
+      localStorage.setItem('tast_secretaria_hours_ca', defHoursCa);
+      localStorage.setItem('tast_secretaria_hours_es', defHoursEs);
+
+      window.dispatchEvent(new Event('hoursConfigChanged'));
+      window.dispatchEvent(new Event('localStorage'));
+
+      if (onAddLog) onAddLog("Valors per defecte restaurats.");
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 2000);
+    }
+  };
+
+  const currentSubject = activeLangTab === 'ca' ? emailSubjectCa : emailSubjectEs;
+  const currentBody = activeLangTab === 'ca' ? emailBodyCa : emailBodyEs;
+  const currentHours = activeLangTab === 'ca' ? hoursCa : hoursEs;
+
+  return (
+    <div className="space-y-6">
+      {/* Top Tabs within customizable board */}
+      <div className="flex bg-zinc-900 border border-zinc-800 p-1 rounded-2xl max-w-lg mb-4">
+        <button
+          type="button"
+          onClick={() => setActiveSubTab('correu')}
+          className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-black tracking-wide uppercase rounded-xl transition-all cursor-pointer ${
+            activeSubTab === 'correu'
+              ? 'bg-[#ff0090] text-white shadow-md'
+              : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+          }`}
+        >
+          <Mail size={13} />
+          {language === 'ca' ? "Correu Conf." : "Correo Conf."}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveSubTab('horari')}
+          className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-black tracking-wide uppercase rounded-xl transition-all cursor-pointer ${
+            activeSubTab === 'horari'
+              ? 'bg-[#ff0090] text-white shadow-md'
+              : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+          }`}
+        >
+          <Clock size={13} />
+          {language === 'ca' ? "Horaris Secr." : "Horarios Secr."}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveSubTab('portada')}
+          className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-black tracking-wide uppercase rounded-xl transition-all cursor-pointer ${
+            activeSubTab === 'portada'
+              ? 'bg-[#ff0090] text-white shadow-md'
+              : 'text-zinc-400 hover:text-white hover:bg-zinc-800'
+          }`}
+        >
+          <Compass size={13} />
+          {language === 'ca' ? "Portada" : "Portada"}
+        </button>
+      </div>
+
+      {activeSubTab === 'correu' && (
+        <div className="bg-white rounded-3xl border border-zinc-200 shadow-md p-6 sm:p-8 space-y-6 animate-fade-in text-zinc-900">
+          <div className="flex items-start gap-4 pb-5 border-b border-zinc-100 justify-between">
+            <div className="flex items-start gap-3">
+              <div className="p-3 bg-fuchsia-50 text-[#ff0090] rounded-2xl shrink-0">
+                <Mail size={22} />
+              </div>
+              <div className="text-left">
+                <h3 className="font-sans font-black text-lg uppercase tracking-tight text-zinc-900">
+                  {language === 'ca' ? "Redacció de Correu Electrònic" : "Redacción de Correo Electrónico"}
+                </h3>
+                <p className="text-xs text-zinc-400 max-w-xl">
+                  {language === 'ca'
+                    ? "Modifica el títol del correu que reben els participants un cop finalitzen la seva inscripció."
+                    : "Modifica el título del correo que reciben los participantes una vez finalizan su inscripción."}
+                </p>
+              </div>
+            </div>
+
+            {/* Language switch */}
+            <div className="flex items-center bg-zinc-100 border border-zinc-200 rounded-xl p-0.5 shrink-0 self-start sm:self-center">
+              <button
+                type="button"
+                onClick={() => setActiveLangTab('ca')}
+                className={`text-[9.5px] font-sans font-black tracking-tight px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                  activeLangTab === 'ca' ? 'bg-[#ff0090] text-white shadow-md' : 'text-zinc-500 hover:text-zinc-800'
+                }`}
+              >
+                CAT
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveLangTab('es')}
+                className={`text-[9.5px] font-sans font-black tracking-tight px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                  activeLangTab === 'es' ? 'bg-[#ff0090] text-white shadow-md' : 'text-zinc-500 hover:text-zinc-800'
+                }`}
+              >
+                ESP
+              </button>
+            </div>
+          </div>
+
+          <form onSubmit={handleSaveCorreuIHorari} className="grid grid-cols-1 lg:grid-cols-12 gap-8 text-left">
+            <div className="lg:col-span-6 space-y-5">
+              <div>
+                <label className="block text-[10px] text-zinc-500 uppercase font-mono mb-1.5 font-bold">
+                  {activeLangTab === 'ca' ? "Assumpte del Correu (CAT) *" : "Asunto del Correo (ESP) *"}
+                </label>
+                {activeLangTab === 'ca' ? (
+                  <input
+                    type="text"
+                    required
+                    value={emailSubjectCa}
+                    onChange={(e) => setEmailSubjectCa(e.target.value)}
+                    className="w-full bg-white text-zinc-900 border border-zinc-300 focus:border-[#ff0090] rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all"
+                  />
+                ) : (
+                  <input
+                    type="text"
+                    required
+                    value={emailSubjectEs}
+                    onChange={(e) => setEmailSubjectEs(e.target.value)}
+                    className="w-full bg-white text-zinc-900 border border-zinc-300 focus:border-[#ff0090] rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all"
+                  />
+                )}
+                <span className="text-[10px] text-zinc-400 mt-1 block">
+                  {language === 'ca' ? "El codi de seguiment s'afegirà al final de l'assumpte automàticament." : "El código de seguimiento se añadirá al final del asunto automáticamente."}
+                </span>
+              </div>
+
+              <div>
+                <label className="block text-[10px] text-zinc-500 uppercase font-mono mb-1.5 font-bold">
+                  {activeLangTab === 'ca' ? "Paràgraf de benvinguda opcional (CAT) *" : "Párrafo de bienvenida opcional (ESP) *"}
+                </label>
+                {activeLangTab === 'ca' ? (
+                  <textarea
+                    rows={4}
+                    required
+                    value={emailBodyCa}
+                    onChange={(e) => setEmailBodyCa(e.target.value)}
+                    className="w-full bg-white text-zinc-900 border border-zinc-300 focus:border-[#ff0090] rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all leading-relaxed resize-none"
+                  />
+                ) : (
+                  <textarea
+                    rows={4}
+                    required
+                    value={emailBodyEs}
+                    onChange={(e) => setEmailBodyEs(e.target.value)}
+                    className="w-full bg-white text-zinc-900 border border-zinc-300 focus:border-[#ff0090] rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all leading-relaxed resize-none"
+                  />
+                )}
+              </div>
+
+              <div className="flex flex-wrap gap-2 pt-3 border-t border-zinc-100">
+                <button
+                  type="submit"
+                  className="bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-black px-5 py-3 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-md"
+                >
+                  <Save size={14} />
+                  {language === 'ca' ? "Desar Canvis" : "Guardar Cambios"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleResetCorreuIHorari}
+                  className="bg-zinc-100 hover:bg-zinc-200 text-zinc-650 text-xs font-bold px-4 py-3 rounded-xl transition cursor-pointer"
+                >
+                  {language === 'ca' ? "Valors per Defecte" : "Valores por Defecto"}
+                </button>
+              </div>
+
+              {saveSuccess && (
+                <div className="p-3 bg-green-50 border border-green-200 text-green-700 text-xs rounded-xl flex items-center gap-2">
+                  <CheckCircle2 size={15} />
+                  {language === 'ca' ? "Configuració del correu actualitzada amb èxit!" : "¡Configuración de correo actualizada con éxito!"}
+                </div>
+              )}
+            </div>
+
+            {/* Right side: Email visual mockup */}
+            <div className="lg:col-span-6 bg-zinc-105 border border-zinc-200 rounded-3xl p-5 space-y-4">
+              <h4 className="font-sans font-bold text-xs text-zinc-600 uppercase tracking-widest flex items-center gap-1 pb-1.5 border-b border-zinc-200">
+                <Inbox size={13} className="text-[#ff0090]" />
+                {language === 'ca' ? "Previsualizació correu electrònic oficial" : "Previsualización correo electrónico oficial"}
+              </h4>
+
+              <div className="border border-zinc-200 rounded-2xl overflow-hidden bg-white text-zinc-900 shadow-sm">
+                <div className="bg-zinc-50 px-4 py-1.5 border-b border-zinc-200/70 flex items-center justify-between">
+                  <span className="text-[8px] font-mono text-zinc-400">Assumpte / Asunto: {currentSubject} [CODI-2026]</span>
+                </div>
+                <div className="p-5 space-y-4 font-sans text-[11px] text-zinc-700 max-w-sm mx-auto">
+                  <div className="text-center pb-2 border-b border-zinc-100 flex items-center justify-center gap-1 flex-col">
+                    <div className="w-8 h-8 rounded-lg bg-fuchsia-600 text-white flex items-center justify-center font-black text-xs shadow-sm">
+                      T
+                    </div>
+                    <span className="font-black text-[10px] text-zinc-900 mt-1">EL TAST VILANOVA</span>
+                  </div>
+
+                  <p className="font-black text-zinc-900 text-center">{language === 'ca' ? "Hola, Joana i Pere!" : "¡Hola, Joana y Pere!"}</p>
+                  <p className="text-center text-[10.5px] text-zinc-500 leading-relaxed leading-normal">{currentBody}</p>
+
+                  <div className="bg-zinc-50 border border-dashed border-fuchsia-450 p-3 rounded-xl text-center">
+                    <span className="block text-[8px] font-mono text-zinc-400 uppercase">CODI SEGUIMENT</span>
+                    <span className="text-sm font-mono font-black text-fuchsia-600">TAST-2026-X84B</span>
+                  </div>
+
+                  <div className="text-center text-[7.5px] text-zinc-400 pt-2 border-t border-zinc-100 leading-tight">
+                    <p className="font-bold">Secretaria General de l'Associació Cultural El Tast</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {activeSubTab === 'horari' && (
+        <div className="bg-white rounded-3xl border border-zinc-200 shadow-md p-6 sm:p-8 space-y-6 animate-fade-in text-zinc-900">
+          <div className="flex items-start gap-4 pb-5 border-b border-zinc-100 justify-between">
+            <div className="flex items-start gap-3">
+              <div className="p-3 bg-fuchsia-50 text-[#ff0090] rounded-2xl shrink-0">
+                <Clock size={22} />
+              </div>
+              <div className="text-left">
+                <h3 className="font-sans font-black text-lg uppercase tracking-tight text-zinc-900">
+                  {language === 'ca' ? "Horaris d'Atenció de Secretaria" : "Horarios de Atención de Secretaría"}
+                </h3>
+                <p className="text-xs text-zinc-400 max-w-xl">
+                  {language === 'ca'
+                    ? "Determina la informació d'horaris presencials que es mostra públicament a l'usuari final al costat del formulari de registre."
+                    : "Determina la información de horarios presenciales que se muestra públicamente al usuario final junto al formulario de registro."}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <form onSubmit={handleSaveCorreuIHorari} className="grid grid-cols-1 lg:grid-cols-12 gap-8 text-left">
+            <div className="lg:col-span-6 space-y-5">
+              <div>
+                <label className="block text-[10px] text-zinc-500 uppercase font-mono mb-1.5 font-bold">
+                  {language === 'ca' ? "Horaris d'Atenció de Secretaria (CAT) *" : "Horario de Atención de Secretaría (CAT) *"}
+                </label>
+                <textarea
+                  rows={4}
+                  required
+                  value={hoursCa}
+                  onChange={(e) => setHoursCa(e.target.value)}
+                  className="w-full bg-white text-zinc-900 border border-zinc-300 focus:border-[#ff0090] rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all leading-relaxed resize-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[10px] text-zinc-500 uppercase font-mono mb-1.5 font-bold">
+                  {language === 'ca' ? "Horaris d'Atenció de Secretaria (ESP) *" : "Horario de Atención de Secretaría (ESP) *"}
+                </label>
+                <textarea
+                  rows={4}
+                  required
+                  value={hoursEs}
+                  onChange={(e) => setHoursEs(e.target.value)}
+                  className="w-full bg-white text-zinc-900 border border-zinc-300 focus:border-[#ff0090] rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all leading-relaxed resize-none"
+                />
+              </div>
+
+              <div className="flex flex-wrap gap-2 pt-3 border-t border-zinc-100">
+                <button
+                  type="submit"
+                  className="bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-black px-5 py-3 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-md"
+                >
+                  <Save size={14} />
+                  {language === 'ca' ? "Desar Canvis" : "Guardar Cambios"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleResetCorreuIHorari}
+                  className="bg-zinc-100 hover:bg-zinc-200 text-zinc-650 text-xs font-bold px-4 py-3 rounded-xl transition cursor-pointer"
+                >
+                  {language === 'ca' ? "Valors per Defecte" : "Valores por Defecto"}
+                </button>
+              </div>
+
+              {saveSuccess && (
+                <div className="p-3 bg-green-50 border border-green-200 text-green-700 text-xs rounded-xl flex items-center gap-2">
+                  <CheckCircle2 size={15} />
+                  {language === 'ca' ? "Horari de secretaria guardat correctament!" : "¡Horario de secretaría guardado correctamente!"}
+                </div>
+              )}
+            </div>
+
+            {/* Right side: Public Hours preview block */}
+            <div className="lg:col-span-6 bg-zinc-105 border border-zinc-200 rounded-3xl p-5 space-y-4">
+              <h4 className="font-sans font-bold text-xs text-zinc-650 uppercase tracking-widest flex items-center gap-1.5 pb-2 border-b border-zinc-200">
+                <Clock size={13} className="text-[#ff0090]" />
+                {language === 'ca' ? "L'usuari ho veurà així (CAT / ESP):" : "El usuario lo verá así (CAT / ESP):"}
+              </h4>
+
+              <div className="bg-zinc-950 rounded-2xl p-5 border border-white/5 space-y-3.5 text-white max-w-sm mx-auto text-left">
+                <h5 className="font-sans font-bold text-[10.5px] text-zinc-400 uppercase tracking-widest flex items-center gap-1.5">
+                  <Clock size={13} className="text-fuchsia-500" />
+                  {language === 'ca' ? "Horaris de secretaria:" : "Horarios de secretaría:"}
+                </h5>
+                <p className="text-xs text-zinc-300 leading-relaxed font-sans">
+                  {language === 'ca' ? hoursCa : hoursEs}
+                </p>
+                <div className="pt-2 border-t border-white/5 flex items-center justify-between text-[9px] text-zinc-550 font-mono">
+                  <span>{language === 'ca' ? "Secció de Informació Pública" : "Sección de Información Pública"}</span>
+                </div>
+              </div>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {activeSubTab === 'portada' && (
+        <AdminPortada language={language} onAddLog={onAddLog} />
+      )}
+    </div>
+  );
+}

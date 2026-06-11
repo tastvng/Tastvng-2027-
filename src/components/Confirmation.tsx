@@ -20,6 +20,25 @@ export default function Confirmation({ registration, onClear }: ConfirmationProp
   const [smtpStatus, setSmtpStatus] = useState<'idle' | 'sending' | 'success' | 'error' | 'not_configured'>('idle');
   const [smtpError, setSmtpError] = useState('');
 
+  const [subSubjectCa, setSubSubjectCa] = useState(() => localStorage.getItem('tast_email_subject_ca') || "🎟️ El Tast Comparses 2026 - Confirmació d'Inscripció");
+  const [subSubjectEs, setSubSubjectEs] = useState(() => localStorage.getItem('tast_email_subject_es') || "🎟️ El Tast Comparses 2026 - Confirmación de Inscripción");
+  const [subBodyCa, setSubBodyCa] = useState(() => localStorage.getItem('tast_email_body_ca') || "S'ha generat correctament el vostre comprovant per a les comparses 2026.");
+  const [subBodyEs, setSubBodyEs] = useState(() => localStorage.getItem('tast_email_body_es') || "Se ha generado correctamente vuestro comprobante para las comparsas 2026.");
+
+  useEffect(() => {
+    const loadCustomTemplates = () => {
+      setSubSubjectCa(localStorage.getItem('tast_email_subject_ca') || "🎟️ El Tast Comparses 2026 - Confirmació d'Inscripció");
+      setSubSubjectEs(localStorage.getItem('tast_email_subject_es') || "🎟️ El Tast Comparses 2026 - Confirmación de Inscripción");
+      setSubBodyCa(localStorage.getItem('tast_email_body_ca') || "S'ha generat correctament el vostre comprovant per a les comparses 2026.");
+      setSubBodyEs(localStorage.getItem('tast_email_body_es') || "Se ha generado correctamente vuestro comprobante para las comparsas 2026.");
+    };
+    loadCustomTemplates();
+    window.addEventListener('localStorage', loadCustomTemplates);
+    return () => {
+      window.removeEventListener('localStorage', loadCustomTemplates);
+    };
+  }, []);
+
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&color=e6007e&data=${encodeURIComponent(registration.id)}`;
 
   const sendRealEmail = async () => {
@@ -46,14 +65,15 @@ export default function Confirmation({ registration, onClear }: ConfirmationProp
         return;
       }
 
-      const emailSubject = language === 'ca' 
-        ? `🎟️ El Tast Comparses 2026 - Confirmació d'Inscripció ${registration.codiSeguiment}`
-        : `🎟️ El Tast Comparses 2026 - Confirmación de Inscripción ${registration.codiSeguiment}`;
+      const emailSubjectBase = language === 'ca' ? subSubjectCa : subSubjectEs;
+      const emailSubject = `${emailSubjectBase} ${registration.codiSeguiment}`;
 
       const extrasHtml = `
         ${registration.teDomasBalco ? `<li>• 1x ${language === 'ca' ? 'Domàs de Balcó (Domás de Balcón)' : 'Colgadura de Balcón'}</li>` : ''}
         ${registration.teMocadorsExtra > 0 ? `<li>• ${registration.teMocadorsExtra}x ${language === 'ca' ? 'Mocador oficial extra (Pañuelo extra)' : 'Pañuelo oficial extra'}</li>` : ''}
       `;
+
+      const emailBodyText = language === 'ca' ? subBodyCa : subBodyEs;
 
       const emailHtml = `
         <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 30px; border: 1px solid #e1e1e6; border-radius: 24px; background-color: #ffffff; color: #111115;">
@@ -67,9 +87,7 @@ export default function Confirmation({ registration, onClear }: ConfirmationProp
             ${language === 'ca' ? "Preinscripció Confirmada!" : "¡Preinscripción Confirmada!"}
           </h1>
           <p style="font-size: 14px; text-align: center; color: #666670; margin-top: 0; margin-bottom: 25px;">
-            ${language === 'ca' 
-              ? "S'ha generat correctament el vostre comprovant per a les comparses 2026." 
-              : "Se ha generado correctamente vuestro comprobante para las comparsas 2026."}
+            ${emailBodyText}
           </p>
 
           <div style="border-top: 2px solid #ff0090; margin: 20px 0;"></div>
@@ -475,7 +493,7 @@ export default function Confirmation({ registration, onClear }: ConfirmationProp
         <div className="mt-3 space-y-1 font-mono text-[10px] text-zinc-400">
           <p><span className="text-zinc-600 font-bold">DE:</span> <span className="text-fuchsia-400 font-bold">{localStorage.getItem('tast_smtp_usuari') || 'secretaria@eltast.cat'}</span> <span className="text-[8px] bg-white/5 border border-white/10 px-1 py-0.5 rounded text-zinc-300 uppercase ml-1 uppercase">Live Connection</span></p>
           <p><span className="text-zinc-600 font-bold">A:</span> <span className="text-zinc-200 font-bold">{registration.c1Email}</span>, <span className="text-zinc-200 font-bold">{registration.c2Email}</span></p>
-          <p><span className="text-zinc-600 font-bold">ASSUMPTE / ASUNTO:</span> <span className="text-zinc-200 font-sans">{language === 'ca' ? `🎟️ El Tast Comparses 2026 - Confirmació d'Inscripció ${registration.codiSeguiment}` : `🎟️ El Tast Comparses 2026 - Confirmación de Inscripción ${registration.codiSeguiment}`}</span></p>
+          <p><span className="text-zinc-600 font-bold">ASSUMPTE / ASUNTO:</span> <span className="text-zinc-200 font-sans">{language === 'ca' ? `${subSubjectCa} ${registration.codiSeguiment}` : `${subSubjectEs} ${registration.codiSeguiment}`}</span></p>
           
           {smtpStatus === 'error' && (
             <div className="mt-3 p-3 bg-red-950/40 border border-red-900 rounded-xl space-y-1 text-left font-sans text-xs">
@@ -538,9 +556,7 @@ export default function Confirmation({ registration, onClear }: ConfirmationProp
                     {language === 'ca' ? `Hola, ${registration.c1Nom} i ${registration.c2Nom}!` : `¡Hola, ${registration.c1Nom} y ${registration.c2Nom}!`}
                   </p>
                   <p className="text-center text-[11px] leading-relaxed">
-                    {language === 'ca' 
-                      ? "La vostra preinscripció ha estat rebuda amb èxit. A continuació us facilitem el vostre codi de seguiment oficial i comprobat QR." 
-                      : "Vuestra preinscripción ha sido recibida con éxito. A continuación os facilitamos vuestro código de seguimiento oficial y comprobante QR."}
+                    {language === 'ca' ? subBodyCa : subBodyEs}
                   </p>
 
                   <div className="bg-zinc-50 border border-zinc-200/50 rounded-xl p-3.5 text-center space-y-1">
