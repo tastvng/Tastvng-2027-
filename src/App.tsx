@@ -221,7 +221,7 @@ export default function App() {
         }
       });
 
-      const savedLogin = localStorage.getItem('tast_admin_session_2026');
+      const savedLogin = localStorage.getItem('tast_admin_session_2026') || sessionStorage.getItem('tast_admin_session_2026');
       if (savedLogin === 'true') {
         setIsAdminLoggedIn(true);
       }
@@ -298,9 +298,14 @@ export default function App() {
     addLog(`Ficha d'inscripció actualitzada del parella: ${updatedReg.c1Nom} (${updatedReg.codiSeguiment})`);
   };
 
-  const handleAdminLogin = () => {
+  const handleAdminLogin = (rememberMe: boolean = false) => {
     setIsAdminLoggedIn(true);
-    localStorage.setItem('tast_admin_session_2026', 'true');
+    if (rememberMe) {
+      localStorage.setItem('tast_admin_session_2026', 'true');
+    } else {
+      sessionStorage.setItem('tast_admin_session_2026', 'true');
+      localStorage.setItem('tast_admin_session_2026', 'false');
+    }
     setView('admin-dashboard');
     addLog("Sessió d'administrador iniciada correctament.");
   };
@@ -308,6 +313,7 @@ export default function App() {
   const handleAdminLogout = () => {
     setIsAdminLoggedIn(false);
     localStorage.setItem('tast_admin_session_2026', 'false');
+    sessionStorage.setItem('tast_admin_session_2026', 'false');
     setView(portadaConfig.activa ? 'portada' : 'public');
     addLog("Sessió de secretaria tancada de manera segura.");
   };

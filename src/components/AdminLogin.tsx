@@ -3,23 +3,45 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Lock, User, AlertCircle, ArrowLeft, Eye, EyeOff, Sparkle } from 'lucide-react';
 import { useLanguage } from '../LanguageContext';
 
 interface AdminLoginProps {
-  onLoginSuccess: () => void;
+  onLoginSuccess: (rememberMe: boolean) => void;
   onBackToPublic: () => void;
 }
 
 export default function AdminLogin({ onLoginSuccess, onBackToPublic }: AdminLoginProps) {
   const { language } = useLanguage();
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
+  
+  const [rememberMe, setRememberMe] = useState(() => {
+    return localStorage.getItem('tast_remember_me_enabled') === 'true';
+  });
+
+  const [username, setUsername] = useState(() => {
+    const r = localStorage.getItem('tast_remember_me_enabled') === 'true';
+    return r ? (localStorage.getItem('tast_saved_username') || '') : '';
+  });
+  const [password, setPassword] = useState(() => {
+    const r = localStorage.getItem('tast_remember_me_enabled') === 'true';
+    return r ? (localStorage.getItem('tast_saved_password') || '') : '';
+  });
+
   const [errorError, setErrorError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
+
+  useEffect(() => {
+    const isEnabled = localStorage.getItem('tast_remember_me_enabled') === 'true';
+    if (isEnabled) {
+      const savedUser = localStorage.getItem('tast_saved_username') || '';
+      const savedPass = localStorage.getItem('tast_saved_password') || '';
+      if (savedUser && !username) setUsername(savedUser);
+      if (savedPass && !password) setPassword(savedPass);
+    }
+  }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,7 +55,7 @@ export default function AdminLogin({ onLoginSuccess, onBackToPublic }: AdminLogi
     setIsVerifying(true);
     setErrorError(null);
 
-    // Simulate cryptographic delay
+    // Simulate delay
     setTimeout(() => {
       // Accepting 'admin'/'admin' or 'tast'/'tast' or 'Tastvng@gmail.com'/'tast'
       let isValid = (username === 'admin' && password === 'admin') || 
@@ -61,11 +83,20 @@ export default function AdminLogin({ onLoginSuccess, onBackToPublic }: AdminLogi
 
       setIsVerifying(false);
       if (isValid) {
-        onLoginSuccess();
+        if (rememberMe) {
+          localStorage.setItem('tast_remember_me_enabled', 'true');
+          localStorage.setItem('tast_saved_username', username);
+          localStorage.setItem('tast_saved_password', password);
+        } else {
+          localStorage.setItem('tast_remember_me_enabled', 'false');
+          localStorage.removeItem('tast_saved_username');
+          localStorage.removeItem('tast_saved_password');
+        }
+        onLoginSuccess(rememberMe);
       } else {
         setErrorError(language === 'ca'
-          ? "L'usuari o la contrasenya no són correctes. Proveu amb 'admin' / 'admin' o els perfils de staff registrats."
-          : "El usuario o la contraseña no son correctos. Pruebe con 'admin' / 'admin' o los perfiles de staff registrados.");
+          ? "L'usuari o la contrasenya no són correctes. Proveu amb credencials vàlides de secretaria."
+          : "El usuario o la contraseña no son correctos. Pruebe con credenciales válidas de secretaría.");
       }
     }, 1000);
   };
@@ -120,7 +151,7 @@ export default function AdminLogin({ onLoginSuccess, onBackToPublic }: AdminLogi
                 value={username} 
                 onChange={(e) => setUsername(e.target.value)}
                 className="w-full bg-zinc-900/60 border border-zinc-800 focus:border-fuchsia-500 focus:bg-zinc-900 rounded-xl pl-10 pr-4 py-3 text-sm focus:outline-none transition-all placeholder-zinc-600 font-sans text-white text-left"
-                placeholder={language === 'ca' ? "Introduïu 'admin' per provar" : "Introduzca 'admin' para probar"}
+                placeholder={language === 'ca' ? "Introduïu el vostre usuari corporatiu" : "Introduzca su usuario corporativo"}
                 id="input-login-username"
               />
             </div>
@@ -139,7 +170,7 @@ export default function AdminLogin({ onLoginSuccess, onBackToPublic }: AdminLogi
                 value={password} 
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full bg-zinc-900/60 border border-zinc-800 focus:border-fuchsia-500 focus:bg-zinc-900 rounded-xl pl-10 pr-10 py-3 text-sm focus:outline-none transition-all placeholder-zinc-600 font-sans text-white text-left"
-                placeholder={language === 'ca' ? "Contrasenya ('admin')" : "Contraseña ('admin')"}
+                placeholder={language === 'ca' ? "Introduïu la vostra clau secreta" : "Introduzca su clave secreta"}
                 id="input-login-password"
               />
               <button
@@ -150,6 +181,22 @@ export default function AdminLogin({ onLoginSuccess, onBackToPublic }: AdminLogi
                 {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
+          </div>
+
+          {/* Remember me toggle */}
+          <div className="flex items-center">
+            <label className="flex items-center gap-2.5 text-xs text-zinc-400 select-none cursor-pointer group">
+              <input
+                type="checkbox"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                className="rounded border-zinc-800 bg-zinc-900 focus:ring-0 focus:ring-offset-0 cursor-pointer accent-fuchsia-600 w-4 h-4"
+                id="remember_me_checkbox"
+              />
+              <span className="group-hover:text-zinc-200 transition-colors">
+                {language === 'ca' ? "Recorda'm en aquest dispositiu" : "Recuérdame en este dispositivo"}
+              </span>
+            </label>
           </div>
 
           <button
@@ -168,12 +215,6 @@ export default function AdminLogin({ onLoginSuccess, onBackToPublic }: AdminLogi
             )}
           </button>
         </form>
-
-        <div className="border-t border-zinc-900 mt-6 pt-4 text-center">
-          <p className="text-[11px] text-zinc-500 font-sans">
-            {language === 'ca' ? 'Dades de proves ràpides:' : 'Datos de pruebas rápidos:'} <strong className="text-zinc-400">admin / admin</strong> o <strong className="text-zinc-400">tast / tast</strong>
-          </p>
-        </div>
       </motion.div>
 
       <div className="text-center mt-6">
