@@ -24,6 +24,7 @@ export default function Confirmation({ registration, onClear }: ConfirmationProp
   const [subSubjectEs, setSubSubjectEs] = useState(() => localStorage.getItem('tast_email_subject_es') || "🎟️ El Tast Comparses 2026 - Confirmación de Inscripción");
   const [subBodyCa, setSubBodyCa] = useState(() => localStorage.getItem('tast_email_body_ca') || "S'ha generat correctament el vostre comprovant per a les comparses 2026.");
   const [subBodyEs, setSubBodyEs] = useState(() => localStorage.getItem('tast_email_body_es') || "Se ha generado correctamente vuestro comprobante para las comparsas 2026.");
+  const [subLogo, setSubLogo] = useState(() => localStorage.getItem('tast_email_logo') || "");
 
   useEffect(() => {
     const loadCustomTemplates = () => {
@@ -31,6 +32,7 @@ export default function Confirmation({ registration, onClear }: ConfirmationProp
       setSubSubjectEs(localStorage.getItem('tast_email_subject_es') || "🎟️ El Tast Comparses 2026 - Confirmación de Inscripción");
       setSubBodyCa(localStorage.getItem('tast_email_body_ca') || "S'ha generat correctament el vostre comprovant per a les comparses 2026.");
       setSubBodyEs(localStorage.getItem('tast_email_body_es') || "Se ha generado correctamente vuestro comprobante para las comparsas 2026.");
+      setSubLogo(localStorage.getItem('tast_email_logo') || "");
     };
     loadCustomTemplates();
     window.addEventListener('localStorage', loadCustomTemplates);
@@ -75,13 +77,17 @@ export default function Confirmation({ registration, onClear }: ConfirmationProp
 
       const emailBodyText = language === 'ca' ? subBodyCa : subBodyEs;
 
-      const emailHtml = `
-        <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 30px; border: 1px solid #e1e1e6; border-radius: 24px; background-color: #ffffff; color: #111115;">
-          <div style="text-align: center; margin-bottom: 25px;">
+      const logoHtml = subLogo 
+        ? `<div style="text-align: center; margin-bottom: 25px;"><img src="${subLogo}" alt="Logo" style="max-height: 70px; max-width: 210px; object-fit: contain; margin: 0 auto; display: block; border-radius: 8px;" /></div>`
+        : `<div style="text-align: center; margin-bottom: 25px;">
             <span style="background-color: #ff0090; color: #ffffff; padding: 10px 24px; font-size: 13px; font-weight: bold; border-radius: 50px; letter-spacing: 1px; display: inline-block; text-transform: uppercase;">
               Associació Cultural El Tast
             </span>
-          </div>
+          </div>`;
+
+      const emailHtml = `
+        <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 30px; border: 1px solid #e1e1e6; border-radius: 24px; background-color: #ffffff; color: #111115;">
+          ${logoHtml}
           
           <h1 style="color: #111115; font-size: 24px; font-weight: 800; text-align: center; margin: 15px 0 5px 0; text-transform: uppercase; letter-spacing: -0.5px;">
             ${language === 'ca' ? "Preinscripció Confirmada!" : "¡Preinscripción Confirmada!"}
@@ -538,13 +544,26 @@ export default function Confirmation({ registration, onClear }: ConfirmationProp
             <div className="p-4 sm:p-6 space-y-4 font-sans text-xs bg-zinc-100">
               <div className="bg-white p-5 rounded-2xl border border-zinc-200/70 shadow-md max-w-sm mx-auto space-y-4">
                 {/* Email logo header */}
-                <div className="text-center pb-3 border-b border-zinc-100 flex items-center justify-center gap-1.5 flex-col">
-                  <div className="w-10 h-10 rounded-xl bg-fuchsia-600 text-white flex items-center justify-center font-black tracking-wider text-sm shadow-md">
-                    T
-                  </div>
-                  <h3 className="font-black text-xs tracking-tight text-zinc-900 mt-1">
-                    EL TAST <span className="text-fuchsia-600">VILANOVA</span>
-                  </h3>
+                <div className="text-center pb-3 border-b border-zinc-100 flex items-center justify-center gap-1.5 flex-col min-h-[58px]">
+                  {subLogo ? (
+                    <img 
+                      src={subLogo} 
+                      alt="Custom Logo" 
+                      className="max-h-12 max-w-[150px] object-contain mx-auto rounded"
+                      onError={(e) => {
+                        (e.target as HTMLElement).style.display = 'none';
+                      }}
+                    />
+                  ) : (
+                    <>
+                      <div className="w-10 h-10 rounded-xl bg-fuchsia-600 text-white flex items-center justify-center font-black tracking-wider text-sm shadow-md">
+                        T
+                      </div>
+                      <h3 className="font-black text-xs tracking-tight text-zinc-900 mt-1">
+                        EL TAST <span className="text-fuchsia-600">VILANOVA</span>
+                      </h3>
+                    </>
+                  )}
                   <span className="text-[8px] font-mono font-bold tracking-wider text-zinc-400 uppercase">
                     {language === 'ca' ? "SESSió INFORMATIVA 2026" : "SESIÓN INFORMATIVA 2026"}
                   </span>

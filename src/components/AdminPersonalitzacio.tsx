@@ -34,6 +34,7 @@ export default function AdminPersonalitzacio({ language, onAddLog }: AdminPerson
   const [emailSubjectEs, setEmailSubjectEs] = useState(() => localStorage.getItem('tast_email_subject_es') || "🎟️ El Tast Comparses 2026 - Confirmación de Inscripción");
   const [emailBodyCa, setEmailBodyCa] = useState(() => localStorage.getItem('tast_email_body_ca') || "S'ha generat correctament el vostre comprovant per a les comparses 2026.");
   const [emailBodyEs, setEmailBodyEs] = useState(() => localStorage.getItem('tast_email_body_es') || "Se ha generado correctamente vuestro comprobante para las comparsas 2026.");
+  const [emailLogo, setEmailLogo] = useState(() => localStorage.getItem('tast_email_logo') || "");
 
   // Horari states
   const [hoursCa, setHoursCa] = useState(() => localStorage.getItem('tast_secretaria_hours_ca') || "Dimecres i divendres, de 18:00h a 21:30h directament a la seu social de l'Associació Cultural El Tast.");
@@ -48,6 +49,7 @@ export default function AdminPersonalitzacio({ language, onAddLog }: AdminPerson
     localStorage.setItem('tast_email_subject_es', emailSubjectEs);
     localStorage.setItem('tast_email_body_ca', emailBodyCa);
     localStorage.setItem('tast_email_body_es', emailBodyEs);
+    localStorage.setItem('tast_email_logo', emailLogo);
     localStorage.setItem('tast_secretaria_hours_ca', hoursCa);
     localStorage.setItem('tast_secretaria_hours_es', hoursEs);
 
@@ -81,6 +83,7 @@ export default function AdminPersonalitzacio({ language, onAddLog }: AdminPerson
       setEmailSubjectEs(defSubjectEs);
       setEmailBodyCa(defBodyCa);
       setEmailBodyEs(defBodyEs);
+      setEmailLogo("");
       setHoursCa(defHoursCa);
       setHoursEs(defHoursEs);
 
@@ -88,6 +91,7 @@ export default function AdminPersonalitzacio({ language, onAddLog }: AdminPerson
       localStorage.setItem('tast_email_subject_es', defSubjectEs);
       localStorage.setItem('tast_email_body_ca', defBodyCa);
       localStorage.setItem('tast_email_body_es', defBodyEs);
+      localStorage.setItem('tast_email_logo', "");
       localStorage.setItem('tast_secretaria_hours_ca', defHoursCa);
       localStorage.setItem('tast_secretaria_hours_es', defHoursEs);
 
@@ -241,6 +245,24 @@ export default function AdminPersonalitzacio({ language, onAddLog }: AdminPerson
                 )}
               </div>
 
+              <div>
+                <label className="block text-[10px] text-zinc-500 uppercase font-mono mb-1.5 font-bold">
+                  {language === 'ca' ? "URL de l'Imatge de Logotip Personalitzat (Opcional)" : "URL de la Imagen de Logotipo Personalizado (Opcional)"}
+                </label>
+                <input
+                  type="url"
+                  placeholder="https://elmeusite.cat/img/logo.png"
+                  value={emailLogo}
+                  onChange={(e) => setEmailLogo(e.target.value)}
+                  className="w-full bg-white text-zinc-900 border border-zinc-300 focus:border-[#ff0090] rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all"
+                />
+                <span className="text-[10px] text-zinc-400 mt-1 block">
+                  {language === 'ca' 
+                    ? "Introduïu un enllaç a una imatge per reemplaçar la lletra 'T'. Deixeu-ho buit per al logotip per defecte." 
+                    : "Introducid un enlace a una imagen para reemplazar la letra 'T'. Dejadlo vacío para el logotipo por defecto."}
+                </span>
+              </div>
+
               <div className="flex flex-wrap gap-2 pt-3 border-t border-zinc-100">
                 <button
                   type="submit"
@@ -278,11 +300,26 @@ export default function AdminPersonalitzacio({ language, onAddLog }: AdminPerson
                   <span className="text-[8px] font-mono text-zinc-400">Assumpte / Asunto: {currentSubject} [CODI-2026]</span>
                 </div>
                 <div className="p-5 space-y-4 font-sans text-[11px] text-zinc-700 max-w-sm mx-auto">
-                  <div className="text-center pb-2 border-b border-zinc-100 flex items-center justify-center gap-1 flex-col">
-                    <div className="w-8 h-8 rounded-lg bg-fuchsia-600 text-white flex items-center justify-center font-black text-xs shadow-sm">
-                      T
-                    </div>
-                    <span className="font-black text-[10px] text-zinc-900 mt-1">EL TAST VILANOVA</span>
+                  <div className="text-center pb-2 border-b border-zinc-100 flex items-center justify-center gap-1 flex-col min-h-[48px]">
+                    {emailLogo ? (
+                      <div className="py-1">
+                        <img 
+                          src={emailLogo} 
+                          alt="Custom Logo" 
+                          className="max-h-12 max-w-[140px] object-contain mx-auto rounded"
+                          onError={(e) => {
+                            (e.target as HTMLElement).style.display = 'none';
+                          }}
+                        />
+                      </div>
+                    ) : (
+                      <>
+                        <div className="w-8 h-8 rounded-lg bg-fuchsia-600 text-white flex items-center justify-center font-black text-xs shadow-sm">
+                          T
+                        </div>
+                        <span className="font-black text-[10px] text-zinc-900 mt-1">EL TAST VILANOVA</span>
+                      </>
+                    )}
                   </div>
 
                   <p className="font-black text-zinc-900 text-center">{language === 'ca' ? "Hola, Joana i Pere!" : "¡Hola, Joana y Pere!"}</p>
