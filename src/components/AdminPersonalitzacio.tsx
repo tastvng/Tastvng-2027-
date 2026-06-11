@@ -17,7 +17,9 @@ import {
   Inbox,
   AlertCircle,
   Save,
-  ArrowRight
+  ArrowRight,
+  Upload,
+  Trash2
 } from 'lucide-react';
 import AdminPortada from './AdminPortada';
 
@@ -42,6 +44,58 @@ export default function AdminPersonalitzacio({ language, onAddLog }: AdminPerson
 
   const [activeLangTab, setActiveLangTab] = useState<'ca' | 'es'>('ca');
   const [saveSuccess, setSaveSuccess] = useState(false);
+
+  // Drag and drop / File upload states and systems
+  const [isDragging, setIsDragging] = useState(false);
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      processFile(file);
+    }
+  };
+
+  const processFile = (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      alert(language === 'ca' 
+        ? "El fitxer ha de ser una imatge." 
+        : "El archivo debe ser una imagen."
+      );
+      return;
+    }
+    if (file.size > 1.5 * 1024 * 1024) { // 1.5MB to be safe inside LocalStorage
+      alert(language === 'ca' 
+        ? "La imatge és massa gran (màxim 1.5MB per a un emmagatzematge ràpid i òptim en el navegador)." 
+        : "La imagen es demasiado grande (máximo 1.5MB para un almacenamiento rápido y óptimo en el navegador)."
+      );
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      if (event.target?.result) {
+        setEmailLogo(event.target.result as string);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      processFile(file);
+    }
+  };
 
   const handleSaveCorreuIHorari = (e: React.FormEvent) => {
     e.preventDefault();
@@ -247,19 +301,82 @@ export default function AdminPersonalitzacio({ language, onAddLog }: AdminPerson
 
               <div>
                 <label className="block text-[10px] text-zinc-500 uppercase font-mono mb-1.5 font-bold">
-                  {language === 'ca' ? "URL de l'Imatge de Logotip Personalitzat (Opcional)" : "URL de la Imagen de Logotipo Personalizado (Opcional)"}
+                  {language === 'ca' ? "Imatge de Logotip Personalitzat (Opcional)" : "Imagen de Logotipo Personalizado (Opcional)"}
                 </label>
-                <input
-                  type="url"
-                  placeholder="https://elmeusite.cat/img/logo.png"
-                  value={emailLogo}
-                  onChange={(e) => setEmailLogo(e.target.value)}
-                  className="w-full bg-white text-zinc-900 border border-zinc-300 focus:border-[#ff0090] rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all"
-                />
-                <span className="text-[10px] text-zinc-400 mt-1 block">
+                
+                <div
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  className={`border-2 border-dashed rounded-2xl p-4 transition-all text-center flex flex-col items-center justify-center gap-2 cursor-pointer ${
+                    isDragging 
+                      ? 'border-[#ff0090] bg-fuchsia-50/45' 
+                      : emailLogo 
+                        ? 'border-emerald-300 bg-emerald-50/10' 
+                        : 'border-zinc-250 hover:border-[#ff0090] bg-zinc-50/50'
+                  }`}
+                >
+                  {emailLogo ? (
+                    <div className="space-y-2 w-full flex flex-col items-center">
+                      <div className="relative group max-w-[160px]">
+                        <img 
+                          src={emailLogo} 
+                          alt="Email custom logo thumbnail" 
+                          className="max-h-16 mx-auto object-contain rounded-lg border border-zinc-200 bg-white p-1"
+                        />
+                      </div>
+                      <div className="flex gap-2 justify-center items-center">
+                        <span className="text-[10px] text-emerald-600 font-bold font-mono">
+                          ✓ {language === 'ca' ? "LOGOTIP CARREGAT" : "LOGOTIPO CARGADO"}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEmailLogo("");
+                          }}
+                          className="p-1.5 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-lg transition cursor-pointer"
+                          title={language === 'ca' ? "Eliminar imatge" : "Eliminar imagen"}
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="py-2 flex flex-col items-center">
+                      <Upload size={24} className="text-zinc-400 mb-1.5" />
+                      <p className="text-xs font-bold text-zinc-700">
+                        {language === 'ca' ? "Arrossegueu una imatge aquí o feu clic a sota" : "Arrastrad una imagen aquí o haced clic abajo"}
+                      </p>
+                      <p className="text-[10px] text-zinc-400 mt-1">
+                        PNG, JPG, SVG, GIF ({language === 'ca' ? "màx. 1.5MB" : "máx. 1.5MB"})
+                      </p>
+                    </div>
+                  )}
+                  
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileSelect}
+                    className="hidden"
+                    id="email-logo-file-picker"
+                  />
+                  {!emailLogo && (
+                    <label 
+                      htmlFor="email-logo-file-picker" 
+                      className="inline-block mt-1 px-3.5 py-2 bg-zinc-900 text-white text-[10px] font-black rounded-xl cursor-pointer hover:bg-zinc-800 transition"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                      }}
+                    >
+                      {language === 'ca' ? "Seleccionar Fitxer" : "Seleccionar Archivo"}
+                    </label>
+                  )}
+                </div>
+                <span className="text-[10px] text-zinc-400 mt-2 block">
                   {language === 'ca' 
-                    ? "Introduïu un enllaç a una imatge per reemplaçar la lletra 'T'. Deixeu-ho buit per al logotip per defecte." 
-                    : "Introducid un enlace a una imagen para reemplazar la letra 'T'. Dejadlo vacío para el logotipo por defecto."}
+                    ? "Aquesta imatge substituirà el logotip oficial de 'El Tast' al correu de confirmació." 
+                    : "Esta imagen sustituirá al logotipo oficial de 'El Tast' en el correo de confirmación."}
                 </span>
               </div>
 
