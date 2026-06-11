@@ -333,6 +333,89 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
     if (!acceptaRGPD) tempErrors.rgpd = language === 'ca' ? "Heu d'acceptar els termes de privadesa" : "Debe aceptar los términos de privacidad";
     if (!acceptaPresencial) tempErrors.presencial = language === 'ca' ? "Heu d'acceptar pagar i recollir de manera presencial" : "Debe aceptar pagar y recoger de forma presencial";
 
+    // Check duplicates in the database ('tast_inscripcions_2026')
+    try {
+      const savedInscripcions = localStorage.getItem('tast_inscripcions_2026');
+      if (savedInscripcions) {
+        const existingInscripcions: Inscripcio[] = JSON.parse(savedInscripcions);
+        
+        const c1NomNormalized = c1Nom.trim().toLowerCase().replace(/\s+/g, ' ');
+        const c1CognomsNormalized = c1Cognoms.trim().toLowerCase().replace(/\s+/g, ' ');
+        const c1EmailNormalized = c1Email.trim().toLowerCase();
+        
+        const c2NomNormalized = c2Nom.trim().toLowerCase().replace(/\s+/g, ' ');
+        const c2CognomsNormalized = c2Cognoms.trim().toLowerCase().replace(/\s+/g, ' ');
+        const c2EmailNormalized = c2Email.trim().toLowerCase();
+
+        let c1AlreadyRegistered = false;
+        let c2AlreadyRegistered = false;
+
+        for (const ins of existingInscripcions) {
+          const insC1Nom = (ins.c1Nom || '').trim().toLowerCase().replace(/\s+/g, ' ');
+          const insC1Cognoms = (ins.c1Cognoms || '').trim().toLowerCase().replace(/\s+/g, ' ');
+          const insC1Email = (ins.c1Email || '').trim().toLowerCase();
+          
+          const insC2Nom = (ins.c2Nom || '').trim().toLowerCase().replace(/\s+/g, ' ');
+          const insC2Cognoms = (ins.c2Cognoms || '').trim().toLowerCase().replace(/\s+/g, ' ');
+          const insC2Email = (ins.c2Email || '').trim().toLowerCase();
+
+          // Check Comparser 1 matching ANY of the registrants (either as c1 or c2)
+          if (
+            (c1NomNormalized && c1CognomsNormalized && (
+              (c1NomNormalized === insC1Nom && c1CognomsNormalized === insC1Cognoms) ||
+              (c1NomNormalized === insC2Nom && c1CognomsNormalized === insC2Cognoms)
+            )) ||
+            (c1EmailNormalized && (c1EmailNormalized === insC1Email || c1EmailNormalized === insC2Email))
+          ) {
+            c1AlreadyRegistered = true;
+          }
+
+          // Check Comparser 2 matching ANY of the registrants (either as c1 or c2)
+          if (
+            (c2NomNormalized && c2CognomsNormalized && (
+              (c2NomNormalized === insC1Nom && c2CognomsNormalized === insC1Cognoms) ||
+              (c2NomNormalized === insC2Nom && c2CognomsNormalized === insC2Cognoms)
+            )) ||
+            (c2EmailNormalized && (c2EmailNormalized === insC1Email || c2EmailNormalized === insC2Email))
+          ) {
+            c2AlreadyRegistered = true;
+          }
+        }
+
+        if (c1AlreadyRegistered) {
+          tempErrors.c1Nom = language === 'ca'
+            ? "⚠️ El primer participant ja està registrat en la base de dades! Reviseu o contacteu amb secretaria."
+            : "⚠️ ¡El primer participante ya está registrado en la base de datos! Revisad o contactad con secretaría.";
+          tempErrors.c1Duplicat = language === 'ca'
+            ? "El primer participant ja es troba inscrit prèviament."
+            : "El primer participante ya se encuentra inscrito previamente.";
+        }
+
+        if (c2AlreadyRegistered) {
+          tempErrors.c2Nom = language === 'ca'
+            ? "⚠️ El segon participant ja està registrat en la base de dades! Reviseu o contacteu amb secretaria."
+            : "⚠️ ¡El segundo participante ya está registrado en la base de datos! Revisad o contactad con secretaría.";
+          tempErrors.c2Duplicat = language === 'ca'
+            ? "El segon participant ja es troba inscrit prèviament."
+            : "El segundo participante ya se encuentra inscrito previamente.";
+        }
+
+        if (c1AlreadyRegistered || c2AlreadyRegistered) {
+          tempErrors.duplicateGlobal = language === 'ca'
+            ? "No s'ha pogut enviar: Un o ambdós participants ja estan registrats a la base de dades de l'esdeveniment."
+            : "No se ha podido enviar: Uno o ambos participantes ya están registrados en la base de datos del evento.";
+          
+          // Also show a browser alert as requested "que les salga un aviso de que ya están inscritos."
+          alert(language === 'ca'
+            ? "⚠️ Avís: Ja esteu inscrits a la base de dades! Rebreu el comprovant o contacteu amb secretaria si teniu qualsevol dubte."
+            : "⚠️ Aviso: ¡Ya estáis inscritos en la base de datos! Recibiréis vuestro comprobante o contactad con secretaría ante cualquier duda."
+          );
+        }
+      }
+    } catch (e) {
+      console.error("Error checking duplicates:", e);
+    }
+
     setErrors(tempErrors);
     return Object.keys(tempErrors).length === 0;
   };
@@ -607,7 +690,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           
           {/* Comparser 1 Card */}
-          <div className="bg-white rounded-3xl p-6 border border-zinc-200/80 shadow-md relative overflow-hidden">
+          <div className={`rounded-3xl p-6 border transition-all relative overflow-hidden ${errors.c1Duplicat ? 'bg-amber-50/10 border-amber-300 ring-2 ring-amber-300 shadow-amber-100/30' : 'bg-white border-zinc-200/80 shadow-md'}`}>
             <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-zinc-100 to-transparent pointer-events-none rounded-bl-3xl flex items-center justify-center">
               <span className="font-mono text-zinc-400 text-sm font-bold">#1</span>
             </div>
@@ -616,6 +699,20 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
               <div className="w-2.5 h-2.5 bg-fuchsia-500 rounded-full" />
               {language === 'ca' ? 'Primer Comparser (Representant)' : 'Primer Comparsero (Representante)'}
             </h3>
+
+            {errors.c1Duplicat && (
+              <div className="bg-amber-50 border border-amber-200 text-amber-900 px-4 py-3 rounded-2xl mb-4 flex items-start gap-2.5 text-xs">
+                <AlertTriangle className="shrink-0 text-amber-600 mt-0.5" size={16} />
+                <div>
+                  <p className="font-bold">{language === 'ca' ? "Ja esteu inscrit" : "Ya estáis inscrito"}</p>
+                  <p className="text-[11px] text-amber-700 leading-normal mt-0.5">
+                    {language === 'ca'
+                      ? "Aquest participant ja consta registrat directament a la base de dades d'inscripcions de la secretaria."
+                      : "Este participante ya consta registrado directamente en la base de datos de inscripciones de la secretaría."}
+                  </p>
+                </div>
+              </div>
+            )}
 
             <div className="space-y-4">
               <div>
@@ -946,7 +1043,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
           </div>
 
           {/* Comparser 2 Card */}
-          <div className="bg-white rounded-3xl p-6 border border-zinc-200/80 shadow-md relative overflow-hidden">
+          <div className={`rounded-3xl p-6 border transition-all relative overflow-hidden ${errors.c2Duplicat ? 'bg-amber-50/10 border-amber-300 ring-2 ring-amber-300 shadow-amber-100/30' : 'bg-white border-zinc-200/80 shadow-md'}`}>
             <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-zinc-100 to-transparent pointer-events-none rounded-bl-3xl flex items-center justify-center">
               <span className="font-mono text-zinc-400 text-sm font-bold">#2</span>
             </div>
@@ -955,6 +1052,20 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
               <div className="w-2.5 h-2.5 bg-fuchsia-500 rounded-full" />
               {language === 'ca' ? 'Segon Comparser' : 'Segundo Comparsero'}
             </h3>
+
+            {errors.c2Duplicat && (
+              <div className="bg-amber-50 border border-amber-200 text-amber-900 px-4 py-3 rounded-2xl mb-4 flex items-start gap-2.5 text-xs">
+                <AlertTriangle className="shrink-0 text-amber-600 mt-0.5" size={16} />
+                <div>
+                  <p className="font-bold">{language === 'ca' ? "Ja esteu inscrit" : "Ya estáis inscrito"}</p>
+                  <p className="text-[11px] text-amber-700 leading-normal mt-0.5">
+                    {language === 'ca'
+                      ? "Aquest participant ja consta registrat directament a la base de dades d'inscripcions de la secretaria."
+                      : "Este participante ya consta registrado directamente en la base de datos de inscripciones de la secretaría."}
+                  </p>
+                </div>
+              </div>
+            )}
 
             <div className="space-y-4">
               <div>
