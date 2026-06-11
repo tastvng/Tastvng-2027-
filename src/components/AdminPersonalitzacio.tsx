@@ -45,6 +45,32 @@ export default function AdminPersonalitzacio({ language, onAddLog }: AdminPerson
   const [activeLangTab, setActiveLangTab] = useState<'ca' | 'es'>('ca');
   const [saveSuccess, setSaveSuccess] = useState(false);
 
+  const [autoTranslate, setAutoTranslate] = useState(true);
+  const [translatingFields, setTranslatingFields] = useState<Record<string, boolean>>({});
+
+  const handleBlurTranslate = async (
+    textToTranslate: string,
+    setTargetValue: (val: string) => void,
+    targetKey: string,
+    sourceLang: 'ca' | 'es',
+    targetLang: 'ca' | 'es'
+  ) => {
+    if (!autoTranslate || !textToTranslate || !textToTranslate.trim()) return;
+
+    setTranslatingFields(prev => ({ ...prev, [targetKey]: true }));
+    try {
+      const { translateText } = await import('../translateService');
+      const translated = await translateText(textToTranslate, sourceLang, targetLang);
+      if (translated && translated.trim()) {
+        setTargetValue(translated.trim());
+      }
+    } catch (e) {
+      console.error("Auto translation error:", e);
+    } finally {
+      setTranslatingFields(prev => ({ ...prev, [targetKey]: false }));
+    }
+  };
+
   // Drag and drop / File upload states and systems
   const [isDragging, setIsDragging] = useState(false);
 
@@ -237,33 +263,49 @@ export default function AdminPersonalitzacio({ language, onAddLog }: AdminPerson
             </div>
 
             {/* Language switch */}
-            <div className="flex items-center bg-zinc-100 border border-zinc-200 rounded-xl p-0.5 shrink-0 self-start sm:self-center">
-              <button
-                type="button"
-                onClick={() => setActiveLangTab('ca')}
-                className={`text-[9.5px] font-sans font-black tracking-tight px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                  activeLangTab === 'ca' ? 'bg-[#ff0090] text-white shadow-md' : 'text-zinc-500 hover:text-zinc-800'
-                }`}
-              >
-                CAT
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveLangTab('es')}
-                className={`text-[9.5px] font-sans font-black tracking-tight px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                  activeLangTab === 'es' ? 'bg-[#ff0090] text-white shadow-md' : 'text-zinc-500 hover:text-zinc-800'
-                }`}
-              >
-                ESP
-              </button>
+            <div className="flex flex-col sm:flex-row items-end sm:items-center gap-3 shrink-0">
+              <label className="flex items-center gap-1.5 cursor-pointer text-[10px] text-zinc-500 select-none">
+                <input 
+                  type="checkbox"
+                  checked={autoTranslate}
+                  onChange={(e) => setAutoTranslate(e.target.checked)}
+                  className="rounded border-zinc-300 bg-white text-[#ff0090] focus:ring-0 accent-[#ff0090] w-3 h-3 cursor-pointer"
+                />
+                <span className={autoTranslate ? "text-[#ff0090] font-black uppercase tracking-wider animate-pulse" : "uppercase tracking-wider"}>
+                  {language === 'ca' ? "Sincro IA ✨" : "Sincro IA ✨"}
+                </span>
+              </label>
+
+              <div className="flex items-center bg-zinc-100 border border-zinc-200 rounded-xl p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setActiveLangTab('ca')}
+                  className={`text-[9.5px] font-sans font-black tracking-tight px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                    activeLangTab === 'ca' ? 'bg-[#ff0090] text-white shadow-md' : 'text-zinc-500 hover:text-zinc-800'
+                  }`}
+                >
+                  CAT
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveLangTab('es')}
+                  className={`text-[9.5px] font-sans font-black tracking-tight px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                    activeLangTab === 'es' ? 'bg-[#ff0090] text-white shadow-md' : 'text-zinc-500 hover:text-zinc-800'
+                  }`}
+                >
+                  ESP
+                </button>
+              </div>
             </div>
           </div>
 
           <form onSubmit={handleSaveCorreuIHorari} className="grid grid-cols-1 lg:grid-cols-12 gap-8 text-left">
             <div className="lg:col-span-6 space-y-5">
               <div>
-                <label className="block text-[10px] text-zinc-500 uppercase font-mono mb-1.5 font-bold">
-                  {activeLangTab === 'ca' ? "Assumpte del Correu (CAT) *" : "Asunto del Correo (ESP) *"}
+                <label className="block text-[10px] text-zinc-500 uppercase font-mono mb-1.5 font-bold flex items-center justify-between">
+                  <span>{activeLangTab === 'ca' ? "Assumpte del Correu (CAT) *" : "Asunto del Correo (ESP) *"}</span>
+                  {activeLangTab === 'ca' && translatingFields['emailSubjectEs'] && <span className="text-[9.5px] text-[#ff0090] font-black animate-pulse lowercase">✨ traduint a l'espanyol...</span>}
+                  {activeLangTab === 'es' && translatingFields['emailSubjectCa'] && <span className="text-[9.5px] text-[#ff0090] font-black animate-pulse lowercase">✨ traduciendo al catalán...</span>}
                 </label>
                 {activeLangTab === 'ca' ? (
                   <input
@@ -271,6 +313,7 @@ export default function AdminPersonalitzacio({ language, onAddLog }: AdminPerson
                     required
                     value={emailSubjectCa}
                     onChange={(e) => setEmailSubjectCa(e.target.value)}
+                    onBlur={() => handleBlurTranslate(emailSubjectCa, setEmailSubjectEs, 'emailSubjectEs', 'ca', 'es')}
                     className="w-full bg-white text-zinc-900 border border-zinc-300 focus:border-[#ff0090] rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all"
                   />
                 ) : (
@@ -279,6 +322,7 @@ export default function AdminPersonalitzacio({ language, onAddLog }: AdminPerson
                     required
                     value={emailSubjectEs}
                     onChange={(e) => setEmailSubjectEs(e.target.value)}
+                    onBlur={() => handleBlurTranslate(emailSubjectEs, setEmailSubjectCa, 'emailSubjectCa', 'es', 'ca')}
                     className="w-full bg-white text-zinc-900 border border-zinc-300 focus:border-[#ff0090] rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all"
                   />
                 )}
@@ -288,8 +332,10 @@ export default function AdminPersonalitzacio({ language, onAddLog }: AdminPerson
               </div>
 
               <div>
-                <label className="block text-[10px] text-zinc-500 uppercase font-mono mb-1.5 font-bold">
-                  {activeLangTab === 'ca' ? "Paràgraf de benvinguda opcional (CAT) *" : "Párrafo de bienvenida opcional (ESP) *"}
+                <label className="block text-[10px] text-zinc-500 uppercase font-mono mb-1.5 font-bold flex items-center justify-between">
+                  <span>{activeLangTab === 'ca' ? "Paràgraf de benvinguda opcional (CAT) *" : "Párrafo de bienvenida opcional (ESP) *"}</span>
+                  {activeLangTab === 'ca' && translatingFields['emailBodyEs'] && <span className="text-[9.5px] text-[#ff0090] font-black animate-pulse lowercase">✨ traduint a l'espanyol...</span>}
+                  {activeLangTab === 'es' && translatingFields['emailBodyCa'] && <span className="text-[9.5px] text-[#ff0090] font-black animate-pulse lowercase">✨ traduciendo al catalán...</span>}
                 </label>
                 {activeLangTab === 'ca' ? (
                   <textarea
@@ -297,6 +343,7 @@ export default function AdminPersonalitzacio({ language, onAddLog }: AdminPerson
                     required
                     value={emailBodyCa}
                     onChange={(e) => setEmailBodyCa(e.target.value)}
+                    onBlur={() => handleBlurTranslate(emailBodyCa, setEmailBodyEs, 'emailBodyEs', 'ca', 'es')}
                     className="w-full bg-white text-zinc-900 border border-zinc-300 focus:border-[#ff0090] rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all leading-relaxed resize-none"
                   />
                 ) : (
@@ -305,6 +352,7 @@ export default function AdminPersonalitzacio({ language, onAddLog }: AdminPerson
                     required
                     value={emailBodyEs}
                     onChange={(e) => setEmailBodyEs(e.target.value)}
+                    onBlur={() => handleBlurTranslate(emailBodyEs, setEmailBodyCa, 'emailBodyCa', 'es', 'ca')}
                     className="w-full bg-white text-zinc-900 border border-zinc-300 focus:border-[#ff0090] rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all leading-relaxed resize-none"
                   />
                 )}
@@ -500,27 +548,31 @@ export default function AdminPersonalitzacio({ language, onAddLog }: AdminPerson
           <form onSubmit={handleSaveCorreuIHorari} className="grid grid-cols-1 lg:grid-cols-12 gap-8 text-left">
             <div className="lg:col-span-6 space-y-5">
               <div>
-                <label className="block text-[10px] text-zinc-500 uppercase font-mono mb-1.5 font-bold">
-                  {language === 'ca' ? "Horaris d'Atenció de Secretaria (CAT) *" : "Horario de Atención de Secretaría (CAT) *"}
+                <label className="block text-[10px] text-zinc-500 uppercase font-mono mb-1.5 font-bold flex items-center justify-between">
+                  <span>{language === 'ca' ? "Horaris d'Atenció de Secretaria (CAT) *" : "Horario de Atención de Secretaría (CAT) *"}</span>
+                  {translatingFields['hoursEs'] && <span className="text-[9.5px] text-[#ff0090] font-black animate-pulse lowercase">✨ traduint a l'espanyol...</span>}
                 </label>
                 <textarea
                   rows={4}
                   required
                   value={hoursCa}
                   onChange={(e) => setHoursCa(e.target.value)}
+                  onBlur={() => handleBlurTranslate(hoursCa, setHoursEs, 'hoursEs', 'ca', 'es')}
                   className="w-full bg-white text-zinc-900 border border-zinc-300 focus:border-[#ff0090] rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all leading-relaxed resize-none"
                 />
               </div>
 
               <div>
-                <label className="block text-[10px] text-zinc-500 uppercase font-mono mb-1.5 font-bold">
-                  {language === 'ca' ? "Horaris d'Atenció de Secretaria (ESP) *" : "Horario de Atención de Secretaría (ESP) *"}
+                <label className="block text-[10px] text-zinc-500 uppercase font-mono mb-1.5 font-bold flex items-center justify-between">
+                  <span>{language === 'ca' ? "Horaris d'Atenció de Secretaria (ESP) *" : "Horario de Atención de Secretaría (ESP) *"}</span>
+                  {translatingFields['hoursCa'] && <span className="text-[9.5px] text-[#ff0090] font-black animate-pulse lowercase">✨ traduciendo al catalán...</span>}
                 </label>
                 <textarea
                   rows={4}
                   required
                   value={hoursEs}
                   onChange={(e) => setHoursEs(e.target.value)}
+                  onBlur={() => handleBlurTranslate(hoursEs, setHoursCa, 'hoursCa', 'es', 'ca')}
                   className="w-full bg-white text-zinc-900 border border-zinc-300 focus:border-[#ff0090] rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all leading-relaxed resize-none"
                 />
               </div>

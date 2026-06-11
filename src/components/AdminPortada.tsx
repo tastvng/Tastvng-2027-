@@ -92,6 +92,28 @@ export default function AdminPortada({ language, onAddLog }: AdminPortadaProps) 
     setConfig(prev => ({ ...prev, [field]: value }));
   };
 
+  const [autoTranslate, setAutoTranslate] = useState(true);
+  const [translatingFields, setTranslatingFields] = useState<Record<string, boolean>>({});
+
+  const handleBlurTranslate = async (sourceField: keyof PortadaConfig, targetField: keyof PortadaConfig, sourceLang: 'ca' | 'es', targetLang: 'ca' | 'es') => {
+    if (!autoTranslate) return;
+    const textToTranslate = config[sourceField] as string;
+    if (!textToTranslate || !textToTranslate.trim()) return;
+
+    setTranslatingFields(prev => ({ ...prev, [targetField as string]: true }));
+    try {
+      const { translateText } = await import('../translateService');
+      const translated = await translateText(textToTranslate, sourceLang, targetLang);
+      if (translated && translated.trim()) {
+        updateField(targetField, translated.trim());
+      }
+    } catch (e) {
+      console.error("Auto translation error:", e);
+    } finally {
+      setTranslatingFields(prev => ({ ...prev, [targetField as string]: false }));
+    }
+  };
+
   const FileOrUrlInput = ({
     labelCa,
     labelEs,
@@ -313,7 +335,7 @@ export default function AdminPortada({ language, onAddLog }: AdminPortadaProps) 
         <div className="lg:col-span-7 space-y-6">
           
           {/* Subtitle / Language segment tabs */}
-          <div className="flex justify-between items-center bg-zinc-900 border border-zinc-800 rounded-xl p-1">
+          <div className="flex justify-between items-center bg-zinc-900 border border-zinc-800 rounded-xl p-1 flex-wrap gap-2">
             <div className="flex items-center gap-1">
               <span className="text-[10px] font-mono px-3 text-zinc-500 uppercase tracking-widest font-bold">Idioma Continguts:</span>
               <button
@@ -339,6 +361,20 @@ export default function AdminPortada({ language, onAddLog }: AdminPortadaProps) 
                 Castellano
               </button>
             </div>
+
+            <div className="flex items-center gap-1.5 pr-3">
+              <label className="flex items-center gap-1.5 cursor-pointer text-[10px] text-zinc-400 select-none">
+                <input 
+                  type="checkbox"
+                  checked={autoTranslate}
+                  onChange={(e) => setAutoTranslate(e.target.checked)}
+                  className="rounded border-zinc-700 bg-zinc-800 text-[#ff0090] focus:ring-0 accent-[#ff0090] w-3 h-3 cursor-pointer"
+                />
+                <span className={autoTranslate ? "text-[#ff0090] font-black uppercase tracking-wider animate-pulse" : "uppercase tracking-wider"}>
+                  {language === 'ca' ? "Auto-traducció IA ✨" : "Auto-traducción IA ✨"}
+                </span>
+              </label>
+            </div>
           </div>
 
           {/* Texts Segment according to language tab */}
@@ -354,44 +390,60 @@ export default function AdminPortada({ language, onAddLog }: AdminPortadaProps) 
             {activeLangTab === 'ca' ? (
               <div className="space-y-4">
                 <div>
-                  <label className="block text-[10px] text-zinc-550 uppercase font-mono mb-1 font-extrabold">Títol de la Portada (CAT) *</label>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="block text-[10px] text-zinc-550 uppercase font-mono font-extrabold">Títol de la Portada (CAT) *</label>
+                    {translatingFields['titolES'] && <span className="text-[9px] text-[#ff0090] font-black animate-pulse flex items-center gap-1">✨ Traduint a l'espanyol...</span>}
+                  </div>
                   <input 
                     type="text"
                     required
                     value={config.titolCA}
                     onChange={(e) => updateField('titolCA', e.target.value)}
+                    onBlur={() => handleBlurTranslate('titolCA', 'titolES', 'ca', 'es')}
                     placeholder="El títol principal cridaner..."
                     className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all placeholder-zinc-400"
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] text-zinc-550 uppercase font-mono mb-1 font-extrabold">Subtítol superior (CAT)</label>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="block text-[10px] text-zinc-550 uppercase font-mono font-extrabold">Subtítol superior (CAT)</label>
+                    {translatingFields['subtitolES'] && <span className="text-[9px] text-[#ff0090] font-black animate-pulse flex items-center gap-1">✨ Traduint a l'espanyol...</span>}
+                  </div>
                   <input 
                     type="text"
                     value={config.subtitolCA}
                     onChange={(e) => updateField('subtitolCA', e.target.value)}
+                    onBlur={() => handleBlurTranslate('subtitolCA', 'subtitolES', 'ca', 'es')}
                     placeholder="Ex: Benvinguts a les comparses d'El Tast..."
                     className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all"
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] text-zinc-550 uppercase font-mono mb-1 font-extrabold">Descripció o Reglament breu (CAT) *</label>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="block text-[10px] text-zinc-550 uppercase font-mono font-extrabold">Descripció o Reglament breu (CAT) *</label>
+                    {translatingFields['descripcioES'] && <span className="text-[9px] text-[#ff0090] font-black animate-pulse flex items-center gap-1">✨ Traduint a l'espanyol...</span>}
+                  </div>
                   <textarea 
                     rows={4}
                     required
                     value={config.descripcioCA}
                     onChange={(e) => updateField('descripcioCA', e.target.value)}
+                    onBlur={() => handleBlurTranslate('descripcioCA', 'descripcioES', 'ca', 'es')}
                     placeholder="Descriu breument com funciona el registre..."
                     className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all resize-none leading-relaxed"
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] text-zinc-550 uppercase font-mono mb-1 font-extrabold">Text del Botó Principal (CAT) *</label>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="block text-[10px] text-zinc-550 uppercase font-mono font-extrabold">Text del Botó Principal (CAT) *</label>
+                    {translatingFields['botoTextES'] && <span className="text-[9px] text-[#ff0090] font-black animate-pulse flex items-center gap-1">✨ Traduint a l'espanyol...</span>}
+                  </div>
                   <input 
                     type="text"
                     required
                     value={config.botoTextCA}
                     onChange={(e) => updateField('botoTextCA', e.target.value)}
+                    onBlur={() => handleBlurTranslate('botoTextCA', 'botoTextES', 'ca', 'es')}
                     placeholder="Ex: Iniciar Formulari..."
                     className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all"
                   />
@@ -400,44 +452,60 @@ export default function AdminPortada({ language, onAddLog }: AdminPortadaProps) 
             ) : (
               <div className="space-y-4">
                 <div>
-                  <label className="block text-[10px] text-zinc-550 uppercase font-mono mb-1 font-extrabold">Título de la Portada (ESP) *</label>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="block text-[10px] text-zinc-550 uppercase font-mono font-extrabold">Título de la Portada (ESP) *</label>
+                    {translatingFields['titolCA'] && <span className="text-[9px] text-[#ff0090] font-black animate-pulse flex items-center gap-1">✨ Traduciendo al catalán...</span>}
+                  </div>
                   <input 
                     type="text"
                     required
                     value={config.titolES}
                     onChange={(e) => updateField('titolES', e.target.value)}
+                    onBlur={() => handleBlurTranslate('titolES', 'titolCA', 'es', 'ca')}
                     placeholder="El título principal llamativo..."
                     className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all placeholder-zinc-400"
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] text-zinc-550 uppercase font-mono mb-1 font-extrabold">Subtítulo superior (ESP)</label>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="block text-[10px] text-zinc-550 uppercase font-mono font-extrabold">Subtítulo superior (ESP)</label>
+                    {translatingFields['subtitolCA'] && <span className="text-[9px] text-[#ff0090] font-black animate-pulse flex items-center gap-1">✨ Traduciendo al catalán...</span>}
+                  </div>
                   <input 
                     type="text"
                     value={config.subtitolES}
                     onChange={(e) => updateField('subtitolES', e.target.value)}
+                    onBlur={() => handleBlurTranslate('subtitolES', 'subtitolCA', 'es', 'ca')}
                     placeholder="Ej: Bienvenidos a las comparsas de El Tast..."
                     className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all"
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] text-zinc-550 uppercase font-mono mb-1 font-extrabold">Descripción o Reglamento breve (ESP) *</label>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="block text-[10px] text-zinc-550 uppercase font-mono font-extrabold">Descripción o Reglamento breve (ESP) *</label>
+                    {translatingFields['descripcioCA'] && <span className="text-[9px] text-[#ff0090] font-black animate-pulse flex items-center gap-1">✨ Traduciendo al catalán...</span>}
+                  </div>
                   <textarea 
                     rows={4}
                     required
                     value={config.descripcioES}
                     onChange={(e) => updateField('descripcioES', e.target.value)}
+                    onBlur={() => handleBlurTranslate('descripcioES', 'descripcioCA', 'es', 'ca')}
                     placeholder="Describe brevemente cómo funciona el registro..."
                     className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all resize-none leading-relaxed"
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] text-zinc-550 uppercase font-mono mb-1 font-extrabold">Texto del Botón Principal (ESP) *</label>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="block text-[10px] text-zinc-550 uppercase font-mono font-extrabold">Texto del Botón Principal (ESP) *</label>
+                    {translatingFields['botoTextCA'] && <span className="text-[9px] text-[#ff0090] font-black animate-pulse flex items-center gap-1">✨ Traduciendo al catalán...</span>}
+                  </div>
                   <input 
                     type="text"
                     required
                     value={config.botoTextES}
                     onChange={(e) => updateField('botoTextES', e.target.value)}
+                    onBlur={() => handleBlurTranslate('botoTextES', 'botoTextCA', 'es', 'ca')}
                     placeholder="Ej: Iniciar Formulario..."
                     className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all"
                   />

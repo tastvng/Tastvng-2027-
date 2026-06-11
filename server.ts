@@ -108,6 +108,68 @@ async function startServer() {
     res.json({ status: "ok", time: new Date() });
   });
 
+  // Lazy load GoogleGenAI client for translation
+  let aiClient: any = null;
+
+  app.post("/api/translate", async (req, res) => {
+    try {
+      const { text, source, target } = req.body;
+      if (!text || !source || !target) {
+        return res.status(400).json({ error: "Falten paràmetres 'text', 'source' o 'target'" });
+      }
+
+      if (!text.trim()) {
+        return res.json({ translatedText: "" });
+      }
+
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) {
+        console.warn("GEMINI_API_KEY no està definit, pre-retornem text original.");
+        return res.json({ translatedText: text }); 
+      }
+
+      if (!aiClient) {
+        const { GoogleGenAI } = await import("@google/genai");
+        aiClient = new GoogleGenAI({
+          apiKey,
+          httpOptions: {
+            headers: {
+              'User-Agent': 'aistudio-build',
+            }
+          }
+        });
+      }
+
+      const sourceName = source === 'ca' ? 'Catalan' : 'Spanish';
+      const targetName = target === 'ca' ? 'Catalan' : 'Spanish';
+
+      const prompt = `You are a professional Catalan-Spanish bilingual translator.
+Translate the following text from ${sourceName} into ${targetName}.
+Ensure you preserve any formatting, capitalizations, emoji, or style.
+Return ONLY the clean translated text, without preamble, thoughts, warnings, explanations, quotes, or markdown tags unless they were in the original.
+Text: "${text}"`;
+
+      const response = await aiClient.models.generateContent({
+        model: "gemini-3.5-flash",
+        contents: prompt,
+        config: {
+          temperature: 0.1,
+        }
+      });
+
+      let translatedText = response.text || "";
+      translatedText = translatedText.trim();
+      if (translatedText.startsWith('"') && translatedText.endsWith('"') && !text.startsWith('"')) {
+        translatedText = translatedText.substring(1, translatedText.length - 1);
+      }
+
+      return res.json({ translatedText: translatedText.trim() });
+    } catch (error: any) {
+      console.error("Error in translation API:", error);
+      return res.json({ translatedText: req.body.text || "" });
+    }
+  });
+
   // Vite development server / static production delivery
   const distPath = path.join(process.cwd(), 'dist');
   const isProduction = process.env.NODE_ENV !== "development";

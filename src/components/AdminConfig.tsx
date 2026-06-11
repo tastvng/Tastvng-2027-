@@ -149,6 +149,32 @@ export default function AdminConfig({ config, onBack, onSave, noticies, onSaveNo
 
   const [notifSuccess, setNotifSuccess] = useState(false);
 
+  const [autoTranslate, setAutoTranslate] = useState(true);
+  const [translatingFields, setTranslatingFields] = useState<Record<string, boolean>>({});
+
+  const handleBlurTranslate = async (
+    textToTranslate: string,
+    setTargetValue: (val: string) => void,
+    targetKey: string,
+    sourceLang: 'ca' | 'es',
+    targetLang: 'ca' | 'es'
+  ) => {
+    if (!autoTranslate || !textToTranslate || !textToTranslate.trim()) return;
+
+    setTranslatingFields(prev => ({ ...prev, [targetKey]: true }));
+    try {
+      const { translateText } = await import('../translateService');
+      const translated = await translateText(textToTranslate, sourceLang, targetLang);
+      if (translated && translated.trim()) {
+        setTargetValue(translated.trim());
+      }
+    } catch (e) {
+      console.error("Auto translation error in AdminConfig:", e);
+    } finally {
+      setTranslatingFields(prev => ({ ...prev, [targetKey]: false }));
+    }
+  };
+
   // States and Handlers for Logo Drag & Drop / Upload
   const [dragActive, setDragActive] = useState(false);
 
@@ -718,13 +744,28 @@ export default function AdminConfig({ config, onBack, onSave, noticies, onSaveNo
 
               {/* Minor legal texts customization */}
               <div className="pt-4 border-t border-zinc-100 space-y-3">
-                <span className="block text-[9px] text-zinc-400 uppercase font-mono tracking-wider font-bold">Autorització de Menors</span>
+                <div className="flex justify-between items-center">
+                  <span className="block text-[9px] text-zinc-400 uppercase font-mono tracking-wider font-bold">Autorització de Menors</span>
+                  <label className="flex items-center gap-1 cursor-pointer text-[9px] text-zinc-400 select-none">
+                    <input 
+                      type="checkbox"
+                      checked={autoTranslate}
+                      onChange={(e) => setAutoTranslate(e.target.checked)}
+                      className="rounded border-zinc-200 bg-white text-[#ff0090] focus:ring-0 accent-[#ff0090] w-2.5 h-2.5 cursor-pointer"
+                    />
+                    <span className={autoTranslate ? "text-[#ff0090] font-bold" : ""}>IA Sincro ✨</span>
+                  </label>
+                </div>
                 
                 <div className="space-y-1">
-                  <label className="block text-xs font-bold text-zinc-700">Text de l'Autorització (Català) *</label>
+                  <div className="flex justify-between items-center">
+                    <label className="block text-xs font-bold text-zinc-700">Text de l'Autorització (Català) *</label>
+                    {translatingFields['minorLegalCa'] && <span className="text-[9px] text-[#ff0090] font-black animate-pulse">✨ Traduint al català...</span>}
+                  </div>
                   <textarea
                     value={textLegalAutoritzacioMenors}
                     onChange={(e) => setTextLegalAutoritzacioMenors(e.target.value)}
+                    onBlur={() => handleBlurTranslate(textLegalAutoritzacioMenors, setTextLegalAutoritzacioMenorsES, 'minorLegalEs', 'ca', 'es')}
                     rows={4}
                     className="w-full bg-zinc-50 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-4 py-2 text-xs focus:outline-none transition-all font-sans leading-relaxed shadow-inner"
                     placeholder="Text legal de l'autorització en català..."
@@ -733,10 +774,14 @@ export default function AdminConfig({ config, onBack, onSave, noticies, onSaveNo
                 </div>
 
                 <div className="space-y-1">
-                  <label className="block text-xs font-bold text-zinc-700">Texto de la Autorización (Castellano) *</label>
+                  <div className="flex justify-between items-center">
+                    <label className="block text-xs font-bold text-zinc-700">Texto de la Autorización (Castellano) *</label>
+                    {translatingFields['minorLegalEs'] && <span className="text-[9px] text-[#ff0090] font-black animate-pulse">✨ Traduciendo al castellano...</span>}
+                  </div>
                   <textarea
                     value={textLegalAutoritzacioMenorsES}
                     onChange={(e) => setTextLegalAutoritzacioMenorsES(e.target.value)}
+                    onBlur={() => handleBlurTranslate(textLegalAutoritzacioMenorsES, setTextLegalAutoritzacioMenors, 'minorLegalCa', 'es', 'ca')}
                     rows={4}
                     className="w-full bg-zinc-50 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-4 py-2 text-xs focus:outline-none transition-all font-sans leading-relaxed shadow-inner"
                     placeholder="Texto legal de la autorización en castellano..."
@@ -928,25 +973,63 @@ export default function AdminConfig({ config, onBack, onSave, noticies, onSaveNo
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-[10px] text-zinc-500 uppercase font-mono font-bold mb-1">
-                        {language === 'ca' ? "Nom de la línia (Català) *" : "Nombre de la línea (Catalán) *"}
-                      </label>
+                      <div className="flex justify-between items-center mb-1">
+                        <label className="block text-[10px] text-zinc-500 uppercase font-mono font-bold">
+                          {language === 'ca' ? "Nom de la línia (Català) *" : "Nombre de la línea (Catalán) *"}
+                        </label>
+                        {translatingFields[`line-nomES-${linia.id}`] && <span className="text-[8px] text-[#ff0090] font-black animate-pulse">✨ traduint...</span>}
+                      </div>
                       <input 
                         type="text"
                         value={linia.nom}
                         onChange={(e) => handleUpdateLiniaUniforme(linia.id, { nom: e.target.value })}
+                        onBlur={async () => {
+                          if (!autoTranslate || !linia.nom.trim()) return;
+                          const targetKey = `line-nomES-${linia.id}`;
+                          setTranslatingFields(prev => ({ ...prev, [targetKey]: true }));
+                          try {
+                            const { translateText } = await import('../translateService');
+                            const translated = await translateText(linia.nom, 'ca', 'es');
+                            if (translated && translated.trim()) {
+                              handleUpdateLiniaUniforme(linia.id, { nomES: translated.trim() });
+                            }
+                          } catch (e) {
+                            console.error(e);
+                          } finally {
+                            setTranslatingFields(prev => ({ ...prev, [targetKey]: false }));
+                          }
+                        }}
                         className="w-full bg-white border border-zinc-250 focus:border-[#ff0090] rounded-xl px-3 py-2 text-xs font-bold focus:outline-none"
                         placeholder="Ex: Talla de Samarreta"
                       />
                     </div>
                     <div>
-                      <label className="block text-[10px] text-zinc-500 uppercase font-mono font-bold mb-1">
-                        {language === 'ca' ? "Nom de la línia (Castellà) *" : "Nombre de la línea (Castellano) *"}
-                      </label>
+                      <div className="flex justify-between items-center mb-1">
+                        <label className="block text-[10px] text-zinc-500 uppercase font-mono font-bold">
+                          {language === 'ca' ? "Nom de la línia (Castellà) *" : "Nombre de la línea (Castellano) *"}
+                        </label>
+                        {translatingFields[`line-nom-${linia.id}`] && <span className="text-[8px] text-[#ff0090] font-black animate-pulse">✨ traduint...</span>}
+                      </div>
                       <input 
                         type="text"
                         value={linia.nomES}
                         onChange={(e) => handleUpdateLiniaUniforme(linia.id, { nomES: e.target.value })}
+                        onBlur={async () => {
+                          if (!autoTranslate || !linia.nomES.trim()) return;
+                          const targetKey = `line-nom-${linia.id}`;
+                          setTranslatingFields(prev => ({ ...prev, [targetKey]: true }));
+                          try {
+                            const { translateText } = await import('../translateService');
+                            const translated = await translateText(linia.nomES, 'es', 'ca');
+                            if (translated && translated.trim()) {
+                              handleUpdateLiniaUniforme(linia.id, { nom: translated.trim() });
+                            }
+                          } catch (e) {
+                            console.error(e);
+                          } finally {
+                            setTranslatingFields(prev => ({ ...prev, [targetKey]: false }));
+                          }
+                        }}
                         className="w-full bg-white border border-zinc-250 focus:border-[#ff0090] rounded-xl px-3 py-2 text-xs font-bold focus:outline-none"
                         placeholder="Ex: Talla de Camiseta"
                       />
