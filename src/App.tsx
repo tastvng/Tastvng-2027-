@@ -47,7 +47,16 @@ import NotificationFeed from './components/NotificationFeed';
 import MobileRemoteScanner from './components/MobileRemoteScanner';
 import PortadaPage, { PortadaConfig } from './components/PortadaPage';
 import { PORTADA_CONFIG_DEFAULTS } from './components/AdminPortada';
-import { getSupabaseSettings, isSupabaseConfigured } from './supabaseClient';
+import { 
+  isSupabaseConfigured, 
+  getSupabaseSetting, 
+  saveSupabaseSetting, 
+  getSupabaseInscripciones, 
+  saveSupabaseInscripcion, 
+  deleteSupabaseInscripcion, 
+  deleteMultipleSupabaseInscripciones, 
+  clearAllSupabaseInscripciones 
+} from './supabaseClient';
 
 export default function App() {
   const { language, setLanguage, t } = useLanguage();
@@ -84,7 +93,7 @@ export default function App() {
     async function loadConfigFromSupabase() {
       if (!isSupabaseConfigured) return;
       try {
-        const dbConfig = await getSupabaseSettings();
+        const dbConfig = await getSupabaseSetting<PortadaConfig | null>('tast_portada_config_2026', null);
         if (dbConfig) {
           const merged = { ...PORTADA_CONFIG_DEFAULTS, ...dbConfig };
           setPortadaConfig(merged);
@@ -105,7 +114,7 @@ export default function App() {
     const handlePortadaChange = async () => {
       try {
         if (isSupabaseConfigured) {
-          const dbConfig = await getSupabaseSettings();
+          const dbConfig = await getSupabaseSetting<PortadaConfig | null>('tast_portada_config_2026', null);
           if (dbConfig) {
             setPortadaConfig({ ...PORTADA_CONFIG_DEFAULTS, ...dbConfig });
             return;
@@ -189,76 +198,131 @@ export default function App() {
     }
   }, []);
 
-  // Load and recover state from LocalStorage on mount
+  // Load and recover state from Supabase / LocalStorage on mount
   useEffect(() => {
-    try {
-      const savedConfig = localStorage.getItem('tast_config_2026');
-      if (savedConfig) {
-        const parsed = JSON.parse(savedConfig);
-        let updated = false;
-        if (!parsed.titolSeccioTarifes || !parsed.tarifesDinamiques) {
-          parsed.titolSeccioTarifes = parsed.titolSeccioTarifes || CONFIG_INICIAL.titolSeccioTarifes || 'Tarifes i Cànons 2026';
-          parsed.tarifesDinamiques = parsed.tarifesDinamiques || [
-            { id: 'adults', nom: 'Preu Parella Adulta (€)', valor: parsed.preuAdult ?? 90.00, actiu: true, tipus: 'categoria_adult' },
-            { id: 'juvenils', nom: 'Preu Parella Juvenil (€)', valor: parsed.preuJuvenil ?? 60.00, actiu: true, tipus: 'categoria_juvenil' },
-            { id: 'domas', nom: 'Cànon Domàs de Balcó (€)', valor: parsed.preuDomasBalco ?? 15.00, actiu: true, tipus: 'extra_domas' },
-            { id: 'mocador', nom: 'Cànon Mocador Extra (€)', valor: parsed.preuMocadorExtra ?? 6.00, actiu: true, tipus: 'extra_mocador' }
-          ];
-          updated = true;
+    async function loadAllFromDatabase() {
+      if (isSupabaseConfigured) {
+        try {
+          // 1. Fetch Global Config
+          const dbConfig = await getSupabaseSetting<SistemaConfig | null>('tast_config_2026', null);
+          if (dbConfig) {
+            setConfig(dbConfig);
+            localStorage.setItem('tast_config_2026', JSON.stringify(dbConfig));
+          } else {
+            console.log("No config found in Supabase settings table, uploading CONFIG_INICIAL...");
+            setConfig(CONFIG_INICIAL);
+            localStorage.setItem('tast_config_2026', JSON.stringify(CONFIG_INICIAL));
+            await saveSupabaseSetting('tast_config_2026', CONFIG_INICIAL);
+          }
+        } catch (e) {
+          console.error("Error loading config from Supabase:", e);
+          setConfig(CONFIG_INICIAL);
         }
-        if (!parsed.titolFormulariDinamic) {
-          parsed.titolFormulariDinamic = CONFIG_INICIAL.titolFormulariDinamic || "Preguntes del Qüestionari d'El Tast";
-          updated = true;
+
+        try {
+          // 2. Fetch Inscriptions
+          const dbInscripcions = await getSupabaseInscripciones();
+          if (dbInscripcions && dbInscripcions.length > 0) {
+            setInscripcions(dbInscripcions);
+            localStorage.setItem('tast_inscripcions_2026', JSON.stringify(dbInscripcions));
+          } else {
+            console.log("No inscriptions found in Supabase 'inscripciones' table, uploading INSCRIPCIONS_INICIALS...");
+            setInscripcions(INSCRIPCIONS_INICIALS);
+            localStorage.setItem('tast_inscripcions_2026', JSON.stringify(INSCRIPCIONS_INICIALS));
+            // Save initial records to newly created table so it's populated for the user
+            for (const ins of INSCRIPCIONS_INICIALS) {
+              await saveSupabaseInscripcion(ins);
+            }
+          }
+        } catch (e) {
+          console.error("Error loading inscriptions from Supabase:", e);
+          setInscripcions(INSCRIPCIONS_INICIALS);
         }
-        if (parsed.logoUseImage === undefined) {
-          parsed.logoUseImage = false;
-          parsed.logoImgUrl = '';
-          updated = true;
+
+        try {
+          // 3. Fetch social news / noticies
+          const dbNoticies = await getSupabaseSetting<NoticiaXarxes[] | null>('tast_noticies_2026', null);
+          if (dbNoticies) {
+            setNoticies(dbNoticies);
+            localStorage.setItem('tast_noticies_2026', JSON.stringify(dbNoticies));
+          } else {
+            const module = await import('./data');
+            setNoticies(module.COMPARTIDES_XARXES);
+            localStorage.setItem('tast_noticies_2026', JSON.stringify(module.COMPARTIDES_XARXES));
+            await saveSupabaseSetting('tast_noticies_2026', module.COMPARTIDES_XARXES);
+          }
+        } catch (e) {
+          console.error("Error loading news from Supabase:", e);
         }
-        if (!parsed.nomUniforme) {
-          parsed.nomUniforme = CONFIG_INICIAL.nomUniforme || "Talla de Samarreta";
-          parsed.nomUniformeES = CONFIG_INICIAL.nomUniformeES || "Talla de Camiseta";
-          parsed.opcionsUniforme = CONFIG_INICIAL.opcionsUniforme || ["XS", "S", "M", "L", "XL", "XXL", "3XL"];
-          updated = true;
+
+        try {
+          // 4. Fetch extra customization settings
+          const subCa = await getSupabaseSetting('tast_email_subject_ca', '');
+          const subEs = await getSupabaseSetting('tast_email_subject_es', '');
+          const bdyCa = await getSupabaseSetting('tast_email_body_ca', '');
+          const bdyEs = await getSupabaseSetting('tast_email_body_es', '');
+          const lg = await getSupabaseSetting('tast_email_logo', '');
+          const hrCa = await getSupabaseSetting('tast_secretaria_hours_ca', '');
+          const hrEs = await getSupabaseSetting('tast_secretaria_hours_es', '');
+
+          if (subCa) localStorage.setItem('tast_email_subject_ca', subCa);
+          if (subEs) localStorage.setItem('tast_email_subject_es', subEs);
+          if (bdyCa) localStorage.setItem('tast_email_body_ca', bdyCa);
+          if (bdyEs) localStorage.setItem('tast_email_body_es', bdyEs);
+          if (lg) {
+            localStorage.setItem('tast_email_logo', lg);
+            setEmailLogo(lg);
+          }
+          if (hrCa) localStorage.setItem('tast_secretaria_hours_ca', hrCa);
+          if (hrEs) localStorage.setItem('tast_secretaria_hours_es', hrEs);
+
+          if (hrCa || hrEs) {
+            setHoursConfig({
+              ca: hrCa || "Dimecres i divendres, de 18:00h a 21:30h directament a la seu social de l'Associació Cultural El Tast.",
+              es: hrEs || "Miércoles y viernes, de 18:00h a 21:30h directamente en la sede social de la Asociación Cultural El Tast."
+            });
+          }
+        } catch (e) {
+          console.error("Error loading extra settings from Supabase:", e);
         }
-        if (!parsed.liniisUniforme) {
-          parsed.liniisUniforme = CONFIG_INICIAL.liniisUniforme || [];
-          updated = true;
-        }
-        if (updated) {
-          localStorage.setItem('tast_config_2026', JSON.stringify(parsed));
-        }
-        setConfig(parsed);
       } else {
-        localStorage.setItem('tast_config_2026', JSON.stringify(CONFIG_INICIAL));
-      }
-
-      const savedInscripcions = localStorage.getItem('tast_inscripcions_2026');
-      if (savedInscripcions) {
-        setInscripcions(JSON.parse(savedInscripcions));
-      } else {
-        setInscripcions(INSCRIPCIONS_INICIALS);
-        localStorage.setItem('tast_inscripcions_2026', JSON.stringify(INSCRIPCIONS_INICIALS));
-      }
-
-      const savedNoticies = localStorage.getItem('tast_noticies_2026');
-      import('./data').then((module) => {
-        if (savedNoticies) {
-          setNoticies(JSON.parse(savedNoticies));
-        } else {
-          setNoticies(module.COMPARTIDES_XARXES);
-          localStorage.setItem('tast_noticies_2026', JSON.stringify(module.COMPARTIDES_XARXES));
+        // Traditional LocalStorage loading fallback
+        try {
+          const savedConfig = localStorage.getItem('tast_config_2026');
+          if (savedConfig) {
+            setConfig(JSON.parse(savedConfig));
+          } else {
+            setConfig(CONFIG_INICIAL);
+          }
+          const savedInscripcions = localStorage.getItem('tast_inscripcions_2026');
+          if (savedInscripcions) {
+            setInscripcions(JSON.parse(savedInscripcions));
+          } else {
+            setInscripcions(INSCRIPCIONS_INICIALS);
+          }
+          const savedNoticies = localStorage.getItem('tast_noticies_2026');
+          if (savedNoticies) {
+            setNoticies(JSON.parse(savedNoticies));
+          } else {
+            const module = await import('./data');
+            setNoticies(module.COMPARTIDES_XARXES);
+          }
+        } catch (e) {
+          console.error("LocalStorage fallback load failed:", e);
+          setInscripcions(INSCRIPCIONS_INICIALS);
         }
-      });
-
-      const savedLogin = localStorage.getItem('tast_admin_session_2026') || sessionStorage.getItem('tast_admin_session_2026');
-      if (savedLogin === 'true') {
-        setIsAdminLoggedIn(true);
       }
-    } catch (e) {
-      console.error("error loading local storage state:", e);
-      setInscripcions(INSCRIPCIONS_INICIALS);
+
+      // Check admin login
+      try {
+        const savedLogin = localStorage.getItem('tast_admin_session_2026') || sessionStorage.getItem('tast_admin_session_2026');
+        if (savedLogin === 'true') {
+          setIsAdminLoggedIn(true);
+        }
+      } catch (e) {}
     }
+
+    loadAllFromDatabase();
   }, []);
 
   // Quick logger function
@@ -268,13 +332,21 @@ export default function App() {
   };
 
   // State update actions
-  const saveConfig = (newConfig: SistemaConfig) => {
+  const saveConfig = async (newConfig: SistemaConfig) => {
     setConfig(newConfig);
     localStorage.setItem('tast_config_2026', JSON.stringify(newConfig));
     addLog("S'han modificat les tarifes i config.");
+    if (isSupabaseConfigured) {
+      try {
+        await saveSupabaseSetting('tast_config_2026', newConfig);
+        addLog("✓ Configuració desada globalment a la base de dades d'settings.");
+      } catch (err) {
+        console.error("Error saving config to Supabase:", err);
+      }
+    }
   };
 
-  const addRegistration = (newReg: Inscripcio) => {
+  const addRegistration = async (newReg: Inscripcio) => {
     const updated = [newReg, ...inscripcions];
     setInscripcions(updated);
     localStorage.setItem('tast_inscripcions_2026', JSON.stringify(updated));
@@ -285,47 +357,102 @@ export default function App() {
       ? `📧 SMTP: Correu de confirmació oficial enviat automàticament des de secretaria@eltast.cat a ${newReg.c1Email} i ${newReg.c2Email}`
       : `📧 SMTP: Correo de confirmación oficial enviado automáticamente desde secretaria@eltast.cat a ${newReg.c1Email} y ${newReg.c2Email}`
     );
+    if (isSupabaseConfigured) {
+      try {
+        await saveSupabaseInscripcion(newReg);
+        addLog(`✓ Inscripció registrada persistentment a Supabase.`);
+      } catch (err) {
+        console.error("Error saving inscription to Supabase:", err);
+      }
+    }
   };
 
-  const addRegistrationManual = (newReg: Inscripcio) => {
+  const addRegistrationManual = async (newReg: Inscripcio) => {
     const updated = [newReg, ...inscripcions];
     setInscripcions(updated);
     localStorage.setItem('tast_inscripcions_2026', JSON.stringify(updated));
     addLog(`Parella afegida manualment des del taulell: ${newReg.c1Nom} & ${newReg.c2Nom}. Codi: ${newReg.codiSeguiment}`);
+    if (isSupabaseConfigured) {
+      try {
+        await saveSupabaseInscripcion(newReg);
+        addLog(`✓ Inscripció manual registrada persistentment a Supabase.`);
+      } catch (err) {
+        console.error("Error saving manual inscription to Supabase:", err);
+      }
+    }
   };
 
-  const deleteRegistration = (id: string) => {
+  const deleteRegistration = async (id: string) => {
     const itemToDelete = inscripcions.find(i => i.id === id);
     const updated = inscripcions.filter(i => i.id !== id);
     setInscripcions(updated);
     localStorage.setItem('tast_inscripcions_2026', JSON.stringify(updated));
     addLog(`S'ha eliminat la inscripció de la parella: ${itemToDelete ? `${itemToDelete.c1Nom} & ${itemToDelete.c2Nom}` : id}`);
+    if (isSupabaseConfigured) {
+      try {
+        await deleteSupabaseInscripcion(id);
+        addLog(`✓ Inscripció eliminada a Supabase.`);
+      } catch (err) {
+        console.error("Error deleting inscription from Supabase:", err);
+      }
+    }
   };
 
-  const deleteMultipleRegistrations = (ids: string[]) => {
+  const deleteMultipleRegistrations = async (ids: string[]) => {
     const updated = inscripcions.filter(i => !ids.includes(i.id));
     setInscripcions(updated);
     localStorage.setItem('tast_inscripcions_2026', JSON.stringify(updated));
     addLog(`S'han eliminat ${ids.length} inscripcions de forma massiva.`);
+    if (isSupabaseConfigured) {
+      try {
+        await deleteMultipleSupabaseInscripciones(ids);
+        addLog(`✓ S'han eliminat ${ids.length} inscripcions a Supabase.`);
+      } catch (err) {
+        console.error("Error deleting multiple inscriptions from Supabase:", err);
+      }
+    }
   };
 
-  const clearAllRegistrations = () => {
+  const clearAllRegistrations = async () => {
     setInscripcions([]);
     localStorage.setItem('tast_inscripcions_2026', JSON.stringify([]));
     addLog(`S'ha buidat completament la base de dades d'inscripcions.`);
+    if (isSupabaseConfigured) {
+      try {
+        await clearAllSupabaseInscripciones();
+        addLog(`✓ Base de dades d'inscripcions buidada a Supabase.`);
+      } catch (err) {
+        console.error("Error clearing all inscriptions from Supabase:", err);
+      }
+    }
   };
 
-  const saveNoticies = (newNoticies: NoticiaXarxes[]) => {
+  const saveNoticies = async (newNoticies: NoticiaXarxes[]) => {
     setNoticies(newNoticies);
     localStorage.setItem('tast_noticies_2026', JSON.stringify(newNoticies));
     addLog("S'han actualitzat les notícies de la xarxa social.");
+    if (isSupabaseConfigured) {
+      try {
+        await saveSupabaseSetting('tast_noticies_2026', newNoticies);
+      } catch (err) {
+        console.error("Error saving news to Supabase:", err);
+      }
+    }
   };
 
-  const updateRegistration = (updatedReg: Inscripcio) => {
+  const updateRegistration = async (updatedReg: Inscripcio) => {
     const updated = inscripcions.map(i => i.id === updatedReg.id ? updatedReg : i);
     setInscripcions(updated);
     localStorage.setItem('tast_inscripcions_2026', JSON.stringify(updated));
     addLog(`Ficha d'inscripció actualitzada del parella: ${updatedReg.c1Nom} (${updatedReg.codiSeguiment})`);
+    if (isSupabaseConfigured) {
+      try {
+        await saveSupabaseInscripcion(updatedReg);
+        addLog(`✓ Ficha actualitzada persistentment a Supabase.`);
+      } catch (err) {
+        console.error("Error updating inscription on Supabase:", err);
+      }
+    }
   };
 
   const handleAdminLogin = (rememberMe: boolean = false) => {

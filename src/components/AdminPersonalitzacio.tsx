@@ -45,6 +45,35 @@ export default function AdminPersonalitzacio({ language, onAddLog }: AdminPerson
   const [activeLangTab, setActiveLangTab] = useState<'ca' | 'es'>('ca');
   const [saveSuccess, setSaveSuccess] = useState(false);
 
+  // Sync with Supabase Settings if available
+  useEffect(() => {
+    async function loadPersonalization() {
+      try {
+        const { isSupabaseConfigured, getSupabaseSetting } = await import('../supabaseClient');
+        if (!isSupabaseConfigured) return;
+
+        const subCa = await getSupabaseSetting('tast_email_subject_ca', '');
+        const subEs = await getSupabaseSetting('tast_email_subject_es', '');
+        const bdyCa = await getSupabaseSetting('tast_email_body_ca', '');
+        const bdyEs = await getSupabaseSetting('tast_email_body_es', '');
+        const lg = await getSupabaseSetting('tast_email_logo', '');
+        const hrCa = await getSupabaseSetting('tast_secretaria_hours_ca', '');
+        const hrEs = await getSupabaseSetting('tast_secretaria_hours_es', '');
+
+        if (subCa) setEmailSubjectCa(subCa);
+        if (subEs) setEmailSubjectEs(subEs);
+        if (bdyCa) setEmailBodyCa(bdyCa);
+        if (bdyEs) setEmailBodyEs(bdyEs);
+        if (lg) setEmailLogo(lg);
+        if (hrCa) setHoursCa(hrCa);
+        if (hrEs) setHoursEs(hrEs);
+      } catch (err) {
+        console.error("Failed to load personalization from Supabase:", err);
+      }
+    }
+    loadPersonalization();
+  }, []);
+
   const [autoTranslate, setAutoTranslate] = useState(true);
   const [translatingFields, setTranslatingFields] = useState<Record<string, boolean>>({});
 
@@ -108,18 +137,24 @@ export default function AdminPersonalitzacio({ language, onAddLog }: AdminPerson
       return;
     }
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       if (event.target?.result) {
         const logoData = event.target.result as string;
         setEmailLogo(logoData);
         // Save immediately and notify all components/pages
         localStorage.setItem('tast_email_logo', logoData);
+        try {
+          const { isSupabaseConfigured, saveSupabaseSetting } = await import('../supabaseClient');
+          if (isSupabaseConfigured) {
+            await saveSupabaseSetting('tast_email_logo', logoData);
+          }
+        } catch (e) {}
         window.dispatchEvent(new Event('hoursConfigChanged'));
         window.dispatchEvent(new Event('localStorage'));
         if (onAddLog) {
           onAddLog(language === 'ca' 
-            ? "Mòdul de Personalització: Imatge de logotip actualitzada i aplicada a tot el sistema." 
-            : "Módulo de Personalización: Imagen de logotipo actualizada y aplicada a todo el sistema."
+            ? "Mòdul de Personalització: Imatge de logotip actualitzada i aplicada al sistema global." 
+            : "Módulo de Personalización: Imagen de logotipo actualizada y aplicada al sistema global."
           );
         }
       }
@@ -134,7 +169,7 @@ export default function AdminPersonalitzacio({ language, onAddLog }: AdminPerson
     }
   };
 
-  const handleSaveCorreuIHorari = (e: React.FormEvent) => {
+  const handleSaveCorreuIHorari = async (e: React.FormEvent) => {
     e.preventDefault();
     localStorage.setItem('tast_email_subject_ca', emailSubjectCa);
     localStorage.setItem('tast_email_subject_es', emailSubjectEs);
@@ -144,6 +179,19 @@ export default function AdminPersonalitzacio({ language, onAddLog }: AdminPerson
     localStorage.setItem('tast_secretaria_hours_ca', hoursCa);
     localStorage.setItem('tast_secretaria_hours_es', hoursEs);
 
+    try {
+      const { isSupabaseConfigured, saveSupabaseSetting } = await import('../supabaseClient');
+      if (isSupabaseConfigured) {
+        await saveSupabaseSetting('tast_email_subject_ca', emailSubjectCa);
+        await saveSupabaseSetting('tast_email_subject_es', emailSubjectEs);
+        await saveSupabaseSetting('tast_email_body_ca', emailBodyCa);
+        await saveSupabaseSetting('tast_email_body_es', emailBodyEs);
+        await saveSupabaseSetting('tast_email_logo', emailLogo);
+        await saveSupabaseSetting('tast_secretaria_hours_ca', hoursCa);
+        await saveSupabaseSetting('tast_secretaria_hours_es', hoursEs);
+      }
+    } catch (err) {}
+
     // Dispatch events to let Confirmation & App components refresh state in real-time
     window.dispatchEvent(new Event('hoursConfigChanged'));
     window.dispatchEvent(new Event('localStorage'));
@@ -151,14 +199,14 @@ export default function AdminPersonalitzacio({ language, onAddLog }: AdminPerson
     setSaveSuccess(true);
     if (onAddLog) {
       onAddLog(language === 'ca' 
-        ? "Personalització de text de correu i horaris de secretaria desada amb èxit." 
-        : "Personalización de texto de correo y horarios de secretaría guardada con éxito."
+        ? "Personalització de text de correu i horaris de secretaria desada amb èxit a Supabase." 
+        : "Personalización de texto de correo y horarios de secretaría guardada con éxito en Supabase."
       );
     }
     setTimeout(() => setSaveSuccess(false), 3000);
   };
 
-  const handleResetCorreuIHorari = () => {
+  const handleResetCorreuIHorari = async () => {
     if (window.confirm(language === 'ca' 
       ? "Segur que vols restaurar els valors de correu i horaris per defecte?" 
       : "¿Seguro que quieres restaurar los valores de correo y horarios por defecto?")) {
@@ -186,10 +234,23 @@ export default function AdminPersonalitzacio({ language, onAddLog }: AdminPerson
       localStorage.setItem('tast_secretaria_hours_ca', defHoursCa);
       localStorage.setItem('tast_secretaria_hours_es', defHoursEs);
 
+      try {
+        const { isSupabaseConfigured, saveSupabaseSetting } = await import('../supabaseClient');
+        if (isSupabaseConfigured) {
+          await saveSupabaseSetting('tast_email_subject_ca', defSubjectCa);
+          await saveSupabaseSetting('tast_email_subject_es', defSubjectEs);
+          await saveSupabaseSetting('tast_email_body_ca', defBodyCa);
+          await saveSupabaseSetting('tast_email_body_es', defBodyEs);
+          await saveSupabaseSetting('tast_email_logo', "");
+          await saveSupabaseSetting('tast_secretaria_hours_ca', defHoursCa);
+          await saveSupabaseSetting('tast_secretaria_hours_es', defHoursEs);
+        }
+      } catch (err) {}
+
       window.dispatchEvent(new Event('hoursConfigChanged'));
       window.dispatchEvent(new Event('localStorage'));
 
-      if (onAddLog) onAddLog("Valors per defecte restaurats.");
+      if (onAddLog) onAddLog("Valors per defecte restaurats en disc i núvol.");
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 2000);
     }
@@ -394,6 +455,11 @@ export default function AdminPersonalitzacio({ language, onAddLog }: AdminPerson
                             e.stopPropagation();
                             setEmailLogo("");
                             localStorage.setItem('tast_email_logo', "");
+                            import('../supabaseClient').then(async (m) => {
+                              if (m.isSupabaseConfigured) {
+                                await m.saveSupabaseSetting('tast_email_logo', "");
+                              }
+                            }).catch(err => console.error(err));
                             window.dispatchEvent(new Event('hoursConfigChanged'));
                             window.dispatchEvent(new Event('localStorage'));
                             if (onAddLog) {

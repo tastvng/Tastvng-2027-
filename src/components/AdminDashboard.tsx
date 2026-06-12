@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLanguage } from '../LanguageContext';
 import { 
   Search, 
@@ -159,6 +159,49 @@ export default function AdminDashboard({
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [inscriptionDeleteConfirmId, setInscriptionDeleteConfirmId] = useState<string | null>(null);
 
+  // Synchronize administrative configurations with Supabase Settings
+  useEffect(() => {
+    async function loadAdminSettings() {
+      try {
+        const { isSupabaseConfigured, getSupabaseSetting } = await import('../supabaseClient');
+        if (!isSupabaseConfigured) return;
+
+        const host = await getSupabaseSetting('tast_smtp_host', '');
+        const port = await getSupabaseSetting('tast_smtp_port', '');
+        const user = await getSupabaseSetting('tast_smtp_usuari', '');
+        const pass = await getSupabaseSetting('tast_smtp_contrasenya', '');
+
+        if (host) setSmtpHost(host);
+        if (port) setSmtpPort(port);
+        if (user) setSmtpUsuari(user);
+        if (pass) setSmtpContrasenya(pass);
+
+        const instConn = await getSupabaseSetting('tast_sc_instagram_connected', '');
+        const instHnd = await getSupabaseSetting('tast_sc_instagram_handle', '');
+        const fbConn = await getSupabaseSetting('tast_sc_facebook_connected', '');
+        const fbHnd = await getSupabaseSetting('tast_sc_facebook_handle', '');
+        const tkConn = await getSupabaseSetting('tast_sc_tiktok_connected', '');
+        const tkHnd = await getSupabaseSetting('tast_sc_tiktok_handle', '');
+
+        if (instConn !== null && instConn !== '') setScInstagramConnected(instConn === 'true');
+        if (instHnd) setScInstagramHandle(instHnd);
+        if (fbConn !== null && fbConn !== '') setScFacebookConnected(fbConn === 'true');
+        if (fbHnd) setScFacebookHandle(fbHnd);
+        if (tkConn !== null && tkConn !== '') setScTikTokConnected(tkConn === 'true');
+        if (tkHnd) setScTikTokHandle(tkHnd);
+
+        const staff = await getSupabaseSetting<StaffMember[] | null>('tast_staff_2026', null);
+        if (staff && staff.length > 0) {
+          setStaffList(staff);
+          localStorage.setItem('tast_staff_2026', JSON.stringify(staff));
+        }
+      } catch (err) {
+        console.error("Failed to load admin settings from Supabase:", err);
+      }
+    }
+    loadAdminSettings();
+  }, []);
+
   // Manual add couple modal state
   const [showAddModal, setShowAddModal] = useState(false);
 
@@ -191,13 +234,24 @@ export default function AdminDashboard({
   const mocadorsPreu = newMocadors * config.preuMocadorExtra;
   const calculatedPreu = basePreu + domasPreu + mocadorsPreu;
 
-  // Save SMTP server settings to LocalStorage
-  const handleSaveSmtp = (e?: React.FormEvent) => {
+  // Save SMTP server settings to LocalStorage & Supabase settings
+  const handleSaveSmtp = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     localStorage.setItem('tast_smtp_host', smtpHost);
     localStorage.setItem('tast_smtp_port', smtpPort);
     localStorage.setItem('tast_smtp_usuari', smtpUsuari);
     localStorage.setItem('tast_smtp_contrasenya', smtpContrasenya);
+
+    try {
+      const { isSupabaseConfigured, saveSupabaseSetting } = await import('../supabaseClient');
+      if (isSupabaseConfigured) {
+        await saveSupabaseSetting('tast_smtp_host', smtpHost);
+        await saveSupabaseSetting('tast_smtp_port', smtpPort);
+        await saveSupabaseSetting('tast_smtp_usuari', smtpUsuari);
+        await saveSupabaseSetting('tast_smtp_contrasenya', smtpContrasenya);
+      }
+    } catch (err) {}
+
     setSmtpSaveSuccess(true);
     if (onAddLog) {
       onAddLog(language === 'ca'
@@ -494,7 +548,7 @@ export default function AdminDashboard({
     setShowAddModal(false);
   };
 
-  const handleAddStaffMember = (e: React.FormEvent) => {
+  const handleAddStaffMember = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newStaffNom.trim() || !newStaffUsuari.trim() || !newStaffContrasenya.trim()) {
       alert("Si us plau, omple tots els camps d’identificació manuals per al membre del staff.");
@@ -514,10 +568,16 @@ export default function AdminDashboard({
     const updated = [...staffList, nouMembre];
     setStaffList(updated);
     localStorage.setItem('tast_staff_2026', JSON.stringify(updated));
+    try {
+      const { isSupabaseConfigured, saveSupabaseSetting } = await import('../supabaseClient');
+      if (isSupabaseConfigured) {
+        await saveSupabaseSetting('tast_staff_2026', updated);
+      }
+    } catch (err) {}
     window.dispatchEvent(new Event('staffChanged'));
 
     if (onAddLog) {
-      onAddLog(`S'ha afegit ${newStaffNom} (${newStaffRol}) al personal d'administració.`);
+      onAddLog(`S'ha afegit ${newStaffNom} (${newStaffRol}) al personal d'administració i s'ha desat al núvol.`);
     }
 
     // Reset fields
@@ -527,34 +587,52 @@ export default function AdminDashboard({
     setNewStaffRol('Secretaria');
   };
 
-  const handleUpdateStaffRol = (id: string, rol: 'SuperAdministrador' | 'Secretaria' | 'Mesa d\'Entrega' | 'Coordinador') => {
+  const handleUpdateStaffRol = async (id: string, rol: 'SuperAdministrador' | 'Secretaria' | 'Mesa d\'Entrega' | 'Coordinador') => {
     const updated = staffList.map(s => s.id === id ? { ...s, rol } : s);
     setStaffList(updated);
     localStorage.setItem('tast_staff_2026', JSON.stringify(updated));
+    try {
+      const { isSupabaseConfigured, saveSupabaseSetting } = await import('../supabaseClient');
+      if (isSupabaseConfigured) {
+        await saveSupabaseSetting('tast_staff_2026', updated);
+      }
+    } catch (err) {}
     window.dispatchEvent(new Event('staffChanged'));
     if (onAddLog) {
-      onAddLog(`S'ha canviat el rol del perfil d'administrador.`);
+      onAddLog(`S'ha canviat el rol del perfil d'administrador i actualitzat a Supabase.`);
     }
   };
 
-  const handleToggleStaffActiu = (id: string) => {
+  const handleToggleStaffActiu = async (id: string) => {
     const updated = staffList.map(s => s.id === id ? { ...s, actiu: !s.actiu } : s);
     setStaffList(updated);
     localStorage.setItem('tast_staff_2026', JSON.stringify(updated));
+    try {
+      const { isSupabaseConfigured, saveSupabaseSetting } = await import('../supabaseClient');
+      if (isSupabaseConfigured) {
+        await saveSupabaseSetting('tast_staff_2026', updated);
+      }
+    } catch (err) {}
     window.dispatchEvent(new Event('staffChanged'));
     if (onAddLog) {
-      onAddLog(`Estat d'accés del perfil de staff modificat.`);
+      onAddLog(`Estat d'accés del perfil de staff modificat i sincronitzat amb Supabase.`);
     }
   };
 
-  const handleRemoveStaffMember = (id: string, name: string) => {
+  const handleRemoveStaffMember = async (id: string, name: string) => {
     if (deleteConfirmId === id) {
       const updated = staffList.filter(s => s.id !== id);
       setStaffList(updated);
       localStorage.setItem('tast_staff_2026', JSON.stringify(updated));
+      try {
+        const { isSupabaseConfigured, saveSupabaseSetting } = await import('../supabaseClient');
+        if (isSupabaseConfigured) {
+          await saveSupabaseSetting('tast_staff_2026', updated);
+        }
+      } catch (err) {}
       window.dispatchEvent(new Event('staffChanged'));
       if (onAddLog) {
-        onAddLog(`Retirat ${name} del canal de personal habilitat.`);
+        onAddLog(`Retirat ${name} del canal de personal habilitat i sincronitzat amb Supabase.`);
       }
       setDeleteConfirmId(null);
     } else {
