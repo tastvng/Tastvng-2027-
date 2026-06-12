@@ -44,10 +44,42 @@ export default function Confirmation({ registration, onClear }: ConfirmationProp
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&color=e6007e&data=${encodeURIComponent(registration.id)}`;
 
   const sendRealEmail = async () => {
-    const host = localStorage.getItem('tast_smtp_host');
-    const port = localStorage.getItem('tast_smtp_port');
-    const user = localStorage.getItem('tast_smtp_usuari');
-    const pass = localStorage.getItem('tast_smtp_contrasenya');
+    let host = localStorage.getItem('tast_smtp_host');
+    let port = localStorage.getItem('tast_smtp_port');
+    let user = localStorage.getItem('tast_smtp_usuari');
+    let pass = localStorage.getItem('tast_smtp_contrasenya');
+
+    if (!host || !port || !user || !pass) {
+      // Hot-load live SMTP credentials from Supabase directly
+      try {
+        const { getSupabaseSetting, isSupabaseConfigured } = await import('../supabaseClient');
+        if (isSupabaseConfigured) {
+          const liveHost = await getSupabaseSetting<string>('tast_smtp_host', '');
+          const livePort = await getSupabaseSetting<string>('tast_smtp_port', '');
+          const liveUser = await getSupabaseSetting<string>('tast_smtp_usuari', '');
+          const livePass = await getSupabaseSetting<string>('tast_smtp_contrasenya', '');
+
+          if (liveHost) {
+            localStorage.setItem('tast_smtp_host', liveHost);
+            host = liveHost;
+          }
+          if (livePort) {
+            localStorage.setItem('tast_smtp_port', livePort);
+            port = livePort;
+          }
+          if (liveUser) {
+            localStorage.setItem('tast_smtp_usuari', liveUser);
+            user = liveUser;
+          }
+          if (livePass) {
+            localStorage.setItem('tast_smtp_contrasenya', livePass);
+            pass = livePass;
+          }
+        }
+      } catch (e) {
+        console.error("Error loading SMTP configurations from Supabase dynamically inside Confirmation:", e);
+      }
+    }
 
     if (!host || !port || !user || !pass) {
       setSmtpStatus('not_configured');
@@ -280,6 +312,41 @@ export default function Confirmation({ registration, onClear }: ConfirmationProp
           )}
         </p>
       </div>
+
+      {/* High-visibility warning alert for SMTP sending error */}
+      {smtpStatus === 'error' && (
+        <motion.div 
+          initial={{ scale: 0.95, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          className="mb-8 p-5 bg-red-50 border-2 border-red-300 rounded-[24px] flex flex-col sm:flex-row items-center justify-between gap-4 text-left shadow-lg print:hidden"
+          id="smtp-error-warning-box"
+        >
+          <div className="flex gap-3.5 items-start">
+            <AlertTriangle className="text-red-500 shrink-0 mt-0.5" size={24} />
+            <div>
+              <p className="font-sans font-black text-red-950 text-sm">
+                {language === 'ca' ? "⚠️ El correu de confirmació no s'ha enviat" : "⚠️ El correo de confirmación no se ha enviado"}
+              </p>
+              <p className="font-sans text-xs text-red-800 mt-1 leading-relaxed">
+                {language === 'ca' 
+                  ? "S'ha trobat un error en el servidor de correu d'El Tast. Podeu provar de tornar-lo a enviar de forma manual ara."
+                  : "Se ha encontrado un error en el servidor de correo de El Tast. Podéis probar a volver a enviarlo de forma manual ahora."}
+              </p>
+              <p className="text-[10px] font-mono text-red-650 mt-1 bg-red-100/40 px-2 py-1 rounded border border-red-200/30">
+                {language === 'ca' ? `Detalls de l'error: ${smtpError}` : `Detalles del error: ${smtpError}`}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => sendRealEmail()}
+            className="w-full sm:w-auto shrink-0 bg-red-650 hover:bg-red-700 active:bg-red-800 text-white font-black text-xs px-4 py-3 rounded-xl transition-all shadow-md hover:scale-[1.01] active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer border border-red-700 font-sans"
+            id="btn-retry-smtp-error"
+          >
+            <RefreshCw size={13} className={smtpStatus === 'sending' ? 'animate-spin' : ''} />
+            {language === 'ca' ? "Enviar manualment" : "Enviar manualmente"}
+          </button>
+        </motion.div>
+      )}
 
       {/* Main voucher printable ticket */}
       <motion.div 
