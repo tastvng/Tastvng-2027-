@@ -35,6 +35,44 @@ export interface PortadaConfig {
   contingutImatgeX?: number; // 0-100% position
   contingutImatgeY?: number; // 0-100% position
   contingutImatgeScale?: 'cover' | 'contain' | 'fill';
+
+  // Customizable colors
+  accentColor?: string;
+  titolColor?: string;
+  subtitolColor?: string;
+  descripcioColor?: string;
+  botoBgColor?: string;
+  botoTextColor?: string;
+
+  // Button advanced customization
+  botoTextSize?: string;
+  botoFontWeight?: string;
+  botoRounded?: string;
+  botoShadowSize?: string;
+  botoShadowColor?: string;
+  botoBorderColor?: string;
+  botoBorderWidth?: number;
+  botoLetterSpacing?: string;
+  botoUppercase?: boolean;
+
+  // Footer customization
+  footerTextCA?: string;
+  footerTextES?: string;
+  footerLink1LabelCA?: string;
+  footerLink1LabelES?: string;
+  footerLink1Url?: string;
+  footerLink2LabelCA?: string;
+  footerLink2LabelES?: string;
+  footerLink2Url?: string;
+  footerTextColor?: string;
+  footerLinkHoverColor?: string;
+  footerTextSize?: string;
+  footerFontWeight?: string;
+  footerUppercase?: boolean;
+  footerLetterSpacing?: string;
+  footerBorderTopColor?: string;
+  footerFontMono?: boolean;
+  footerShadowEnabled?: boolean;
 }
 
 interface PortadaPageProps {
@@ -60,6 +98,9 @@ export default function PortadaPage({
 
   const [customLogo, setCustomLogo] = React.useState(() => localStorage.getItem('tast_email_logo') || "");
 
+  const [hoverFooter1, setHoverFooter1] = React.useState(false);
+  const [hoverFooter2, setHoverFooter2] = React.useState(false);
+
   React.useEffect(() => {
     const loadLogo = () => {
       setCustomLogo(localStorage.getItem('tast_email_logo') || "");
@@ -75,10 +116,121 @@ export default function PortadaPage({
     };
   }, []);
 
+  const accentColor = config.accentColor || '#ff0090';
+  const titolColor = config.titolColor || '#ffffff';
+  const subtitolColor = config.subtitolColor || '#a1a1aa';
+  const descripcioColor = config.descripcioColor || '#d4d4d8';
+  const botoBgColor = config.botoBgColor || accentColor;
+  const botoTextColor = config.botoTextColor || '#ffffff';
+
+  const hexToRgba = (hex: string, alpha: number) => {
+    try {
+      let c = hex.substring(1);
+      if (c.length === 3) {
+        c = c[0] + c[0] + c[1] + c[1] + c[2] + c[2];
+      }
+      const r = parseInt(c.substring(0, 2), 16);
+      const g = parseInt(c.substring(2, 4), 16);
+      const b = parseInt(c.substring(4, 6), 16);
+      if (isNaN(r) || isNaN(g) || isNaN(b)) {
+        return `rgba(255, 0, 144, ${alpha})`;
+      }
+      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    } catch (e) {
+      return `rgba(255, 0, 144, ${alpha})`;
+    }
+  };
+
   const titol = language === 'ca' ? config.titolCA : config.titolES;
   const subtitol = language === 'ca' ? config.subtitolCA : config.subtitolES;
   const descripcio = language === 'ca' ? config.descripcioCA : config.descripcioES;
   const botoText = language === 'ca' ? config.botoTextCA : config.botoTextES;
+
+  const footerText = language === 'ca'
+    ? (config.footerTextCA || `© ${new Date().getFullYear()} ASSOCIACIÓ COMPARSES EL TAST • VILANOVA`)
+    : (config.footerTextES || `© ${new Date().getFullYear()} ASOCIACIÓN COMPARSES EL TAST • VILANOVA`);
+
+  const footerLink1Label = language === 'ca'
+    ? (config.footerLink1LabelCA || 'Normativa')
+    : (config.footerLink1LabelES || 'Normativa');
+
+  const footerLink2Label = language === 'ca'
+    ? (config.footerLink2LabelCA || 'secretaria@eltast.cat')
+    : (config.footerLink2LabelES || 'secretaria@eltast.cat');
+
+  const footerLink1Url = config.footerLink1Url || '#';
+  const footerLink2Url = config.footerLink2Url || 'mailto:secretaria@eltast.cat';
+  const footerTextColor = config.footerTextColor || '#71717a';
+
+  // Button Custom styling resolver
+  const botoTextSize = config.botoTextSize || 'text-xs md:text-sm';
+  const botoFontWeight = config.botoFontWeight || 'font-black';
+  const botoLetterSpacing = config.botoLetterSpacing || 'tracking-wider';
+  const botoUppercase = config.botoUppercase !== false;
+
+  const botoClassName = `group flex items-center justify-center gap-2.5 active:scale-98 transition duration-300 cursor-pointer relative overflow-hidden px-6 py-4
+    ${botoTextSize}
+    ${botoFontWeight}
+    ${botoLetterSpacing}
+    ${botoUppercase ? 'uppercase' : ''}
+  `;
+
+  const botoStyle: React.CSSProperties = {
+    backgroundColor: botoBgColor,
+    color: botoTextColor,
+    borderRadius: config.botoRounded === 'rounded-none' ? '0px'
+                : config.botoRounded === 'rounded-sm' ? '0.125rem'
+                : config.botoRounded === 'rounded' ? '0.25rem'
+                : config.botoRounded === 'rounded-md' ? '0.375rem'
+                : config.botoRounded === 'rounded-lg' ? '0.5rem'
+                : config.botoRounded === 'rounded-xl' ? '0.75rem'
+                : config.botoRounded === 'rounded-2xl' ? '1rem'
+                : config.botoRounded === 'rounded-3xl' ? '1.5rem'
+                : config.botoRounded === 'rounded-full' ? '9999px'
+                : '1rem', // Default: 2xl (1rem)
+    borderWidth: config.botoBorderWidth !== undefined ? `${config.botoBorderWidth}px` : '0px',
+    borderColor: config.botoBorderColor || 'transparent',
+    borderStyle: config.botoBorderWidth ? 'solid' : 'none',
+  };
+
+  const shadowColor = config.botoShadowColor || botoBgColor;
+  if (config.botoShadowSize && config.botoShadowSize !== 'shadow-none') {
+    const rgba = hexToRgba(shadowColor, 0.35);
+    const shadowVal = config.botoShadowSize === 'shadow-sm' ? `0 2px 4px ${rgba}`
+                    : config.botoShadowSize === 'shadow' ? `0 4px 6px ${rgba}`
+                    : config.botoShadowSize === 'shadow-md' ? `0 6px 12px ${rgba}`
+                    : config.botoShadowSize === 'shadow-lg' ? `0 8px 18px ${rgba}`
+                    : config.botoShadowSize === 'shadow-xl' ? `0 12px 24px ${rgba}`
+                    : config.botoShadowSize === 'shadow-2xl' ? `0 20px 35px ${rgba}`
+                    : `0 8px 24px ${rgba}`;
+    botoStyle.boxShadow = shadowVal;
+  } else if (config.botoShadowSize === 'shadow-none') {
+    botoStyle.boxShadow = 'none';
+  } else {
+    // Default soft shadow
+    botoStyle.boxShadow = `0 8px 24px ${hexToRgba(botoBgColor, 0.35)}`;
+  }
+
+  // Footer styling resolver
+  const footerLinkHoverColor = config.footerLinkHoverColor || accentColor;
+
+  const footerTextStyle: React.CSSProperties = {
+    fontSize: config.footerTextSize === 'text-[9px]' ? '9px'
+            : config.footerTextSize === 'text-[10px]' ? '10px'
+            : config.footerTextSize === 'text-xs' ? '12px'
+            : config.footerTextSize === 'text-sm' ? '14px'
+            : undefined, // defaults to tailwind class
+    fontWeight: config.footerFontWeight === 'font-medium' ? 500
+              : config.footerFontWeight === 'font-bold' ? 700
+              : undefined, // defaults to tailwind style
+    textTransform: config.footerUppercase === false ? 'none' : 'uppercase',
+    letterSpacing: config.footerLetterSpacing === 'tracking-normal' ? 'normal'
+                 : config.footerLetterSpacing === 'tracking-wide' ? '0.025em'
+                 : config.footerLetterSpacing === 'tracking-wider' ? '0.05em'
+                 : config.footerLetterSpacing === 'tracking-widest' ? '0.1em'
+                 : undefined, // defaults to tailwind tracking-wider
+    textShadow: config.footerShadowEnabled ? '1px 1px 3px rgba(0,0,0,0.85)' : undefined
+  };
 
   // Video embed helper for YouTube backgrounds
   const getYoutubeEmbedUrl = (url: string, asBackground = false) => {
@@ -163,10 +315,10 @@ export default function PortadaPage({
 
       {/* Floating decorative sparkles/confetti elements */}
       <div className="absolute top-12 left-1/4 pointer-events-none opacity-20 animate-pulse z-10">
-        <Sparkles size={24} className="text-[#ff0090]" />
+        <Sparkles size={24} style={{ color: accentColor }} />
       </div>
       <div className="absolute bottom-24 right-1/4 pointer-events-none opacity-25 animate-pulse duration-1000 z-10">
-        <Sparkles size={16} className="text-[#ff0090]" />
+        <Sparkles size={16} style={{ color: accentColor }} />
       </div>
 
       {/* Header bar within the landing layout */}
@@ -205,9 +357,10 @@ export default function PortadaPage({
             onClick={() => setLanguage('ca')}
             className={`text-[9px] font-sans font-black tracking-tight px-2 py-1 rounded-lg transition-all cursor-pointer ${
               language === 'ca' 
-                ? 'bg-[#ff0090] text-white shadow-md' 
+                ? 'text-white shadow-md' 
                 : 'text-zinc-400 hover:text-white'
             }`}
+            style={language === 'ca' ? { backgroundColor: accentColor } : {}}
           >
             CAT
           </button>
@@ -215,9 +368,10 @@ export default function PortadaPage({
             onClick={() => setLanguage('es')}
             className={`text-[9px] font-sans font-black tracking-tight px-2 py-1 rounded-lg transition-all cursor-pointer ${
               language === 'es' 
-                ? 'bg-[#ff0090] text-white shadow-md' 
+                ? 'text-white shadow-md' 
                 : 'text-zinc-400 hover:text-white'
             }`}
+            style={language === 'es' ? { backgroundColor: accentColor } : {}}
           >
             ESP
           </button>
@@ -232,7 +386,8 @@ export default function PortadaPage({
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.5, delay: 0.1 }}
-            className="inline-flex items-center gap-2 px-3 py-1 bg-white/5 border border-white/10 rounded-full font-mono text-[9px] text-[#ff0090] uppercase tracking-widest font-black"
+            className="inline-flex items-center gap-2 px-3 py-1 bg-white/5 border rounded-full font-mono text-[9px] uppercase tracking-widest font-black"
+            style={{ color: accentColor, borderColor: `${accentColor}40` }}
           >
             <Compass size={10} className="animate-spin duration-3000" />
             {language === 'ca' ? 'Inscripcions Obertes 2026' : 'Inscripciones Abiertas 2026'}
@@ -243,7 +398,8 @@ export default function PortadaPage({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ duration: 0.5, delay: 0.2 }}
-              className="text-zinc-400 text-xs md:text-sm font-semibold tracking-widest uppercase font-mono"
+              className="text-xs md:text-sm font-semibold tracking-widest uppercase font-mono"
+              style={{ color: subtitolColor }}
             >
               {subtitol}
             </motion.p>
@@ -253,7 +409,8 @@ export default function PortadaPage({
             initial={{ opacity: 0, y: 15 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.3 }}
-            className="font-sans font-black text-3xl md:text-5xl lg:text-6xl tracking-tight text-white leading-tight"
+            className="font-sans font-black text-3xl md:text-5xl lg:text-6xl tracking-tight leading-tight"
+            style={{ color: titolColor }}
           >
             {titol}
           </motion.h2>
@@ -262,7 +419,8 @@ export default function PortadaPage({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.6, delay: 0.4 }}
-            className="text-zinc-300 font-sans text-xs md:text-sm leading-relaxed max-w-2xl whitespace-pre-wrap"
+            className="font-sans text-xs md:text-sm leading-relaxed max-w-2xl whitespace-pre-wrap"
+            style={{ color: descripcioColor }}
           >
             {descripcio}
           </motion.p>
@@ -275,8 +433,8 @@ export default function PortadaPage({
           >
             <button
               onClick={onEnterForm}
-              className="group flex items-center justify-center gap-2.5 bg-[#ff0090] text-white hover:bg-[#ff0090]/90 font-black px-6 py-4 rounded-2xl shadow-xl shadow-fuchsia-500/20 active:scale-98 transition duration-300 tracking-wider text-xs md:text-sm uppercase cursor-pointer relative overflow-hidden"
-              style={{ boxShadow: '0 8px 24px rgba(255, 0, 144, 0.3)' }}
+              className={botoClassName}
+              style={botoStyle}
               id="btn-portada-jump-to-form"
             >
               {botoText}
@@ -302,7 +460,7 @@ export default function PortadaPage({
           >
             <div className="bg-zinc-950/85 backdrop-blur-md p-3.5 rounded-3xl border border-white/10 shadow-2xl w-full max-w-md overflow-hidden relative group">
               <div className="absolute top-3 left-3 bg-black/60 backdrop-blur-md border border-white/10 px-2.5 py-1 rounded-lg text-[9px] font-mono font-bold tracking-wider uppercase z-20 text-zinc-300 flex items-center gap-1.5">
-                {config.contingutTipus === 'video' ? <Play size={10} className="text-[#ff0090] animate-pulse" /> : <Image size={10} className="text-[#ff0090]" />}
+                {config.contingutTipus === 'video' ? <Play size={10} style={{ color: accentColor }} className="animate-pulse" /> : <Image size={10} style={{ color: accentColor }} />}
                 {language === 'ca' ? 'Destacat' : 'Destacado'}
               </div>
 
@@ -348,18 +506,48 @@ export default function PortadaPage({
       </div>
 
       {/* Simple footer with legal link simulation/regulations info */}
-      <div className="relative z-10 w-full pt-4 border-t border-white/10 flex flex-col sm:flex-row justify-between items-center gap-3 text-[10px] text-zinc-500 font-mono uppercase tracking-wider">
-        <span>© {new Date().getFullYear()} ASSOCIACIÓ COMPARSES EL TAST • VILANOVA</span>
+      <div 
+        className={`relative z-10 w-full pt-4 border-t flex flex-col sm:flex-row justify-between items-center gap-3 text-[10px] tracking-wider ${config.footerFontMono !== false ? 'font-mono' : 'font-sans'}`}
+        style={{ 
+          color: footerTextColor,
+          borderTopColor: config.footerBorderTopColor || 'rgba(255, 255, 255, 0.1)',
+          ...footerTextStyle 
+        }}
+        id="portada-landing-footer"
+      >
+        <span style={footerTextStyle}>{footerText}</span>
         <div className="flex gap-4">
-          <span className="text-zinc-400 hover:text-[#ff0090] transition-colors flex items-center gap-1">
+          <a 
+            href={footerLink1Url}
+            target={footerLink1Url.startsWith('http') || footerLink1Url.startsWith('//') ? '_blank' : undefined}
+            rel="noopener noreferrer"
+            onMouseEnter={() => setHoverFooter1(true)}
+            onMouseLeave={() => setHoverFooter1(false)}
+            className="transition-all flex items-center gap-1 cursor-pointer hover:underline"
+            style={{ 
+              color: hoverFooter1 ? footerLinkHoverColor : footerTextColor,
+              ...footerTextStyle 
+            }}
+          >
             <FileText size={10} />
-            {language === 'ca' ? 'Normativa' : 'Normativa'}
-          </span>
-          <span className="text-zinc-500">•</span>
-          <span className="text-zinc-400 hover:text-[#ff0090] transition-colors flex items-center gap-1">
+            <span>{footerLink1Label}</span>
+          </a>
+          <span style={{ color: `${footerTextColor}80`, ...footerTextStyle }}>•</span>
+          <a 
+            href={footerLink2Url}
+            target={footerLink2Url.startsWith('http') || footerLink2Url.startsWith('//') ? '_blank' : undefined}
+            rel="noopener noreferrer"
+            onMouseEnter={() => setHoverFooter2(true)}
+            onMouseLeave={() => setHoverFooter2(false)}
+            className="transition-all flex items-center gap-1 cursor-pointer hover:underline"
+            style={{ 
+              color: hoverFooter2 ? footerLinkHoverColor : footerTextColor,
+              ...footerTextStyle 
+            }}
+          >
             <Mail size={10} />
-            secretaria@eltast.cat
-          </span>
+            <span>{footerLink2Label}</span>
+          </a>
         </div>
       </div>
     </div>

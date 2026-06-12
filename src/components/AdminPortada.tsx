@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Compass, Sparkles, CheckCircle2, RotateCcw, Image, Video, Palette, Play, Eye, FileText, LayoutTemplate, Sliders, Upload, Trash2 } from 'lucide-react';
 import { PortadaConfig } from './PortadaPage';
+import { saveSupabaseSettings, getSupabaseSettings, isSupabaseConfigured } from '../supabaseClient';
 
 export const PORTADA_CONFIG_DEFAULTS: PortadaConfig = {
   activa: true,
@@ -33,7 +34,47 @@ export const PORTADA_CONFIG_DEFAULTS: PortadaConfig = {
 
   contingutImatgeX: 50,
   contingutImatgeY: 50,
-  contingutImatgeScale: 'cover'
+  contingutImatgeScale: 'cover',
+
+  // Color customization defaults
+  accentColor: '#ff0090',
+  titolColor: '#ffffff',
+  subtitolColor: '#a1a1aa',
+  descripcioColor: '#d4d4d8',
+  botoBgColor: '#ff0090',
+  botoTextColor: '#ffffff',
+
+  // Footer customization defaults
+  footerTextCA: '© 2026 ASSOCIACIÓ COMPARSES EL TAST • VILANOVA',
+  footerTextES: '© 2026 ASOCIACIÓN COMPARSAS EL TAST • VILANOVA',
+  footerLink1LabelCA: 'Normativa',
+  footerLink1LabelES: 'Normativa',
+  footerLink1Url: '#',
+  footerLink2LabelCA: 'secretaria@eltast.cat',
+  footerLink2LabelES: 'secretaria@eltast.cat',
+  footerLink2Url: 'mailto:secretaria@eltast.cat',
+  footerTextColor: '#71717a',
+
+  // Button advanced customization defaults
+  botoTextSize: 'text-xs md:text-sm',
+  botoFontWeight: 'font-black',
+  botoRounded: 'rounded-2xl',
+  botoShadowSize: 'shadow-xl',
+  botoShadowColor: '#ff0090',
+  botoBorderWidth: 0,
+  botoBorderColor: 'transparent',
+  botoLetterSpacing: 'tracking-wider',
+  botoUppercase: true,
+
+  // Footer styling helper defaults
+  footerLinkHoverColor: '#ff0090',
+  footerTextSize: 'text-[10px]',
+  footerFontWeight: 'font-normal',
+  footerUppercase: true,
+  footerLetterSpacing: 'tracking-wider',
+  footerBorderTopColor: 'rgba(255, 255, 255, 0.1)',
+  footerFontMono: true,
+  footerShadowEnabled: false
 };
 
 interface AdminPortadaProps {
@@ -54,12 +95,36 @@ export default function AdminPortada({ language, onAddLog }: AdminPortadaProps) 
     return PORTADA_CONFIG_DEFAULTS;
   });
 
+  // Load from Supabase on mount
+  useEffect(() => {
+    async function loadConfig() {
+      if (!isSupabaseConfigured) return;
+      try {
+        const dbConfig = await getSupabaseSettings();
+        if (dbConfig) {
+          setConfig({ ...PORTADA_CONFIG_DEFAULTS, ...dbConfig });
+        }
+      } catch (e) {
+        console.error("Error fetching admin config from Supabase:", e);
+      }
+    }
+    loadConfig();
+  }, []);
+
   const [activeLangTab, setActiveLangTab] = useState<'ca' | 'es'>('ca');
   const [saveSuccess, setSaveSuccess] = useState(false);
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Save to localStorage as a fast local copy fallback
     localStorage.setItem('tast_portada_config_2026', JSON.stringify(config));
+    
+    // Save to Supabase using settings table
+    let synced = false;
+    if (isSupabaseConfigured) {
+      synced = await saveSupabaseSettings(config);
+    }
     
     // Dispatch custom event to let App know configuration changed
     window.dispatchEvent(new Event('portadaConfigChanged'));
@@ -67,22 +132,34 @@ export default function AdminPortada({ language, onAddLog }: AdminPortadaProps) 
     setSaveSuccess(true);
     if (onAddLog) {
       onAddLog(language === 'ca' 
-        ? "Configuració de la pantalla de Portada actualitzada correctament." 
-        : "Configuración de la pantalla de Portada actualizada correctamente."
+        ? `Configuració de la pantalla de Portada actualitzada correctament${synced ? " (Sincronitzat amb Supabase)" : ""}.` 
+        : `Configuración de la pantalla de Portada actualizada correctamente${synced ? " (Sincronizado con Supabase)" : ""}.`
       );
     }
     setTimeout(() => setSaveSuccess(false), 3000);
   };
 
-  const handleResetDefaults = () => {
+  const handleResetDefaults = async () => {
     if (window.confirm(language === 'ca' 
       ? "Segur que vols restaurar els valors per defecte de la Portada?" 
       : "¿Seguro que quieres restaurar los valores por defecto de la Portada?")) {
+      
       setConfig(PORTADA_CONFIG_DEFAULTS);
       localStorage.setItem('tast_portada_config_2026', JSON.stringify(PORTADA_CONFIG_DEFAULTS));
+      
+      let synced = false;
+      if (isSupabaseConfigured) {
+        synced = await saveSupabaseSettings(PORTADA_CONFIG_DEFAULTS);
+      }
+      
       window.dispatchEvent(new Event('portadaConfigChanged'));
       
-      if (onAddLog) onAddLog("Restaurats valors per defecte de la Portada.");
+      if (onAddLog) {
+        onAddLog(language === 'ca' 
+          ? `Restaurats valors per defecte de la Portada${synced ? " (Sincronitzat amb Supabase)" : ""}.` 
+          : `Restaurado valores por defecto de la Portada${synced ? " (Sincronizado con Supabase)" : ""}.`
+        );
+      }
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 2000);
     }
@@ -738,6 +815,695 @@ export default function AdminPortada({ language, onAddLog }: AdminPortadaProps) 
             )}
           </div>
 
+          {/* Colors i Estils de Textos */}
+          <div className="bg-zinc-50 border border-zinc-150 rounded-2xl p-5 space-y-4 text-left">
+            <h4 className="font-sans font-bold text-xs text-zinc-700 uppercase tracking-widest flex items-center gap-1.5 border-b border-zinc-200 pb-2">
+              <Palette size={14} className="text-[#ff0090]" />
+              {language === 'ca' ? "Colors i Estils Visuals de la Portada" : "Colores y Estilos Visuales de la Portada"}
+            </h4>
+            <p className="text-[11px] text-zinc-550 leading-normal mb-1">
+              {language === 'ca' 
+                ? "Estableix la combinació de colors per als textos i botons per donar una identitat unificada i personalitzada a la portada."
+                : "Establece la combinación de colores para los textos y botones para dar una identidad unificada y personalizada a la portada."}
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Color d'accent global (marca) */}
+              <div className="space-y-1.5">
+                <label className="block text-[10px] text-zinc-650 font-mono font-bold uppercase tracking-wider">
+                  {language === 'ca' ? "Color d'accent / Detalls" : "Color de acento / Detalles"}
+                </label>
+                <div className="flex items-center gap-2">
+                  <input 
+                    type="color" 
+                    value={config.accentColor || '#ff0090'} 
+                    onChange={(e) => updateField('accentColor', e.target.value)}
+                    className="w-10 h-10 border border-zinc-200 rounded-xl cursor-pointer p-0.5 shrink-0"
+                  />
+                  <input 
+                    type="text" 
+                    value={config.accentColor || '#ff0090'} 
+                    onChange={(e) => updateField('accentColor', e.target.value)}
+                    className="flex-1 bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-0 uppercase font-mono"
+                    placeholder="#ff0090"
+                    maxLength={7}
+                  />
+                </div>
+              </div>
+
+              {/* Color del fons del botó CTA */}
+              <div className="space-y-1.5">
+                <label className="block text-[10px] text-zinc-650 font-mono font-bold uppercase tracking-wider">
+                  {language === 'ca' ? "Fons del Botó Principal" : "Fondo del Botón Principal"}
+                </label>
+                <div className="flex items-center gap-2">
+                  <input 
+                    type="color" 
+                    value={config.botoBgColor || config.accentColor || '#ff0090'} 
+                    onChange={(e) => updateField('botoBgColor', e.target.value)}
+                    className="w-10 h-10 border border-zinc-200 rounded-xl cursor-pointer p-0.5 shrink-0"
+                  />
+                  <input 
+                    type="text" 
+                    value={config.botoBgColor || config.accentColor || '#ff0090'} 
+                    onChange={(e) => updateField('botoBgColor', e.target.value)}
+                    className="flex-1 bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-0 uppercase font-mono"
+                    placeholder="#ff0090"
+                    maxLength={7}
+                  />
+                </div>
+              </div>
+
+              {/* Color del text del botó CTA */}
+              <div className="space-y-1.5">
+                <label className="block text-[10px] text-zinc-650 font-mono font-bold uppercase tracking-wider">
+                  {language === 'ca' ? "Text del Botó Principal" : "Texto del Botón Principal"}
+                </label>
+                <div className="flex items-center gap-2">
+                  <input 
+                    type="color" 
+                    value={config.botoTextColor || '#ffffff'} 
+                    onChange={(e) => updateField('botoTextColor', e.target.value)}
+                    className="w-10 h-10 border border-zinc-200 rounded-xl cursor-pointer p-0.5 shrink-0"
+                  />
+                  <input 
+                    type="text" 
+                    value={config.botoTextColor || '#ffffff'} 
+                    onChange={(e) => updateField('botoTextColor', e.target.value)}
+                    className="flex-1 bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-0 uppercase font-mono"
+                    placeholder="#ffffff"
+                    maxLength={7}
+                  />
+                </div>
+              </div>
+
+              {/* Ajusts Avançats del Botó CTA */}
+              <div className="col-span-1 md:col-span-2 bg-white/40 border border-zinc-200/50 rounded-xl p-4.5 space-y-4">
+                <div className="flex items-center gap-1.5 border-b border-zinc-250 pb-1.5 font-sans font-black text-[11px] text-zinc-700 uppercase tracking-wider">
+                  <Sparkles size={13} className="text-[#ff0090]" />
+                  <span>
+                    {language === 'ca' ? "Estil i Sombreado del Botó" : "Estilo y Sombreado del Botón"}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-left">
+                  {/* Text Size */}
+                  <div className="space-y-1">
+                    <label className="block text-[9px] text-zinc-550 font-mono font-bold uppercase tracking-wider">
+                      {language === 'ca' ? "Mida del Text" : "Tamaño del Texto"}
+                    </label>
+                    <select
+                      value={config.botoTextSize || 'text-xs md:text-sm'}
+                      onChange={(e) => updateField('botoTextSize', e.target.value)}
+                      className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-2.5 py-1.5 text-xs focus:outline-none focus:ring-0"
+                    >
+                      <option value="text-[10px]">{language === 'ca' ? "Molt petit" : "Muy pequeño"}</option>
+                      <option value="text-xs">{language === 'ca' ? "Petit" : "Pequeño"}</option>
+                      <option value="text-xs md:text-sm">{language === 'ca' ? "Original (Estàndard)" : "Original (Estándar)"}</option>
+                      <option value="text-sm">{language === 'ca' ? "Mitjà" : "Mediano"}</option>
+                      <option value="text-base">{language === 'ca' ? "Gran" : "Grande"}</option>
+                      <option value="text-lg">{language === 'ca' ? "Molt gran" : "Muy grande"}</option>
+                    </select>
+                  </div>
+
+                  {/* Font Weight */}
+                  <div className="space-y-1">
+                    <label className="block text-[9px] text-zinc-550 font-mono font-bold uppercase tracking-wider">
+                      {language === 'ca' ? "Gruix de Lletra" : "Grosor de Letra"}
+                    </label>
+                    <select
+                      value={config.botoFontWeight || 'font-black'}
+                      onChange={(e) => updateField('botoFontWeight', e.target.value)}
+                      className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-2.5 py-1.5 text-xs focus:outline-none focus:ring-0"
+                    >
+                      <option value="font-normal">{language === 'ca' ? "Normal" : "Normal"}</option>
+                      <option value="font-medium">{language === 'ca' ? "Mitjà" : "Medio"}</option>
+                      <option value="font-semibold">{language === 'ca' ? "Seminegre" : "Seminegrita"}</option>
+                      <option value="font-bold">{language === 'ca' ? "Negre" : "Negrita"}</option>
+                      <option value="font-extrabold">{language === 'ca' ? "Extra Negre" : "Extra Negrita"}</option>
+                      <option value="font-black">{language === 'ca' ? "Original (Supernegre)" : "Original (Supernegrita)"}</option>
+                    </select>
+                  </div>
+
+                  {/* Arrodoniment */}
+                  <div className="space-y-1">
+                    <label className="block text-[9px] text-zinc-550 font-mono font-bold uppercase tracking-wider">
+                      {language === 'ca' ? "Arrodoniment (Cantons)" : "Redondeado (Esquinas)"}
+                    </label>
+                    <select
+                      value={config.botoRounded || 'rounded-2xl'}
+                      onChange={(e) => updateField('botoRounded', e.target.value)}
+                      className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-2.5 py-1.5 text-xs focus:outline-none focus:ring-0"
+                    >
+                      <option value="rounded-none">{language === 'ca' ? "Rectangle Recte" : "Rectángulo Recto"}</option>
+                      <option value="rounded-sm">{language === 'ca' ? "Mínim" : "Mínimo"}</option>
+                      <option value="rounded">{language === 'ca' ? "Petit" : "Pequeño"}</option>
+                      <option value="rounded-md">{language === 'ca' ? "Mitjà" : "Medio"}</option>
+                      <option value="rounded-lg">{language === 'ca' ? "Suau (L)" : "Suave (L)"}</option>
+                      <option value="rounded-xl">{language === 'ca' ? "Bonic (XL)" : "Elegante (XL)"}</option>
+                      <option value="rounded-2xl">{language === 'ca' ? "Original (2nd XL)" : "Original (2nd XL)"}</option>
+                      <option value="rounded-3xl">{language === 'ca' ? "Màxim (3rd XL)" : "Máximo (3rd XL)"}</option>
+                      <option value="rounded-full">{language === 'ca' ? "Pastilla (Full)" : "Cápsula (Full)"}</option>
+                    </select>
+                  </div>
+
+                  {/* Distanciament de Lletres */}
+                  <div className="space-y-1">
+                    <label className="block text-[9px] text-zinc-550 font-mono font-bold uppercase tracking-wider">
+                      {language === 'ca' ? "Espaiat de lletres" : "Espaciado de letras"}
+                    </label>
+                    <select
+                      value={config.botoLetterSpacing || 'tracking-wider'}
+                      onChange={(e) => updateField('botoLetterSpacing', e.target.value)}
+                      className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-2.5 py-1.5 text-xs focus:outline-none focus:ring-0"
+                    >
+                      <option value="tracking-tighter">{language === 'ca' ? "Molt estret" : "Muy estrecho"}</option>
+                      <option value="tracking-normal">{language === 'ca' ? "Normal" : "Normal"}</option>
+                      <option value="tracking-wide">{language === 'ca' ? "Ample" : "Ancho"}</option>
+                      <option value="tracking-wider">{language === 'ca' ? "Original (Més Ample)" : "Original (Más Ancho)"}</option>
+                      <option value="tracking-widest">{language === 'ca' ? "El més ample" : "El más ancho"}</option>
+                    </select>
+                  </div>
+
+                  {/* Sombreado del Botó */}
+                  <div className="space-y-1">
+                    <label className="block text-[9px] text-zinc-550 font-mono font-bold uppercase tracking-wider">
+                      {language === 'ca' ? "Mida del Sombreado (Ombra)" : "Tamaño del Sombreado (Sombra)"}
+                    </label>
+                    <select
+                      value={config.botoShadowSize || 'shadow-xl'}
+                      onChange={(e) => updateField('botoShadowSize', e.target.value)}
+                      className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-2.5 py-1.5 text-xs focus:outline-none focus:ring-0"
+                    >
+                      <option value="shadow-none">{language === 'ca' ? "Sense Sombra (Pla)" : "Sin Sombra (Plano)"}</option>
+                      <option value="shadow-sm">{language === 'ca' ? "Molt lleugera" : "Muy ligera"}</option>
+                      <option value="shadow">{language === 'ca' ? "Bàsica" : "Básica"}</option>
+                      <option value="shadow-md">{language === 'ca' ? "Mitjana" : "Mediana"}</option>
+                      <option value="shadow-lg">{language === 'ca' ? "Nítida (L)" : "Nítida (L)"}</option>
+                      <option value="shadow-xl">{language === 'ca' ? "Original (Flotant XL)" : "Original (Flotante XL)"}</option>
+                      <option value="shadow-2xl">{language === 'ca' ? "Màxima (Glow 2XL)" : "Máxima (Glow 2XL)"}</option>
+                    </select>
+                  </div>
+
+                  {/* Color de la Sombra */}
+                  <div className="space-y-1">
+                    <label className="block text-[9px] text-zinc-550 font-mono font-bold uppercase tracking-wider">
+                      {language === 'ca' ? "Color del Sombreado" : "Color del Sombreado"}
+                    </label>
+                    <div className="flex items-center gap-1.5">
+                      <input 
+                        type="color" 
+                        value={config.botoShadowColor || config.botoBgColor || config.accentColor || '#ff0090'} 
+                        onChange={(e) => updateField('botoShadowColor', e.target.value)}
+                        className="w-7 h-7 border border-zinc-200 rounded-lg cursor-pointer p-0.5 shrink-0"
+                        title={language === 'ca' ? "Escollir color d'ombra" : "Elegir color de sombra"}
+                      />
+                      <input 
+                        type="text" 
+                        value={config.botoShadowColor || config.botoBgColor || config.accentColor || '#ff0090'} 
+                        onChange={(e) => updateField('botoShadowColor', e.target.value)}
+                        className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-2.5 py-1 text-xs focus:outline-none focus:ring-0 uppercase font-mono"
+                        placeholder="#ff0090"
+                        maxLength={7}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Gruix de la Vora */}
+                  <div className="space-y-1">
+                    <label className="block text-[9px] text-zinc-550 font-mono font-bold uppercase tracking-wider">
+                      {language === 'ca' ? "Gruix de la Vora" : "Grosor del Borde"}
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input 
+                        type="range" 
+                        min={0} 
+                        max={4} 
+                        step={1}
+                        value={config.botoBorderWidth ?? 0}
+                        onChange={(e) => updateField('botoBorderWidth', parseInt(e.target.value))}
+                        className="w-2/3 accent-[#ff0090] h-1.5 bg-zinc-200 rounded-lg cursor-pointer"
+                      />
+                      <span className="text-xs font-bold text-zinc-700 font-mono shrink-0">{(config.botoBorderWidth ?? 0)}px</span>
+                    </div>
+                  </div>
+
+                  {/* Color de la Vora */}
+                  <div className="space-y-1">
+                    <label className="block text-[9px] text-zinc-550 font-mono font-bold uppercase tracking-wider">
+                      {language === 'ca' ? "Color de la Vora" : "Color del Borde"}
+                    </label>
+                    <div className="flex items-center gap-1.5">
+                      <input 
+                        type="color" 
+                        value={config.botoBorderColor || 'transparent'} 
+                        onChange={(e) => updateField('botoBorderColor', e.target.value)}
+                        className="w-7 h-7 border border-zinc-200 rounded-lg cursor-pointer p-0.5 shrink-0"
+                      />
+                      <input 
+                        type="text" 
+                        value={config.botoBorderColor || ''} 
+                        onChange={(e) => updateField('botoBorderColor', e.target.value)}
+                        className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-2.5 py-1 text-xs focus:outline-none focus:ring-0 uppercase font-mono"
+                        placeholder="Ex: #ffffff"
+                        maxLength={7}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Majúscules toggle */}
+                  <div className="sm:col-span-2 pt-1 flex items-center justify-between">
+                    <span className="text-xs font-bold text-zinc-700">
+                      {language === 'ca' ? "Text completament en majúscules" : "Texto completamente en mayúsculas"}
+                    </span>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={config.botoUppercase !== false} 
+                        onChange={(e) => updateField('botoUppercase', e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-9 h-5 bg-zinc-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#ff0090]"></div>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              {/* Color del Títol */}
+              <div className="space-y-1.5">
+                <label className="block text-[10px] text-zinc-650 font-mono font-bold uppercase tracking-wider">
+                  {language === 'ca' ? "Color del Títol Principal" : "Color del Título Principal"}
+                </label>
+                <div className="flex items-center gap-2">
+                  <input 
+                    type="color" 
+                    value={config.titolColor || '#ffffff'} 
+                    onChange={(e) => updateField('titolColor', e.target.value)}
+                    className="w-10 h-10 border border-zinc-200 rounded-xl cursor-pointer p-0.5 shrink-0"
+                  />
+                  <input 
+                    type="text" 
+                    value={config.titolColor || '#ffffff'} 
+                    onChange={(e) => updateField('titolColor', e.target.value)}
+                    className="flex-1 bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-0 uppercase font-mono"
+                    placeholder="#ffffff"
+                    maxLength={7}
+                  />
+                </div>
+              </div>
+
+              {/* Color del Subtítol */}
+              <div className="space-y-1.5">
+                <label className="block text-[10px] text-zinc-650 font-mono font-bold uppercase tracking-wider">
+                  {language === 'ca' ? "Color del Subtítol" : "Color del Subtítulo"}
+                </label>
+                <div className="flex items-center gap-2">
+                  <input 
+                    type="color" 
+                    value={config.subtitolColor || '#a1a1aa'} 
+                    onChange={(e) => updateField('subtitolColor', e.target.value)}
+                    className="w-10 h-10 border border-zinc-200 rounded-xl cursor-pointer p-0.5 shrink-0"
+                  />
+                  <input 
+                    type="text" 
+                    value={config.subtitolColor || '#a1a1aa'} 
+                    onChange={(e) => updateField('subtitolColor', e.target.value)}
+                    className="flex-1 bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-0 uppercase font-mono"
+                    placeholder="#a1a1aa"
+                    maxLength={7}
+                  />
+                </div>
+              </div>
+
+              {/* Color de la Descripció */}
+              <div className="space-y-1.5">
+                <label className="block text-[10px] text-zinc-650 font-mono font-bold uppercase tracking-wider">
+                  {language === 'ca' ? "Color de la Descripció" : "Color de la Descripción"}
+                </label>
+                <div className="flex items-center gap-2">
+                  <input 
+                    type="color" 
+                    value={config.descripcioColor || '#d4d4d8'} 
+                    onChange={(e) => updateField('descripcioColor', e.target.value)}
+                    className="w-10 h-10 border border-zinc-200 rounded-xl cursor-pointer p-0.5 shrink-0"
+                  />
+                  <input 
+                    type="text" 
+                    value={config.descripcioColor || '#d4d4d8'} 
+                    onChange={(e) => updateField('descripcioColor', e.target.value)}
+                    className="flex-1 bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-0 uppercase font-mono"
+                    placeholder="#d4d4d8"
+                    maxLength={7}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Presets ràpids per simplicitat */}
+            <div className="pt-2">
+              <label className="block text-[9px] text-zinc-400 font-mono font-bold uppercase tracking-wider mb-2">
+                {language === 'ca' ? "Paletes de Presets Ràpides" : "Paletas de Presets Rápidas"}
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { name: 'Tast Fuchsia (Original)', accent: '#ff0090', titol: '#ffffff', sub: '#a1a1aa', desc: '#d4d4d8', buttonBg: '#ff0090', buttonText: '#ffffff' },
+                  { name: 'VNG Gold & Amber', accent: '#fbbf24', titol: '#ffffff', sub: '#fcd34d', desc: '#e5e7eb', buttonBg: '#fbbf24', buttonText: '#18181b' },
+                  { name: 'Deep Electric Cyan', accent: '#06b6d4', titol: '#ffffff', sub: '#67e8f9', desc: '#f3f4f6', buttonBg: '#06b6d4', buttonText: '#ffffff' },
+                  { name: 'Carnaval Acid Green', accent: '#84cc16', titol: '#ffffff', sub: '#bef264', desc: '#f3f4f6', buttonBg: '#84cc16', buttonText: '#111827' },
+                  { name: 'Cosmic Royal Violet', accent: '#8b5cf6', titol: '#ffffff', sub: '#c084fc', desc: '#e2e8f0', buttonBg: '#8b5cf6', buttonText: '#ffffff' },
+                  { name: 'Sunset Terracotta', accent: '#f97316', titol: '#ffffff', sub: '#fdba74', desc: '#cbd5e1', buttonBg: '#f97316', buttonText: '#ffffff' },
+                ].map((preset, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => {
+                      updateField('accentColor', preset.accent);
+                      updateField('titolColor', preset.titol);
+                      updateField('subtitolColor', preset.sub);
+                      updateField('descripcioColor', preset.desc);
+                      updateField('botoBgColor', preset.buttonBg);
+                      updateField('botoTextColor', preset.buttonText);
+                    }}
+                    className="px-2.5 py-1.5 bg-white hover:bg-zinc-100 border border-zinc-200 text-[10px] font-bold rounded-xl flex items-center gap-1.5 transition cursor-pointer text-zinc-700 font-sans"
+                  >
+                    <span className="w-2.5 h-2.5 rounded-full inline-block shrink-0" style={{ backgroundColor: preset.accent }} />
+                    <span>{preset.name}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Personalització del Peu de Pàgina */}
+          <div className="bg-zinc-50 border border-zinc-150 rounded-2xl p-5 space-y-4 text-left">
+            <h4 className="font-sans font-bold text-xs text-zinc-700 uppercase tracking-widest flex items-center gap-1.5 border-b border-zinc-200 pb-2">
+              <Sliders size={14} className="text-[#ff0090]" />
+              {language === 'ca' ? "Personalització del Peu de Pàgina (Footer)" : "Personalización del Pie de Página (Footer)"}
+            </h4>
+            <p className="text-[11px] text-zinc-550 leading-normal mb-1">
+              {language === 'ca' 
+                ? "Editeu els textos, colors i enllaços legals o de contacte situats a la part inferior de la portada."
+                : "Edita los textos, colores y enlaces legales o de contacto ubicados en la parte inferior de la portada."}
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Text de copyright / Principal (Català) */}
+              <div className="space-y-1">
+                <label className="block text-[10px] text-zinc-650 font-mono font-bold uppercase tracking-wider">
+                  {language === 'ca' ? "Text del Peu de Pàgina (Català)" : "Texto del Pie de Página (Catalán)"}
+                </label>
+                <input 
+                  type="text"
+                  value={config.footerTextCA ?? ''}
+                  onChange={(e) => updateField('footerTextCA', e.target.value)}
+                  onBlur={() => handleBlurTranslate('footerTextCA', 'footerTextES', 'ca', 'es')}
+                  className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-0"
+                  placeholder="Ex: © 2026 ASSOCIACIÓ COMPARSES EL TAST"
+                />
+              </div>
+
+              {/* Text de copyright / Principal (Castellà) */}
+              <div className="space-y-1">
+                <label className="block text-[10px] text-zinc-650 font-mono font-bold uppercase tracking-wider">
+                  {language === 'ca' ? "Text del Peu de Pàgina (Castellà)" : "Texto del Pie de Página (Castellano)"}
+                </label>
+                <input 
+                  type="text"
+                  value={config.footerTextES ?? ''}
+                  onChange={(e) => updateField('footerTextES', e.target.value)}
+                  onBlur={() => handleBlurTranslate('footerTextES', 'footerTextCA', 'es', 'ca')}
+                  className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-0"
+                  placeholder="Ex: © 2026 ASOCIACIÓN COMPARSAS EL TAST"
+                />
+              </div>
+
+              {/* Color del text del footer */}
+              <div className="space-y-1.5 md:col-span-2">
+                <label className="block text-[10px] text-zinc-650 font-mono font-bold uppercase tracking-wider">
+                  {language === 'ca' ? "Color del Text del Peu de Pàgina" : "Color de Texto del Pie de Página"}
+                </label>
+                <div className="flex items-center gap-2">
+                  <input 
+                    type="color" 
+                    value={config.footerTextColor || '#71717a'} 
+                    onChange={(e) => updateField('footerTextColor', e.target.value)}
+                    className="w-10 h-10 border border-zinc-200 rounded-xl cursor-pointer p-0.5 shrink-0"
+                  />
+                  <input 
+                    type="text" 
+                    value={config.footerTextColor || '#71717a'} 
+                    onChange={(e) => updateField('footerTextColor', e.target.value)}
+                    className="flex-1 bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-0 uppercase font-mono"
+                    placeholder="#71717a"
+                    maxLength={7}
+                  />
+                </div>
+              </div>
+
+              {/* Enllaç 1 - Català */}
+              <div className="space-y-1">
+                <label className="block text-[10px] text-zinc-650 font-mono font-bold uppercase tracking-wider">
+                  {language === 'ca' ? "Esment Enllaç 1 (Català)" : "Etiqueta Enlace 1 (Catalán)"}
+                </label>
+                <input 
+                  type="text"
+                  value={config.footerLink1LabelCA ?? ''}
+                  onChange={(e) => updateField('footerLink1LabelCA', e.target.value)}
+                  onBlur={() => handleBlurTranslate('footerLink1LabelCA', 'footerLink1LabelES', 'ca', 'es')}
+                  className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-0"
+                  placeholder="Ex: Normativa"
+                />
+              </div>
+
+              {/* Enllaç 1 - Castellà */}
+              <div className="space-y-1">
+                <label className="block text-[10px] text-zinc-650 font-mono font-bold uppercase tracking-wider">
+                  {language === 'ca' ? "Esment Enllaç 1 (Castellà)" : "Etiqueta Enlace 1 (Castellano)"}
+                </label>
+                <input 
+                  type="text"
+                  value={config.footerLink1LabelES ?? ''}
+                  onChange={(e) => updateField('footerLink1LabelES', e.target.value)}
+                  onBlur={() => handleBlurTranslate('footerLink1LabelES', 'footerLink1LabelCA', 'es', 'ca')}
+                  className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-0"
+                  placeholder="Ex: Normativa"
+                />
+              </div>
+
+              {/* URL Enllaç 1 */}
+              <div className="space-y-1 md:col-span-2">
+                <label className="block text-[10px] text-zinc-650 font-mono font-bold uppercase tracking-wider">
+                  {language === 'ca' ? "URL / Destí d'Enllaç 1" : "URL / Destino de Enlace 1"}
+                </label>
+                <input 
+                  type="text"
+                  value={config.footerLink1Url ?? ''}
+                  onChange={(e) => updateField('footerLink1Url', e.target.value)}
+                  className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-0"
+                  placeholder="https://eltast.cat/normativa.pdf o #"
+                />
+              </div>
+
+              {/* Enllaç 2 - Català */}
+              <div className="space-y-1">
+                <label className="block text-[10px] text-zinc-650 font-mono font-bold uppercase tracking-wider">
+                  {language === 'ca' ? "Esment Enllaç 2 (Català)" : "Etiqueta Enlace 2 (Catalán)"}
+                </label>
+                <input 
+                  type="text"
+                  value={config.footerLink2LabelCA ?? ''}
+                  onChange={(e) => updateField('footerLink2LabelCA', e.target.value)}
+                  onBlur={() => handleBlurTranslate('footerLink2LabelCA', 'footerLink2LabelES', 'ca', 'es')}
+                  className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-0"
+                  placeholder="Ex: secretaria@eltast.cat"
+                />
+              </div>
+
+              {/* Enllaç 2 - Castellà */}
+              <div className="space-y-1">
+                <label className="block text-[10px] text-zinc-650 font-mono font-bold uppercase tracking-wider">
+                  {language === 'ca' ? "Esment Enllaç 2 (Castellà)" : "Etiqueta Enlace 2 (Castellano)"}
+                </label>
+                <input 
+                  type="text"
+                  value={config.footerLink2LabelES ?? ''}
+                  onChange={(e) => updateField('footerLink2LabelES', e.target.value)}
+                  onBlur={() => handleBlurTranslate('footerLink2LabelES', 'footerLink2LabelCA', 'es', 'ca')}
+                  className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-0"
+                  placeholder="Ex: secretaria@eltast.cat"
+                />
+              </div>
+
+              {/* URL Enllaç 2 */}
+              <div className="space-y-1 md:col-span-2">
+                <label className="block text-[10px] text-zinc-650 font-mono font-bold uppercase tracking-wider">
+                  {language === 'ca' ? "URL / Destí d'Enllaç 2" : "URL / Destino de Enlace 2"}
+                </label>
+                <input 
+                  type="text"
+                  value={config.footerLink2Url ?? ''}
+                  onChange={(e) => updateField('footerLink2Url', e.target.value)}
+                  className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-0"
+                  placeholder="mailto:secretaria@eltast.cat o https://..."
+                />
+              </div>
+
+              {/* Ajusts de Disseny de Peu de Pàgina */}
+              <div className="col-span-1 md:col-span-2 bg-white/40 border border-zinc-200/50 rounded-xl p-4.5 space-y-4 text-left">
+                <div className="flex items-center gap-1.5 border-b border-zinc-250 pb-1.5 font-sans font-black text-[11px] text-zinc-700 uppercase tracking-wider">
+                  <Palette size={13} className="text-[#ff0090]" />
+                  <span>
+                    {language === 'ca' ? "Estil del Peu de Pàgina" : "Estilo del Pie de Página"}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* Mida de lletra del footer */}
+                  <div className="space-y-1">
+                    <label className="block text-[9px] text-zinc-550 font-mono font-bold uppercase tracking-wider">
+                      {language === 'ca' ? "Mida del Text" : "Tamaño del Texto"}
+                    </label>
+                    <select
+                      value={config.footerTextSize || 'text-[10px]'}
+                      onChange={(e) => updateField('footerTextSize', e.target.value)}
+                      className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-2.5 py-1.5 text-xs focus:outline-none focus:ring-0"
+                    >
+                      <option value="text-[9px]">{language === 'ca' ? "Extra petit (9px)" : "Extra pequeño (9px)"}</option>
+                      <option value="text-[10px]">{language === 'ca' ? "Original (10px)" : "Original (10px)"}</option>
+                      <option value="text-xs">{language === 'ca' ? "Petit (12px)" : "Pequeño (12px)"}</option>
+                      <option value="text-sm">{language === 'ca' ? "Mitjà (14px)" : "Mediano (14px)"}</option>
+                    </select>
+                  </div>
+
+                  {/* Gruix de lletra del footer */}
+                  <div className="space-y-1">
+                    <label className="block text-[9px] text-zinc-550 font-mono font-bold uppercase tracking-wider">
+                      {language === 'ca' ? "Gruix del text" : "Grosor del texto"}
+                    </label>
+                    <select
+                      value={config.footerFontWeight || 'font-normal'}
+                      onChange={(e) => updateField('footerFontWeight', e.target.value)}
+                      className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-2.5 py-1.5 text-xs focus:outline-none focus:ring-0"
+                    >
+                      <option value="font-normal">{language === 'ca' ? "Original (Normal)" : "Original (Normal)"}</option>
+                      <option value="font-medium">{language === 'ca' ? "Mitjà d'accent" : "Grosor medio"}</option>
+                      <option value="font-bold">{language === 'ca' ? "Gruixut" : "Negrita"}</option>
+                    </select>
+                  </div>
+
+                  {/* Font tipus: Mono o Sans */}
+                  <div className="space-y-1">
+                    <label className="block text-[9px] text-zinc-550 font-mono font-bold uppercase tracking-wider">
+                      {language === 'ca' ? "Família de Fonts" : "Familia de Fuentes"}
+                    </label>
+                    <select
+                      value={config.footerFontMono !== false ? 'mono' : 'sans'}
+                      onChange={(e) => updateField('footerFontMono', e.target.value === 'mono')}
+                      className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-2.5 py-1.5 text-xs focus:outline-none focus:ring-0"
+                    >
+                      <option value="mono">{language === 'ca' ? "Original (Tipografia Mono)" : "Original (Tipografía Mono)"}</option>
+                      <option value="sans">{language === 'ca' ? "Senzilla (Tipografia Sans-Serif)" : "Sencilla (Tipografía Sans-Serif)"}</option>
+                    </select>
+                  </div>
+
+                  {/* Color de Hover dels Links */}
+                  <div className="space-y-1">
+                    <label className="block text-[9px] text-zinc-550 font-mono font-bold uppercase tracking-wider">
+                      {language === 'ca' ? "Color del Link al passar el ratolí" : "Color del Link al pasar el ratón"}
+                    </label>
+                    <div className="flex items-center gap-1.5">
+                      <input 
+                        type="color" 
+                        value={config.footerLinkHoverColor || config.accentColor || '#ff0090'} 
+                        onChange={(e) => updateField('footerLinkHoverColor', e.target.value)}
+                        className="w-7 h-7 border border-zinc-200 rounded-lg cursor-pointer p-0.5 shrink-0"
+                      />
+                      <input 
+                        type="text" 
+                        value={config.footerLinkHoverColor || config.accentColor || '#ff0090'} 
+                        onChange={(e) => updateField('footerLinkHoverColor', e.target.value)}
+                        className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-2.5 py-1 text-xs focus:outline-none focus:ring-0 uppercase font-mono"
+                        placeholder="#ff0090"
+                        maxLength={7}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Color de la línia superior del footer (Separador) */}
+                  <div className="space-y-1">
+                    <label className="block text-[9px] text-zinc-550 font-mono font-bold uppercase tracking-wider">
+                      {language === 'ca' ? "Color de la línia separadora" : "Color de la línea separadora"}
+                    </label>
+                    <div className="flex items-center gap-1.5">
+                      <input 
+                        type="color" 
+                        value={config.footerBorderTopColor || 'rgba(255, 255, 255, 0.1)'} 
+                        onChange={(e) => updateField('footerBorderTopColor', e.target.value)}
+                        className="w-7 h-7 border border-zinc-200 rounded-lg cursor-pointer p-0.5 shrink-0"
+                      />
+                      <input 
+                        type="text" 
+                        value={config.footerBorderTopColor || ''} 
+                        onChange={(e) => updateField('footerBorderTopColor', e.target.value)}
+                        className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-2.5 py-1 text-xs focus:outline-none focus:ring-0 font-mono"
+                        placeholder="Ex: rgba(255,255,255,0.1)"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Espaiat de lletres del footer */}
+                  <div className="space-y-1">
+                    <label className="block text-[9px] text-zinc-550 font-mono font-bold uppercase tracking-wider">
+                      {language === 'ca' ? "Espaiat de lletres" : "Espaciado de letras"}
+                    </label>
+                    <select
+                      value={config.footerLetterSpacing || 'tracking-wider'}
+                      onChange={(e) => updateField('footerLetterSpacing', e.target.value)}
+                      className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-2.5 py-1.5 text-xs focus:outline-none focus:ring-0"
+                    >
+                      <option value="tracking-normal">{language === 'ca' ? "Normal" : "Normal"}</option>
+                      <option value="tracking-wide">{language === 'ca' ? "Ample" : "Ancho"}</option>
+                      <option value="tracking-wider">{language === 'ca' ? "Original (Més ample)" : "Original (Más ancho)"}</option>
+                      <option value="tracking-widest">{language === 'ca' ? "El més ample" : "El más ancho"}</option>
+                    </select>
+                  </div>
+
+                  {/* Majúscules text toggle */}
+                  <div className="sm:col-span-1 pt-1 flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-zinc-700">
+                      {language === 'ca' ? "Text complet en majúscules" : "Texto completo en mayúsculas"}
+                    </span>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={config.footerUppercase !== false} 
+                        onChange={(e) => updateField('footerUppercase', e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-9 h-5 bg-zinc-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#ff0090]"></div>
+                    </label>
+                  </div>
+
+                  {/* Sombreado de Text en Footer (per llegibilitat) */}
+                  <div className="sm:col-span-1 pt-1 flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-zinc-700">
+                      {language === 'ca' ? "Sombreado per a llegibilitat" : "Sombreado para legibilidad"}
+                    </span>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={!!config.footerShadowEnabled} 
+                        onChange={(e) => updateField('footerShadowEnabled', e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-9 h-5 bg-zinc-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#ff0090]"></div>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* Spotlight Highlight Showcase Content Card on Portada */}
           <div className="bg-zinc-50 border border-zinc-150 rounded-2xl p-5 space-y-4 text-left">
             <h4 className="font-sans font-bold text-xs text-zinc-700 uppercase tracking-widest flex items-center gap-1.5 border-b border-zinc-200 pb-2">
@@ -958,19 +1724,35 @@ export default function AdminPortada({ language, onAddLog }: AdminPortadaProps) 
 
               {/* Shell mock body */}
               <div className="relative z-10 flex-1 flex flex-col justify-center space-y-3 py-4 text-left">
-                <span className="px-2 py-0.5 bg-[#ff0090]/10 border border-[#ff0090]/25 rounded-full text-[7px] text-[#ff0090] font-mono tracking-wider font-extrabold uppercase w-max">
+                <span 
+                  className="px-2 py-0.5 rounded-full text-[7px] font-mono tracking-wider font-extrabold uppercase w-max"
+                  style={{ 
+                    backgroundColor: `${config.accentColor || '#ff0090'}15`, 
+                    color: config.accentColor || '#ff0090',
+                    border: `1px solid ${config.accentColor || '#ff0090'}35`
+                  }}
+                >
                   {language === 'ca' ? 'Obert en directe' : 'Abierto en directo'}
                 </span>
 
-                <h5 className="font-sans font-black text-white text-base md:text-lg leading-tight tracking-tight">
+                <h5 
+                  className="font-sans font-black text-base md:text-lg leading-tight tracking-tight"
+                  style={{ color: config.titolColor || '#ffffff' }}
+                >
                   {activeLangTab === 'ca' ? config.titolCA : config.titolES}
                 </h5>
 
-                <p className="text-zinc-400 text-[9px] tracking-wide uppercase font-mono">
+                <p 
+                  className="text-[9px] tracking-wide uppercase font-mono"
+                  style={{ color: config.subtitolColor || '#a1a1aa' }}
+                >
                   {activeLangTab === 'ca' ? config.subtitolCA : config.subtitolES}
                 </p>
 
-                <p className="text-zinc-350 text-[9px] leading-relaxed line-clamp-3">
+                <p 
+                  className="text-[9px] leading-relaxed line-clamp-3"
+                  style={{ color: config.descripcioColor || '#d4d4d8' }}
+                >
                   {activeLangTab === 'ca' ? config.descripcioCA : config.descripcioES}
                 </p>
 
@@ -996,7 +1778,13 @@ export default function AdminPortada({ language, onAddLog }: AdminPortadaProps) 
 
                 {/* Simulated Click button CTA */}
                 <div className="pt-2">
-                  <div className="w-full bg-[#ff0090] text-white text-center font-black py-2.5 rounded-xl uppercase tracking-wider text-[8px] shadow-lg shadow-fuchsia-950/20">
+                  <div 
+                    className="w-full text-center font-black py-2.5 rounded-xl uppercase tracking-wider text-[8px] shadow-lg"
+                    style={{ 
+                      backgroundColor: config.botoBgColor || config.accentColor || '#ff0090', 
+                      color: config.botoTextColor || '#ffffff' 
+                    }}
+                  >
                     {activeLangTab === 'ca' ? config.botoTextCA : config.botoTextES}
                   </div>
                 </div>

@@ -47,6 +47,7 @@ import NotificationFeed from './components/NotificationFeed';
 import MobileRemoteScanner from './components/MobileRemoteScanner';
 import PortadaPage, { PortadaConfig } from './components/PortadaPage';
 import { PORTADA_CONFIG_DEFAULTS } from './components/AdminPortada';
+import { getSupabaseSettings, isSupabaseConfigured } from './supabaseClient';
 
 export default function App() {
   const { language, setLanguage, t } = useLanguage();
@@ -78,10 +79,39 @@ export default function App() {
   });
   const [mobileScannerSyncKey, setMobileScannerSyncKey] = useState<string | null>(null);
 
-  // Sync Portada state dynamically with localStorage changes
+  // Load from Supabase on component mount
   useEffect(() => {
-    const handlePortadaChange = () => {
+    async function loadConfigFromSupabase() {
+      if (!isSupabaseConfigured) return;
       try {
+        const dbConfig = await getSupabaseSettings();
+        if (dbConfig) {
+          const merged = { ...PORTADA_CONFIG_DEFAULTS, ...dbConfig };
+          setPortadaConfig(merged);
+          // Auto route to public if the loaded Supabase landing page is set to inactive
+          if (merged.activa === false && view === 'portada') {
+            setView('public');
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load Supabase settings:", err);
+      }
+    }
+    loadConfigFromSupabase();
+  }, [view]);
+
+  // Sync Portada state dynamically with localStorage & Supabase changes
+  useEffect(() => {
+    const handlePortadaChange = async () => {
+      try {
+        if (isSupabaseConfigured) {
+          const dbConfig = await getSupabaseSettings();
+          if (dbConfig) {
+            setPortadaConfig({ ...PORTADA_CONFIG_DEFAULTS, ...dbConfig });
+            return;
+          }
+        }
+        
         const saved = localStorage.getItem('tast_portada_config_2026');
         if (saved) {
           setPortadaConfig({ ...PORTADA_CONFIG_DEFAULTS, ...JSON.parse(saved) });
