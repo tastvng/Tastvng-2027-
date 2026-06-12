@@ -36,7 +36,8 @@ import {
   AlertCircle,
   ExternalLink,
   Globe,
-  EyeOff
+  EyeOff,
+  RefreshCw
 } from 'lucide-react';
 import { Inscripcio, CategoriaParella, EstatPagament, EstatVerificacio, EstatInscripcio, MetodePagament, SistemaConfig, StaffMember, NoticiaXarxes } from '../types';
 import * as XLSX from 'xlsx';
@@ -57,6 +58,7 @@ interface AdminDashboardProps {
   onAddInscripcioManual?: (newReg: Inscripcio) => void;
   noticies?: NoticiaXarxes[];
   onSaveNoticies?: (updatedNoticies: NoticiaXarxes[]) => void;
+  onSaveInscripcio?: (updatedReg: Inscripcio) => void;
 }
 
 export default function AdminDashboard({ 
@@ -72,12 +74,16 @@ export default function AdminDashboard({
   onClearAllInscripcions,
   onAddInscripcioManual,
   noticies = [],
-  onSaveNoticies
+  onSaveNoticies,
+  onSaveInscripcio
 }: AdminDashboardProps) {
   const { language, t } = useLanguage();
   
   // Admin Tabs Navigation State
   const [activePanelTab, setActivePanelTab] = useState<'inscripcions' | 'smtp' | 'xarxes' | 'portada' | 'personalitzacio'>('inscripcions');
+
+  // State to track SMTP sending status of specific rows
+  const [rowSmtpSending, setRowSmtpSending] = useState<Record<string, 'sending' | 'success' | 'error'>>({});
 
   // SMTP state hooks
   const [smtpHost, setSmtpHost] = useState(() => localStorage.getItem('tast_smtp_host') || 'smtp.gmail.com');
@@ -202,6 +208,238 @@ export default function AdminDashboard({
     }
     loadAdminSettings();
   }, []);
+
+  // Manual confirmation email resender with robust CID logo embedding to prevent blank emails
+  const handleResendEmail = async (item: Inscripcio) => {
+    setRowSmtpSending(prev => ({ ...prev, [item.id]: 'sending' }));
+
+    const host = localStorage.getItem('tast_smtp_host') || smtpHost;
+    const port = localStorage.getItem('tast_smtp_port') || smtpPort;
+    const user = localStorage.getItem('tast_smtp_usuari') || smtpUsuari;
+    const pass = localStorage.getItem('tast_smtp_contrasenya') || smtpContrasenya;
+
+    if (!host || !port || !user || !pass) {
+      alert(language === 'ca' 
+        ? "Configureu i deseu el servidor SMTP primer a la pestanya 'Configuració SMTP'." 
+        : "Configure y guarde el servidor SMTP primero en la pestaña 'Configuración SMTP'.");
+      setRowSmtpSending(prev => ({ ...prev, [item.id]: 'error' }));
+      return;
+    }
+
+    try {
+      const emailList = [item.c1Email, item.c2Email].filter(Boolean).filter(email => email.includes('@'));
+      if (emailList.length === 0) {
+        alert(language === 'ca' ? "No s'ha trobat cap adreça de correu vàlida per als participants." : "No se encontró ninguna dirección de correo válida para los participantes.");
+        setRowSmtpSending(prev => ({ ...prev, [item.id]: 'error' }));
+        return;
+      }
+
+      const emailSubjectCa = localStorage.getItem('tast_email_subject_ca') || "🎟️ El Tast Comparses 2026 - Confirmació d'Inscripció";
+      const emailSubjectEs = localStorage.getItem('tast_email_subject_es') || "🎟️ El Tast Comparses 2026 - Confirmación de Inscripción";
+      const emailSubject = `${language === 'ca' ? emailSubjectCa : emailSubjectEs} ${item.codiSeguiment}`;
+
+      const emailBodyText = language === 'ca' 
+        ? (localStorage.getItem('tast_email_body_ca') || "S'ha generat correctament el vostre comprovant per a les comparses 2026.")
+        : (localStorage.getItem('tast_email_body_es') || "Se ha generado correctamente vuestro comprobante para las comparsas 2026.");
+
+      const subLogo = localStorage.getItem('tast_email_logo') || "";
+      let logoHtml = '';
+      const emailAttachments: any[] = [];
+
+      if (subLogo) {
+        if (subLogo.startsWith('data:')) {
+          logoHtml = `<div style="text-align: center; margin-bottom: 25px;"><img src="cid:tast-email-logo-cid" alt="Logo" style="max-height: 70px; max-width: 210px; object-fit: contain; margin: 0 auto; display: block; border-radius: 8px;" /></div>`;
+          emailAttachments.push({
+            filename: 'logo.png',
+            content: subLogo,
+            cid: 'tast-email-logo-cid'
+          });
+        } else {
+          logoHtml = `<div style="text-align: center; margin-bottom: 25px;"><img src="${subLogo}" alt="Logo" style="max-height: 70px; max-width: 210px; object-fit: contain; margin: 0 auto; display: block; border-radius: 8px;" /></div>`;
+        }
+      } else {
+        logoHtml = `<div style="text-align: center; margin-bottom: 25px;">
+            <span style="background-color: #ff0090; color: #ffffff; padding: 10px 24px; font-size: 13px; font-weight: bold; border-radius: 50px; letter-spacing: 1px; display: inline-block; text-transform: uppercase;">
+              Associació Cultural El Tast
+            </span>
+          </div>`;
+      }
+
+      const extrasHtml = `
+        ${item.teDomasBalco ? `<li>• 1x ${language === 'ca' ? 'Domàs de Balcó (Domás de Balcón)' : 'Colgadura de Balcón'}</li>` : ''}
+        ${item.teMocadorsExtra > 0 ? `<li>• ${item.teMocadorsExtra}x ${language === 'ca' ? 'Mocador oficial extra (Pañuelo extra)' : 'Pañuelo oficial extra'}</li>` : ''}
+      `;
+
+      const emailHtml = `
+        <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 30px; border: 1px solid #e1e1e6; border-radius: 24px; background-color: #ffffff; color: #111115;">
+          ${logoHtml}
+          
+          <h1 style="color: #111115; font-size: 24px; font-weight: 800; text-align: center; margin: 15px 0 5px 0; text-transform: uppercase; letter-spacing: -0.5px;">
+            ${language === 'ca' ? "Preinscripció Confirmada!" : "¡Preinscripción Confirmada!"}
+          </h1>
+          <p style="font-size: 14px; text-align: center; color: #666670; margin-top: 0; margin-bottom: 25px;">
+            ${emailBodyText}
+          </p>
+
+          <div style="border-top: 2px solid #ff0090; margin: 20px 0;"></div>
+
+          <div style="background-color: #fcf6fa; border: 1px dashed #ff0090; padding: 20px; border-radius: 18px; text-align: center; margin-bottom: 30px;">
+            <p style="font-size: 11px; font-family: monospace; color: #cc0073; margin: 0 0 5px 0; text-transform: uppercase; letter-spacing: 1.5px; font-weight: bold;">
+              ${language === 'ca' ? 'CODI DE SEGUIMENT OFICIAL' : 'CÓDIGO DE SEGUIMIENTO OFICIAL'}
+            </p>
+            <p style="font-size: 28px; font-family: monospace; font-weight: 900; color: #ff0090; margin: 0; letter-spacing: 1px;">
+              ${item.codiSeguiment}
+            </p>
+          </div>
+
+          <!-- QR Container -->
+          <div style="text-align: center; margin: 30px 0;">
+            <div style="display: inline-block; padding: 15px; background-color: #f8f9fa; border: 1px solid #e1e1e6; border-radius: 20px;">
+              <img src="https://api.qrserver.com/v1/create-qr-code/?size=250x250&color=e6007e&data=${encodeURIComponent(item.id)}" 
+                   alt="QR Code" width="180" height="180" style="display: block; border-radius: 10px;" />
+            </div>
+            <p style="font-size: 11px; color: #888890; margin-top: 10px; font-family: monospace; text-transform: uppercase; letter-spacing: 0.5px;">
+              ${language === 'ca' ? 'Presenteu aquest QR a Secretaria per pagar' : 'Presenten este QR en Secretaría para pagar'}
+            </p>
+          </div>
+
+          <!-- Couples and details table -->
+          <div style="border-top: 1px solid #e1e1e6; border-bottom: 1px solid #e1e1e6; padding: 15px 0; margin-bottom: 30px;">
+            <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+              <tr>
+                <td style="padding: 8px 0; color: #666670; font-weight: bold; text-transform: uppercase; font-size: 11px;">
+                  ${language === 'ca' ? 'Parella:' : 'Pareja:'}
+                </td>
+                <td style="padding: 8px 0; text-align: right; font-weight: bold; color: #111115;">
+                  ${item.c1Nom} &amp; ${item.c2Nom}
+                </td>
+              </tr>
+              <tr>
+                <td style="padding: 8px 0; color: #666670; font-weight: bold; text-transform: uppercase; font-size: 11px;">
+                  ${language === 'ca' ? 'Categoria (Categoría):' : 'Categoría:'}
+                </td>
+                <td style="padding: 8px 0; text-align: right; color: #111115; font-family: monospace;">
+                  ${item.categoria === CategoriaParella.ADULT 
+                    ? (language === 'ca' ? 'PARELLA ADULTA' : 'PAREJA ADULTA') 
+                    : (language === 'ca' ? 'PARELLA JUVENIL' : 'PAREJA JUVENIL')}
+                </td>
+              </tr>
+              ${extrasHtml ? `
+              <tr>
+                <td style="padding: 8px 0; color: #666670; font-weight: bold; text-transform: uppercase; font-size: 11px; vertical-align: top;">
+                  ${language === 'ca' ? 'Complements:' : 'Complementos:'}
+                </td>
+                <td style="padding: 8px 0; text-align: right; color: #333338;">
+                  <ul style="margin: 0; padding: 0; list-style: none; line-height: 1.4;">
+                    ${extrasHtml}
+                  </ul>
+                </td>
+              </tr>
+              ` : ''}
+              <tr style="border-top: 1px dashed #e1e1e6;">
+                <td style="padding: 15px 0 8px 0; color: #111110; font-weight: 950; font-size: 14px; text-transform: uppercase;">
+                  ${language === 'ca' ? 'Total a Pagar:' : 'Total a Pagar:'}
+                </td>
+                <td style="padding: 15px 0 8px 0; text-align: right; font-weight: 950; color: #ff0090; font-size: 22px;">
+                  ${item.preuCalculat}€
+                </td>
+              </tr>
+            </table>
+          </div>
+
+          <!-- Next Steps -->
+          <div style="background-color: #f8f9fa; padding: 20px; border-radius: 18px; margin-bottom: 30px;">
+            <h3 style="margin-top: 0; margin-bottom: 12px; font-size: 13px; color: #111115; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 850;">
+              ${language === 'ca' ? '📦 PROXIMS PASOS I RECOLLIDA:' : '📦 PRÓXIMOS PASOS Y RECOGIDA:'}
+            </h3>
+            <div style="font-size: 13px; color: #44444f; line-height: 1.6;">
+              <p style="margin: 0 0 8px 0;">
+                <strong>1. ${language === 'ca' ? "Sede d'El Tast" : "Sede de El Tast"}:</strong><br/>
+                ${language === 'ca'
+                  ? "Presenteu-vos a la secretaria de l'associació cultural amb el codi QR adjunt."
+                  : "Preséntense en la secretaría de la asociación cultural mostrando el código QR adjunto."}
+              </p>
+              <p style="margin: 0;">
+                <strong>2. ${language === 'ca' ? 'Dies de lliurament i caixa' : 'Días de entrega y cobro'}:</strong><br/>
+                ${language === 'ca'
+                  ? "Dimecres i divendres previs als dards de comparses, de 18:00h a 21:30h."
+                  : "Miércoles y viernes previos a los días de comparsas, de 18:00h a 21:30h."}
+              </p>
+            </div>
+          </div>
+
+          <div style="border-top: 1px solid #eaeaea; padding-top: 20px; text-align: center;">
+            <p style="font-size: 11px; color: #99999f; margin: 0; line-height: 1.5;">
+              <strong>Associació Cultural El Tast de Vilanova i la Geltrú</strong><br/>
+              Carrer de l'Aigua, 12, Vilanova i la Geltrú &bull; <a href="mailto:secretaria@eltast.cat" style="color: #ff0090; text-decoration: none;">secretaria@eltast.cat</a>
+            </p>
+          </div>
+        </div>
+      `;
+
+      const sendPromises = emailList.map(emailTo => {
+        return fetch('/api/send-email', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            smtpConfig: { host, port, user, pass, senderName: language === 'ca' ? "Inscripcions El Tast" : "Inscripciones El Tast" },
+            emailData: {
+              to: emailTo,
+              subject: emailSubject,
+              html: emailHtml,
+              attachments: emailAttachments
+            }
+          })
+        });
+      });
+
+      const results = await Promise.all(sendPromises);
+      const errorsList: string[] = [];
+
+      for (let i = 0; i < results.length; i++) {
+        const res = results[i];
+        if (!res.ok) {
+          const text = await res.text();
+          errorsList.push(text);
+        }
+      }
+
+      if (errorsList.length === 0) {
+        setRowSmtpSending(prev => ({ ...prev, [item.id]: 'success' }));
+        if (onAddLog) {
+          onAddLog(`📧 SMTP: Correu de confirmació manual enviat correctament a ${emailList.join(', ')}`);
+        }
+        if (onSaveInscripcio) {
+          onSaveInscripcio({
+            ...item,
+            respostesCuestionari: {
+              ...item.respostesCuestionari,
+              estatCorreu: 'enviat'
+            }
+          });
+        }
+      } else {
+        throw new Error(errorsList.join(', '));
+      }
+    } catch (err: any) {
+      console.error(err);
+      setRowSmtpSending(prev => ({ ...prev, [item.id]: 'error' }));
+      if (onAddLog) {
+        onAddLog(`⚠️ Error SMTP manual per a ${item.codiSeguiment}: ${err.message || err}`);
+      }
+      if (onSaveInscripcio) {
+        onSaveInscripcio({
+          ...item,
+          respostesCuestionari: {
+            ...item.respostesCuestionari,
+            estatCorreu: 'fallat'
+          }
+        });
+      }
+    }
+  };
 
   // Manual add couple modal state
   const [showAddModal, setShowAddModal] = useState(false);
@@ -1162,6 +1400,7 @@ export default function AdminDashboard({
                     <th className="px-6 py-4 text-center">PAGAMENT</th>
                     <th className="px-6 py-4 text-center">DNI STATUS</th>
                     <th className="px-6 py-4 text-center">LLIURAMENT</th>
+                    <th className="px-6 py-4 text-center">CORREU ENVIAT</th>
                     <th className="px-6 py-4 text-center">ACCIONS</th>
                   </tr>
                 </thead>
@@ -1282,6 +1521,56 @@ export default function AdminDashboard({
                             No lliurat
                           </span>
                         )}
+                      </td>
+
+                      {/* Correu / Notificació status and manual trigger */}
+                      <td className="px-6 py-4.5 text-center" onClick={(e) => e.stopPropagation()}>
+                        {(() => {
+                          const currentStatus = rowSmtpSending[item.id] || item.respostesCuestionari?.estatCorreu || 'enviat';
+                          
+                          if (currentStatus === 'sending') {
+                            return (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-fuchsia-50 text-fuchsia-600 animate-pulse">
+                                <Send size={9} className="animate-bounce" /> {language === 'ca' ? "Enviant..." : "Enviando..."}
+                              </span>
+                            );
+                          }
+                          
+                          if (currentStatus === 'fallat' || currentStatus === 'error') {
+                            return (
+                              <div className="flex flex-col sm:flex-row items-center justify-center gap-1">
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-800" title={language === 'ca' ? "S'ha produït un error a l'SMTP" : "Se produjo un error en el SMTP"}>
+                                  <AlertCircle size={10} /> {language === 'ca' ? "Fallat" : "Fallido"}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleResendEmail(item)}
+                                  className="p-1 text-[9px] font-extrabold bg-zinc-900 border border-zinc-200 hover:bg-[#ff0090] text-white rounded-md cursor-pointer flex items-center gap-1 transition-all hover:scale-105 active:scale-95"
+                                  title={language === 'ca' ? "Re-enviar comprovant manualment ara" : "Re-enviar comprobante manualmente ahora"}
+                                >
+                                  <Send size={8} /> {language === 'ca' ? "Enviar" : "Enviar"}
+                                </button>
+                              </div>
+                            );
+                          }
+                          
+                          // Default is success 'enviat'
+                          return (
+                            <div className="flex items-center justify-center gap-1.5 inline-flex">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-green-100 text-green-800">
+                                <CheckCircle size={10} /> {language === 'ca' ? "Enviat" : "Enviado"}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleResendEmail(item)}
+                                className="p-1 hover:bg-zinc-100 rounded-md text-zinc-400 hover:text-zinc-900 cursor-pointer transition-all"
+                                title={language === 'ca' ? "Re-enviar comprovant" : "Volver a enviar comprobante"}
+                              >
+                                <RefreshCw size={10} />
+                              </button>
+                            </div>
+                          );
+                        })()}
                       </td>
 
                       {/* Quick navigation action triggers */}

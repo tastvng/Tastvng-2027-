@@ -12,9 +12,10 @@ import { useLanguage } from '../LanguageContext';
 interface ConfirmationProps {
   registration: Inscripcio;
   onClear: () => void;
+  onUpdate?: (updatedReg: Inscripcio) => void;
 }
 
-export default function Confirmation({ registration, onClear }: ConfirmationProps) {
+export default function Confirmation({ registration, onClear, onUpdate }: ConfirmationProps) {
   const { language, t } = useLanguage();
   const [showEmailPreview, setShowEmailPreview] = useState(false);
   const [smtpStatus, setSmtpStatus] = useState<'idle' | 'sending' | 'success' | 'error' | 'not_configured'>('idle');
@@ -109,13 +110,27 @@ export default function Confirmation({ registration, onClear }: ConfirmationProp
 
       const emailBodyText = language === 'ca' ? subBodyCa : subBodyEs;
 
-      const logoHtml = subLogo 
-        ? `<div style="text-align: center; margin-bottom: 25px;"><img src="${subLogo}" alt="Logo" style="max-height: 70px; max-width: 210px; object-fit: contain; margin: 0 auto; display: block; border-radius: 8px;" /></div>`
-        : `<div style="text-align: center; margin-bottom: 25px;">
+      let logoHtml = '';
+      const emailAttachments: any[] = [];
+
+      if (subLogo) {
+        if (subLogo.startsWith('data:')) {
+          logoHtml = `<div style="text-align: center; margin-bottom: 25px;"><img src="cid:tast-email-logo-cid" alt="Logo" style="max-height: 70px; max-width: 210px; object-fit: contain; margin: 0 auto; display: block; border-radius: 8px;" /></div>`;
+          emailAttachments.push({
+            filename: 'logo.png',
+            content: subLogo,
+            cid: 'tast-email-logo-cid'
+          });
+        } else {
+          logoHtml = `<div style="text-align: center; margin-bottom: 25px;"><img src="${subLogo}" alt="Logo" style="max-height: 70px; max-width: 210px; object-fit: contain; margin: 0 auto; display: block; border-radius: 8px;" /></div>`;
+        }
+      } else {
+        logoHtml = `<div style="text-align: center; margin-bottom: 25px;">
             <span style="background-color: #ff0090; color: #ffffff; padding: 10px 24px; font-size: 13px; font-weight: bold; border-radius: 50px; letter-spacing: 1px; display: inline-block; text-transform: uppercase;">
               Associació Cultural El Tast
             </span>
           </div>`;
+      }
 
       const emailHtml = `
         <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 30px; border: 1px solid #e1e1e6; border-radius: 24px; background-color: #ffffff; color: #111115;">
@@ -224,7 +239,7 @@ export default function Confirmation({ registration, onClear }: ConfirmationProp
         </div>
       `;
 
-      // Dispatch to all emails
+      // Dispatch to all emails (passing base64 media payload as real MIME CID attachment)
       const sendPromises = emailList.map(emailTo => {
         return fetch('/api/send-email', {
           method: 'POST',
@@ -236,7 +251,8 @@ export default function Confirmation({ registration, onClear }: ConfirmationProp
             emailData: {
               to: emailTo,
               subject: emailSubject,
-              html: emailHtml
+              html: emailHtml,
+              attachments: emailAttachments
             }
           })
         });
@@ -262,14 +278,41 @@ export default function Confirmation({ registration, onClear }: ConfirmationProp
 
       if (errorsList.length === 0) {
         setSmtpStatus('success');
+        if (onUpdate) {
+          onUpdate({
+            ...registration,
+            respostesCuestionari: {
+              ...registration.respostesCuestionari,
+              estatCorreu: 'enviat'
+            }
+          });
+        }
       } else {
         setSmtpStatus('error');
         setSmtpError(errorsList.join(', '));
+        if (onUpdate) {
+          onUpdate({
+            ...registration,
+            respostesCuestionari: {
+              ...registration.respostesCuestionari,
+              estatCorreu: 'fallat'
+            }
+          });
+        }
       }
     } catch (err: any) {
       console.error("Error sending registration SMTP mail:", err);
       setSmtpStatus('error');
       setSmtpError(err.message || 'Error de conexión');
+      if (onUpdate) {
+        onUpdate({
+          ...registration,
+          respostesCuestionari: {
+            ...registration.respostesCuestionari,
+            estatCorreu: 'fallat'
+          }
+        });
+      }
     }
   };
 

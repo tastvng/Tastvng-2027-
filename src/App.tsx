@@ -687,6 +687,7 @@ export default function App() {
                   setActiveRegistration(null);
                   setView('public');
                 }}
+                onUpdate={updateRegistration}
               />
             )}
 
@@ -715,6 +716,7 @@ export default function App() {
                 onDeleteMultipleInscripcions={deleteMultipleRegistrations}
                 onClearAllInscripcions={clearAllRegistrations}
                 onAddInscripcioManual={addRegistrationManual}
+                onSaveInscripcio={updateRegistration}
               />
             )}
 
