@@ -7,6 +7,7 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Lock, User, AlertCircle, ArrowLeft, Eye, EyeOff, Sparkle } from 'lucide-react';
 import { useLanguage } from '../LanguageContext';
+import { supabase, isSupabaseConfigured } from '../supabaseClient';
 
 interface AdminLoginProps {
   onLoginSuccess: (rememberMe: boolean) => void;
@@ -43,7 +44,7 @@ export default function AdminLogin({ onLoginSuccess, onBackToPublic }: AdminLogi
     }
   }, []);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!username.trim() || !password.trim()) {
       setErrorError(language === 'ca' 
@@ -55,30 +56,73 @@ export default function AdminLogin({ onLoginSuccess, onBackToPublic }: AdminLogi
     setIsVerifying(true);
     setErrorError(null);
 
-    // Simulate delay
-    setTimeout(() => {
+    try {
       // Accepting 'admin'/'admin' or 'tast'/'tast' or 'tastvng@gmail.com'/'eltast2026' or 'tastvng@gmail.com'/'tast'
       let isValid = (username === 'admin' && password === 'admin') || 
                     (username === 'tast' && password === 'tast') ||
                     (username.toLowerCase() === 'tastvng@gmail.com' && (password === 'tast' || password === 'eltast2026')) ||
                     (username === 'secretaria' && password === 'eltast2026');
 
-      // Direct lookup from manually added staff profiles
-      try {
-        const savedStaff = localStorage.getItem('tast_staff_2026');
-        if (savedStaff) {
-          const staffList = JSON.parse(savedStaff);
-          const found = staffList.find((s: any) => 
-            (s.usuari.toLowerCase() === username.toLowerCase() || s.nom.toLowerCase() === username.toLowerCase()) && 
-            s.contrasenya === password && 
-            s.actiu !== false
-          );
-          if (found) {
-            isValid = true;
+      if (!isValid) {
+        // Direct lookup from manually added staff profiles in Supabase setting 'tast_staff_2026'
+        if (isSupabaseConfigured && supabase) {
+          try {
+            const { data, error } = await supabase
+              .from('settings')
+              .select('value, config')
+              .or('key.eq.tast_staff_2026,id.eq.tast_staff_2026')
+              .maybeSingle();
+
+            if (!error && data) {
+              const rawVal = data.value !== undefined ? data.value : data.config;
+              let staffList: any[] = [];
+              if (rawVal) {
+                if (typeof rawVal === 'string') {
+                  staffList = JSON.parse(rawVal);
+                } else {
+                  staffList = rawVal;
+                }
+              }
+
+              if (Array.isArray(staffList)) {
+                // Sincronizar en LocalStorage para redundancia local inmediata
+                localStorage.setItem('tast_staff_2026', JSON.stringify(staffList));
+                window.dispatchEvent(new Event('staffChanged'));
+
+                const found = staffList.find((s: any) => 
+                  (s.usuari?.toLowerCase() === username.toLowerCase() || s.nom?.toLowerCase() === username.toLowerCase()) && 
+                  s.contrasenya === password && 
+                  s.actiu !== false
+                );
+                if (found) {
+                  isValid = true;
+                }
+              }
+            }
+          } catch (jwtErr) {
+            console.error("Live Supabase credentials fetch failed:", jwtErr);
           }
         }
-      } catch (e) {
-        console.error("Error verifying dynamic staff credentials:", e);
+
+        // LocalStorage fallback if still not found
+        if (!isValid) {
+          try {
+            const savedStaff = localStorage.getItem('tast_staff_2026');
+            if (savedStaff) {
+              const staffList = JSON.parse(savedStaff);
+              const found = staffList.find((s: any) => 
+                (s.usuari?.toLowerCase() === username.toLowerCase() || s.nom?.toLowerCase() === username.toLowerCase()) && 
+                s.contrasenya === password && 
+                s.actiu !== false
+              );
+              if (found) {
+                isValid = true;
+              }
+            }
+          } catch (e) {
+            console.error("Error verifying dynamic staff credentials from LocalStorage backup:", e);
+          }
+        }
       }
 
       setIsVerifying(false);
@@ -98,7 +142,10 @@ export default function AdminLogin({ onLoginSuccess, onBackToPublic }: AdminLogi
           ? "L'usuari o la contrasenya no són correctes. Proveu amb credencials vàlides de secretaria."
           : "El usuario o la contraseña no son correctos. Pruebe con credenciales válidas de secretaría.");
       }
-    }, 1000);
+    } catch (err: any) {
+      setIsVerifying(false);
+      setErrorError(err.message || String(err));
+    }
   };
 
   return (

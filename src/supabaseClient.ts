@@ -73,41 +73,63 @@ export async function saveSupabaseSetting(key: string, value: any): Promise<bool
   }
 
   try {
-    // Attempt 1: { key: key, value: value }
-    let response = await supabase
+    let existingRow: { id: any } | null = null;
+    let keyColumn = 'key';
+    
+    // 1. Check if column 'key' matches our keyName
+    const { data: dataKey, error: errorKey } = await supabase
       .from('settings')
-      .upsert({ key: key, value: value });
+      .select('id')
+      .eq('key', key)
+      .maybeSingle();
       
-    if (!response.error) return true;
-    let lastError = response.error;
-    
-    // Attempt 2: { id: key, value: value }
-    if (lastError.message?.includes('column "key" does not exist') || lastError.message?.includes('key')) {
-      response = await supabase
-        .from('settings')
-        .upsert({ id: key, value: value });
-      if (!response.error) return true;
-      lastError = response.error;
-    }
-    
-    // Attempt 3: { key: key, config: value }
-    if (lastError.message?.includes('column "value" does not exist') || lastError.message?.includes('value')) {
-      response = await supabase
-        .from('settings')
-        .upsert({ key: key, config: value });
-      if (!response.error) return true;
-      lastError = response.error;
+    if (errorKey) {
+      // If column "key" doesn't exist, try querying with column "id" as the key identifier
+      if (errorKey.message?.includes('column "key" does not exist') || errorKey.code === 'PGRST106' || errorKey.message?.includes('key')) {
+        keyColumn = 'id';
+        const { data: dataId, error: errorId } = await supabase
+          .from('settings')
+          .select('id')
+          .eq('id', key)
+          .maybeSingle();
+        if (!errorId && dataId) {
+          existingRow = dataId;
+        }
+      }
+    } else if (dataKey) {
+      existingRow = dataKey;
     }
 
-    // Attempt 4: { id: key, config: value }
-    response = await supabase
-      .from('settings')
-      .upsert({ id: key, config: value });
-      
-    if (!response.error) return true;
-    
-    console.error(`All adaptive setting upsert attempts on 'settings' table failed for key [${key}]:`, response.error);
-    return false;
+    // 2. Perform UPDATE if row exists, else INSERT
+    if (existingRow) {
+      // Try updating column 'value' first
+      let updateRes = await supabase
+        .from('settings')
+        .update({ value: value })
+        .eq(keyColumn, key);
+        
+      if (updateRes.error) {
+        // Fallback to updating column 'config'
+        updateRes = await supabase
+          .from('settings')
+          .update({ config: value })
+          .eq(keyColumn, key);
+      }
+      return !updateRes.error;
+    } else {
+      // Try inserting with column 'value' first
+      let insertRes = await supabase
+        .from('settings')
+        .insert({ [keyColumn]: key, value: value });
+        
+      if (insertRes.error) {
+        // Fallback to inserting with column 'config'
+        insertRes = await supabase
+          .from('settings')
+          .insert({ [keyColumn]: key, config: value });
+      }
+      return !insertRes.error;
+    }
   } catch (err) {
     console.error(`Exception saving setting to Supabase for key [${key}]:`, err);
     return false;

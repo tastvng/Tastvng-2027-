@@ -252,6 +252,13 @@ export default function App() {
 
         try {
           // 4. Fetch extra customization settings
+          const dbPortada = await getSupabaseSetting<PortadaConfig | null>('tast_portada_config_2026', null);
+          if (dbPortada) {
+            const merged = { ...PORTADA_CONFIG_DEFAULTS, ...dbPortada };
+            setPortadaConfig(merged);
+            localStorage.setItem('tast_portada_config_2026', JSON.stringify(merged));
+          }
+
           const lg = await getSupabaseSetting('tast_email_logo', '');
           const hrCa = await getSupabaseSetting('tast_secretaria_hours_ca', '');
           const hrEs = await getSupabaseSetting('tast_secretaria_hours_es', '');
