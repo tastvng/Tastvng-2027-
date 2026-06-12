@@ -80,10 +80,15 @@ export default function App() {
       try {
         // Load Config
         const { data: configData, error: configError } = await supabase.from('settings').select('*').eq('key', 'config').single();
+        
         if (configData && configData.value) {
-          setConfig(configData.value);
-        } else if (configError && configError.code !== 'PGRST116') {
-          console.error("Error loading config:", configError);
+          setConfig({ ...CONFIG_INICIAL, ...configData.value });
+        } else {
+          if (configError && configError.code !== 'PGRST116') {
+            console.error("Error loading config:", configError);
+          }
+          // Fallback explícito si está vacío
+          setConfig(CONFIG_INICIAL);
         }
 
         // Load Inscripcions
