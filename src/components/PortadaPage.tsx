@@ -1,7 +1,8 @@
 import React from 'react';
 import { motion } from 'motion/react';
 import { useLanguage } from '../LanguageContext';
-import { Play, Image, Sparkles, ChevronRight, VolumeX, Mail, FileText, Compass, ExternalLink } from 'lucide-react';
+import TranslatedText from './TranslatedText';
+import { Play, Image, Sparkles, ChevronRight, VolumeX, Mail, FileText, Compass, ExternalLink, Instagram, Heart, Star, Zap, Bell } from 'lucide-react';
 
 export interface PortadaConfig {
   activa: boolean;
@@ -23,6 +24,16 @@ export interface PortadaConfig {
   
   botoTextCA: string;
   botoTextES: string;
+
+  // Badge customization
+  badgeTextCA?: string;
+  badgeTextES?: string;
+  badgeIcon?: 'compass' | 'instagram' | 'sparkles' | 'none' | 'heart' | 'star' | 'lightning' | 'bell';
+  badgeStyle?: 'custom' | 'instagram-gradient' | 'glass-retro' | 'solid-neon' | 'cyberpunk';
+  badgeBgColor?: string;
+  badgeTextColor?: string;
+  badgeBorderColor?: string;
+  badgeSpinIcon?: boolean;
 
   // New photo framing & color adjustment options (optional for safety with older state)
   bgImatgeX?: number; // 0-100% position
@@ -141,22 +152,16 @@ export default function PortadaPage({
     }
   };
 
-  const titol = language === 'ca' ? config.titolCA : config.titolES;
-  const subtitol = language === 'ca' ? config.subtitolCA : config.subtitolES;
-  const descripcio = language === 'ca' ? config.descripcioCA : config.descripcioES;
-  const botoText = language === 'ca' ? config.botoTextCA : config.botoTextES;
+  const titol = (language === 'ca' ? config.titolCA : config.titolES) || (language === 'ca' ? config.titolES : config.titolCA) || '';
+  const subtitol = (language === 'ca' ? config.subtitolCA : config.subtitolES) || (language === 'ca' ? config.subtitolES : config.subtitolCA) || '';
+  const descripcio = (language === 'ca' ? config.descripcioCA : config.descripcioES) || (language === 'ca' ? config.descripcioES : config.descripcioCA) || '';
+  const botoText = (language === 'ca' ? config.botoTextCA : config.botoTextES) || (language === 'ca' ? config.botoTextES : config.botoTextCA) || '';
 
-  const footerText = language === 'ca'
-    ? (config.footerTextCA || `© ${new Date().getFullYear()} ASSOCIACIÓ COMPARSES EL TAST • VILANOVA`)
-    : (config.footerTextES || `© ${new Date().getFullYear()} ASOCIACIÓN COMPARSES EL TAST • VILANOVA`);
+  const footerText = (language === 'ca' ? config.footerTextCA : config.footerTextES) || (language === 'ca' ? config.footerTextES : config.footerTextCA) || `© ${new Date().getFullYear()} ASSOCIACIÓ COMPARSES EL TAST • VILANOVA`;
 
-  const footerLink1Label = language === 'ca'
-    ? (config.footerLink1LabelCA || 'Normativa')
-    : (config.footerLink1LabelES || 'Normativa');
+  const footerLink1Label = (language === 'ca' ? config.footerLink1LabelCA : config.footerLink1LabelES) || (language === 'ca' ? config.footerLink1LabelES : config.footerLink1LabelCA) || 'Normativa';
 
-  const footerLink2Label = language === 'ca'
-    ? (config.footerLink2LabelCA || 'secretaria@eltast.cat')
-    : (config.footerLink2LabelES || 'secretaria@eltast.cat');
+  const footerLink2Label = (language === 'ca' ? config.footerLink2LabelCA : config.footerLink2LabelES) || (language === 'ca' ? config.footerLink2LabelES : config.footerLink2LabelCA) || 'secretaria@eltast.cat';
 
   const footerLink1Url = config.footerLink1Url || '#';
   const footerLink2Url = config.footerLink2Url || 'mailto:secretaria@eltast.cat';
@@ -380,18 +385,74 @@ export default function PortadaPage({
 
       {/* Main content grid */}
       <div className="relative z-10 flex-1 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center py-8 md:py-12">
-        {/* Texts side */}
+          {/* Texts side */}
         <div className="lg:col-span-7 space-y-5 text-left">
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.5, delay: 0.1 }}
-            className="inline-flex items-center gap-2 px-3 py-1 bg-white/5 border rounded-full font-mono text-[9px] uppercase tracking-widest font-black"
-            style={{ color: accentColor, borderColor: `${accentColor}40` }}
-          >
-            <Compass size={10} className="animate-spin duration-3000" />
-            {language === 'ca' ? 'Inscripcions Obertes 2026' : 'Inscripciones Abiertas 2026'}
-          </motion.div>
+          {(() => {
+            // Define fallback configuration values
+            const badgeText = language === 'ca' 
+              ? (config.badgeTextCA || 'Inscripcions Obertes 2026') 
+              : (config.badgeTextES || 'Inscripciones Abiertas 2026');
+            
+            const badgeIconName = config.badgeIcon || 'compass';
+            const badgeStyleType = config.badgeStyle || 'custom';
+            const badgeBg = config.badgeBgColor || accentColor;
+            const badgeTxtColor = config.badgeTextColor || '#ffffff';
+            const badgeBrdColor = config.badgeBorderColor || `${accentColor}40`;
+            const badgeSpinIcon = config.badgeSpinIcon !== false;
+
+            const iconProps = {
+              size: 10,
+              className: badgeSpinIcon ? "animate-spin duration-3000" : ""
+            };
+
+            let innerIcon = null;
+            if (badgeIconName === 'compass') innerIcon = <Compass {...iconProps} />;
+            else if (badgeIconName === 'instagram') innerIcon = <Instagram {...iconProps} />;
+            else if (badgeIconName === 'sparkles') innerIcon = <Sparkles {...iconProps} />;
+            else if (badgeIconName === 'heart') innerIcon = <Heart {...iconProps} />;
+            else if (badgeIconName === 'star') innerIcon = <Star {...iconProps} />;
+            else if (badgeIconName === 'lightning') innerIcon = <Zap {...iconProps} />;
+            else if (badgeIconName === 'bell') innerIcon = <Bell {...iconProps} />;
+
+            let badgeClasses = "inline-flex items-center gap-2 px-3 py-1 font-mono text-[9px] uppercase tracking-widest font-black transition-all duration-300 ";
+            let badgeStyles: React.CSSProperties = {};
+
+            if (badgeStyleType === 'instagram-gradient') {
+              badgeClasses += "bg-gradient-to-r from-amber-400 via-pink-600 to-purple-600 text-white shadow-lg shadow-pink-500/20 hover:scale-105 duration-300 rounded-full border border-white/20";
+            } else if (badgeStyleType === 'glass-retro') {
+              badgeClasses += "bg-white/10 backdrop-blur-md border border-white/20 text-white rounded-xl shadow-inner";
+            } else if (badgeStyleType === 'solid-neon') {
+              badgeClasses += "bg-green-400 text-black border border-green-300 rounded-full font-bold shadow-[0_0_12px_rgba(74,222,128,0.5)]";
+              badgeStyles = {
+                backgroundColor: '#22c55e',
+                color: '#000000',
+                borderColor: '#4ade80'
+              };
+            } else if (badgeStyleType === 'cyberpunk') {
+              badgeClasses += "bg-black text-rose-500 border border-fuchsia-500 rounded-none tracking-widest shadow-[inset_0_0_8px_rgba(236,72,153,0.3)] animate-pulse";
+            } else {
+              // 'custom'
+              badgeClasses += "bg-white/5 border rounded-full";
+              badgeStyles = {
+                color: badgeTxtColor,
+                backgroundColor: badgeBg.startsWith('#') ? `${badgeBg}20` : badgeBg,
+                borderColor: badgeBrdColor
+              };
+            }
+
+            return (
+              <motion.div
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.5, delay: 0.1 }}
+                className={badgeClasses}
+                style={badgeStyles}
+              >
+                {innerIcon}
+                <TranslatedText text={badgeText} />
+              </motion.div>
+            );
+          })()}
 
           {subtitol && (
             <motion.p
@@ -401,7 +462,7 @@ export default function PortadaPage({
               className="text-xs md:text-sm font-semibold tracking-widest uppercase font-mono"
               style={{ color: subtitolColor }}
             >
-              {subtitol}
+              <TranslatedText text={subtitol} />
             </motion.p>
           )}
 
@@ -412,7 +473,7 @@ export default function PortadaPage({
             className="font-sans font-black text-3xl md:text-5xl lg:text-6xl tracking-tight leading-tight"
             style={{ color: titolColor }}
           >
-            {titol}
+            <TranslatedText text={titol} />
           </motion.h2>
 
           <motion.p
@@ -422,7 +483,7 @@ export default function PortadaPage({
             className="font-sans text-xs md:text-sm leading-relaxed max-w-2xl whitespace-pre-wrap"
             style={{ color: descripcioColor }}
           >
-            {descripcio}
+            <TranslatedText text={descripcio} />
           </motion.p>
 
           <motion.div
@@ -437,7 +498,7 @@ export default function PortadaPage({
               style={botoStyle}
               id="btn-portada-jump-to-form"
             >
-              {botoText}
+              <TranslatedText text={botoText} />
               <ChevronRight size={16} className="group-hover:translate-x-1.5 transition-transform" />
             </button>
             <button
@@ -515,7 +576,7 @@ export default function PortadaPage({
         }}
         id="portada-landing-footer"
       >
-        <span style={footerTextStyle}>{footerText}</span>
+        <span style={footerTextStyle}><TranslatedText text={footerText} /></span>
         <div className="flex gap-4">
           <a 
             href={footerLink1Url}
@@ -530,7 +591,7 @@ export default function PortadaPage({
             }}
           >
             <FileText size={10} />
-            <span>{footerLink1Label}</span>
+            <span><TranslatedText text={footerLink1Label} /></span>
           </a>
           <span style={{ color: `${footerTextColor}80`, ...footerTextStyle }}>•</span>
           <a 
@@ -546,7 +607,7 @@ export default function PortadaPage({
             }}
           >
             <Mail size={10} />
-            <span>{footerLink2Label}</span>
+            <span><TranslatedText text={footerLink2Label} /></span>
           </a>
         </div>
       </div>

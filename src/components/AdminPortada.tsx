@@ -44,6 +44,16 @@ export const PORTADA_CONFIG_DEFAULTS: PortadaConfig = {
   botoBgColor: '#ff0090',
   botoTextColor: '#ffffff',
 
+  // Badge customization defaults
+  badgeTextCA: 'Inscripcions Obertes 2026',
+  badgeTextES: 'Inscripciones Abiertas 2026',
+  badgeIcon: 'compass',
+  badgeStyle: 'custom',
+  badgeBgColor: '#ff0090',
+  badgeTextColor: '#ffffff',
+  badgeBorderColor: 'rgba(255, 0, 144, 0.4)',
+  badgeSpinIcon: true,
+
   // Footer customization defaults
   footerTextCA: '© 2026 ASSOCIACIÓ COMPARSES EL TAST • VILANOVA',
   footerTextES: '© 2026 ASOCIACIÓN COMPARSAS EL TAST • VILANOVA',
@@ -525,6 +535,20 @@ export default function AdminPortada({ language, onAddLog }: AdminPortadaProps) 
                     className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all"
                   />
                 </div>
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="block text-[10px] text-zinc-550 uppercase font-mono font-extrabold">Text de l'Etiqueta / Badge (CAT)</label>
+                    {translatingFields['badgeTextES'] && <span className="text-[9px] text-[#ff0090] font-black animate-pulse flex items-center gap-1">✨ Traduint a l'espanyol...</span>}
+                  </div>
+                  <input 
+                    type="text"
+                    value={config.badgeTextCA || ''}
+                    onChange={(e) => updateField('badgeTextCA', e.target.value)}
+                    onBlur={() => handleBlurTranslate('badgeTextCA', 'badgeTextES', 'ca', 'es')}
+                    placeholder="Ex: Inscripcions Obertes 2026..."
+                    className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all"
+                  />
+                </div>
               </div>
             ) : (
               <div className="space-y-4">
@@ -584,6 +608,20 @@ export default function AdminPortada({ language, onAddLog }: AdminPortadaProps) 
                     onChange={(e) => updateField('botoTextES', e.target.value)}
                     onBlur={() => handleBlurTranslate('botoTextES', 'botoTextCA', 'es', 'ca')}
                     placeholder="Ej: Iniciar Formulario..."
+                    className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all"
+                  />
+                </div>
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="block text-[10px] text-zinc-550 uppercase font-mono font-extrabold">Texto de la Etiqueta / Badge (ESP)</label>
+                    {translatingFields['badgeTextCA'] && <span className="text-[9px] text-[#ff0090] font-black animate-pulse flex items-center gap-1">✨ Traduciendo al catalán...</span>}
+                  </div>
+                  <input 
+                    type="text"
+                    value={config.badgeTextES || ''}
+                    onChange={(e) => updateField('badgeTextES', e.target.value)}
+                    onBlur={() => handleBlurTranslate('badgeTextES', 'badgeTextCA', 'es', 'ca')}
+                    placeholder="Ej: Inscripciones Abiertas 2026..."
                     className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all"
                   />
                 </div>
@@ -813,6 +851,147 @@ export default function AdminPortada({ language, onAddLog }: AdminPortadaProps) 
                 placeholder="https://www.youtube.com/watch?v=... o puja un fitxer"
               />
             )}
+          </div>
+
+          {/* Estil i Disseny del Badge / Etiqueta de Capçalera */}
+          <div className="bg-zinc-50 border border-zinc-150 rounded-2xl p-5 space-y-4 text-left">
+            <h4 className="font-sans font-bold text-xs text-zinc-700 uppercase tracking-widest flex items-center gap-1.5 border-b border-zinc-200 pb-2">
+              <Sparkles size={14} className="text-[#ff0090]" />
+              {language === 'ca' ? "Etiqueta Destacada / Badge de Portada" : "Etiqueta Destacada / Badge de Portada"}
+            </h4>
+            <p className="text-[11px] text-zinc-550 leading-normal mb-1">
+              {language === 'ca' 
+                ? "Dissenya l'etiqueta flotant que apareix a sobre del títol principal. Escull presets de marca moderns com Instagram o crea el teu estil propi."
+                : "Diseña la etiqueta flotante que aparece sobre el título principal. Escoge presets de marca modernos como Instagram o crea tu propio estilo."}
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Preset d'Estil del Badge */}
+              <div className="space-y-1.5 col-span-1 md:col-span-2">
+                <label className="block text-[10px] text-zinc-650 font-mono font-bold uppercase tracking-wider">
+                  {language === 'ca' ? "Preset d'Estil de l'Etiqueta" : "Preset de Estilo de la Etiqueta"}
+                </label>
+                <select
+                  value={config.badgeStyle || 'custom'}
+                  onChange={(e) => updateField('badgeStyle', e.target.value as any)}
+                  className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3 py-2.5 text-xs focus:outline-none transition-all"
+                >
+                  <option value="custom">⚙️ {language === 'ca' ? "Estil Personalitzat (Color sòlid i vora)" : "Estilo Personalizado (Color sólido y borde)"}</option>
+                  <option value="instagram-gradient">📸 Instagram Story Gradient (Vibrant Color Wheel)</option>
+                  <option value="glass-retro">🪟 Efecte Vidre Transmès (Glassmorphism Retro)</option>
+                  <option value="solid-neon">🔋 Neon Elèctric Glow (Green/Acid)</option>
+                  <option value="cyberpunk">👾 Cyberpunk Retro-Neon Pulse</option>
+                </select>
+              </div>
+
+              {/* Icona de l'Etiqueta */}
+              <div className="space-y-1.5">
+                <label className="block text-[10px] text-zinc-650 font-mono font-bold uppercase tracking-wider">
+                  {language === 'ca' ? "Icona de l'Etiqueta" : "Icono de la Etiqueta"}
+                </label>
+                <select
+                  value={config.badgeIcon || 'compass'}
+                  onChange={(e) => updateField('badgeIcon', e.target.value as any)}
+                  className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3 py-2.5 text-xs focus:outline-none transition-all"
+                >
+                  <option value="compass">🧭 Compass (Brúixola)</option>
+                  <option value="instagram">📸 Instagram</option>
+                  <option value="sparkles">✨ Sparkles (Destells)</option>
+                  <option value="heart">❤️ Heart (Cor)</option>
+                  <option value="star">⭐️ Star (Estrella)</option>
+                  <option value="lightning">⚡️ Lightning (Rampell)</option>
+                  <option value="bell">🔔 Bell (Campana)</option>
+                  <option value="none">🚫 {language === 'ca' ? "Sense icona" : "Sin icono"}</option>
+                </select>
+              </div>
+
+              {/* Animació / Gir de la icona */}
+              <div className="flex items-center gap-2 py-2 col-span-1 md:col-span-2">
+                <input 
+                  type="checkbox"
+                  id="badgeSpinIcon"
+                  checked={config.badgeSpinIcon !== false}
+                  onChange={(e) => updateField('badgeSpinIcon', e.target.checked)}
+                  className="rounded text-[#ff0090] focus:ring-[#ff0090] h-4 w-4 border-zinc-300 cursor-pointer"
+                />
+                <label htmlFor="badgeSpinIcon" className="text-xs font-semibold text-zinc-700 cursor-pointer select-none">
+                  🌀 {language === 'ca' ? "Rotar l'icona contínuament (Animació dinàmica)" : "Rotar el icono continuamente (Animación dinámica)"}
+                </label>
+              </div>
+
+              {/* Camps opcionals de color per a estil custom */}
+              {config.badgeStyle === 'custom' && (
+                <>
+                  {/* Color de Fons */}
+                  <div className="space-y-1.5">
+                    <label className="block text-[10px] text-zinc-650 font-mono font-bold uppercase tracking-wider">
+                      {language === 'ca' ? "Fons de l'Etiqueta" : "Fondo de la Etiqueta"}
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input 
+                        type="color" 
+                        value={config.badgeBgColor || '#ff0090'} 
+                        onChange={(e) => updateField('badgeBgColor', e.target.value)}
+                        className="w-10 h-10 border border-zinc-200 rounded-xl cursor-pointer p-0.5 shrink-0"
+                      />
+                      <input 
+                        type="text" 
+                        value={config.badgeBgColor || '#ff0090'} 
+                        onChange={(e) => updateField('badgeBgColor', e.target.value)}
+                        className="flex-1 bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-0 uppercase font-mono"
+                        placeholder="#ff0090"
+                        maxLength={7}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Color del Text */}
+                  <div className="space-y-1.5">
+                    <label className="block text-[10px] text-zinc-650 font-mono font-bold uppercase tracking-wider">
+                      {language === 'ca' ? "Text de l'Etiqueta" : "Texto de la Etiqueta"}
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input 
+                        type="color" 
+                        value={config.badgeTextColor || '#ffffff'} 
+                        onChange={(e) => updateField('badgeTextColor', e.target.value)}
+                        className="w-10 h-10 border border-zinc-200 rounded-xl cursor-pointer p-0.5 shrink-0"
+                      />
+                      <input 
+                        type="text" 
+                        value={config.badgeTextColor || '#ffffff'} 
+                        onChange={(e) => updateField('badgeTextColor', e.target.value)}
+                        className="flex-1 bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-0 uppercase font-mono"
+                        placeholder="#ffffff"
+                        maxLength={7}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Color de la Vora */}
+                  <div className="space-y-1.5 col-span-1 md:col-span-2">
+                    <label className="block text-[10px] text-zinc-650 font-mono font-bold uppercase tracking-wider">
+                      {language === 'ca' ? "Color de la Vora" : "Color del Borde"}
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input 
+                        type="color" 
+                        value={config.badgeBorderColor || 'rgba(255, 0, 144, 0.4)'} 
+                        onChange={(e) => updateField('badgeBorderColor', e.target.value)}
+                        className="w-10 h-10 border border-zinc-200 rounded-xl cursor-pointer p-0.5 shrink-0"
+                      />
+                      <input 
+                        type="text" 
+                        value={config.badgeBorderColor || 'rgba(255, 0, 144, 0.4)'} 
+                        onChange={(e) => updateField('badgeBorderColor', e.target.value)}
+                        className="flex-1 bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-0 uppercase font-mono"
+                        placeholder="rgba(255, 0, 144, 0.4)"
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
 
           {/* Colors i Estils de Textos */}
@@ -1724,16 +1903,59 @@ export default function AdminPortada({ language, onAddLog }: AdminPortadaProps) 
 
               {/* Shell mock body */}
               <div className="relative z-10 flex-1 flex flex-col justify-center space-y-3 py-4 text-left">
-                <span 
-                  className="px-2 py-0.5 rounded-full text-[7px] font-mono tracking-wider font-extrabold uppercase w-max"
-                  style={{ 
-                    backgroundColor: `${config.accentColor || '#ff0090'}15`, 
-                    color: config.accentColor || '#ff0090',
-                    border: `1px solid ${config.accentColor || '#ff0090'}35`
-                  }}
-                >
-                  {language === 'ca' ? 'Obert en directe' : 'Abierto en directo'}
-                </span>
+                {(() => {
+                  const badgeText = activeLangTab === 'ca' 
+                    ? (config.badgeTextCA || 'Inscripcions Obertes 2026') 
+                    : (config.badgeTextES || 'Inscripciones Abiertas 2026');
+                  
+                  const badgeIconName = config.badgeIcon || 'compass';
+                  const badgeStyleType = config.badgeStyle || 'custom';
+                  const badgeBg = config.badgeBgColor || config.accentColor || '#ff0090';
+                  const badgeTxtColor = config.badgeTextColor || '#ffffff';
+                  const badgeBrdColor = config.badgeBorderColor || `rgba(255, 0, 144, 0.4)`;
+                  const badgeSpinIcon = config.badgeSpinIcon !== false;
+
+                  let badgeClasses = "px-2 py-1 text-[7.5px] font-mono tracking-wider font-extrabold uppercase w-max rounded-full transition-all duration-300 flex items-center gap-1 ";
+                  let badgeStyles: React.CSSProperties = {};
+
+                  if (badgeStyleType === 'instagram-gradient') {
+                    badgeClasses += "bg-gradient-to-r from-amber-400 via-pink-600 to-purple-600 text-white shadow-md border border-white/10";
+                  } else if (badgeStyleType === 'glass-retro') {
+                    badgeClasses += "bg-white/10 backdrop-blur-md border border-white/20 text-white !rounded-xl";
+                  } else if (badgeStyleType === 'solid-neon') {
+                    badgeClasses += "bg-green-400 text-black border border-green-300 shadow-[0_0_8px_rgba(74,222,128,0.5)] font-bold";
+                    badgeStyles = {
+                      backgroundColor: '#22c55e',
+                      color: '#000000',
+                      borderColor: '#4ade80'
+                    };
+                  } else if (badgeStyleType === 'cyberpunk') {
+                    badgeClasses += "bg-black text-rose-500 border border-fuchsia-500 !rounded-none shadow-[inset_0_0_5px_rgba(236,72,153,0.3)] animate-pulse";
+                  } else {
+                    badgeClasses += "bg-white/5 border";
+                    badgeStyles = {
+                      color: badgeTxtColor,
+                      backgroundColor: badgeBg.startsWith('#') ? `${badgeBg}20` : badgeBg,
+                      borderColor: badgeBrdColor
+                    };
+                  }
+
+                  return (
+                    <span className={badgeClasses} style={badgeStyles}>
+                      {badgeIconName !== 'none' && (
+                        <span className={badgeSpinIcon ? "animate-spin inline-block origin-center" : "inline-block"}>
+                          {badgeIconName === 'instagram' ? '📸' : 
+                           badgeIconName === 'sparkles' ? '✨' : 
+                           badgeIconName === 'heart' ? '❤️' :
+                           badgeIconName === 'star' ? '⭐️' :
+                           badgeIconName === 'lightning' ? '⚡️' :
+                           badgeIconName === 'bell' ? '🔔' : '🧭'}
+                        </span>
+                      )}
+                      <span>{badgeText}</span>
+                    </span>
+                  );
+                })()}
 
                 <h5 
                   className="font-sans font-black text-base md:text-lg leading-tight tracking-tight"

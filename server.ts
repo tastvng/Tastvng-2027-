@@ -140,14 +140,27 @@ async function startServer() {
         });
       }
 
-      const sourceName = source === 'ca' ? 'Catalan' : 'Spanish';
       const targetName = target === 'ca' ? 'Catalan' : 'Spanish';
 
-      const prompt = `You are a professional Catalan-Spanish bilingual translator.
+      let prompt = '';
+      if (source === 'auto') {
+        prompt = `You are a professional Catalan-Spanish bilingual translator.
+Analyze the following text and determine its language (Catalan or Spanish).
+- If the text is already in ${targetName}, return it exactly as is.
+- If the text is in the other language, translate it into ${targetName}.
+Ensure you preserve any formatting, capitalizations, emoji, or style.
+CRITICAL MANDATE: Never translate the word "Tast" or "El Tast". Keep the proper name "Tast" or "El Tast" exactly as is in the output text, without converting it to any other word.
+Return ONLY the clean text, without preamble, thoughts, warnings, explanations, quotes, or markdown tags unless they were in the original.
+Text: "${text}"`;
+      } else {
+        const sourceName = source === 'ca' ? 'Catalan' : 'Spanish';
+        prompt = `You are a professional Catalan-Spanish bilingual translator.
 Translate the following text from ${sourceName} into ${targetName}.
 Ensure you preserve any formatting, capitalizations, emoji, or style.
+CRITICAL MANDATE: Never translate the word "Tast" or "El Tast". Keep the proper name "Tast" or "El Tast" exactly as is in the output text, without converting it to any other word.
 Return ONLY the clean translated text, without preamble, thoughts, warnings, explanations, quotes, or markdown tags unless they were in the original.
 Text: "${text}"`;
+      }
 
       const response = await aiClient.models.generateContent({
         model: "gemini-3.5-flash",

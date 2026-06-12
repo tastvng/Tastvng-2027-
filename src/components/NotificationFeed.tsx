@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { NoticiaXarxes } from '../types';
 import { useLanguage } from '../LanguageContext';
+import TranslatedText from './TranslatedText';
 
 interface NotificationFeedProps {
   onAddLog?: (txt: string) => void;
@@ -140,14 +141,17 @@ export default function NotificationFeed({ onAddLog, noticies = COMPARTIDES_XARX
               {/* Title if defined */}
               {post.titol && (
                 <h4 className="font-sans font-black text-xs text-white uppercase tracking-tight mb-1.5 leading-tight flex items-center gap-1">
-                  <Sparkles size={11} className="text-[#ff0090] shrink-0" /> {post.titol}
+                  <Sparkles size={11} className="text-[#ff0090] shrink-0" />
+                  <TranslatedText text={post.titol} />
                 </h4>
               )}
 
               {/* Body Text / Description */}
-              <p className={`text-xs leading-relaxed mb-3 font-sans ${isImportant ? 'text-zinc-200 font-medium' : 'text-zinc-350'}`}>
-                {post.text}
-              </p>
+              <TranslatedText 
+                text={post.text} 
+                as="p" 
+                className={`text-xs leading-relaxed mb-3 font-sans ${isImportant ? 'text-zinc-200 font-medium' : 'text-zinc-350'}`} 
+              />
 
               {/* Custom Video Block Embed */}
               {post.tipus === 'video' && post.videoUrl && (

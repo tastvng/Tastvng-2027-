@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { CategoriaParella, SistemaConfig, Inscripcio, EstatPagament, EstatVerificacio, EstatInscripcio } from '../types';
 import { useLanguage } from '../LanguageContext';
+import TranslatedText from './TranslatedText';
 
 interface PublicFormProps {
   config: SistemaConfig;
@@ -1401,14 +1402,19 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
           <div className="bg-white rounded-3xl p-6 border border-zinc-200 shadow-sm">
             <h3 className="font-sans font-bold text-zinc-900 text-lg mb-5 pb-2 border-b border-zinc-100 flex items-center gap-2">
               <Sparkles className="text-fuchsia-500" size={18} />
-              {config.titolFormulariDinamic || (language === 'ca' ? "Preguntes del Qüestionari d'El Tast" : "Preguntas del Cuestionario de El Tast")}
+              {config.titolFormulariDinamic ? (
+                <TranslatedText text={config.titolFormulariDinamic} />
+              ) : (
+                language === 'ca' ? "Preguntes del Qüestionari d'El Tast" : "Preguntas del Cuestionario de El Tast"
+              )}
             </h3>
 
             <div className="space-y-5">
               {config.preguntesFormulari.filter(q => q.activa).map((q) => (
                 <div key={q.id}>
-                  <label className="block text-sm font-semibold text-zinc-800 mb-1.5">
-                    {q.titol} {q.requerit && <span className="text-red-500">*</span>}
+                  <label className="block text-sm font-semibold text-zinc-800 mb-1.5 flex items-center gap-1.5">
+                    <TranslatedText text={q.titol} />
+                    {q.requerit && <span className="text-red-500">*</span>}
                   </label>
 
                   {q.tipus === 'text' && (
