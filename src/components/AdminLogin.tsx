@@ -57,10 +57,10 @@ export default function AdminLogin({ onLoginSuccess, onBackToPublic }: AdminLogi
 
     // Simulate delay
     setTimeout(() => {
-      // Accepting 'admin'/'admin' or 'tast'/'tast' or 'Tastvng@gmail.com'/'tast'
+      // Accepting 'admin'/'admin' or 'tast'/'tast' or 'tastvng@gmail.com'/'eltast2026' or 'tastvng@gmail.com'/'tast'
       let isValid = (username === 'admin' && password === 'admin') || 
                     (username === 'tast' && password === 'tast') ||
-                    (username.toLowerCase() === 'tastvng@gmail.com' && password === 'tast') ||
+                    (username.toLowerCase() === 'tastvng@gmail.com' && (password === 'tast' || password === 'eltast2026')) ||
                     (username === 'secretaria' && password === 'eltast2026');
 
       // Direct lookup from manually added staff profiles
