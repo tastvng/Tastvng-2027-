@@ -212,7 +212,6 @@ export default function App() {
             console.log("No config found in Supabase settings table, uploading CONFIG_INICIAL...");
             setConfig(CONFIG_INICIAL);
             localStorage.setItem('tast_config_2026', JSON.stringify(CONFIG_INICIAL));
-            await saveSupabaseSetting('tast_config_2026', CONFIG_INICIAL);
           }
         } catch (e) {
           console.error("Error loading config from Supabase:", e);
@@ -226,13 +225,8 @@ export default function App() {
             setInscripcions(dbInscripcions);
             localStorage.setItem('tast_inscripcions_2026', JSON.stringify(dbInscripcions));
           } else {
-            console.log("No inscriptions found in Supabase 'inscripciones' table, uploading INSCRIPCIONS_INICIALS...");
-            setInscripcions(INSCRIPCIONS_INICIALS);
-            localStorage.setItem('tast_inscripcions_2026', JSON.stringify(INSCRIPCIONS_INICIALS));
-            // Save initial records to newly created table so it's populated for the user
-            for (const ins of INSCRIPCIONS_INICIALS) {
-              await saveSupabaseInscripcion(ins);
-            }
+            setInscripcions([]);
+            localStorage.setItem('tast_inscripcions_2026', JSON.stringify([]));
           }
         } catch (e) {
           console.error("Error loading inscriptions from Supabase:", e);
@@ -249,7 +243,6 @@ export default function App() {
             const module = await import('./data');
             setNoticies(module.COMPARTIDES_XARXES);
             localStorage.setItem('tast_noticies_2026', JSON.stringify(module.COMPARTIDES_XARXES));
-            await saveSupabaseSetting('tast_noticies_2026', module.COMPARTIDES_XARXES);
           }
         } catch (e) {
           console.error("Error loading news from Supabase:", e);
