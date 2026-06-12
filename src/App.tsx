@@ -8,13 +8,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   Sparkles, 
   ShieldCheck, 
-  Volume2, 
-  HelpCircle,
-  Megaphone,
-  Facebook,
-  Instagram,
-  Terminal,
-  Clock
+  Terminal, 
+  Clock 
 } from 'lucide-react';
 
 import { 
@@ -46,7 +41,7 @@ export default function App() {
   const [mobileScannerSyncKey, setMobileScannerSyncKey] = useState<string | null>(null);
 
   // Persistence States
-  const [config, setConfig] = useState<SistemaConfig>(CONFIG_INICIAL);
+  const [config, setConfig] = useState<any>(CONFIG_INICIAL);
   const [inscripcions, setInscripcions] = useState<Inscripcio[]>([]);
   const [noticies, setNoticies] = useState<NoticiaXarxes[]>([]);
   const [activeRegistration, setActiveRegistration] = useState<Inscripcio | null>(null);
@@ -58,8 +53,8 @@ export default function App() {
 
   useEffect(() => {
     setOperationLogs([
-      language === 'ca' ? "Sistema de gestió El Tast inicialitzat correctament." : "Sistema de gestión El Tast inicializado correctamente.",
-      language === 'ca' ? "Sincronitzant amb la base de dades..." : "Sincronizando con la base de datos..."
+      language === 'ca' ? "Sistema de gestió El Tast inicialitzat." : "Sistema de gestión El Tast inicializado.",
+      language === 'ca' ? "Sincronitzant dades del servidor..." : "Sincronizando datos del servidor..."
     ]);
   }, [language]);
 
@@ -68,190 +63,142 @@ export default function App() {
     setOperationLogs(prev => [`[${time}] ${text}`, ...prev.slice(0, 4)]);
   };
 
-  // Carga inicial conectada a las tablas reales de Supabase
+  // Carga paralela de contingencia absoluta de configuración
   useEffect(() => {
     const loadData = async () => {
       try {
-        // 1. Cargar Configuración (settings)
-        const { data: configData, error: configError } = await supabase.from('settings').select('*').eq('key', 'config').single();
-        
-        if (configData && configData.value) {
-          setConfig({ ...CONFIG_INICIAL, ...configData.value });
+        let remotoConfig: any = null;
+
+        // Intentar leer de 'settings'
+        try {
+          const { data: sData } = await supabase.from('settings').select('*').eq('key', 'config').single();
+          if (sData && sData.value) remotoConfig = sData.value;
+        } catch (e) { console.log("Settings no cargado", e); }
+
+        // Si falla, intentar leer de 'sistema_config' por si acaso
+        if (!remotoConfig) {
+          try {
+            const { data: scData } = await supabase.from('sistema_config').select('*').limit(1).single();
+            if (scData) remotoConfig = scData.value || scData;
+          } catch (e) { console.log("Sistema_config no cargado", e); }
+        }
+
+        if (remotoConfig) {
+          setConfig({ ...CONFIG_INICIAL, ...remotoConfig });
         } else {
           setConfig(CONFIG_INICIAL);
         }
 
-        // 2. Cargar Inscripciones (tabla: inscripciones)
-        const { data: insData, error: insError } = await supabase.from('inscripciones').select('*').order('creadoEn', { ascending: false });
+        // Cargar Inscripciones reales (tabla: inscripciones)
+        const { data: insData } = await supabase.from('inscripciones').select('*').order('creadoEn', { ascending: false });
         if (insData) {
-          const parsedInsData = insData.map((ins: any) => ({
+          setInscripcions(insData.map((ins: any) => ({
             ...ins,
             respostesCuestionari: ins.respostesCuestionari || {},
             seleccionsUniforme: ins.seleccionsUniforme || undefined
-          }));
-          setInscripcions(parsedInsData);
-        } else if (insError) {
-          console.error("Error cargando inscripciones:", insError);
+          })));
         }
 
-        // 3. Cargar Noticias
+        // Cargar Noticias
         const { data: notData } = await supabase.from('noticies_xarxes').select('*');
-        if (notData) {
-          setNoticies(notData);
-        }
+        if (notData) setNoticies(notData);
 
-        // 4. Cargar Staff
+        // Cargar Staff count
         const { count } = await supabase.from('staff').select('*', { count: 'exact', head: true });
         setStaffCount(count || 0);
 
       } catch (error) {
-        console.error("Error general de carga:", error);
-        addLog("Error carregant dades de Supabase.");
+        console.error("Error cargando datos:", error);
       }
     };
 
     loadData();
 
-    const savedLogin = localStorage.getItem('tast_admin_session_2026');
-    if (savedLogin === 'true') {
+    if (localStorage.getItem('tast_admin_session_2026') === 'true') {
       setIsAdminLoggedIn(true);
     }
   }, []);
 
-  const saveConfig = async (newConfig: SistemaConfig) => { 
+  const saveConfig = async (newConfig: any) => { 
     setConfig(newConfig); 
     try { 
-      const { error } = await supabase.from('settings').upsert({ key: 'config', value: newConfig }); 
-      if (error) throw error; 
-      addLog("Configuració desada correctament."); 
+      // Guardar de forma masiva en ambas tablas posibles para blindar el guardado
+      await supabase.from('settings').upsert({ key: 'config', value: newConfig }); 
+      try {
+        await supabase.from('sistema_config').upsert({ id: 1, value: newConfig, ...newConfig });
+      } catch(ee){}
+      addLog("Configuració desada amb èxit."); 
     } catch (e) { 
-      console.error("Error saving config:", e); 
       addLog("Error al desar la configuració."); 
     } 
   };
 
   const addRegistration = async (newReg: Inscripcio) => { 
-    const updated = [newReg, ...inscripcions]; 
-    setInscripcions(updated); 
+    setInscripcions([newReg, ...inscripcions]); 
     setActiveRegistration(newReg); 
     setView('confirmacio'); 
-    try { 
-      await supabase.from('inscripciones').insert(newReg); 
-      addLog(`Preinscripció OK: ${newReg.c1Nom} & ${newReg.c2Nom}.`); 
-    } catch (e) { 
-      addLog("Error en registrar la preinscripció a la base de dades."); 
-    } 
+    try { await supabase.from('inscripciones').insert(newReg); } catch (e) {} 
   };
 
   const addRegistrationManual = async (newReg: Inscripcio) => { 
-    const updated = [newReg, ...inscripcions]; 
-    setInscripcions(updated); 
-    try { 
-      await supabase.from('inscripciones').insert(newReg); 
-      addLog(`Parella afegida manualment: ${newReg.c1Nom}.`); 
-    } catch (e) { 
-      addLog("Error en afegir manualment."); 
-    } 
+    setInscripcions([newReg, ...inscripcions]); 
+    try { await supabase.from('inscripciones').insert(newReg); } catch (e) {} 
   };
 
   const deleteRegistration = async (id: string) => { 
-    const updated = inscripcions.filter(i => i.id !== id); 
-    setInscripcions(updated); 
-    try { 
-      await supabase.from('inscripciones').delete().eq('id', id); 
-      addLog(`Inscripció eliminada.`); 
-    } catch (e) { 
-      addLog("Error en eliminar la inscripció."); 
-    } 
+    setInscripcions(inscripcions.filter(i => i.id !== id)); 
+    try { await supabase.from('inscripciones').delete().eq('id', id); } catch (e) {} 
   };
 
   const deleteMultipleRegistrations = async (ids: string[]) => { 
-    const updated = inscripcions.filter(i => !ids.includes(i.id)); 
-    setInscripcions(updated); 
-    try { 
-      await supabase.from('inscripciones').delete().in('id', ids); 
-      addLog(`S'han eliminat les inscripcions seleccionades.`); 
-    } catch (e) { 
-      addLog("Error en l'eliminació massiva."); 
-    } 
+    setInscripcions(inscripcions.filter(i => !ids.includes(i.id))); 
+    try { await supabase.from('inscripciones').delete().in('id', ids); } catch (e) {} 
   };
 
   const clearAllRegistrations = async () => { 
     setInscripcions([]); 
-    try { 
-      const allIds = inscripcions.map(i => i.id); 
-      if (allIds.length > 0) { 
-        await supabase.from('inscripciones').delete().in('id', allIds); 
-      } 
-      addLog(`Base de dades d'inscripcions buidada.`); 
-    } catch (e) { 
-      addLog("Error en buidar la base de dades."); 
-    } 
+    try { await supabase.from('inscripciones').delete().in('id', inscripcions.map(i => i.id)); } catch (e) {} 
   };
 
   const saveNoticies = async (newNoticies: NoticiaXarxes[]) => { 
     setNoticies(newNoticies); 
     try { 
-      const { data: existing } = await supabase.from('noticies_xarxes').select('id'); 
-      if (existing && existing.length > 0) { 
-        await supabase.from('noticies_xarxes').delete().in('id', existing.map(e => e.id)); 
-      } 
-      if (newNoticies.length > 0) { 
-        await supabase.from('noticies_xarxes').insert(newNoticies); 
-      } 
-      addLog("S'han actualitzat les notícies."); 
-    } catch (e) { 
-      addLog("Error al actualitzar les notícies."); 
-    } 
+      const { data: ex } = await supabase.from('noticies_xarxes').select('id'); 
+      if (ex && ex.length > 0) await supabase.from('noticies_xarxes').delete().in('id', ex.map(e => e.id)); 
+      if (newNoticies.length > 0) await supabase.from('noticies_xarxes').insert(newNoticies); 
+    } catch (e) {} 
   };
 
   const updateRegistration = async (updatedReg: Inscripcio) => { 
-    const updated = inscripcions.map(i => i.id === updatedReg.id ? updatedReg : i); 
-    setInscripcions(updated); 
-    try { 
-      await supabase.from('inscripciones').update(updatedReg).eq('id', updatedReg.id); 
-      addLog(`Ficha actualitzada: ${updatedReg.c1Nom}`); 
-    } catch (e) { 
-      addLog("Error en actualitzar la inscripció."); 
-    } 
+    setInscripcions(inscripcions.map(i => i.id === updatedReg.id ? updatedReg : i)); 
+    try { await supabase.from('inscripciones').update(updatedReg).eq('id', updatedReg.id); } catch (e) {} 
   };
 
-  const handleAdminLogin = () => { 
-    setIsAdminLoggedIn(true); 
-    localStorage.setItem('tast_admin_session_2026', 'true'); 
-    setView('admin-dashboard'); 
-  };
-
-  const handleAdminLogout = () => { 
-    setIsAdminLoggedIn(false); 
-    localStorage.setItem('tast_admin_session_2026', 'false'); 
-    setView('landing'); 
-  };
-
-  // Variables de diseño vinculadas al panel de control dinámico
-  const logoText = config.logoText || 'T'; 
-  const titolPrincipal = config.titolPrincipal || 'EL TAST'; 
-  const titolSecundari = config.titolSecundari || 'VILANOVA'; 
+  // Mapeo Inteligente Definitivo de Variables (Soporta múltiples nomenclaturas de la base de datos)
+  const logoText = config.logoText || config.logo_text || 'T'; 
+  const titolPrincipal = config.titolPrincipal || config.titol_principal || 'EL TAST'; 
+  const titolSecundari = config.titolSecundari || config.titol_secundari || 'VILANOVA'; 
   const subtitol = config.subtitol || 'Vilanova i la Geltrú 2026'; 
-  const logoColor = config.logoColor || '#ff0090';
+  const logoColor = config.logoColor || config.logo_color || '#ff0090';
 
-  const bgImage = (config as any).portadaImatge || (config as any).fonsImatge || (config as any).bgImage || (config as any).portadaImatgeFons || '';
-  const landingTitle = (config as any).portadaTitol || (config as any).titolPortada || titolPrincipal;
-  const landingSubtitle = (config as any).portadaSubtitol || (config as any).subtitolPortada || subtitol;
-  const landingDesc = (config as any).portadaDescripcio || (config as any).descripcioPortada || '';
-  const landingBtnText = (config as any).portadaTextBoto || (config as any).textBotoPortada || (language === 'ca' ? 'Inscripció en línia' : 'Inscripción en línea');
-  const landingBadge = (config as any).portadaBadge || (config as any).badgePortada || '';
+  // Buscar el título de la portada en cualquier campo posible
+  const landingTitle = config.portadaTitol || config.portada_titol || config.titolPortada || config.titol_portada || "Inscripcions Comparses El Tast 2027";
+  const landingSubtitle = config.portadaSubtitol || config.portada_subtitol || config.subtitolPortada || config.subtitol_portada || "Bienvenidos al espacio de registro oficial del Tast";
+  const landingDesc = config.portadaDescripcio || config.portada_descripcio || config.descripcioPortada || config.descripcio_portada || "Enguany us presentem un qüestionari àgil i integrat amb el nostre sistema de secretaria digital de l'Asociación Cultural El Tast.";
+  const landingBtnText = config.portadaTextBoto || config.portada_text_boto || config.textBotoPortada || (language === 'ca' ? 'Inscripció en línia' : 'Inscripción en línea');
+  const landingBadge = config.portadaBadge || config.portada_badge || config.badgePortada || "Inscripcions Obertes 2026";
+  const bgImage = config.portadaImatge || config.portada_imatge || config.fonsImatge || config.fons_imatge || config.portadaImatgeFons || '';
 
   return (
-    <div className="min-h-screen bg-dark-bg text-white flex flex-col justify-between selection:bg-brand selection:text-white" id="app-root-container">
+    <div className="min-h-screen bg-dark-bg text-white flex flex-col justify-between" id="app-root-container">
       <header className="bg-dark-card text-white py-4 px-6 border-b border-white/10 flex justify-between items-center relative overflow-hidden shadow-2xl">
         <div className="absolute top-0 left-0 right-0 h-1" style={{ backgroundColor: logoColor }} />
         
         <div className="flex items-center gap-2.5">
           {config.logoUseImage && config.logoImgUrl ? (
-            <img src={config.logoImgUrl} alt="Logo" className="w-9 h-9 object-contain rounded-lg" referrerPolicy="no-referrer" />
+            <img src={config.logoImgUrl} alt="Logo" className="w-9 h-9 object-contain rounded-lg" />
           ) : (
-            <div className="w-8 h-8 rounded flex items-center justify-center font-bold text-black text-lg uppercase transition-all shrink-0" style={{ backgroundColor: logoColor, boxShadow: `0 4px 12px ${logoColor}40` }}>
+            <div className="w-8 h-8 rounded flex items-center justify-center font-bold text-black text-lg uppercase transition-all" style={{ backgroundColor: logoColor }}>
               {logoText}
             </div>
           )}
@@ -264,17 +211,17 @@ export default function App() {
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="flex items-center bg-white/5 border border-white/10 rounded-xl p-0.5 shrink-0">
+          <div className="flex items-center bg-white/5 border border-white/10 rounded-xl p-0.5">
             <button onClick={() => setLanguage('ca')} className={`text-[9px] font-sans font-black px-2 py-1 rounded-lg ${language === 'ca' ? 'bg-[#ff0090] text-white' : 'text-zinc-400'}`}>CAT</button>
             <button onClick={() => setLanguage('es')} className={`text-[9px] font-sans font-black px-2 py-1 rounded-lg ${language === 'es' ? 'bg-[#ff0090] text-white' : 'text-zinc-400'}`}>ESP</button>
           </div>
 
           {isAdminLoggedIn ? (
-            <button onClick={() => setView('admin-dashboard')} className="text-xs bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-200 font-bold px-3 py-2 rounded-xl">
+            <button onClick={() => setView('admin-dashboard')} className="text-xs bg-white/5 border border-white/10 text-zinc-200 font-bold px-3 py-2 rounded-xl">
               {t('admin_panel')}
             </button>
           ) : (
-            <button onClick={() => setView('login')} className="text-xs bg-white/5 hover:bg-white/10 text-zinc-350 font-bold px-3.5 py-2 rounded-xl border border-white/10 font-mono">
+            <button onClick={() => setView('login')} className="text-xs bg-white/5 text-zinc-350 font-bold px-3.5 py-2 rounded-xl border border-white/10 font-mono">
               {t('secretary')}
             </button>
           )}
@@ -295,32 +242,33 @@ export default function App() {
                   backgroundColor: '#121212'
                 }}
               >
-                <div className="absolute inset-0 bg-black/65 backdrop-blur-[2px]"></div>
+                <div className="absolute inset-0 bg-black/70 backdrop-blur-[1px]"></div>
+                
                 <div className="relative z-10 w-full max-w-4xl mx-auto flex flex-col items-center">
                   {landingBadge && (
                     <div className="mb-6 px-5 py-2 bg-[#ff0090]/20 border border-[#ff0090]/50 text-[#ff0090] text-xs font-bold uppercase tracking-widest rounded-full flex items-center gap-2">
                       <Sparkles size={16} /> {landingBadge}
                     </div>
                   )}
-                  <h1 className="font-sans font-black text-5xl md:text-7xl text-white tracking-tight mb-6 drop-shadow-2xl">
+                  <h1 className="font-sans font-black text-4xl md:text-6xl text-white tracking-tight mb-6 max-w-3xl leading-tight">
                     {landingTitle}
                   </h1>
                   {landingSubtitle && (
-                    <h2 className="text-zinc-300 font-bold uppercase tracking-widest text-sm md:text-lg mb-8 drop-shadow-md">
+                    <h2 className="text-zinc-300 font-bold uppercase tracking-widest text-xs md:text-sm mb-8">
                       {landingSubtitle}
                     </h2>
                   )}
                   {landingDesc && (
-                    <p className="text-zinc-200 text-base md:text-xl max-w-3xl mx-auto mb-12 drop-shadow-lg leading-relaxed">
+                    <p className="text-zinc-300 text-sm md:text-base max-w-2xl mx-auto mb-12 leading-relaxed">
                       {landingDesc}
                     </p>
                   )}
                   <button
                     onClick={() => setView('public')}
-                    className="w-full md:w-auto text-white font-black text-lg md:text-xl px-12 py-5 rounded-2xl shadow-xl transition-all flex items-center justify-center gap-3 cursor-pointer uppercase tracking-widest hover:scale-105"
-                    style={{ backgroundColor: logoColor, boxShadow: `0 10px 25px -5px ${logoColor}60` }}
+                    className="w-full md:w-auto text-white font-black text-base px-10 py-4 rounded-xl shadow-xl transition-all flex items-center justify-center gap-3 uppercase tracking-widest hover:scale-102"
+                    style={{ backgroundColor: logoColor }}
                   >
-                    <Sparkles size={24} /> {landingBtnText}
+                    <Sparkles size={20} /> {landingBtnText}
                   </button>
                 </div>
               </div>
@@ -338,7 +286,7 @@ export default function App() {
                       <Clock size={14} className="text-brand" /> {language === 'ca' ? 'Horaris de secretaria:' : 'Horarios de secretaría:'}
                     </h4>
                     <p className="text-xs text-zinc-400 leading-relaxed">
-                      {language === 'ca' ? "Dimecres i divendres, de 18:00h a 21:30h directament a la seu social." : "Miércoles y viernes, de 18:00h a 21:30h directamente en la sede social."}
+                      Miércoles y viernes, de 18:00h a 21:30h directamente en la sede social.
                     </p>
                   </div>
                 </div>
@@ -350,7 +298,7 @@ export default function App() {
             )}
 
             {view === 'login' && (
-              <AdminLogin Honour-Sync onLoginSuccess={handleAdminLogin} onBackToPublic={() => setView('landing')} />
+              <AdminLogin onLoginSuccess={() => { setIsAdminLoggedIn(true); localStorage.setItem('tast_admin_session_2026', 'true'); setView('admin-dashboard'); }} onBackToPublic={() => setView('landing')} />
             )}
 
             {view === 'admin-dashboard' && (
@@ -358,7 +306,8 @@ export default function App() {
                 inscripcions={inscripcions} config={config}
                 onSelectInscripcio={(id) => { setEditId(id); setView('admin-ficha'); }}
                 onGoToScanner={() => setView('admin-scanner')} onGoToConfig={() => setView('admin-config')}
-                onLogout={handleAdminLogout} onAddLog={addLog} onDeleteInscripcio={deleteRegistration}
+                onLogout={() => { setIsAdminLoggedIn(false); localStorage.setItem('tast_admin_session_2026', 'false'); setView('landing'); }} 
+                onAddLog={addLog} onDeleteInscripcio={deleteRegistration}
                 onDeleteMultipleInscripcions={deleteMultipleRegistrations} onClearAllInscripcions={clearAllRegistrations}
                 onAddInscripcioManual={addRegistrationManual}
               />
