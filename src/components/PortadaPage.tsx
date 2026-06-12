@@ -168,7 +168,7 @@ export default function PortadaPage({
   const botoLetterSpacing = config.botoLetterSpacing || 'tracking-wider';
   const botoUppercase = config.botoUppercase !== false;
 
-  const botoClassName = `group flex items-center justify-center gap-2.5 active:scale-98 transition duration-300 cursor-pointer relative overflow-hidden px-6 py-4
+  const botoClassName = `group flex items-center justify-center gap-2.5 hover:scale-[1.02] active:scale-[0.97] transition-all duration-300 ease-out cursor-pointer relative overflow-hidden px-6 py-4
     ${botoTextSize}
     ${botoFontWeight}
     ${botoLetterSpacing}
