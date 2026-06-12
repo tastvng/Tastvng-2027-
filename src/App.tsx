@@ -48,7 +48,7 @@ export default function App() {
   const { language, setLanguage, t } = useLanguage();
 
   // Navigation Routing States
-  const [view, setView] = useState<string>('public');
+  const [view, setView] = useState<string>('landing');
   const [mobileScannerSyncKey, setMobileScannerSyncKey] = useState<string | null>(null);
 
   // Persistence States
@@ -129,137 +129,134 @@ export default function App() {
       if (mode === 'mobile-scanner' && syncKey) {
         setMobileScannerSyncKey(syncKey);
         setView('mobile-scanner');
-        addLog(`S'ha iniciat el terminal mòbil d'escaneig síncron amb la clau: ${syncKey}`);
-      }
-    } catch (e) {
-      console.error("Error parsing query params", e);
+        addLog(`S'ha iniciat el terminal mòbil d'escaneig síncron amb la clau: ${syncKey}`); 
+      } 
+    } catch (e) { 
+      console.error("Error parsing query params", e); 
     }
-
     const savedLogin = localStorage.getItem('tast_admin_session_2026');
     if (savedLogin === 'true') {
       setIsAdminLoggedIn(true);
     }
   }, []);
 
-  const saveConfig = async (newConfig: SistemaConfig) => {
-    setConfig(newConfig);
-    try {
-      const { error } = await supabase.from('settings').upsert({ key: 'config', value: newConfig });
-      if (error) throw error;
-      addLog("S'han modificat les tarifes i config.");
-    } catch (e) {
-      console.error("Error saving config:", e);
-      addLog("Error al desar la configuració.");
-    }
+  const saveConfig = async (newConfig: SistemaConfig) => { 
+    setConfig(newConfig); 
+    try { 
+      const { error } = await supabase.from('settings').upsert({ key: 'config', value: newConfig }); 
+      if (error) throw error; 
+      addLog("S'han modificat les tarifes i config."); 
+    } catch (e) { 
+      console.error("Error saving config:", e); 
+      addLog("Error al desar la configuració."); 
+    } 
   };
 
-  const addRegistration = async (newReg: Inscripcio) => {
-    const updated = [newReg, ...inscripcions];
-    setInscripcions(updated);
-    setActiveRegistration(newReg);
-    setView('confirmacio');
-    try {
-      await supabase.from('inscripcions').insert(newReg);
-      addLog(`Preinscripció realitzada amb èxit per a: ${newReg.c1Nom} & ${newReg.c2Nom}. Codi: ${newReg.codiSeguiment}`);
-    } catch (e) {
-      addLog("Error en registrar la preinscripció.");
-    }
+  const addRegistration = async (newReg: Inscripcio) => { 
+    const updated = [newReg, ...inscripcions]; 
+    setInscripcions(updated); 
+    setActiveRegistration(newReg); 
+    setView('confirmacio'); 
+    try { 
+      await supabase.from('inscripcions').insert(newReg); 
+      addLog(`Preinscripció realitzada amb èxit per a: ${newReg.c1Nom} & ${newReg.c2Nom}. Codi: ${newReg.codiSeguiment}`); 
+    } catch (e) { 
+      addLog("Error en registrar la preinscripció."); 
+    } 
   };
 
-  const addRegistrationManual = async (newReg: Inscripcio) => {
-    const updated = [newReg, ...inscripcions];
-    setInscripcions(updated);
-    try {
-      await supabase.from('inscripcions').insert(newReg);
-      addLog(`Parella afegida manualment des del taulell: ${newReg.c1Nom} & ${newReg.c2Nom}. Codi: ${newReg.codiSeguiment}`);
-    } catch (e) {
-      addLog("Error en afegir manualment.");
-    }
+  const addRegistrationManual = async (newReg: Inscripcio) => { 
+    const updated = [newReg, ...inscripcions]; 
+    setInscripcions(updated); 
+    try { 
+      await supabase.from('inscripcions').insert(newReg); 
+      addLog(`Parella afegida manualment des del taulell: ${newReg.c1Nom} & ${newReg.c2Nom}. Codi: ${newReg.codiSeguiment}`); 
+    } catch (e) { 
+      addLog("Error en afegir manualment."); 
+    } 
   };
 
-  const deleteRegistration = async (id: string) => {
-    const itemToDelete = inscripcions.find(i => i.id === id);
-    const updated = inscripcions.filter(i => i.id !== id);
-    setInscripcions(updated);
-    try {
-      await supabase.from('inscripcions').delete().eq('id', id);
-      addLog(`S'ha eliminat la inscripció de la parella: ${itemToDelete ? `${itemToDelete.c1Nom} & ${itemToDelete.c2Nom}` : id}`);
-    } catch (e) {
-      addLog("Error en eliminar la inscripció.");
-    }
+  const deleteRegistration = async (id: string) => { 
+    const itemToDelete = inscripcions.find(i => i.id === id); 
+    const updated = inscripcions.filter(i => i.id !== id); 
+    setInscripcions(updated); 
+    try { 
+      await supabase.from('inscripcions').delete().eq('id', id); 
+      addLog(`S'ha eliminat la inscripció de la parella: ${itemToDelete ? `${itemToDelete.c1Nom} & ${itemToDelete.c2Nom}` : id}`); 
+    } catch (e) { 
+      addLog("Error en eliminar la inscripció."); 
+    } 
   };
 
-  const deleteMultipleRegistrations = async (ids: string[]) => {
-    const updated = inscripcions.filter(i => !ids.includes(i.id));
-    setInscripcions(updated);
-    try {
-      await supabase.from('inscripcions').delete().in('id', ids);
-      addLog(`S'han eliminat ${ids.length} inscripcions de forma massiva.`);
-    } catch (e) {
-      addLog("Error en l'eliminació massiva.");
-    }
+  const deleteMultipleRegistrations = async (ids: string[]) => { 
+    const updated = inscripcions.filter(i => !ids.includes(i.id)); 
+    setInscripcions(updated); 
+    try { 
+      await supabase.from('inscripcions').delete().in('id', ids); 
+      addLog(`S'han eliminat ${ids.length} inscripcions de forma massiva.`); 
+    } catch (e) { 
+      addLog("Error en l'eliminació massiva."); 
+    } 
   };
 
-  const clearAllRegistrations = async () => {
-    setInscripcions([]);
-    try {
-      const allIds = inscripcions.map(i => i.id);
-      if (allIds.length > 0) {
-        await supabase.from('inscripcions').delete().in('id', allIds);
-      }
-      addLog(`S'ha buidat completament la base de dades d'inscripcions.`);
-    } catch (e) {
-      addLog("Error en buidar la base de dades.");
-    }
+  const clearAllRegistrations = async () => { 
+    setInscripcions([]); 
+    try { 
+      const allIds = inscripcions.map(i => i.id); 
+      if (allIds.length > 0) { 
+        await supabase.from('inscripcions').delete().in('id', allIds); 
+      } 
+      addLog(`S'ha buidat completament la base de dades d'inscripcions.`); 
+    } catch (e) { 
+      addLog("Error en buidar la base de dades."); 
+    } 
   };
 
-  const saveNoticies = async (newNoticies: NoticiaXarxes[]) => {
-    setNoticies(newNoticies);
-    try {
-      // Simplest way is to delete all and insert new
-      // But let's just use upsert
-      const { data: existing } = await supabase.from('noticies_xarxes').select('id');
-      if (existing && existing.length > 0) {
-         await supabase.from('noticies_xarxes').delete().in('id', existing.map(e => e.id));
-      }
-      if (newNoticies.length > 0) {
-         await supabase.from('noticies_xarxes').insert(newNoticies);
-      }
-      addLog("S'han actualitzat les notícies de la xarxa social.");
-    } catch (e) {
-      addLog("Error al actualitzar les notícies.");
-    }
+  const saveNoticies = async (newNoticies: NoticiaXarxes[]) => { 
+    setNoticies(newNoticies); 
+    try { 
+      const { data: existing } = await supabase.from('noticies_xarxes').select('id'); 
+      if (existing && existing.length > 0) { 
+        await supabase.from('noticies_xarxes').delete().in('id', existing.map(e => e.id)); 
+      } 
+      if (newNoticies.length > 0) { 
+        await supabase.from('noticies_xarxes').insert(newNoticies); 
+      } 
+      addLog("S'han actualitzat les notícies de la xarxa social."); 
+    } catch (e) { 
+      addLog("Error al actualitzar les notícies."); 
+    } 
   };
 
-  const updateRegistration = async (updatedReg: Inscripcio) => {
-    const updated = inscripcions.map(i => i.id === updatedReg.id ? updatedReg : i);
-    setInscripcions(updated);
-    try {
-      await supabase.from('inscripcions').update(updatedReg).eq('id', updatedReg.id);
-      addLog(`Ficha d'inscripció actualitzada del parella: ${updatedReg.c1Nom} (${updatedReg.codiSeguiment})`);
-    } catch (e) {
-      addLog("Error en actualitzar la inscripció.");
-    }
+  const updateRegistration = async (updatedReg: Inscripcio) => { 
+    const updated = inscripcions.map(i => i.id === updatedReg.id ? updatedReg : i); 
+    setInscripcions(updated); 
+    try { 
+      await supabase.from('inscripcions').update(updatedReg).eq('id', updatedReg.id); 
+      addLog(`Ficha d'inscripció actualitzada del parella: ${updatedReg.c1Nom} (${updatedReg.codiSeguiment})`); 
+    } catch (e) { 
+      addLog("Error en actualitzar la inscripció."); 
+    } 
   };
 
-  const handleAdminLogin = () => {
-    setIsAdminLoggedIn(true);
-    localStorage.setItem('tast_admin_session_2026', 'true');
-    setView('admin-dashboard');
-    addLog("Sessió d'administrador iniciada correctament.");
+  const handleAdminLogin = () => { 
+    setIsAdminLoggedIn(true); 
+    localStorage.setItem('tast_admin_session_2026', 'true'); 
+    setView('admin-dashboard'); 
+    addLog("Sessió d'administrador iniciada correctament."); 
   };
 
-  const handleAdminLogout = () => {
-    setIsAdminLoggedIn(false);
-    localStorage.setItem('tast_admin_session_2026', 'false');
-    setView('public');
-    addLog("Sessió de secretaria tancada de manera segura.");
+  const handleAdminLogout = () => { 
+    setIsAdminLoggedIn(false); 
+    localStorage.setItem('tast_admin_session_2026', 'false'); 
+    setView('public'); 
+    addLog("Sessió de secretaria tancada de manera segura."); 
   };
 
-  const logoText = config.logoText || 'T';
-  const titolPrincipal = config.titolPrincipal || 'EL TAST';
-  const titolSecundari = config.titolSecundari || 'VILANOVA';
-  const subtitol = config.subtitol || 'Vilanova i la Geltrú 2026';
+  const logoText = config.logoText || 'T'; 
+  const titolPrincipal = config.titolPrincipal || 'EL TAST'; 
+  const titolSecundari = config.titolSecundari || 'VILANOVA'; 
+  const subtitol = config.subtitol || 'Vilanova i la Geltrú 2026'; 
   const logoColor = config.logoColor || '#ff0090';
 
   return (
@@ -355,6 +352,40 @@ export default function App() {
             transition={{ duration: 0.25 }}
             className="w-full"
           >
+            {view === 'landing' && (
+              <div className="flex flex-col items-center justify-center text-center py-20 px-4 min-h-[60vh]">
+                <div className="mb-8">
+                  {config.logoUseImage && config.logoImgUrl ? (
+                    <img 
+                      src={config.logoImgUrl} 
+                      alt="Logo" 
+                      className="w-32 h-32 object-contain mx-auto rounded-3xl shadow-2xl border border-white/10"
+                    />
+                  ) : (
+                    <div 
+                      className="w-32 h-32 mx-auto rounded-3xl flex items-center justify-center font-bold text-black text-6xl shadow-2xl"
+                      style={{ backgroundColor: logoColor }}
+                    >
+                      {logoText}
+                    </div>
+                  )}
+                </div>
+                <h1 className="font-sans font-black text-4xl md:text-6xl text-white tracking-tight mb-4">
+                  {titolPrincipal} <span style={{ color: logoColor }}>{titolSecundari}</span>
+                </h1>
+                <p className="text-zinc-400 text-lg max-w-2xl mx-auto mb-12">
+                  {subtitol}
+                </p>
+                <button
+                  onClick={() => setView('public')}
+                  className="bg-fuchsia-600 hover:bg-fuchsia-500 text-white font-bold text-lg px-8 py-4 rounded-2xl shadow-lg shadow-fuchsia-600/30 transition-all flex items-center gap-3 cursor-pointer"
+                >
+                  <Sparkles size={24} />
+                  {language === 'ca' ? 'Començar Inscripció' : 'Empezar Inscripción'}
+                </button>
+              </div>
+            )}
+
             {view === 'public' && (
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <div className="lg:col-span-2">
@@ -390,7 +421,7 @@ export default function App() {
                 registration={activeRegistration} 
                 onClear={() => {
                   setActiveRegistration(null);
-                  setView('public');
+                  setView('landing');
                 }}
               />
             )}
@@ -398,7 +429,7 @@ export default function App() {
             {view === 'login' && (
               <AdminLogin 
                 onLoginSuccess={handleAdminLogin}
-                onBackToPublic={() => setView('public')}
+                onBackToPublic={() => setView('landing')}
               />
             )}
 
@@ -462,7 +493,7 @@ export default function App() {
                 inscripcions={inscripcions}
                 onBack={() => {
                   window.history.pushState({}, '', window.location.pathname);
-                  setView('public');
+                  setView('landing');
                 }}
               />
             )}
@@ -481,5 +512,5 @@ export default function App() {
         </p>
       </footer>
     </div>
-  );
+  ); 
 }
