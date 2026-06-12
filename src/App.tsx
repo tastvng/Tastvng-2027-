@@ -60,6 +60,7 @@ import {
 
 export default function App() {
   const { language, setLanguage, t } = useLanguage();
+  const [isLoading, setIsLoading] = useState<boolean>(true);
 
   // Portada Configuration State
   const [portadaConfig, setPortadaConfig] = useState<PortadaConfig>(() => {
@@ -313,6 +314,8 @@ export default function App() {
           setIsAdminLoggedIn(true);
         }
       } catch (e) {}
+
+      setIsLoading(false);
     }
 
     loadAllFromDatabase();
@@ -505,6 +508,17 @@ export default function App() {
   const titolSecundari = config.titolSecundari || 'VILANOVA';
   const subtitol = config.subtitol || 'Vilanova i la Geltrú 2026';
   const logoColor = config.logoColor || '#ff0090';
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-dark-bg flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-10 h-10 rounded-full border-4 border-brand border-t-transparent animate-spin" />
+          <p className="text-zinc-500 font-mono text-xs tracking-widest uppercase">Carregant...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-dark-bg text-white flex flex-col justify-between selection:bg-brand selection:text-white" id="app-root-container">
