@@ -73,62 +73,42 @@ export async function saveSupabaseSetting(key: string, value: any): Promise<bool
   }
 
   try {
-    let existingRow: { id: any } | null = null;
-    let keyColumn = 'key';
-    
-    // 1. Check if column 'key' matches our keyName
-    const { data: dataKey, error: errorKey } = await supabase
+    // Remedy 3: Formatter guard - serialize object/array, keep string plain
+    const normalizedValue = typeof value === 'object' && value !== null
+      ? JSON.stringify(value)
+      : value;
+
+    // Main Operation: Direct upsert by key with conflict resolution on key
+    const { error: upsertError } = await supabase
+      .from('settings')
+      .upsert({ key: key, value: normalizedValue }, { onConflict: 'key' });
+
+    if (!upsertError) {
+      return true;
+    }
+
+    console.warn(`Direct upsert on Conflict 'key' failed, executing defensive select/update/insert rollback flow:`, upsertError.message);
+
+    // Defensive fallback: Check existence and perform separate UPDATE/INSERT query
+    const { data: existingRow, error: selectError } = await supabase
       .from('settings')
       .select('id')
       .eq('key', key)
       .maybeSingle();
-      
-    if (errorKey) {
-      // If column "key" doesn't exist, try querying with column "id" as the key identifier
-      if (errorKey.message?.includes('column "key" does not exist') || errorKey.code === 'PGRST106' || errorKey.message?.includes('key')) {
-        keyColumn = 'id';
-        const { data: dataId, error: errorId } = await supabase
-          .from('settings')
-          .select('id')
-          .eq('id', key)
-          .maybeSingle();
-        if (!errorId && dataId) {
-          existingRow = dataId;
-        }
-      }
-    } else if (dataKey) {
-      existingRow = dataKey;
-    }
 
-    // 2. Perform UPDATE if row exists, else INSERT
-    if (existingRow) {
-      // Try updating column 'value' first
-      let updateRes = await supabase
+    if (!selectError && existingRow) {
+      // Record exists, do a targeted UPDATE
+      const { error: updateError } = await supabase
         .from('settings')
-        .update({ value: value })
-        .eq(keyColumn, key);
-        
-      if (updateRes.error) {
-        // Fallback to updating column 'config'
-        updateRes = await supabase
-          .from('settings')
-          .update({ config: value })
-          .eq(keyColumn, key);
-      }
-      return !updateRes.error;
+        .update({ value: normalizedValue })
+        .eq('key', key);
+      return !updateError;
     } else {
-      // Try inserting with column 'value' first
-      let insertRes = await supabase
+      // Record does not exist, do a targeted INSERT
+      const { error: insertError } = await supabase
         .from('settings')
-        .insert({ [keyColumn]: key, value: value });
-        
-      if (insertRes.error) {
-        // Fallback to inserting with column 'config'
-        insertRes = await supabase
-          .from('settings')
-          .insert({ [keyColumn]: key, config: value });
-      }
-      return !insertRes.error;
+        .insert({ key: key, value: normalizedValue });
+      return !insertError;
     }
   } catch (err) {
     console.error(`Exception saving setting to Supabase for key [${key}]:`, err);

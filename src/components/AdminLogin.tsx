@@ -58,37 +58,39 @@ export default function AdminLogin({ onLoginSuccess, onBackToPublic }: AdminLogi
 
     try {
       // Accepting 'admin'/'admin' or 'tast'/'tast' or 'tastvng@gmail.com'/'eltast2026' or 'tastvng@gmail.com'/'tast'
-      let isValid = (username === 'admin' && password === 'admin') || 
-                    (username === 'tast' && password === 'tast') ||
-                    (username.toLowerCase() === 'tastvng@gmail.com' && (password === 'tast' || password === 'eltast2026')) ||
-                    (username === 'secretaria' && password === 'eltast2026');
+      const isEmergencyUser = (username === 'admin' && password === 'admin') || 
+                              (username === 'tast' && password === 'tast') ||
+                              (username.toLowerCase() === 'tastvng@gmail.com' && (password === 'tast' || password === 'eltast2026')) ||
+                              (username === 'secretaria' && password === 'eltast2026');
 
-      if (!isValid) {
-        // Direct lookup from manually added staff profiles in Supabase setting 'tast_staff_2026'
-        if (isSupabaseConfigured && supabase) {
-          try {
-            const { data, error } = await supabase
-              .from('settings')
-              .select('value, config')
-              .or('key.eq.tast_staff_2026,id.eq.tast_staff_2026')
-              .maybeSingle();
+      let isValid = isEmergencyUser;
 
-            if (!error && data) {
-              const rawVal = data.value !== undefined ? data.value : data.config;
-              let staffList: any[] = [];
-              if (rawVal) {
-                if (typeof rawVal === 'string') {
-                  staffList = JSON.parse(rawVal);
-                } else {
-                  staffList = rawVal;
-                }
+      // Remedy 1 & 2: Direct lookup from manually added staff profiles in Supabase setting 'tast_staff_2026'
+      if (isSupabaseConfigured && supabase) {
+        try {
+          const { data, error } = await supabase
+            .from('settings')
+            .select('value')
+            .eq('key', 'tast_staff_2026')
+            .maybeSingle();
+
+          if (!error && data) {
+            const rawVal = data.value;
+            let staffList: any[] = [];
+            if (rawVal) {
+              if (typeof rawVal === 'string') {
+                staffList = JSON.parse(rawVal);
+              } else {
+                staffList = rawVal;
               }
+            }
 
-              if (Array.isArray(staffList)) {
-                // Sincronizar en LocalStorage para redundancia local inmediata
-                localStorage.setItem('tast_staff_2026', JSON.stringify(staffList));
-                window.dispatchEvent(new Event('staffChanged'));
+            if (Array.isArray(staffList) && staffList.length > 0) {
+              // Sincronizar en LocalStorage para redundancia local inmediata
+              localStorage.setItem('tast_staff_2026', JSON.stringify(staffList));
+              window.dispatchEvent(new Event('staffChanged'));
 
+              if (!isValid) {
                 const found = staffList.find((s: any) => 
                   (s.usuari?.toLowerCase() === username.toLowerCase() || s.nom?.toLowerCase() === username.toLowerCase()) && 
                   s.contrasenya === password && 
@@ -99,29 +101,29 @@ export default function AdminLogin({ onLoginSuccess, onBackToPublic }: AdminLogi
                 }
               }
             }
-          } catch (jwtErr) {
-            console.error("Live Supabase credentials fetch failed:", jwtErr);
           }
+        } catch (jwtErr) {
+          console.error("Live Supabase credentials fetch failed:", jwtErr);
         }
+      }
 
-        // LocalStorage fallback if still not found
-        if (!isValid) {
-          try {
-            const savedStaff = localStorage.getItem('tast_staff_2026');
-            if (savedStaff) {
-              const staffList = JSON.parse(savedStaff);
-              const found = staffList.find((s: any) => 
-                (s.usuari?.toLowerCase() === username.toLowerCase() || s.nom?.toLowerCase() === username.toLowerCase()) && 
-                s.contrasenya === password && 
-                s.actiu !== false
-              );
-              if (found) {
-                isValid = true;
-              }
+      // LocalStorage fallback if still not found
+      if (!isValid) {
+        try {
+          const savedStaff = localStorage.getItem('tast_staff_2026');
+          if (savedStaff) {
+            const staffList = JSON.parse(savedStaff);
+            const found = staffList.find((s: any) => 
+              (s.usuari?.toLowerCase() === username.toLowerCase() || s.nom?.toLowerCase() === username.toLowerCase()) && 
+              s.contrasenya === password && 
+              s.actiu !== false
+            );
+            if (found) {
+              isValid = true;
             }
-          } catch (e) {
-            console.error("Error verifying dynamic staff credentials from LocalStorage backup:", e);
           }
+        } catch (e) {
+          console.error("Error verifying dynamic staff credentials from LocalStorage backup:", e);
         }
       }
 

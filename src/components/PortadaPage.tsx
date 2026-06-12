@@ -117,6 +117,31 @@ export default function PortadaPage({
       setCustomLogo(localStorage.getItem('tast_email_logo') || "");
     };
     loadLogo();
+
+    // Remedy 3: Ask Supabase directly for live values at mount time to populate empty incognito caches
+    async function loadLiveSupabaseAssets() {
+      try {
+        const { getSupabaseSetting, isSupabaseConfigured } = await import('../supabaseClient');
+        if (isSupabaseConfigured) {
+          const liveLogo = await getSupabaseSetting<string>('tast_email_logo', '');
+          if (liveLogo) {
+            localStorage.setItem('tast_email_logo', liveLogo);
+            setCustomLogo(liveLogo);
+            window.dispatchEvent(new Event('hoursConfigChanged'));
+          }
+
+          const livePortada = await getSupabaseSetting<any>('tast_portada_config_2026', null);
+          if (livePortada) {
+            localStorage.setItem('tast_portada_config_2026', JSON.stringify(livePortada));
+            window.dispatchEvent(new Event('portadaConfigChanged'));
+          }
+        }
+      } catch (err) {
+        console.error("Error doing live mount fetch on PortadaPage:", err);
+      }
+    }
+    loadLiveSupabaseAssets();
+
     window.addEventListener('storage', loadLogo);
     window.addEventListener('hoursConfigChanged', loadLogo);
     window.addEventListener('localStorage', loadLogo);
