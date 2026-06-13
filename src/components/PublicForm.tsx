@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Camera, 
@@ -15,7 +15,8 @@ import {
   Minus, 
   AlertTriangle,
   ChevronRight,
-  Sparkle
+  Sparkle,
+  Database
 } from 'lucide-react';
 import { CategoriaParella, SistemaConfig, Inscripcio, EstatPagament, EstatVerificacio, EstatInscripcio } from '../types';
 import { useLanguage } from '../LanguageContext';
@@ -29,6 +30,7 @@ interface PublicFormProps {
 
 export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicFormProps) {
   const { language, t } = useLanguage();
+
   // Form fields state
   const [categoria, setCategoria] = useState<CategoriaParella>(CategoriaParella.ADULT);
   
@@ -100,6 +102,84 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitProgress, setSubmitProgress] = useState(0);
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Load existing registrations for live duplicate detection
+  const [existingInscripcions, setExistingInscripcions] = useState<Inscripcio[]>([]);
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('tast_inscripcions_2026');
+      if (saved) {
+        setExistingInscripcions(JSON.parse(saved));
+      }
+    } catch (e) {
+      console.error("Error loading existing inscriptions in PublicForm:", e);
+    }
+  }, []);
+
+  // Live duplicate check flags for Comparser 1 & 2
+  const isC1NameDuplicate = useMemo(() => {
+    if (!c1Nom.trim() || !c1Cognoms.trim()) return false;
+    const nomNorm = c1Nom.trim().toLowerCase().replace(/\s+/g, ' ');
+    const cognomsNorm = c1Cognoms.trim().toLowerCase().replace(/\s+/g, ' ');
+    return existingInscripcions.some(ins => {
+      const insC1Nom = (ins.c1Nom || '').trim().toLowerCase().replace(/\s+/g, ' ');
+      const insC1Cognoms = (ins.c1Cognoms || '').trim().toLowerCase().replace(/\s+/g, ' ');
+      const insC2Nom = (ins.c2Nom || '').trim().toLowerCase().replace(/\s+/g, ' ');
+      const insC2Cognoms = (ins.c2Cognoms || '').trim().toLowerCase().replace(/\s+/g, ' ');
+      return (nomNorm === insC1Nom && cognomsNorm === insC1Cognoms) || 
+             (nomNorm === insC2Nom && cognomsNorm === insC2Cognoms);
+    });
+  }, [c1Nom, c1Cognoms, existingInscripcions]);
+
+  const isC1EmailDuplicate = useMemo(() => {
+    if (!c1Email.trim()) return false;
+    const emailNorm = c1Email.trim().toLowerCase();
+    return existingInscripcions.some(ins => 
+      (ins.c1Email || '').trim().toLowerCase() === emailNorm || 
+      (ins.c2Email || '').trim().toLowerCase() === emailNorm
+    );
+  }, [c1Email, existingInscripcions]);
+
+  const isC1PhoneDuplicate = useMemo(() => {
+    if (!c1Telefon.trim()) return false;
+    const phoneNorm = c1Telefon.trim().replace(/\s+/g, '');
+    return existingInscripcions.some(ins => 
+      (ins.c1Telefon || '').trim().replace(/\s+/g, '') === phoneNorm || 
+      (ins.c2Telefon || '').trim().replace(/\s+/g, '') === phoneNorm
+    );
+  }, [c1Telefon, existingInscripcions]);
+
+  const isC2NameDuplicate = useMemo(() => {
+    if (!c2Nom.trim() || !c2Cognoms.trim()) return false;
+    const nomNorm = c2Nom.trim().toLowerCase().replace(/\s+/g, ' ');
+    const cognomsNorm = c2Cognoms.trim().toLowerCase().replace(/\s+/g, ' ');
+    return existingInscripcions.some(ins => {
+      const insC1Nom = (ins.c1Nom || '').trim().toLowerCase().replace(/\s+/g, ' ');
+      const insC1Cognoms = (ins.c1Cognoms || '').trim().toLowerCase().replace(/\s+/g, ' ');
+      const insC2Nom = (ins.c2Nom || '').trim().toLowerCase().replace(/\s+/g, ' ');
+      const insC2Cognoms = (ins.c2Cognoms || '').trim().toLowerCase().replace(/\s+/g, ' ');
+      return (nomNorm === insC1Nom && cognomsNorm === insC1Cognoms) || 
+             (nomNorm === insC2Nom && cognomsNorm === insC2Cognoms);
+    });
+  }, [c2Nom, c2Cognoms, existingInscripcions]);
+
+  const isC2EmailDuplicate = useMemo(() => {
+    if (!c2Email.trim()) return false;
+    const emailNorm = c2Email.trim().toLowerCase();
+    return existingInscripcions.some(ins => 
+      (ins.c1Email || '').trim().toLowerCase() === emailNorm || 
+      (ins.c2Email || '').trim().toLowerCase() === emailNorm
+    );
+  }, [c2Email, existingInscripcions]);
+
+  const isC2PhoneDuplicate = useMemo(() => {
+    if (!c2Telefon.trim()) return false;
+    const phoneNorm = c2Telefon.trim().replace(/\s+/g, '');
+    return existingInscripcions.some(ins => 
+      (ins.c1Telefon || '').trim().replace(/\s+/g, '') === phoneNorm || 
+      (ins.c2Telefon || '').trim().replace(/\s+/g, '') === phoneNorm
+    );
+  }, [c2Telefon, existingInscripcions]);
   
   // Camera Modal state
   const [cameraOwner, setCameraOwner] = useState<'c1' | 'c2' | null>(null);
@@ -691,25 +771,30 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           
           {/* Comparser 1 Card */}
-          <div className={`rounded-3xl p-6 border transition-all relative overflow-hidden ${errors.c1Duplicat ? 'bg-amber-50/10 border-amber-300 ring-2 ring-amber-300 shadow-amber-100/30' : 'bg-white border-zinc-200/80 shadow-md'}`}>
+          <div className={`rounded-3xl p-6 border transition-all relative overflow-hidden ${errors.c1Duplicat || isC1NameDuplicate || isC1EmailDuplicate || isC1PhoneDuplicate ? 'bg-amber-50/10 border-amber-300 ring-2 ring-amber-300 shadow-amber-100/30' : 'bg-white border-zinc-200/80 shadow-md'}`}>
             <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-zinc-100 to-transparent pointer-events-none rounded-bl-3xl flex items-center justify-center">
               <span className="font-mono text-zinc-400 text-sm font-bold">#1</span>
             </div>
             
-            <h3 className="font-sans font-bold text-zinc-900 text-lg mb-5 pb-2 border-b border-zinc-100 flex items-center gap-2">
-              <div className="w-2.5 h-2.5 bg-fuchsia-500 rounded-full" />
-              {language === 'ca' ? 'Primer Comparser (Representant)' : 'Primer Comparsero (Representante)'}
-            </h3>
+            <div className="flex justify-between items-center mb-5 pb-2 border-b border-zinc-100">
+              <h3 className="font-sans font-bold text-zinc-900 text-lg flex items-center gap-2">
+                <div className="w-2.5 h-2.5 bg-fuchsia-500 rounded-full" />
+                {language === 'ca' ? 'Primer Comparser (Representant)' : 'Primer Comparsero (Representante)'}
+              </h3>
+              <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-150 px-2 py-0.5 rounded-full font-mono uppercase tracking-tight flex items-center gap-1 shadow-sm shrink-0" title={language === 'ca' ? "Sincronitzat amb la base de dades" : "Sincronizado con la base de datos"}>
+                <Database size={9} /> {language === 'ca' ? 'Enllaç BBDD' : 'Enlace BBDD'}
+              </span>
+            </div>
 
-            {errors.c1Duplicat && (
+            {(errors.c1Duplicat || isC1NameDuplicate || isC1EmailDuplicate || isC1PhoneDuplicate) && (
               <div className="bg-amber-50 border border-amber-200 text-amber-900 px-4 py-3 rounded-2xl mb-4 flex items-start gap-2.5 text-xs">
                 <AlertTriangle className="shrink-0 text-amber-600 mt-0.5" size={16} />
                 <div>
-                  <p className="font-bold">{language === 'ca' ? "Ja esteu inscrit" : "Ya estáis inscrito"}</p>
+                  <p className="font-bold">{language === 'ca' ? "Avís de dades coincidents" : "Aviso de datos coincidentes"}</p>
                   <p className="text-[11px] text-amber-700 leading-normal mt-0.5">
                     {language === 'ca'
-                      ? "Aquest participant ja consta registrat directament a la base de dades d'inscripcions de la secretaria."
-                      : "Este participante ya consta registrado directamente en la base de datos de inscripciones de la secretaría."}
+                      ? "S'ha detectat que part d'aquestes dades ja estan registrades a la base de dades d'inscripcions!"
+                      : "¡Se ha detectado que parte de estos datos ya están registrados en la base de datos de inscripciones!"}
                   </p>
                 </div>
               </div>
@@ -717,59 +802,94 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
 
             <div className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-zinc-700 tracking-tight mb-1">
-                  {language === 'ca' ? 'Nom *' : 'Nombre *'}
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-bold text-zinc-700 tracking-tight">
+                    {language === 'ca' ? 'Nom *' : 'Nombre *'}
+                  </label>
+                  <span className="text-[8px] font-bold text-emerald-600 bg-emerald-50 px-1 py-0.5 rounded font-mono uppercase tracking-tight flex items-center gap-0.5" title={language === 'ca' ? "Es desa a la base de dades" : "Se guarda en la base de datos"}>
+                    <Database size={8} /> BBDD
+                  </span>
+                </div>
                 <input 
                   type="text" 
                   value={c1Nom} 
                   onChange={(e) => setC1Nom(e.target.value)}
-                  className={`w-full bg-zinc-50 border ${errors.c1Nom ? 'border-red-500' : 'border-zinc-200'} focus:border-fuchsia-500 focus:bg-white rounded-xl px-4 py-3 text-sm focus:outline-none transition-all`}
+                  className={`w-full bg-zinc-50 border ${errors.c1Nom || isC1NameDuplicate ? 'border-amber-400 focus:border-amber-500 bg-amber-50/5' : 'border-zinc-200 focus:border-fuchsia-500'} focus:bg-white rounded-xl px-4 py-3 text-sm focus:outline-none transition-all`}
                   placeholder={language === 'ca' ? "Ex. Joan" : "Ej. Juan"}
                   id="input-c1-nom"
                 />
+                {isC1NameDuplicate && (
+                  <p className="text-[9px] text-amber-600 font-bold mt-1 flex items-center gap-1 animate-pulse">
+                    <AlertTriangle size={10} /> {language === 'ca' ? "Ja existeix un participant amb aquest nom a la BBDD" : "Ya existe un participante con este nombre en la BBDD"}
+                  </p>
+                )}
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-zinc-700 tracking-tight mb-1">
-                  {language === 'ca' ? 'Cognoms *' : 'Apellidos *'}
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-bold text-zinc-700 tracking-tight">
+                    {language === 'ca' ? 'Cognoms *' : 'Apellidos *'}
+                  </label>
+                  <span className="text-[8px] font-bold text-emerald-600 bg-emerald-50 px-1 py-0.5 rounded font-mono uppercase tracking-tight flex items-center gap-0.5" title={language === 'ca' ? "Es desa a la base de dades" : "Se guarda en la base de datos"}>
+                    <Database size={8} /> BBDD
+                  </span>
+                </div>
                 <input 
                   type="text" 
                   value={c1Cognoms} 
                   onChange={(e) => setC1Cognoms(e.target.value)}
-                  className={`w-full bg-zinc-50 border ${errors.c1Cognoms ? 'border-red-500' : 'border-zinc-200'} focus:border-fuchsia-500 focus:bg-white rounded-xl px-4 py-3 text-sm focus:outline-none transition-all`}
+                  className={`w-full bg-zinc-50 border ${errors.c1Cognoms || isC1NameDuplicate ? 'border-amber-400 focus:border-amber-500 bg-amber-50/5' : 'border-zinc-200 focus:border-fuchsia-500'} focus:bg-white rounded-xl px-4 py-3 text-sm focus:outline-none transition-all`}
                   placeholder={language === 'ca' ? "Ex. Garcia Pujol" : "Ej. García Pujol"}
                   id="input-c1-cognoms"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-zinc-700 tracking-tight mb-1">
-                  {language === 'ca' ? 'Telèfon de contacte *' : 'Teléfono de contacto *'}
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-bold text-zinc-700 tracking-tight">
+                    {language === 'ca' ? 'Telèfon de contacte *' : 'Teléfono de contacto *'}
+                  </label>
+                  <span className="text-[8px] font-bold text-emerald-600 bg-emerald-50 px-1 py-0.5 rounded font-mono uppercase tracking-tight flex items-center gap-0.5" title={language === 'ca' ? "Es desa a la base de dades" : "Se guarda en la base de datos"}>
+                    <Database size={8} /> BBDD
+                  </span>
+                </div>
                 <input 
                   type="tel" 
                   value={c1Telefon} 
                   onChange={(e) => setC1Telefon(e.target.value)}
-                  className={`w-full bg-zinc-50 border ${errors.c1Telefon ? 'border-red-500' : 'border-zinc-200'} focus:border-fuchsia-500 focus:bg-white rounded-xl px-4 py-3 text-sm focus:outline-none transition-all`}
+                  className={`w-full bg-zinc-50 border ${errors.c1Telefon || isC1PhoneDuplicate ? 'border-amber-400 focus:border-amber-500 bg-amber-50/5' : 'border-zinc-200 focus:border-fuchsia-500'} focus:bg-white rounded-xl px-4 py-3 text-sm focus:outline-none transition-all`}
                   placeholder={language === 'ca' ? "Ex. 600123456" : "Ej. 600123456"}
                   id="input-c1-telefon"
                 />
+                {isC1PhoneDuplicate && (
+                  <p className="text-[9px] text-amber-600 font-bold mt-1 flex items-center gap-1 animate-pulse">
+                    <AlertTriangle size={10} /> {language === 'ca' ? "Aquest telèfon ja consta registrat a la BBDD" : "Este teléfono ya consta registrado en la BBDD"}
+                  </p>
+                )}
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-zinc-700 tracking-tight mb-1">
-                  {language === 'ca' ? 'Correu electrònic *' : 'Correo electrónico *'}
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-bold text-zinc-700 tracking-tight">
+                    {language === 'ca' ? 'Correu electrònic *' : 'Correo electrónico *'}
+                  </label>
+                  <span className="text-[8px] font-bold text-emerald-600 bg-emerald-50 px-1 py-0.5 rounded font-mono uppercase tracking-tight flex items-center gap-0.5" title={language === 'ca' ? "Es desa a la base de dades" : "Se guarda en la base de datos"}>
+                    <Database size={8} /> BBDD
+                  </span>
+                </div>
                 <input 
                   type="email" 
                   value={c1Email} 
                   onChange={(e) => setC1Email(e.target.value)}
-                  className={`w-full bg-zinc-50 border ${errors.c1Email ? 'border-red-500' : 'border-zinc-200'} focus:border-fuchsia-500 focus:bg-white rounded-xl px-4 py-3 text-sm focus:outline-none transition-all`}
+                  className={`w-full bg-zinc-50 border ${errors.c1Email || isC1EmailDuplicate ? 'border-amber-400 focus:border-amber-500 bg-amber-50/5' : 'border-zinc-200 focus:border-fuchsia-500'} focus:bg-white rounded-xl px-4 py-3 text-sm focus:outline-none transition-all`}
                   placeholder={language === 'ca' ? "Ex. joan@gmail.com" : "Ej. juan@gmail.com"}
                   id="input-c1-email"
                 />
+                {isC1EmailDuplicate && (
+                  <p className="text-[9px] text-amber-600 font-bold mt-1 flex items-center gap-1 animate-pulse">
+                    <AlertTriangle size={10} /> {language === 'ca' ? "Aquest correu ja consta registrat a la BBDD" : "Este correo ya consta registrado en la BBDD"}
+                  </p>
+                )}
               </div>
 
               {/* Minor status and Tutor details for Comparser 1 */}
@@ -1044,25 +1164,30 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
           </div>
 
           {/* Comparser 2 Card */}
-          <div className={`rounded-3xl p-6 border transition-all relative overflow-hidden ${errors.c2Duplicat ? 'bg-amber-50/10 border-amber-300 ring-2 ring-amber-300 shadow-amber-100/30' : 'bg-white border-zinc-200/80 shadow-md'}`}>
+          <div className={`rounded-3xl p-6 border transition-all relative overflow-hidden ${errors.c2Duplicat || isC2NameDuplicate || isC2EmailDuplicate || isC2PhoneDuplicate ? 'bg-amber-50/10 border-amber-300 ring-2 ring-amber-300 shadow-amber-100/30' : 'bg-white border-zinc-200/80 shadow-md'}`}>
             <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-zinc-100 to-transparent pointer-events-none rounded-bl-3xl flex items-center justify-center">
               <span className="font-mono text-zinc-400 text-sm font-bold">#2</span>
             </div>
 
-            <h3 className="font-sans font-bold text-zinc-900 text-lg mb-5 pb-2 border-b border-zinc-100 flex items-center gap-2">
-              <div className="w-2.5 h-2.5 bg-fuchsia-500 rounded-full" />
-              {language === 'ca' ? 'Segon Comparser' : 'Segundo Comparsero'}
-            </h3>
+            <div className="flex justify-between items-center mb-5 pb-2 border-b border-zinc-100">
+              <h3 className="font-sans font-bold text-zinc-900 text-lg flex items-center gap-2">
+                <div className="w-2.5 h-2.5 bg-fuchsia-500 rounded-full" />
+                {language === 'ca' ? 'Segon Comparser' : 'Segundo Comparsero'}
+              </h3>
+              <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-150 px-2 py-0.5 rounded-full font-mono uppercase tracking-tight flex items-center gap-1 shadow-sm shrink-0" title={language === 'ca' ? "Sincronitzat amb la base de dades" : "Sincronizado con la base de datos"}>
+                <Database size={9} /> {language === 'ca' ? 'Enllaç BBDD' : 'Enlace BBDD'}
+              </span>
+            </div>
 
-            {errors.c2Duplicat && (
+            {(errors.c2Duplicat || isC2NameDuplicate || isC2EmailDuplicate || isC2PhoneDuplicate) && (
               <div className="bg-amber-50 border border-amber-200 text-amber-900 px-4 py-3 rounded-2xl mb-4 flex items-start gap-2.5 text-xs">
                 <AlertTriangle className="shrink-0 text-amber-600 mt-0.5" size={16} />
                 <div>
-                  <p className="font-bold">{language === 'ca' ? "Ja esteu inscrit" : "Ya estáis inscrito"}</p>
+                  <p className="font-bold">{language === 'ca' ? "Avís de dades coincidents" : "Aviso de datos coincidentes"}</p>
                   <p className="text-[11px] text-amber-700 leading-normal mt-0.5">
                     {language === 'ca'
-                      ? "Aquest participant ja consta registrat directament a la base de dades d'inscripcions de la secretaria."
-                      : "Este participante ya consta registrado directamente en la base de datos de inscripciones de la secretaría."}
+                      ? "S'ha detectat que part d'aquestes dades ja estan registrades a la base de dades d'inscripcions!"
+                      : "¡Se ha detectado que parte de estos datos ya están registrados en la base de datos de inscripciones!"}
                   </p>
                 </div>
               </div>
@@ -1070,59 +1195,94 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
 
             <div className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-zinc-700 tracking-tight mb-1">
-                  {language === 'ca' ? 'Nom *' : 'Nombre *'}
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-bold text-zinc-700 tracking-tight">
+                    {language === 'ca' ? 'Nom *' : 'Nombre *'}
+                  </label>
+                  <span className="text-[8px] font-bold text-emerald-600 bg-emerald-50 px-1 py-0.5 rounded font-mono uppercase tracking-tight flex items-center gap-0.5" title={language === 'ca' ? "Es desa a la base de dades" : "Se guarda en la base de datos"}>
+                    <Database size={8} /> BBDD
+                  </span>
+                </div>
                 <input 
                   type="text" 
                   value={c2Nom} 
                   onChange={(e) => setC2Nom(e.target.value)}
-                  className={`w-full bg-zinc-50 border ${errors.c2Nom ? 'border-red-500' : 'border-zinc-200'} focus:border-fuchsia-500 focus:bg-white rounded-xl px-4 py-3 text-sm focus:outline-none transition-all`}
+                  className={`w-full bg-zinc-50 border ${errors.c2Nom || isC2NameDuplicate ? 'border-amber-400 focus:border-amber-500 bg-amber-50/5' : 'border-zinc-200 focus:border-fuchsia-500'} focus:bg-white rounded-xl px-4 py-3 text-sm focus:outline-none transition-all`}
                   placeholder={language === 'ca' ? "Ex. Marta" : "Ej. Marta"}
                   id="input-c2-nom"
                 />
+                {isC2NameDuplicate && (
+                  <p className="text-[9px] text-amber-600 font-bold mt-1 flex items-center gap-1 animate-pulse">
+                    <AlertTriangle size={10} /> {language === 'ca' ? "Ja existeix un participant amb aquest nom a la BBDD" : "Ya existe un participante con este nombre en la BBDD"}
+                  </p>
+                )}
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-zinc-700 tracking-tight mb-1">
-                  {language === 'ca' ? 'Cognoms *' : 'Apellidos *'}
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-bold text-zinc-700 tracking-tight">
+                    {language === 'ca' ? 'Cognoms *' : 'Apellidos *'}
+                  </label>
+                  <span className="text-[8px] font-bold text-emerald-600 bg-emerald-50 px-1 py-0.5 rounded font-mono uppercase tracking-tight flex items-center gap-0.5" title={language === 'ca' ? "Es desa a la base de dades" : "Se guarda en la base de datos"}>
+                    <Database size={8} /> BBDD
+                  </span>
+                </div>
                 <input 
                   type="text" 
                   value={c2Cognoms} 
                   onChange={(e) => setC2Cognoms(e.target.value)}
-                  className={`w-full bg-zinc-50 border ${errors.c2Cognoms ? 'border-red-500' : 'border-zinc-200'} focus:border-fuchsia-500 focus:bg-white rounded-xl px-4 py-3 text-sm focus:outline-none transition-all`}
+                  className={`w-full bg-zinc-50 border ${errors.c2Cognoms || isC2NameDuplicate ? 'border-amber-400 focus:border-amber-500 bg-amber-50/5' : 'border-zinc-200 focus:border-fuchsia-500'} focus:bg-white rounded-xl px-4 py-3 text-sm focus:outline-none transition-all`}
                   placeholder={language === 'ca' ? "Ex. Vilanova Soler" : "Ej. Vilanova Soler"}
                   id="input-c2-cognoms"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-zinc-700 tracking-tight mb-1">
-                  {language === 'ca' ? 'Telèfon de contacte *' : 'Teléfono de contacto *'}
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-bold text-zinc-700 tracking-tight">
+                    {language === 'ca' ? 'Telèfon de contacte *' : 'Teléfono de contacto *'}
+                  </label>
+                  <span className="text-[8px] font-bold text-emerald-600 bg-emerald-50 px-1 py-0.5 rounded font-mono uppercase tracking-tight flex items-center gap-0.5" title={language === 'ca' ? "Es desa a la base de dades" : "Se guarda en la base de datos"}>
+                    <Database size={8} /> BBDD
+                  </span>
+                </div>
                 <input 
                   type="tel" 
                   value={c2Telefon} 
                   onChange={(e) => setC2Telefon(e.target.value)}
-                  className={`w-full bg-zinc-50 border ${errors.c2Telefon ? 'border-red-500' : 'border-zinc-200'} focus:border-fuchsia-500 focus:bg-white rounded-xl px-4 py-3 text-sm focus:outline-none transition-all`}
+                  className={`w-full bg-zinc-50 border ${errors.c2Telefon || isC2PhoneDuplicate ? 'border-amber-400 focus:border-amber-500 bg-amber-50/5' : 'border-zinc-200 focus:border-fuchsia-500'} focus:bg-white rounded-xl px-4 py-3 text-sm focus:outline-none transition-all`}
                   placeholder={language === 'ca' ? "Ex. 600654321" : "Ej. 600654321"}
                   id="input-c2-telefon"
                 />
+                {isC2PhoneDuplicate && (
+                  <p className="text-[9px] text-amber-600 font-bold mt-1 flex items-center gap-1 animate-pulse">
+                    <AlertTriangle size={10} /> {language === 'ca' ? "Aquest telèfon ja consta registrat a la BBDD" : "Este teléfono ya consta registrado en la BBDD"}
+                  </p>
+                )}
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-zinc-700 tracking-tight mb-1">
-                  {language === 'ca' ? 'Correu electrònic *' : 'Correo electrónico *'}
-                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-bold text-zinc-700 tracking-tight">
+                    {language === 'ca' ? 'Correu electrònic *' : 'Correo electrónico *'}
+                  </label>
+                  <span className="text-[8px] font-bold text-emerald-600 bg-emerald-50 px-1 py-0.5 rounded font-mono uppercase tracking-tight flex items-center gap-0.5" title={language === 'ca' ? "Es desa a la base de dades" : "Se guarda en la base de datos"}>
+                    <Database size={8} /> BBDD
+                  </span>
+                </div>
                 <input 
                   type="email" 
                   value={c2Email} 
                   onChange={(e) => setC2Email(e.target.value)}
-                  className={`w-full bg-zinc-50 border ${errors.c2Email ? 'border-red-500' : 'border-zinc-200'} focus:border-fuchsia-500 focus:bg-white rounded-xl px-4 py-3 text-sm focus:outline-none transition-all`}
+                  className={`w-full bg-zinc-50 border ${errors.c2Email || isC2EmailDuplicate ? 'border-amber-400 focus:border-amber-500 bg-amber-50/5' : 'border-zinc-200 focus:border-fuchsia-500'} focus:bg-white rounded-xl px-4 py-3 text-sm focus:outline-none transition-all`}
                   placeholder={language === 'ca' ? "Ex. marta@gmail.com" : "Ej. marta@gmail.com"}
                   id="input-c2-email"
                 />
+                {isC2EmailDuplicate && (
+                  <p className="text-[9px] text-amber-600 font-bold mt-1 flex items-center gap-1 animate-pulse">
+                    <AlertTriangle size={10} /> {language === 'ca' ? "Aquest correu ja consta registrat a la BBDD" : "Este correo ya consta registrado en la BBDD"}
+                  </p>
+                )}
               </div>
 
               {/* Minor status and Tutor details for Comparser 2 */}
@@ -1584,38 +1744,51 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
 
         {/* Legal RGPD and Payment policy */}
         <div className="bg-white rounded-3xl p-6 border border-zinc-200 shadow-sm space-y-4">
-          <div className="flex items-start gap-3">
+          <div className="flex items-start gap-3 p-4 bg-zinc-50 border border-zinc-200 hover:border-fuchsia-300 rounded-2xl transition-all shadow-sm">
             <input 
               type="checkbox" 
               checked={acceptaRGPD}
               onChange={(e) => setAcceptaRGPD(e.target.checked)}
-              className="mt-1 w-4 h-4 rounded text-fuchsia-500 outline-none accent-fuchsia-500 cursor-pointer"
+              className="mt-1 w-4 h-4 rounded text-fuchsia-500 outline-none accent-fuchsia-500 cursor-pointer shrink-0"
               id="checkbox-rgpd"
             />
-            <div>
+            <div className="space-y-1 bg-transparent">
               <p className="text-xs text-zinc-700 font-sans leading-relaxed">
                 {language === 'ca'
                   ? "Accepto que l'Associació Cultural El Tast tracti les meves dades i arxius dels DNIs exclusivament per a la finalitat de validar legalment la pertinença a les comparses 2026. Els fitxers s'eliminaran del servidor acabada la jornada festiva l'acord amb la RGPD europea. *"
                   : "Acepto que la Associació Cultural El Tast trate mis datos y archivos de los DNIs exclusivamente para la finalidad de validar legalmente la pertenencia a las comparsas 2026. Los archivos se eliminarán del servidor al finalizar la jornada festiva de acuerdo con la RGPD europea. *"}
               </p>
+              <div className="flex items-center gap-1.5 pt-1">
+                <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded uppercase font-mono tracking-tight flex items-center gap-1" title={language === 'ca' ? "Sota protecció de dades xifrades" : "Bajo protección de datos cifrados"}>
+                  <Database size={8} /> RGPD BBDD SECURE
+                </span>
+                <span className="text-[9px] font-bold text-zinc-500 bg-zinc-100 px-1.5 py-0.5 rounded uppercase font-mono tracking-tight">
+                  {language === 'ca' ? "Eliminació automàtica" : "Remoción automática"}
+                </span>
+              </div>
               {errors.rgpd && <p className="text-red-500 text-[10px] font-mono mt-0.5">{errors.rgpd}</p>}
             </div>
           </div>
 
-          <div className="flex items-start gap-3">
+          <div className="flex items-start gap-3 p-4 bg-zinc-50 border border-zinc-200 hover:border-fuchsia-300 rounded-2xl transition-all shadow-sm">
             <input 
               type="checkbox" 
               checked={acceptaPresencial}
               onChange={(e) => setAcceptaPresencial(e.target.checked)}
-              className="mt-1 w-4 h-4 rounded text-fuchsia-500 outline-none accent-fuchsia-500 cursor-pointer"
+              className="mt-1 w-4 h-4 rounded text-fuchsia-500 outline-none accent-fuchsia-500 cursor-pointer shrink-0"
               id="checkbox-presencial"
             />
-            <div>
+            <div className="space-y-1 bg-transparent">
               <p className="text-xs text-zinc-700 font-sans leading-relaxed font-semibold">
                 {language === 'ca'
                   ? "Accepto que la formalització del pagament (metàl·lic o Bizum de la colla) i la recollida del material d'armilles i mocadors es farà obligatòriament de forma presencial a la secretaria del local d'El Tast presentant el codi QR de preinscripció enviat per correu. *"
                   : "Acepto que la formalización del pago (metálico o Bizum de la colla) y la recogida del material de chalecos y pañuelos se realizará obligatoriamente de forma presencial en la secretaría del local de El Tast presentando el código QR de preinscripción enviado por correo. *"}
               </p>
+              <div className="flex items-center gap-1.5 pt-1">
+                <span className="text-[9px] font-bold text-fuchsia-700 bg-fuchsia-50 border border-fuchsia-100 px-1.5 py-0.5 rounded uppercase font-mono tracking-tight flex items-center gap-1">
+                  🔒 VERIFICACIÓ PRESENCIAL
+                </span>
+              </div>
               {errors.presencial && <p className="text-red-500 text-[10px] font-mono mt-0.5">{errors.presencial}</p>}
             </div>
           </div>
