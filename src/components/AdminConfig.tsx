@@ -41,6 +41,7 @@ export default function AdminConfig({ config, onBack, onSave, noticies, onSaveNo
   const [preuJuvenil, setPreuJuvenil] = useState(config.preuJuvenil);
   const [preuDomasBalco, setPreuDomasBalco] = useState(config.preuDomasBalco);
   const [preuMocadorExtra, setPreuMocadorExtra] = useState(config.preuMocadorExtra);
+  const [estatInscripcions, setEstatInscripcions] = useState<'obertes' | 'espera' | 'tancades'>(config.estatInscripcions || 'obertes');
 
   // States for dynamic customizable tariffs/payment lines
   const [titolSeccioTarifes, setTitolSeccioTarifes] = useState(config.titolSeccioTarifes || 'Tarifes i Cànons 2026');
@@ -148,6 +149,73 @@ export default function AdminConfig({ config, onBack, onSave, noticies, onSaveNo
   const [textLegalAutoritzacioMenorsES, setTextLegalAutoritzacioMenorsES] = useState(config.textLegalAutoritzacioMenorsES || "AUTORIZACIÓN DE MENORES DE EDAD\n\nEn condición de tutor/a legal del menor inscrito, declaro bajo mi responsabilidad que autorizo expresamente su participación en el evento y actividades organizadas por la Associació Cultural El Tast (Vilanova i la Geltrú 2026).\n\nCertifico que el menor se encuentra en condiciones físicas y de salud aptas para el correcto desarrollo de la actividad, y me hago responsable de cualquier incidencia que se derive de su estado previo de salud, así como del cumplimiento de la normativa de la organización.");
 
   const [notifSuccess, setNotifSuccess] = useState(false);
+
+  // Google Sheets Real-time sync states
+  const [googleSheetSyncUrl, setGoogleSheetSyncUrl] = useState(config.googleSheetSyncUrl || '');
+  const [googleSheetSyncActive, setGoogleSheetSyncActive] = useState(!!config.googleSheetSyncActive);
+  const [showSyncInstructions, setShowSyncInstructions] = useState(false);
+  const [isTestingSync, setIsTestingSync] = useState(false);
+  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  const testSyncConnection = async () => {
+    if (!googleSheetSyncUrl) {
+      alert(language === 'ca' ? "Introduïu primer l'URL d'Apps Script." : "Introduzca primero la URL de Apps Script.");
+      return;
+    }
+    setIsTestingSync(true);
+    setTestResult(null);
+    try {
+      const testInscripcio = [{
+        id: 'test-conn-id',
+        codiSeguiment: "TEST-CONN",
+        categoria: "adults",
+        c1Nom: "Parella Prova",
+        c1Cognoms: "Sincro 1",
+        c1Email: "secretaria@eltast.cat",
+        c1Telefon: "600000000",
+        c1Talla: "M",
+        c1UniformeTipus: "compra",
+        c1EsMenor: false,
+        c2Nom: "Parella Prova",
+        c2Cognoms: "Sincro 2",
+        c2Email: "secretaria@eltast.cat",
+        c2Telefon: "600000000",
+        c2Talla: "L",
+        c2UniformeTipus: "compra",
+        c2EsMenor: false,
+        preuCalculat: 0,
+        teDomasBalco: false,
+        teMocadorsExtra: 0,
+        estatPagament: "pendent",
+        creadoEn: new Date().toISOString()
+      }] as any[];
+
+      const { syncToGoogleSheet } = await import('../googleSync');
+      const ok = await syncToGoogleSheet(testInscripcio, googleSheetSyncUrl, true);
+      if (ok) {
+        setTestResult({
+          success: true,
+          message: language === 'ca' 
+            ? "Sincronització de prova enviada! Verifiqueu el vostre full de Google Sheets per comprovar que apareix una fila amb 'TEST-CONN'."
+            : "¡Sincronización de prueba enviada! Verifica tu hoja de Google Sheets para comprobar que aparece una fila con 'TEST-CONN'."
+        });
+      } else {
+        setTestResult({
+          success: false,
+          message: language === 'ca'
+            ? "No s'ha pogut completar. Reviseu que la deployed Apps Script URL tingui permisos totals per a tothom ('Anyone')."
+            : "No se pudo completar. Revisa que la URL de Apps Script desplegada tenga permisos de acceso para todos ('Anyone')."
+        });
+      }
+    } catch(e: any) {
+      setTestResult({
+        success: false,
+        message: e.message || "Error"
+      });
+    } finally {
+      setIsTestingSync(false);
+    }
+  };
 
   const [autoTranslate, setAutoTranslate] = useState(true);
   const [translatingFields, setTranslatingFields] = useState<Record<string, boolean>>({});
@@ -327,7 +395,10 @@ export default function AdminConfig({ config, onBack, onSave, noticies, onSaveNo
       opcionsUniforme: liniisUniforme[0]?.opcions || (config.opcionsUniforme || ["XS", "S", "M", "L", "XL", "XXL", "3XL"]),
       liniisUniforme: liniisUniforme,
       textLegalAutoritzacioMenors: textLegalAutoritzacioMenors,
-      textLegalAutoritzacioMenorsES: textLegalAutoritzacioMenorsES
+      textLegalAutoritzacioMenorsES: textLegalAutoritzacioMenorsES,
+      estatInscripcions: estatInscripcions,
+      googleSheetSyncUrl: googleSheetSyncUrl.trim(),
+      googleSheetSyncActive: googleSheetSyncActive
     };
 
     onSave(updated);
@@ -382,7 +453,463 @@ export default function AdminConfig({ config, onBack, onSave, noticies, onSaveNo
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
         {/* Left column: Prices configurations */}
-        <div className="lg:col-span-1 space-y-6">
+        <div className="lg:col-span-1 space-y-6 animate-fadeIn">
+          {/* SEMÀFOR D'ESTAT DE LES INSCRIPCIONS */}
+          <div className="bg-white rounded-3xl border border-zinc-200 p-6 shadow-sm space-y-5" id="config-semafor-card">
+            <div className="border-b border-zinc-100 pb-3">
+              <h3 className="font-sans font-black text-sm text-zinc-900 uppercase tracking-wider flex items-center gap-2">
+                <span className="text-xl">🚦</span> {language === 'ca' ? "Semàfor d'Estat de les Inscripcions" : "Semáforo de Estado de Inscripciones"}
+              </h3>
+              <p className="text-[10px] text-zinc-400 mt-1">
+                {language === 'ca' 
+                  ? "Controla la fase de registre. Canvia els indicadors en temps real." 
+                  : "Controla la fase de registro. Modifica los indicadores en tiempo real."}
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              {/* Opció 1: Obertes - VERD */}
+              <button
+                type="button"
+                onClick={() => setEstatInscripcions('obertes')}
+                className={`w-full p-4 rounded-2xl border text-left transition-all flex items-center justify-between cursor-pointer ${
+                  estatInscripcions === 'obertes'
+                    ? 'bg-emerald-50 border-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.15)]'
+                    : 'bg-zinc-50 hover:bg-zinc-100 border-zinc-200'
+                }`}
+                id="btn-semafor-obertes"
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`w-3.5 h-3.5 rounded-full bg-emerald-500 relative shrink-0 ${estatInscripcions === 'obertes' ? 'animate-ping' : ''}`}>
+                    <div className="absolute inset-0 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981]" />
+                  </div>
+                  <div>
+                    <span className="block font-sans font-bold text-xs text-zinc-850">
+                      {language === 'ca' ? "🟢 Inscripcions Obertes" : "🟢 Inscripciones Abiertas"}
+                    </span>
+                    <span className="block text-[10px] text-zinc-400">
+                      {language === 'ca' ? "Registre actiu sense restriccions" : "Registro activo sin restricciones"}
+                    </span>
+                  </div>
+                </div>
+                {estatInscripcions === 'obertes' && (
+                  <span className="text-[10px] uppercase font-mono font-black text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded-full">
+                    {language === 'ca' ? "ACTIU" : "ACTIVO"}
+                  </span>
+                )}
+              </button>
+
+              {/* Opció 2: Espera - TARONJA */}
+              <button
+                type="button"
+                onClick={() => setEstatInscripcions('espera')}
+                className={`w-full p-4 rounded-2xl border text-left transition-all flex items-center justify-between cursor-pointer ${
+                  estatInscripcions === 'espera'
+                    ? 'bg-amber-50 border-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.15)]'
+                    : 'bg-zinc-50 hover:bg-zinc-100 border-zinc-200'
+                }`}
+                id="btn-semafor-espera"
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`w-3.5 h-3.5 rounded-full bg-amber-500 relative shrink-0 ${estatInscripcions === 'espera' ? 'animate-ping' : ''}`}>
+                    <div className="absolute inset-0 rounded-full bg-amber-500 shadow-[0_0_8px_#f59e0b]" />
+                  </div>
+                  <div>
+                    <span className="block font-sans font-bold text-xs text-zinc-850">
+                      {language === 'ca' ? "🟡 Llista d'Espera" : "🟡 Lista de Espera"}
+                    </span>
+                    <span className="block text-[10px] text-zinc-400">
+                      {language === 'ca' ? "Aforament complet, noves sol·licituds en llista" : "Aforo completo, nuevas solicitudes en lista"}
+                    </span>
+                  </div>
+                </div>
+                {estatInscripcions === 'espera' && (
+                  <span className="text-[10px] uppercase font-mono font-black text-amber-600 bg-amber-500/10 px-2 py-0.5 rounded-full">
+                    {language === 'ca' ? "ACTIU" : "ACTIVO"}
+                  </span>
+                )}
+              </button>
+
+              {/* Opció 3: Tancades - VERMELL */}
+              <button
+                type="button"
+                onClick={() => setEstatInscripcions('tancades')}
+                className={`w-full p-4 rounded-2xl border text-left transition-all flex items-center justify-between cursor-pointer ${
+                  estatInscripcions === 'tancades'
+                    ? 'bg-rose-50 border-rose-400 shadow-[0_0_20px_rgba(239,68,68,0.25)]'
+                    : 'bg-zinc-50 hover:bg-zinc-100 border-zinc-200'
+                }`}
+                id="btn-semafor-tancades"
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`w-3.5 h-3.5 rounded-full bg-red-600 relative shrink-0 ${estatInscripcions === 'tancades' ? 'animate-pulse' : ''}`}>
+                    <div className="absolute inset-0 rounded-full bg-red-600 shadow-[0_0_12px_#ef4444]" />
+                  </div>
+                  <div>
+                    <span className="block font-sans font-bold text-xs text-zinc-850">
+                      {language === 'ca' ? "🔴 Inscripcions Tancades" : "🔴 Inscripciones Cerradas"}
+                    </span>
+                    <span className="block text-[10px] text-zinc-400">
+                      {language === 'ca' ? "Formulari desactivat per complet" : "Formulario desactivado por completo"}
+                    </span>
+                  </div>
+                </div>
+                {estatInscripcions === 'tancades' && (
+                  <span className="text-[10px] uppercase font-mono font-black text-red-600 bg-red-500/10 px-2 py-0.5 rounded-full animate-bounce">
+                    {language === 'ca' ? "TANCAT" : "CERRADO"}
+                  </span>
+                )}
+              </button>
+            </div>
+
+            {/* Glowing Traffic light representation */}
+            <div className="p-3.5 bg-zinc-950 border border-zinc-850 rounded-2xl flex justify-center items-center gap-5">
+              <span className="text-[10|px] font-mono font-bold tracking-widest text-zinc-500 uppercase shrink-0 mr-1">VISTA:</span>
+              <div className="flex bg-zinc-900 border border-zinc-800 rounded-full px-3 py-1.5 gap-3.5 items-center">
+                {/* Red Light */}
+                <div 
+                  className={`w-5 h-5 rounded-full transition-all duration-300 ${
+                    estatInscripcions === 'tancades'
+                      ? 'bg-red-500 shadow-[0_0_16px_rgba(239,68,68,0.9)] scale-110'
+                      : 'bg-red-950/60 opacity-30'
+                  }`}
+                  title={language === 'ca' ? "Tancades" : "Cerradas"} 
+                />
+                {/* Orange Light */}
+                <div 
+                  className={`w-5 h-5 rounded-full transition-all duration-300 ${
+                    estatInscripcions === 'espera'
+                      ? 'bg-amber-500 shadow-[0_0_16px_rgba(245,158,11,0.9)] scale-110'
+                      : 'bg-amber-950/60 opacity-30'
+                  }`}
+                  title={language === 'ca' ? "Llista d'Espera" : "Lista de Espera"} 
+                />
+                {/* Green Light */}
+                <div 
+                  className={`w-5 h-5 rounded-full transition-all duration-300 ${
+                    estatInscripcions === 'obertes'
+                      ? 'bg-emerald-500 shadow-[0_0_16px_rgba(16,185,129,0.9)] scale-110'
+                      : 'bg-emerald-950/60 opacity-30'
+                  }`}
+                  title={language === 'ca' ? "Obertes" : "Abiertas"} 
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* GOOGLE SHEETS REAL-TIME SYNC CONFIG */}
+          <div className="bg-white rounded-3xl border border-zinc-200 p-6 shadow-sm space-y-5 animate-fadeIn" id="config-googlesheets-card">
+            <div className="border-b border-zinc-100 pb-3">
+              <h3 className="font-sans font-black text-sm text-zinc-900 uppercase tracking-wider flex items-center gap-2">
+                <span className="text-xl">📊</span> {language === 'ca' ? "Sincronització Full de Google" : "Sincronización Hoja de Google"}
+              </h3>
+              <p className="text-[10px] text-zinc-400 mt-1">
+                {language === 'ca' 
+                  ? "Sincronitza i replica totes les dades en temps real en un full de Google Sheets de Google Drive de manera immediata." 
+                  : "Sincroniza y replica todos los datos en tiempo real en una hoja de Google Sheets de Google Drive de manera inmediata."}
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              {/* Toggle Switch */}
+              <div className="flex items-center justify-between p-3.5 bg-zinc-50 border border-zinc-150 rounded-2xl">
+                <div>
+                  <span className="block font-sans font-bold text-xs text-zinc-800">
+                    {language === 'ca' ? "Sincronització Activa" : "Sincronización Activa"}
+                  </span>
+                  <span className="block text-[10px] text-zinc-400 mt-0.5">
+                    {language === 'ca' ? "Sincronitza cada canvi immediatament" : "Sincroniza cada cambio de inmediato"}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setGoogleSheetSyncActive(!googleSheetSyncActive)}
+                  className={`w-11 h-6 flex items-center rounded-full p-0.5 transition-all duration-300 cursor-pointer ${
+                    googleSheetSyncActive ? 'bg-emerald-500' : 'bg-zinc-300'
+                  }`}
+                >
+                  <div className={`bg-white w-5 h-5 rounded-full shadow transition-all duration-300 transform ${
+                    googleSheetSyncActive ? 'translate-x-5' : 'translate-x-0'
+                  }`} />
+                </button>
+              </div>
+
+              {/* URL Input */}
+              <div className="space-y-1">
+                <label className="block text-[10px] text-zinc-500 uppercase font-mono font-bold">
+                  {language === 'ca' ? "URL d'Apps Script de Google" : "URL de Apps Script de Google"}
+                </label>
+                <input
+                  type="url"
+                  value={googleSheetSyncUrl}
+                  onChange={(e) => setGoogleSheetSyncUrl(e.target.value)}
+                  placeholder="https://script.google.com/macros/s/.../exec"
+                  className="w-full bg-zinc-50 border border-zinc-200 focus:border-zinc-900 focus:bg-white rounded-xl px-3 py-2.5 text-xs focus:outline-none font-mono"
+                />
+              </div>
+
+              {/* Actions & Connection Test */}
+              <div className="flex gap-2.5">
+                <button
+                  type="button"
+                  onClick={testSyncConnection}
+                  disabled={isTestingSync || !googleSheetSyncUrl}
+                  className="flex-1 py-2 px-3 bg-zinc-900 hover:bg-zinc-800 text-white font-sans font-bold text-xs rounded-xl transition flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  <RefreshCw size={12} className={isTestingSync ? 'animate-spin' : ''} />
+                  {isTestingSync 
+                    ? (language === 'ca' ? "Provant..." : "Probando...") 
+                    : (language === 'ca' ? "Provar Connexió" : "Probar Conexión")}
+                </button>
+              </div>
+
+              {/* Connection Test Response */}
+              {testResult && (
+                <div className={`p-3 rounded-2xl text-xs border ${
+                  testResult.success 
+                    ? 'bg-emerald-50 text-emerald-800 border-emerald-200 shadow-sm animate-fadeIn' 
+                    : 'bg-rose-50 text-rose-800 border-rose-200 animate-fadeIn'
+                }`}>
+                  <p className="font-bold mb-0.5">{testResult.success ? '✓ Sincronitzat' : '✗ El daltabaix'}</p>
+                  <p className="text-[10px] leading-relaxed mb-0">{testResult.message}</p>
+                </div>
+              )}
+
+              {/* Collapsed Instruction Drawer */}
+              <div className="border border-zinc-200 rounded-2xl overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setShowSyncInstructions(!showSyncInstructions)}
+                  className="w-full bg-zinc-50 hover:bg-zinc-100/80 px-4 py-3 text-left flex justify-between items-center transition cursor-pointer"
+                >
+                  <span className="font-sans font-bold text-xs text-zinc-700 flex items-center gap-1.5 mb-0">
+                    <span>💡</span> {language === 'ca' ? "Com configurar-ho?" : "¿Cómo configurarlo?"}
+                  </span>
+                  <span className="text-[10px] text-zinc-400 uppercase font-mono tracking-widest font-bold">
+                    {showSyncInstructions ? (language === 'ca' ? "Amagar" : "Ocultar") : (language === 'ca' ? "Veure" : "Ver")}
+                  </span>
+                </button>
+
+                {showSyncInstructions && (
+                  <div className="p-4 bg-white border-t border-zinc-100 text-[11px] text-zinc-650 leading-relaxed space-y-3.5 animate-fadeIn">
+                    <p>
+                      {language === 'ca' 
+                        ? "Podeu sincronitzar totes les inscripcions en temps real en un full de Google Sheets de Google Drive de manera immediata seguint aquests passos ultra senzills:"
+                        : "Puedes sincronizar todas las inscripciones en tiempo real en una hoja de Google Sheets de Google Drive de manera inmediata siguiendo estos pasos ultra sencillos:"}
+                    </p>
+                    <ol className="list-decimal list-inside space-y-1.5 pl-1">
+                      <li>
+                        {language === 'ca' 
+                          ? "Creeu un full nou de Google Sheets al vostre Google Drive." 
+                          : "Crea una hoja nueva de Google Sheets en tu Google Drive."}
+                      </li>
+                      <li>
+                        {language === 'ca' 
+                          ? "Aneu al menú superior i feu clic a Extensions > Apps Script." 
+                          : "Ve al menú del superior y haz clic en Extensiones > Apps Script."}
+                      </li>
+                      <li>
+                        {language === 'ca' 
+                          ? "Esborreu el codi existent i pegueu-hi exactament el codi de sota:" 
+                          : "Borra el código existente y pega exactamente el código de abajo:"}
+                      </li>
+                    </ol>
+
+                    {/* Code copy block */}
+                    <div className="relative">
+                      <pre className="p-3 bg-zinc-950 text-emerald-400 rounded-xl overflow-x-auto text-[9px] font-mono leading-normal max-h-48 shadow-inner select-all">
+{`function doPost(e) {
+  try {
+    var jsonString = e.postData.contents;
+    var payload = JSON.parse(jsonString);
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+
+    // 1. RAW INSCRIPICTIONS TAB
+    var sheetInsc = ss.getSheetByName("Inscripcions") || ss.insertSheet("Inscripcions");
+    sheetInsc.clear();
+    var headers = [
+      "Codis Seguiment", "Categoria", "C1 Nom", "C1 Cognoms", "C1 Email", "C1 Telèfon", "C1 Talla", "C1 Tipus Uniforme", "C1 Menor", "C1 Nom Tutor", "C1 Cognoms Tutor", "C1 DNI Tutor", "C1 Telèfon Tutor",
+      "C2 Nom", "C2 Cognoms", "C2 Email", "C2 Telèfon", "C2 Talla", "C2 Tipus Uniforme", "C2 Menor", "C2 Nom Tutor", "C2 Cognoms Tutor", "C2 DNI Tutor", "C2 Telèfon Tutor",
+      "Preu Total (€)", "Domàs Balcó", "Mocadors Extra", "Estat Pagament", "Mètode Pagament", "Validació DNI", "Entrega Material", "Llista Espera", "Data Creació"
+    ];
+    sheetInsc.appendRow(headers);
+    sheetInsc.getRange(1, 1, 1, headers.length).setFontWeight("bold").setBackground("#f4f4f5");
+
+    if (payload.data && payload.data.length > 0) {
+      var rowsToWrite = [];
+      for (var i = 0; i < payload.data.length; i++) {
+        var r = payload.data[i];
+        rowsToWrite.push([
+          r.codiSeguiment, r.categoria, r.c1Nom, r.c1Cognoms, r.c1Email, r.c1Telefon, r.c1Talla, r.c1UniformeTipus, r.c1EsMenor, r.c1TutorNom, r.c1TutorCognoms, r.c1TutorDni, r.c1TutorTelefon,
+          r.c2Nom, r.c2Cognoms, r.c2Email, r.c2Telefon, r.c2Talla, r.c2UniformeTipus, r.c2EsMenor, r.c2TutorNom, r.c2TutorCognoms, r.c2TutorDni, r.c2TutorTelefon,
+          r.preuTotal, r.domasBalco, r.mocadorsExtra, r.estatPagament, r.metodePagament, r.validacioDni, r.entregaMaterial, r.llistaEspera, r.dataCreacio
+        ]);
+      }
+      sheetInsc.getRange(2, 1, rowsToWrite.length, headers.length).setValues(rowsToWrite);
+    }
+    for (var col = 1; col <= headers.length; col++) {
+      sheetInsc.autoResizeColumn(col);
+    }
+
+    // 2. DAILY CLOSURE TAB ("Cierre del Dia")
+    var sheetSumm = ss.getSheetByName("Cierre del Dia") || ss.insertSheet("Cierre del Dia");
+    sheetSumm.clear();
+    var sumHeaders = [
+      "Data Inscripció", "Parelles Registrades", "A la Llista d'Espera", "Recaudació Total (€)", "Efectiu (€)", "Bizum (€)", "Inscripcions Adults", "Inscripcions Juvenils", "Total Menors d'Edat", "Domassos Balcó", "Mocadors Extres"
+    ];
+    sheetSumm.appendRow(sumHeaders);
+    sheetSumm.getRange(1, 1, 1, sumHeaders.length).setFontWeight("bold").setBackground("#dcfce7");
+
+    if (payload.summaries && payload.summaries.length > 0) {
+      var sumRows = [];
+      for (var j = 0; j < payload.summaries.length; j++) {
+        var s = payload.summaries[j];
+        sumRows.push([
+          s.dateStr,
+          s.totalRegistrations,
+          s.waitingListCount,
+          s.totalRevenue,
+          s.cashRevenue,
+          s.bizumRevenue,
+          s.adultsCount,
+          s.juvenilsCount,
+          s.minorsCount,
+          s.domasCount,
+          s.extraMocadorsCount
+        ]);
+      }
+      sheetSumm.getRange(2, 1, sumRows.length, sumHeaders.length).setValues(sumRows);
+    }
+    for (var colS = 1; colS <= sumHeaders.length; colS++) {
+      sheetSumm.autoResizeColumn(colS);
+    }
+
+    return ContentService.createTextOutput(JSON.stringify({ success: true }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (error) {
+    return ContentService.createTextOutput(JSON.stringify({ success: false, error: error.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}`}
+                      </pre>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const code = `function doPost(e) {
+  try {
+    var jsonString = e.postData.contents;
+    var payload = JSON.parse(jsonString);
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+
+    // 1. RAW INSCRIPICTIONS TAB
+    var sheetInsc = ss.getSheetByName("Inscripcions") || ss.insertSheet("Inscripcions");
+    sheetInsc.clear();
+    var headers = [
+      "Codis Seguiment", "Categoria", "C1 Nom", "C1 Cognoms", "C1 Email", "C1 Telèfon", "C1 Talla", "C1 Tipus Uniforme", "C1 Menor", "C1 Nom Tutor", "C1 Cognoms Tutor", "C1 DNI Tutor", "C1 Telèfon Tutor",
+      "C2 Nom", "C2 Cognoms", "C2 Email", "C2 Telèfon", "C2 Talla", "C2 Tipus Uniforme", "C2 Menor", "C2 Nom Tutor", "C2 Cognoms Tutor", "C2 DNI Tutor", "C2 Telèfon Tutor",
+      "Preu Total (€)", "Domàs Balcó", "Mocadors Extra", "Estat Pagament", "Mètode Pagament", "Validació DNI", "Entrega Material", "Llista Espera", "Data Creació"
+    ];
+    sheetInsc.appendRow(headers);
+    sheetInsc.getRange(1, 1, 1, headers.length).setFontWeight("bold").setBackground("#f4f4f5");
+
+    if (payload.data && payload.data.length > 0) {
+      var rowsToWrite = [];
+      for (var i = 0; i < payload.data.length; i++) {
+        var r = payload.data[i];
+        rowsToWrite.push([
+          r.codiSeguiment, r.categoria, r.c1Nom, r.c1Cognoms, r.c1Email, r.c1Telefon, r.c1Talla, r.c1UniformeTipus, r.c1EsMenor, r.c1TutorNom, r.c1TutorCognoms, r.c1TutorDni, r.c1TutorTelefon,
+          r.c2Nom, r.c2Cognoms, r.c2Email, r.c2Telefon, r.c2Talla, r.c2UniformeTipus, r.c2EsMenor, r.c2TutorNom, r.c2TutorCognoms, r.c2TutorDni, r.c2TutorTelefon,
+          r.preuTotal, r.domasBalco, r.mocadorsExtra, r.estatPagament, r.metodePagament, r.validacioDni, r.entregaMaterial, r.llistaEspera, r.dataCreacio
+        ]);
+      }
+      sheetInsc.getRange(2, 1, rowsToWrite.length, headers.length).setValues(rowsToWrite);
+    }
+    for (var col = 1; col <= headers.length; col++) {
+      sheetInsc.autoResizeColumn(col);
+    }
+
+    // 2. DAILY CLOSURE TAB ("Cierre del Dia")
+    var sheetSumm = ss.getSheetByName("Cierre del Dia") || ss.insertSheet("Cierre del Dia");
+    sheetSumm.clear();
+    var sumHeaders = [
+      "Data Inscripció", "Parelles Registrades", "A la Llista d'Espera", "Recaudació Total (€)", "Efectiu (€)", "Bizum (€)", "Inscripcions Adults", "Inscripcions Juvenils", "Total Menors d'Edat", "Domassos Balcó", "Mocadors Extres"
+    ];
+    sheetSumm.appendRow(sumHeaders);
+    sheetSumm.getRange(1, 1, 1, sumHeaders.length).setFontWeight("bold").setBackground("#dcfce7");
+
+    if (payload.summaries && payload.summaries.length > 0) {
+      var sumRows = [];
+      for (var j = 0; j < payload.summaries.length; j++) {
+        var s = payload.summaries[j];
+        sumRows.push([
+          s.dateStr,
+          s.totalRegistrations,
+          s.waitingListCount,
+          s.totalRevenue,
+          s.cashRevenue,
+          s.bizumRevenue,
+          s.adultsCount,
+          s.juvenilsCount,
+          s.minorsCount,
+          s.domasCount,
+          s.extraMocadorsCount
+        ]);
+      }
+      sheetSumm.getRange(2, 1, sumRows.length, sumHeaders.length).setValues(sumRows);
+    }
+    for (var colS = 1; colS <= sumHeaders.length; colS++) {
+      sheetSumm.autoResizeColumn(colS);
+    }
+
+    return ContentService.createTextOutput(JSON.stringify({ success: true }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (error) {
+    return ContentService.createTextOutput(JSON.stringify({ success: false, error: error.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}`;
+                          navigator.clipboard.writeText(code);
+                          alert(language === 'ca' ? "Codi d'Apps Script copiat!" : "¡Código de Apps Script copiado!");
+                        }}
+                        className="absolute right-2.5 top-2.5 bg-white/15 hover:bg-white/20 active:scale-95 text-white py-1 px-2 rounded-lg text-[9px] uppercase font-sans font-black transition cursor-pointer select-none"
+                      >
+                        {language === 'ca' ? "Copiar" : "Copiar"}
+                      </button>
+                    </div>
+
+                    <ol className="list-decimal list-inside space-y-1.5 pl-1 font-sans" start={4}>
+                      <li>
+                        {language === 'ca' 
+                          ? "Feu clic a 'Deploia' (a dalt a la dreta) i trieu 'Nova implementació' (New deployment)." 
+                          : "Haz clic en 'Implementar' (arriba a la derecha) y elige 'Nueva implementación' (New deployment)."}
+                      </li>
+                      <li>
+                        {language === 'ca' 
+                          ? "Trieu el tipus canònic 'Aplicació web' (Web App)." 
+                          : "Selecciona el tipo canónico 'Aplicación web' (Web App)."}
+                      </li>
+                      <li>
+                        {language === 'ca' 
+                          ? "Configura: Execute as: 'Me' (El vostre compte de Google) i Who has access: 'Anyone' (Tothom, per donar permisos de sincronia des de la web)." 
+                          : "Configura: Execute as: 'Me' (Tu cuenta de Google) y Who has access: 'Anyone' (Cualquiera, para permitir sincronización desde la web)."}
+                      </li>
+                      <li>
+                        {language === 'ca' 
+                          ? "Autoritzeu l'accés si s'ho demana i copieu l'URL oficial resultant." 
+                          : "Autoriza el acceso si lo solicita y copia la URL oficial resultante."}
+                      </li>
+                      <li>
+                        {language === 'ca' 
+                          ? "Pegueu l'URL copiat dalt i activeu la Sincronització." 
+                          : "Pega la URL copiada arriba y activa la Sincronización."}
+                      </li>
+                    </ol>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
           <div className="bg-white rounded-3xl border border-zinc-200 p-6 shadow-sm space-y-6">
             <h3 className="font-sans font-black text-sm text-zinc-900 pb-3 border-b border-zinc-100 uppercase tracking-wider flex items-center gap-2">
               <Coins size={16} className="text-fuchsia-500" /> {titolSeccioTarifes}

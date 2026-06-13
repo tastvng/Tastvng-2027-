@@ -57,6 +57,7 @@ export const CONFIG_INICIAL: SistemaConfig = {
   preuJuvenil: 60.00,
   preuDomasBalco: 15.00,
   preuMocadorExtra: 6.00,
+  estatInscripcions: 'obertes',
   titolSeccioTarifes: 'Tarifes i Cànons 2026',
   tarifesDinamiques: [
     { id: 'adults', nom: 'Preu Parella Adulta (€)', valor: 90.00, actiu: true, tipus: 'categoria_adult' },

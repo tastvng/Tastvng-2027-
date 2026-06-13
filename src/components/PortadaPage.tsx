@@ -92,6 +92,7 @@ interface PortadaPageProps {
   globalLogoText?: string;
   globalLogoUseImage?: boolean;
   globalLogoImgUrl?: string;
+  globalEstatInscripcions?: 'obertes' | 'espera' | 'tancades';
   onEnterForm: () => void;
   onGoToLogin: () => void;
 }
@@ -102,6 +103,7 @@ export default function PortadaPage({
   globalLogoText = 'T',
   globalLogoUseImage = false,
   globalLogoImgUrl = '',
+  globalEstatInscripcions = 'obertes',
   onEnterForm,
   onGoToLogin
 }: PortadaPageProps) {
@@ -412,72 +414,92 @@ export default function PortadaPage({
       <div className="relative z-10 flex-1 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center py-8 md:py-12">
           {/* Texts side */}
         <div className="lg:col-span-7 space-y-5 text-left">
-          {(() => {
-            // Define fallback configuration values
-            const badgeText = language === 'ca' 
-              ? (config.badgeTextCA || 'Inscripcions Obertes 2026') 
-              : (config.badgeTextES || 'Inscripciones Abiertas 2026');
-            
-            const badgeIconName = config.badgeIcon || 'compass';
-            const badgeStyleType = config.badgeStyle || 'custom';
-            const badgeBg = config.badgeBgColor || accentColor;
-            const badgeTxtColor = config.badgeTextColor || '#ffffff';
-            const badgeBrdColor = config.badgeBorderColor || `${accentColor}40`;
-            const badgeSpinIcon = config.badgeSpinIcon !== false;
+          <div className="flex flex-wrap gap-3 items-center">
+            {(() => {
+              // Determine active badge text based on the registration state
+              const badgeText = globalEstatInscripcions === 'tancades'
+                ? (language === 'ca' ? 'Inscripcions Tancades' : 'Inscripciones Cerradas')
+                : globalEstatInscripcions === 'espera'
+                  ? (language === 'ca' ? "Llista d'Espera 2026" : "Lista de Espera 2026")
+                  : (language === 'ca' 
+                      ? (config.badgeTextCA || 'Inscripcions Obertes 2026') 
+                      : (config.badgeTextES || 'Inscripciones Abiertas 2026'));
+              
+              const badgeStyleType = config.badgeStyle || 'custom';
+              const badgeBg = config.badgeBgColor || accentColor;
+              const badgeTxtColor = config.badgeTextColor || '#ffffff';
+              const badgeBrdColor = config.badgeBorderColor || `${accentColor}40`;
 
-            const iconProps = {
-              size: 10,
-              className: badgeSpinIcon ? "animate-spin duration-3000" : ""
-            };
+              let badgeClasses = "inline-flex items-center gap-1.5 px-3 py-1.5 font-mono text-[9px] uppercase tracking-widest font-black transition-all duration-300 shadow-sm ";
+              let badgeStyles: React.CSSProperties = {};
 
-            let innerIcon = null;
-            if (badgeIconName === 'compass') innerIcon = <Compass {...iconProps} />;
-            else if (badgeIconName === 'instagram') innerIcon = <Instagram {...iconProps} />;
-            else if (badgeIconName === 'sparkles') innerIcon = <Sparkles {...iconProps} />;
-            else if (badgeIconName === 'heart') innerIcon = <Heart {...iconProps} />;
-            else if (badgeIconName === 'star') innerIcon = <Star {...iconProps} />;
-            else if (badgeIconName === 'lightning') innerIcon = <Zap {...iconProps} />;
-            else if (badgeIconName === 'bell') innerIcon = <Bell {...iconProps} />;
+              if (badgeStyleType === 'instagram-gradient') {
+                badgeClasses += "bg-gradient-to-r from-amber-400 via-pink-600 to-purple-600 text-white shadow-lg shadow-pink-500/20 hover:scale-105 duration-300 rounded-full border border-white/20";
+              } else if (badgeStyleType === 'glass-retro') {
+                badgeClasses += "bg-white/10 backdrop-blur-md border border-white/20 text-white rounded-xl shadow-inner";
+              } else if (badgeStyleType === 'solid-neon') {
+                badgeClasses += "bg-green-400 text-black border border-green-300 rounded-full font-bold shadow-[0_0_12px_rgba(74,222,128,0.5)]";
+                badgeStyles = {
+                  backgroundColor: '#22c55e',
+                  color: '#000000',
+                  borderColor: '#4ade80'
+                };
+              } else if (badgeStyleType === 'cyberpunk') {
+                badgeClasses += "bg-black text-rose-500 border border-fuchsia-500 rounded-none tracking-widest shadow-[inset_0_0_8px_rgba(236,72,153,0.3)] animate-pulse";
+              } else {
+                // 'custom'
+                badgeClasses += "bg-white/5 border rounded-full";
+                badgeStyles = {
+                  color: badgeTxtColor,
+                  backgroundColor: badgeBg.startsWith('#') ? `${badgeBg}20` : badgeBg,
+                  borderColor: badgeBrdColor
+                };
+              }
 
-            let badgeClasses = "inline-flex items-center gap-2 px-3 py-1 font-mono text-[9px] uppercase tracking-widest font-black transition-all duration-300 ";
-            let badgeStyles: React.CSSProperties = {};
-
-            if (badgeStyleType === 'instagram-gradient') {
-              badgeClasses += "bg-gradient-to-r from-amber-400 via-pink-600 to-purple-600 text-white shadow-lg shadow-pink-500/20 hover:scale-105 duration-300 rounded-full border border-white/20";
-            } else if (badgeStyleType === 'glass-retro') {
-              badgeClasses += "bg-white/10 backdrop-blur-md border border-white/20 text-white rounded-xl shadow-inner";
-            } else if (badgeStyleType === 'solid-neon') {
-              badgeClasses += "bg-green-400 text-black border border-green-300 rounded-full font-bold shadow-[0_0_12px_rgba(74,222,128,0.5)]";
-              badgeStyles = {
-                backgroundColor: '#22c55e',
-                color: '#000000',
-                borderColor: '#4ade80'
-              };
-            } else if (badgeStyleType === 'cyberpunk') {
-              badgeClasses += "bg-black text-rose-500 border border-fuchsia-500 rounded-none tracking-widest shadow-[inset_0_0_8px_rgba(236,72,153,0.3)] animate-pulse";
-            } else {
-              // 'custom'
-              badgeClasses += "bg-white/5 border rounded-full";
-              badgeStyles = {
-                color: badgeTxtColor,
-                backgroundColor: badgeBg.startsWith('#') ? `${badgeBg}20` : badgeBg,
-                borderColor: badgeBrdColor
-              };
-            }
-
-            return (
-              <motion.div
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.5, delay: 0.1 }}
-                className={badgeClasses}
-                style={badgeStyles}
-              >
-                {innerIcon}
-                <TranslatedText text={badgeText} />
-              </motion.div>
-            );
-          })()}
+              return (
+                <motion.div
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.5, delay: 0.1 }}
+                  className={badgeClasses}
+                  style={badgeStyles}
+                  id="unified-status-badge"
+                >
+                  {/* Traffic Light Mini Representation inside the single badge */}
+                  <div className="flex items-center gap-1 bg-black/60 border border-white/10 px-1.5 py-0.5 rounded-full shrink-0">
+                    <div 
+                      className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${
+                        globalEstatInscripcions === 'tancades'
+                          ? 'bg-red-500 shadow-[0_0_8px_#ef4444] animate-pulse scale-110'
+                          : 'bg-red-950/60 opacity-30 shadow-none'
+                      }`}
+                      title={language === 'ca' ? "Tancat" : "Cerrado"} 
+                    />
+                    <div 
+                      className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${
+                        globalEstatInscripcions === 'espera'
+                          ? 'bg-amber-500 shadow-[0_0_8px_#f59e0b] animate-pulse scale-110'
+                          : 'bg-amber-950/60 opacity-30 shadow-none'
+                      }`}
+                      title={language === 'ca' ? "Llista d'espera" : "Lista de espera"} 
+                    />
+                    <div 
+                      className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${
+                        globalEstatInscripcions === 'obertes'
+                          ? 'bg-emerald-500 shadow-[0_0_8px_#10b981] animate-pulse scale-110'
+                          : 'bg-emerald-950/60 opacity-30 shadow-none'
+                      }`}
+                      title={language === 'ca' ? "Obert" : "Abierto"} 
+                    />
+                  </div>
+                  
+                  <span className="leading-none mt-0.5 sm:mt-0">
+                    <TranslatedText text={badgeText} />
+                  </span>
+                </motion.div>
+              );
+            })()}
+          </div>
 
           {subtitol && (
             <motion.p

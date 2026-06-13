@@ -43,6 +43,7 @@ import { Inscripcio, CategoriaParella, EstatPagament, EstatVerificacio, EstatIns
 import * as XLSX from 'xlsx';
 import AdminPortada from './AdminPortada';
 import AdminPersonalitzacio from './AdminPersonalitzacio';
+import { calculateDailySummaries } from '../dailySummary';
 
 interface AdminDashboardProps {
   inscripcions: Inscripcio[];
@@ -80,7 +81,7 @@ export default function AdminDashboard({
   const { language, t } = useLanguage();
   
   // Admin Tabs Navigation State
-  const [activePanelTab, setActivePanelTab] = useState<'inscripcions' | 'smtp' | 'xarxes' | 'portada' | 'personalitzacio'>('inscripcions');
+  const [activePanelTab, setActivePanelTab] = useState<'inscripcions' | 'smtp' | 'xarxes' | 'portada' | 'personalitzacio' | 'cierre'>('inscripcions');
 
   // State to track SMTP sending status of specific rows
   const [rowSmtpSending, setRowSmtpSending] = useState<Record<string, 'sending' | 'success' | 'error'>>({});
@@ -887,6 +888,7 @@ export default function AdminDashboard({
   const totalInscrites = inscripcions.length;
   const adultCount = inscripcions.filter(i => i.categoria === CategoriaParella.ADULT).length;
   const juvenilCount = inscripcions.filter(i => i.categoria === CategoriaParella.JUVENIL).length;
+  const esperaCount = inscripcions.filter(i => i.llistaEspera).length;
   
   const totalPagadesInscripcions = inscripcions.filter(i => i.estatPagament === EstatPagament.PAGAT);
   const totalRecaudat = totalPagadesInscripcions.reduce((acc, i) => acc + i.preuCalculat, 0);
@@ -1050,9 +1052,40 @@ export default function AdminDashboard({
     const wsData = [headers, ...rows];
     const ws = XLSX.utils.aoa_to_sheet(wsData);
 
-    // Create workbook and append worksheet
+    // Calculate aggregated day-by-day summaries
+    const summaryHeaders = [
+      language === 'ca' ? 'DATA INSCRIPCIÓ' : 'FECHA INSCRIPCIÓN',
+      language === 'ca' ? 'PARELLES REGISTRADES' : 'PAREJAS REGISTRADAS',
+      language === 'ca' ? "A LA LLISTA D'ESPERA" : 'EN LISTA DE ESPERA',
+      language === 'ca' ? 'RECAUDACIÓ TOTAL (€)' : 'RECAUDACIÓN TOTAL (€)',
+      language === 'ca' ? 'EFECTIU (€)' : 'EFECTIVO (€)',
+      language === 'ca' ? 'BIZUM (€)' : 'BIZUM (€)',
+      language === 'ca' ? 'INSCRIPCIONS ADULTS' : 'INSCRIPCIONES ADULTOS',
+      language === 'ca' ? 'INSCRIPCIONS JUVENILS' : 'INSCRIPCIONES JUVENILES',
+      language === 'ca' ? "TOTAL MENORS D'EDAT" : 'TOTAL MENORES DE EDAD',
+      language === 'ca' ? 'DOMASSOS BALCÓ' : 'COBERTORES BALCÓN',
+      language === 'ca' ? 'MOCADORS EXTRES' : 'PAÑUELOS EXTRAS'
+    ];
+    const summaryRows = calculateDailySummaries(filteredInscripcions).map((s: any) => [
+      s.dateStr,
+      s.totalRegistrations,
+      s.waitingListCount,
+      s.totalRevenue,
+      s.cashRevenue,
+      s.bizumRevenue,
+      s.adultsCount,
+      s.juvenilsCount,
+      s.minorsCount,
+      s.domasCount,
+      s.extraMocadorsCount
+    ]);
+    const wsSummaryData = [summaryHeaders, ...summaryRows];
+    const wsSummary = XLSX.utils.aoa_to_sheet(wsSummaryData);
+
+    // Create workbook and append both worksheets
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Inscripcions");
+    XLSX.utils.book_append_sheet(wb, ws, language === 'ca' ? "Inscripcions" : "Inscripciones");
+    XLSX.utils.book_append_sheet(wb, wsSummary, language === 'ca' ? "Cierre del Dia" : "Cierre del Dia");
 
     // Write workbook to file in standard .xlsx format
     XLSX.writeFile(wb, `llista_espera_tast_comparses_${new Date().toISOString().slice(0,10)}.xlsx`);
@@ -1148,6 +1181,11 @@ export default function AdminDashboard({
             <h3 className="font-sans font-black text-2xl text-zinc-900 mt-0.5">{totalInscrites} parelles</h3>
             <p className="text-[10px] text-zinc-500 mt-1">
               Adults: <span className="font-bold">{adultCount}</span> • Juvenils: <span className="font-bold">{juvenilCount}</span>
+              {esperaCount > 0 && (
+                <span className="text-amber-600 font-extrabold ml-1 px-1 py-0.2 bg-amber-500/10 rounded font-sans inline-block" title="Parella en llista d'espera">
+                  • {esperaCount} espera
+                </span>
+              )}
             </p>
           </div>
           <div className="absolute top-0 right-0 h-full w-2 bg-zinc-800" />
@@ -1240,6 +1278,20 @@ export default function AdminDashboard({
         >
           <Sliders size={14} />
           {language === 'ca' ? "Personalització" : "Personalización"}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActivePanelTab('cierre')}
+          className={`flex items-center justify-center gap-2 px-5 py-3 text-xs font-black tracking-wide uppercase rounded-xl transition-all cursor-pointer ${
+            activePanelTab === 'cierre'
+              ? 'bg-[#ff0090] text-white shadow-md shadow-fuchsia-500/20'
+              : 'text-zinc-400 hover:text-white hover:bg-zinc-800/60'
+          }`}
+          id="btn-nav-cierre"
+        >
+          <Clock size={14} />
+          {language === 'ca' ? "Cierre de Día" : "Cierre de Día"}
         </button>
       </div>
 
@@ -1430,7 +1482,14 @@ export default function AdminDashboard({
                       </td>
                       {/* tracking code and creation date */}
                       <td className="px-6 py-4.5">
-                        <span className="font-mono font-bold text-zinc-900 block">{item.codiSeguiment}</span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-mono font-bold text-zinc-900 block">{item.codiSeguiment}</span>
+                          {item.llistaEspera && (
+                            <span className="bg-amber-100 text-amber-800 text-[8px] font-black px-1.5 py-0.5 rounded uppercase font-mono tracking-wider shrink-0 bg-amber-500/10 border border-amber-300">
+                              🟡 ESPERA
+                            </span>
+                          )}
+                        </div>
                         <span className="text-[10px] text-zinc-400 font-mono">{new Date(item.creadoEn).toLocaleDateString('ca-ES')}</span>
                       </td>
 
@@ -2096,6 +2155,152 @@ export default function AdminDashboard({
 
       {activePanelTab === 'personalitzacio' && (
         <AdminPersonalitzacio language={language} onAddLog={onAddLog} />
+      )}
+
+      {activePanelTab === 'cierre' && (
+        <div className="bg-white rounded-3xl border border-zinc-200 shadow-md overflow-hidden animate-fade-in" id="panel-view-cierre">
+          <div className="p-6 border-b border-zinc-100 bg-zinc-50 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div>
+              <h2 className="font-sans font-black text-sm text-zinc-900 uppercase tracking-wider flex items-center gap-2">
+                <span className="text-lg">📊</span> {language === 'ca' ? "Cierre de Día / Resum Diari" : "Cierre de Día / Resumen Diario"}
+              </h2>
+              <p className="text-[10px] text-zinc-400 mt-1">
+                {language === 'ca'
+                  ? "Registrat i classificat diàriament per data d'inscripció per a una comptabilitat òptima. Arxivat en una pestanya diferent del vostre full de Google."
+                  : "Registrado y clasificado diariamente por fecha de inscripción para una contabilidad óptima. Archivado en una pestaña diferente de su hoja de Google."}
+              </p>
+            </div>
+            
+            <button
+              type="button"
+              onClick={() => {
+                if (config.googleSheetSyncUrl) {
+                  import('../googleSync').then(({ syncToGoogleSheet }) => {
+                    syncToGoogleSheet(inscripcions, config.googleSheetSyncUrl, config.googleSheetSyncActive || true).then((ok) => {
+                      if (ok) {
+                        alert(language === 'ca' ? "S'ha forçat la sincronia amb èxit!" : "¡Sincronización forzada con éxito!");
+                      } else {
+                        alert(language === 'ca' ? "No s'ha pogut forçar la sincronia." : "No se pudo forzar la sincronización.");
+                      }
+                    });
+                  });
+                } else {
+                  alert(language === 'ca' ? "Activeu primer la Sincronització de Full de Google al menú Preus i Camps." : "Active primero la Sincronización de Hoja de Google en el menú Precios y Campos.");
+                }
+              }}
+              className="bg-zinc-900 hover:bg-black text-white px-4 py-2.5 rounded-xl font-bold text-xs transition flex items-center gap-2 cursor-pointer self-stretch md:self-auto justify-center"
+            >
+              <RefreshCw size={13} />
+              {language === 'ca' ? "Forçar Sincro Google Sheets" : "Forzar Sincro Google Sheets"}
+            </button>
+          </div>
+
+          <div className="p-6 space-y-6">
+            {/* Visual KPI Banner */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-emerald-50/60 border border-emerald-100 p-4 rounded-2xl flex items-center gap-3">
+                <span className="text-xl">📈</span>
+                <div>
+                  <h4 className="text-[9px] text-emerald-800 font-mono font-bold uppercase tracking-wider">{language === 'ca' ? "RITME MITJÀ DE INSCRIPCIÓ" : "RITMO MEDIO DE INSCRIPCIÓN"}</h4>
+                  <p className="font-sans font-black text-base text-emerald-950 mt-0.5">
+                    {(inscripcions.length / Math.max(1, calculateDailySummaries(inscripcions).length)).toFixed(1)} {language === 'ca' ? "parelles / dia" : "parejas / día"}
+                  </p>
+                </div>
+              </div>
+              <div className="bg-fuchsia-50/60 border border-fuchsia-100 p-4 rounded-2xl flex items-center gap-3">
+                <span className="text-xl">💰</span>
+                <div>
+                  <h4 className="text-[9px] text-fuchsia-800 font-mono font-bold uppercase tracking-wider">{language === 'ca' ? "RECAUDACIÓ MITJANA DIÀRIA" : "RECAUDACIÓN MEDIA DIARIA"}</h4>
+                  <p className="font-sans font-black text-base text-fuchsia-950 mt-0.5">
+                    {(inscripcions.reduce((acc, current) => acc + (current.preuCalculat || 0), 0) / Math.max(1, calculateDailySummaries(inscripcions).length)).toFixed(2)}€ / dia
+                  </p>
+                </div>
+              </div>
+              <div className="bg-zinc-50 border border-zinc-150 p-4 rounded-2xl flex items-center gap-3">
+                <span className="text-xl">🎯</span>
+                <div>
+                  <h4 className="text-[9px] text-zinc-500 font-mono font-bold uppercase tracking-wider">{language === 'ca' ? "DIES REGISTRATS AMB ACTIVITAT" : "DÍAS REGISTRADOS CON ACTIVIDAD"}</h4>
+                  <p className="font-sans font-black text-base text-zinc-800 mt-0.5">
+                    {calculateDailySummaries(inscripcions).length} {language === 'ca' ? "dies actius" : "días activos"}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Table */}
+            <div className="border border-zinc-250/80 rounded-2xl overflow-hidden shadow-sm">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse font-sans text-xs">
+                  <thead>
+                    <tr className="bg-zinc-50 border-b border-zinc-200 text-zinc-500 font-mono text-[9px] uppercase tracking-wider">
+                      <th className="p-3.5 font-bold">{language === 'ca' ? "Data" : "Fecha"}</th>
+                      <th className="p-3.5 font-bold text-center">{language === 'ca' ? "Parelles" : "Parejas"}</th>
+                      <th className="p-3.5 font-bold text-center">{language === 'ca' ? "En Espera" : "En Espera"}</th>
+                      <th className="p-3.5 font-bold text-right">{language === 'ca' ? "Total Tarifa" : "Total Tarifa"}</th>
+                      <th className="p-3.5 font-bold text-right">{language === 'ca' ? "Efectiu" : "Efectivo"}</th>
+                      <th className="p-3.5 font-bold text-right">{language === 'ca' ? "Bizum" : "Bizum"}</th>
+                      <th className="p-3.5 font-bold text-center">{language === 'ca' ? "Adults / Juv" : "Adults / Juv"}</th>
+                      <th className="p-3.5 font-bold text-center">{language === 'ca' ? "Menors" : "Menores"}</th>
+                      <th className="p-3.5 font-bold text-center">{language === 'ca' ? "Domassos" : "Covers"}</th>
+                      <th className="p-3.5 font-bold text-center">{language === 'ca' ? "Mocadors" : "Pañuelos"}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-150 bg-white">
+                    {calculateDailySummaries(inscripcions).length === 0 ? (
+                      <tr>
+                        <td colSpan={10} className="p-8 text-center text-zinc-400">
+                          {language === 'ca' ? "No hi ha inscripcions amb dates vàlides registrades." : "No hay inscripciones con fechas válidas registradas."}
+                        </td>
+                      </tr>
+                    ) : (
+                      calculateDailySummaries(inscripcions).map((row) => (
+                        <tr key={row.dateStr} className="hover:bg-zinc-50/50 transition">
+                          <td className="p-3.5 font-mono font-bold text-zinc-950">{row.dateStr}</td>
+                          <td className="p-3.5 text-center font-bold text-zinc-800">{row.totalRegistrations}</td>
+                          <td className="p-3.5 text-center">
+                            {row.waitingListCount > 0 ? (
+                              <span className="px-1.5 py-0.5 bg-amber-100 text-amber-800 rounded-md font-bold text-[10px]">
+                                {row.waitingListCount}
+                              </span>
+                            ) : '-'}
+                          </td>
+                          <td className="p-3.5 text-right font-black text-zinc-900">{row.totalRevenue.toFixed(2)}€</td>
+                          <td className="p-3.5 text-right text-zinc-600">{row.cashRevenue.toFixed(2)}€</td>
+                          <td className="p-3.5 text-right text-zinc-600">{row.bizumRevenue.toFixed(2)}€</td>
+                          <td className="p-3.5 text-center font-mono text-[10px] text-zinc-500">
+                            {row.adultsCount}A / {row.juvenilsCount}J
+                          </td>
+                          <td className="p-3.5 text-center">
+                            {row.minorsCount > 0 ? (
+                              <span className="px-1.5 py-0.5 bg-zinc-100 text-zinc-700 rounded-md font-bold text-[10px]">
+                                {row.minorsCount}
+                              </span>
+                            ) : '-'}
+                          </td>
+                          <td className="p-3.5 text-center text-zinc-600">{row.domasCount || '-'}</td>
+                          <td className="p-3.5 text-center text-zinc-600">{row.extraMocadorsCount || '-'}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Note indicator block */}
+            <div className="p-4 bg-zinc-50 rounded-2xl border border-zinc-200 flex items-start gap-2.5 text-zinc-500 text-[11px] leading-relaxed">
+              <span className="text-base shrink-0">📌</span>
+              <div>
+                <p className="font-bold text-zinc-700 mb-0.5">{language === 'ca' ? "Sincronització de doble pestanya activa" : "Sincronización de doble pestaña activa"}</p>
+                <p className="mb-0 text-zinc-500 text-[10px]">
+                  {language === 'ca'
+                    ? "Cada vegada que es realitza, s'actualitzi o s'elimina una inscripció, el programari envia la llista raw a la pestanya 'Inscripcions' i genera aquest resum de Cierre de Día a la pestanya 'Cierre del Dia' al vostre full de Google de forma automatitzada i instantània."
+                    : "Cada vez que se realiza, actualiza o elimina una inscripción, el software envía la lista cruda a la pestaña 'Inscripcions' y genera este resumen de Cierre de Día en la pestaña 'Cierre del Dia' en su hoja de Google de forma automatizada e instantánea."}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Interactive visual helper: Simulated Queue Panel to scan QR codes inside client! */}

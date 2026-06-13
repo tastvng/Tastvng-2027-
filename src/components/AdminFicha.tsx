@@ -38,6 +38,7 @@ export default function AdminFicha({ registration, config, onBack, onSave }: Adm
   const [metodePagament, setMetodePagament] = useState<MetodePagament | null>(registration.metodePagament);
   const [estatDni, setEstatDni] = useState<EstatVerificacio>(registration.estatDni);
   const [entregaMaterial, setEntregaMaterial] = useState<EstatInscripcio>(registration.entregaMaterial);
+  const [llistaEspera, setLlistaEspera] = useState<boolean>(!!registration.llistaEspera);
 
   // Participant Editable configurations
   const [c1Nom, setC1Nom] = useState(registration.c1Nom);
@@ -131,6 +132,7 @@ export default function AdminFicha({ registration, config, onBack, onSave }: Adm
       metodePagament: estatPagament === EstatPagament.PAGAT ? metodePagament : null,
       estatDni,
       entregaMaterial,
+      llistaEspera,
       actualizadoEn: new Date().toISOString()
     };
 
@@ -814,6 +816,37 @@ export default function AdminFicha({ registration, config, onBack, onSave }: Adm
                   }`}
                 >
                   {language === 'ca' ? "Lliurat Complet" : "Entregado Completo"}
+                </button>
+              </div>
+            </div>
+
+            {/* Segment 4: Waitlist Status */}
+            <div className="space-y-2 border-t border-zinc-900 pt-4">
+              <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider font-mono">
+                {language === 'ca' ? "Estat en Llista d'Espera" : "Estado en Lista de Espera"}
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setLlistaEspera(false)}
+                  className={`py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    !llistaEspera 
+                      ? 'bg-zinc-850 text-white border border-zinc-700' 
+                      : 'bg-zinc-900 text-zinc-500 hover:bg-zinc-850'
+                  }`}
+                >
+                  {language === 'ca' ? "Admitit / Normal" : "Admitido / Normal"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLlistaEspera(true)}
+                  className={`py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    llistaEspera 
+                      ? 'bg-amber-500 text-white shadow shadow-amber-500/10' 
+                      : 'bg-zinc-900 text-zinc-500 hover:bg-zinc-850'
+                  }`}
+                >
+                  {language === 'ca' ? "🟡 Llista d'Espera" : "🟡 Lista de Espera"}
                 </button>
               </div>
             </div>

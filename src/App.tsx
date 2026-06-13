@@ -327,11 +327,21 @@ export default function App() {
     setOperationLogs(prev => [`[${time}] ${text}`, ...prev.slice(0, 4)]);
   };
 
+  // Trigger background google sheet sync when inscriptions change or config updates
+  const syncWithGoogle = (latestInscripcions: Inscripcio[], activeConfig: SistemaConfig = config) => {
+    if (activeConfig.googleSheetSyncActive && activeConfig.googleSheetSyncUrl) {
+      import('./googleSync').then(({ syncToGoogleSheet }) => {
+        syncToGoogleSheet(latestInscripcions, activeConfig.googleSheetSyncUrl, activeConfig.googleSheetSyncActive);
+      });
+    }
+  };
+
   // State update actions
   const saveConfig = async (newConfig: SistemaConfig) => {
     setConfig(newConfig);
     localStorage.setItem('tast_config_2026', JSON.stringify(newConfig));
     addLog("S'han modificat les tarifes i config.");
+    syncWithGoogle(inscripcions, newConfig);
     if (isSupabaseConfigured) {
       try {
         await saveSupabaseSetting('tast_config_2026', newConfig);
@@ -346,6 +356,7 @@ export default function App() {
     const updated = [newReg, ...inscripcions];
     setInscripcions(updated);
     localStorage.setItem('tast_inscripcions_2026', JSON.stringify(updated));
+    syncWithGoogle(updated);
     setActiveRegistration(newReg);
     setView('confirmacio');
     addLog(`Preinscripció realitzada amb èxit per a: ${newReg.c1Nom} & ${newReg.c2Nom}. Codi: ${newReg.codiSeguiment}`);
@@ -367,6 +378,7 @@ export default function App() {
     const updated = [newReg, ...inscripcions];
     setInscripcions(updated);
     localStorage.setItem('tast_inscripcions_2026', JSON.stringify(updated));
+    syncWithGoogle(updated);
     addLog(`Parella afegida manualment des del taulell: ${newReg.c1Nom} & ${newReg.c2Nom}. Codi: ${newReg.codiSeguiment}`);
     if (isSupabaseConfigured) {
       try {
@@ -383,6 +395,7 @@ export default function App() {
     const updated = inscripcions.filter(i => i.id !== id);
     setInscripcions(updated);
     localStorage.setItem('tast_inscripcions_2026', JSON.stringify(updated));
+    syncWithGoogle(updated);
     addLog(`S'ha eliminat la inscripció de la parella: ${itemToDelete ? `${itemToDelete.c1Nom} & ${itemToDelete.c2Nom}` : id}`);
     if (isSupabaseConfigured) {
       try {
@@ -398,6 +411,7 @@ export default function App() {
     const updated = inscripcions.filter(i => !ids.includes(i.id));
     setInscripcions(updated);
     localStorage.setItem('tast_inscripcions_2026', JSON.stringify(updated));
+    syncWithGoogle(updated);
     addLog(`S'han eliminat ${ids.length} inscripcions de forma massiva.`);
     if (isSupabaseConfigured) {
       try {
@@ -412,6 +426,7 @@ export default function App() {
   const clearAllRegistrations = async () => {
     setInscripcions([]);
     localStorage.setItem('tast_inscripcions_2026', JSON.stringify([]));
+    syncWithGoogle([]);
     addLog(`S'ha buidat completament la base de dades d'inscripcions.`);
     if (isSupabaseConfigured) {
       try {
@@ -440,6 +455,7 @@ export default function App() {
     const updated = inscripcions.map(i => i.id === updatedReg.id ? updatedReg : i);
     setInscripcions(updated);
     localStorage.setItem('tast_inscripcions_2026', JSON.stringify(updated));
+    syncWithGoogle(updated);
     addLog(`Ficha d'inscripció actualitzada del parella: ${updatedReg.c1Nom} (${updatedReg.codiSeguiment})`);
     if (isSupabaseConfigured) {
       try {
@@ -643,6 +659,7 @@ export default function App() {
                 globalLogoText={config.logoText}
                 globalLogoUseImage={config.logoUseImage}
                 globalLogoImgUrl={config.logoImgUrl}
+                globalEstatInscripcions={config.estatInscripcions || 'obertes'}
                 onEnterForm={() => setView('public')}
                 onGoToLogin={() => setView('login')}
               />

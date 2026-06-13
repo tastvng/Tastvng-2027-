@@ -571,6 +571,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
         metodePagament: null,
         estatDni: EstatVerificacio.PENDENT,
         entregaMaterial: EstatInscripcio.PENDENT,
+        llistaEspera: config.estatInscripcions === 'espera',
         creadoEn: new Date().toISOString(),
         actualizadoEn: new Date().toISOString()
       };
@@ -649,7 +650,70 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
         </button>
       </div>
 
-      <form onSubmit={handleSubmetre} className="space-y-8">
+      {config.estatInscripcions === 'tancades' ? (
+        <div className="bg-white rounded-3xl border border-zinc-200 p-8 shadow-sm space-y-6 text-center max-w-2xl mx-auto py-12 animate-fadeIn" id="closed-registration-view">
+          <div className="mx-auto w-20 h-20 bg-rose-100 rounded-full flex items-center justify-center relative">
+            <div className="absolute inset-0 bg-rose-500 rounded-full animate-ping opacity-25" />
+            <div className="w-16 h-16 bg-red-500 rounded-full flex items-center justify-center shadow-lg shadow-red-500/50">
+              <span className="text-3xl">🚦</span>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <h2 className="font-sans font-black text-2xl text-zinc-900 tracking-tight uppercase">
+              {language === 'ca' ? "🔴 Procés d'Inscripció Tancat" : "🔴 Proceso de Inscripción Cerrado"}
+            </h2>
+            <p className="text-zinc-500 text-sm max-w-md mx-auto leading-relaxed">
+              {language === 'ca'
+                ? "El període de preinscripció online per a les Comparses de El Tast 2026 ha finalitzat oficialment. Agraïm moltíssim el vostre interès."
+                : "El periodo de preinscripción online para las Comparsas de El Tast 2026 ha finalizado oficialmente. Agradecemos muchísimo vuestro interés."}
+            </p>
+          </div>
+
+          {/* Glowing Traffic light with red illuminated state */}
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 inline-flex items-center gap-6 shadow font-mono text-[10px] text-zinc-400">
+            <span className="font-bold tracking-widest text-[#ff0090] uppercase">ESTAT:</span>
+            <div className="bg-zinc-950 border border-zinc-850 px-3.5 py-1.5 rounded-full flex items-center gap-3">
+              {/* Red - ON */}
+              <div className="w-4 h-4 rounded-full bg-red-500 shadow-[0_0_12px_#ef4444] animate-pulse" />
+              {/* Orange - OFF */}
+              <div className="w-4 h-4 rounded-full bg-amber-950/20 opacity-20" />
+              {/* Green - OFF */}
+              <div className="w-4 h-4 rounded-full bg-emerald-900/20 opacity-20" />
+            </div>
+            <span className="font-sans font-extrabold text-red-500 uppercase tracking-wide">
+              {language === 'ca' ? "Tancades" : "Cerradas"}
+            </span>
+          </div>
+
+          <div className="border-t border-zinc-200 pt-5 space-y-3">
+            <p className="text-xs text-zinc-400 italic">
+              {language === 'ca'
+                ? "Per a dubtes, reclamacions o incidències administratives, podeu contactar directament amb Secretaria a través de la seu presencial d'El Tast."
+                : "Para dudas, reclamaciones o incidencias administrativas, podéis contactar directamente con Secretaría a través de la sede presencial de El Tast."}
+            </p>
+          </div>
+        </div>
+      ) : (
+        <form onSubmit={handleSubmetre} className="space-y-8">
+          {/* LLISTA D'ESPERA WARNING BAR FOR 'espera' STATUS */}
+          {config.estatInscripcions === 'espera' && (
+            <div className="bg-amber-50 rounded-3xl border border-amber-300 p-5 shadow-sm flex items-start gap-4 animate-fadeIn" id="waitlist-warning">
+              <div className="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center text-amber-600 shrink-0">
+                <AlertTriangle size={20} className="animate-bounce" />
+              </div>
+              <div className="space-y-1">
+                <h4 className="font-sans font-bold text-xs text-amber-800 uppercase tracking-wider flex items-center gap-2">
+                  <span>🚦</span> {language === 'ca' ? "Fase Activa: Llista d'Espera" : "Fase Activa: Lista de Espera"}
+                </h4>
+                <p className="text-amber-700 text-xs leading-relaxed">
+                  {language === 'ca'
+                    ? "L'aforament d'enguany ha superat el límit inicial. Encara podeu enviar el formulari: la vostra sol·licitud serà registrada amb èxit i s'afegirà a la llista d'espera oficial d'El Tast, en rigorós ordre d'arribada."
+                    : "El aforo de este año ha superado el límite inicial. Todavía podéis enviar el formulario: vuestra solicitud será registrada con éxito y se añadirá a la lista de espera oficial de El Tast, en riguroso orden de llegada."}
+                </p>
+              </div>
+            </div>
+          )}
         {/* Category Toggles Selector */}
         <div className="bg-zinc-900 rounded-3xl p-6 border border-zinc-800 shadow-xl relative overflow-hidden">
           <div className="absolute top-0 right-0 p-8 text-zinc-800/40 pointer-events-none">
@@ -1818,6 +1882,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
           </button>
         </div>
       </form>
+      )}
 
       {/* Camera Live/Mock Modal Screen Overlay */}
       <AnimatePresence>

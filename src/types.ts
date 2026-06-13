@@ -83,6 +83,7 @@ export interface Inscripcio {
   metodePagament: MetodePagament | null;
   estatDni: EstatVerificacio;
   entregaMaterial: EstatInscripcio;
+  llistaEspera?: boolean;
   
   creadoEn: string;
   actualizadoEn: string;
@@ -126,6 +127,9 @@ export interface SistemaConfig {
   liniisUniforme?: LiniaUniforme[];
   textLegalAutoritzacioMenors?: string;
   textLegalAutoritzacioMenorsES?: string;
+  estatInscripcions?: 'obertes' | 'espera' | 'tancades';
+  googleSheetSyncUrl?: string;
+  googleSheetSyncActive?: boolean;
 }
 
 export interface NoticiaXarxes {

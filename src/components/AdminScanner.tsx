@@ -27,7 +27,7 @@ import {
   FileText,
   X
 } from 'lucide-react';
-import { Inscripcio, EstatPagament, EstatVerificacio, EstatInscripcio, MetodePagament } from '../types';
+import { Inscripcio, EstatPagament, EstatVerificacio, EstatInscripcio, MetodePagament, CategoriaParella } from '../types';
 import { useLanguage } from '../LanguageContext';
 import jsQR from 'jsqr';
 
@@ -55,6 +55,7 @@ export default function AdminScanner({
   const [tempRecord, setTempRecord] = useState<Inscripcio | null>(null);
   const [isScanningTransition, setIsScanningTransition] = useState(false);
   const [justSavedNotification, setJustSavedNotification] = useState<string | null>(null);
+  const [zoomedDniUrl, setZoomedDniUrl] = useState<string | null>(null);
 
   // Real webcam camera state fallback
   const [useRealCamera, setUseRealCamera] = useState(false);
@@ -667,77 +668,372 @@ export default function AdminScanner({
                   </p>
                 </div>
               ) : tempRecord ? (
-                /* ================ STATE B: DISPLAY FULL DETAILS FICHA ON SCREEN ================ */
                 <div className="space-y-4 animate-fadeIn">
                   
                   {/* Ficha title banner */}
-                  <div className="flex justify-between items-start bg-zinc-950 border border-white/5 p-3.5 rounded-xl text-xs">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-zinc-950 border border-white/5 p-4 rounded-2xl gap-3">
                     <div>
-                      <span className="font-mono text-[9px] text-zinc-500 uppercase block">
-                        {language === 'ca' ? "FITXA DE SOCIS COMPARSERS VINCULATS:" : "FICHA DE SOCIOS COMPARSERS VINCULADOS:"}
+                      <span className="font-mono text-[8px] text-[#ff0090] tracking-widest font-black uppercase block mb-0.5">
+                        {language === 'ca' ? "DADES REBRE DE LA MA REGAST DE SECRETARIA" : "DATOS RECIBIDOS DEL EXPEDIENTE DE SECRETARÍA"}
                       </span>
-                      <h4 className="font-sans font-black text-sm text-brand">{tempRecord.c1Nom} &amp; {tempRecord.c2Nom}</h4>
+                      <h4 className="font-sans font-black text-base text-white flex items-center gap-2">
+                        {tempRecord.c1Nom} &amp; {tempRecord.c2Nom}
+                        <span className={`text-[9px] font-black tracking-tight font-mono px-2 py-0.5 rounded-full uppercase ${
+                          tempRecord.categoria === CategoriaParella.ADULT 
+                            ? 'bg-[#ff0090]/10 text-white border border-[#ff0090]/35' 
+                            : 'bg-cyan-550/10 text-cyan-400 border border-cyan-500/30'
+                        }`}>
+                          {tempRecord.categoria === CategoriaParella.ADULT 
+                            ? (language === 'ca' ? 'Adult' : 'Adulto') 
+                            : (language === 'ca' ? 'Juvenil' : 'Juvenil')}
+                        </span>
+                      </h4>
+                      <p className="text-[10px] text-zinc-500 font-mono mt-1">
+                        {language === 'ca' ? "Registrat el: " : "Registrado el: "} 
+                        <span className="text-zinc-300 font-bold">
+                          {tempRecord.creadoEn ? new Date(tempRecord.creadoEn).toLocaleString(language === 'ca' ? 'ca-ES' : 'es-ES') : "13/06/2026, 17:34:20"}
+                        </span>
+                      </p>
                     </div>
-                    <div className="text-right">
+                    <div className="text-left sm:text-right flex sm:flex-col items-center sm:items-end justify-between w-full sm:w-auto border-t sm:border-t-0 border-white/5 pt-2 sm:pt-0">
                       <span className="font-mono text-[9px] text-zinc-500 uppercase block">
-                        {language === 'ca' ? "Codi Seguiment" : "Código Seguimiento"}
+                        {language === 'ca' ? "Codi Localitzador" : "Código Localizador"}
                       </span>
-                      <span className="font-mono font-bold text-zinc-300 text-[11px]">{tempRecord.codiSeguiment}</span>
+                      <span className="font-mono font-black text-white text-sm bg-zinc-900 border border-white/10 px-3 py-1 rounded-lg select-all">
+                        {tempRecord.codiSeguiment}
+                      </span>
                     </div>
                   </div>
 
                   {/* Informació general columns */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-sans">
                     
-                    {/* C1 info panel */}
-                    <div className="bg-[#121212] p-3 rounded-xl border border-white/5 space-y-1">
-                      <p className="font-bold text-[11px] text-zinc-300 font-mono uppercase pb-1 border-b border-white/5">
-                        {language === 'ca' ? "Comparser 1 (Principal)" : "Comparser 1 (Principal)"}
+                    {/* Comparser 1 Sheet card */}
+                    <div className="bg-[#121212] p-4 rounded-2xl border border-white/5 space-y-3 relative overflow-hidden">
+                      <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-white/2 to-transparent pointer-events-none rounded-bl-3xl flex items-center justify-end pr-3 pt-3">
+                        <span className="font-mono text-zinc-800 text-lg font-bold">#1</span>
+                      </div>
+                      
+                      <p className="font-bold text-[10px] text-zinc-400 font-mono uppercase pb-1.5 border-b border-white/5 tracking-wider">
+                        {language === 'ca' ? "Representant Titular" : "Representante Titular"}
                       </p>
-                      <p className="font-bold text-white mt-1">{tempRecord.c1Nom} {tempRecord.c1Cognoms}</p>
-                      <p className="text-zinc-500 truncate">{tempRecord.c1Email}</p>
-                      <p className="text-zinc-500">{tempRecord.c1Telefon}</p>
-                      <p className="text-[10px] text-zinc-400 font-mono pt-1">
-                        {language === 'ca' ? "Talla vestimenta: " : "Talla vestuario: "}
-                        <strong className="text-white font-sans text-[11px]">{tempRecord.c1Talla}</strong>
-                      </p>
+
+                      <div className="space-y-1.5">
+                        <p className="text-[10px] text-zinc-500 font-mono">{language === 'ca' ? "Nom Sencer:" : "Nombre Completo:"}</p>
+                        <p className="font-black text-white text-sm">{tempRecord.c1Nom} {tempRecord.c1Cognoms}</p>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 pt-1">
+                        <div className="bg-zinc-950 p-2 rounded-xl border border-white/5 min-w-0">
+                          <p className="text-[9px] text-zinc-500 font-mono truncate">{language === 'ca' ? "Correu Electrònic:" : "Correo Electrónico:"}</p>
+                          <p className="font-bold text-zinc-200 mt-0.5 truncate flex items-center gap-1" title={tempRecord.c1Email}>
+                            <Mail size={10} className="text-[#ff0090]" /> {tempRecord.c1Email}
+                          </p>
+                        </div>
+                        <div className="bg-zinc-950 p-2 rounded-xl border border-white/5 min-w-0">
+                          <p className="text-[9px] text-zinc-500 font-mono truncate">{language === 'ca' ? "Telèfon Mòbil:" : "Teléfono Móvil:"}</p>
+                          <p className="font-bold text-zinc-200 mt-0.5 truncate flex items-center gap-1">
+                            <Phone size={10} className="text-[#ff0090]" /> {tempRecord.c1Telefon}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 pt-1">
+                        <div className="bg-zinc-950 p-2 rounded-xl border border-white/5">
+                          <p className="text-[9px] text-zinc-500 font-mono">{language === 'ca' ? "Talla Armilla:" : "Talla Chaleco:"}</p>
+                          <p className="font-extrabold text-[#ff0090] text-xs mt-0.5 flex items-center gap-1">
+                            <CheckSquare size={11} /> {tempRecord.c1Talla}
+                          </p>
+                        </div>
+                        <div className="bg-zinc-950 p-2 rounded-xl border border-white/5">
+                          <p className="text-[9px] text-zinc-500 font-mono">{language === 'ca' ? "Adquisició Vestitori:" : "Adquisición Vestuario:"}</p>
+                          <p className="font-bold text-zinc-300 text-[10px] mt-0.5 uppercase tracking-wide">
+                            {tempRecord.c1UniformeTipus === 'lloguer' 
+                              ? (language === 'ca' ? "租 Lloguer" : "租 Alquiler") 
+                              : (language === 'ca' ? "🛒 Compra" : "🛒 Compra")}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Minor indicator & Tutor Box for C1 */}
+                      {tempRecord.c1EsMenor ? (
+                        <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 space-y-1.5 text-[11px] animate-pulse">
+                          <p className="font-bold text-amber-400 font-mono uppercase tracking-tight flex items-center gap-1">
+                            <AlertTriangle size={12} /> {language === 'ca' ? "PARTICIPANT MENOR D'EDAT" : "PARTICIPANTE MENOR DE EDAD"}
+                          </p>
+                          <div className="text-zinc-300 space-y-1 pl-1">
+                            <p>• {language === 'ca' ? "Tutor Legal: " : "Tutor Legal: "} <strong className="text-white">{tempRecord.c1TutorNom} {tempRecord.c1TutorCognoms}</strong></p>
+                            <p>• {language === 'ca' ? "DNI Tutor: " : "DNI Tutor: "} <span className="font-mono text-zinc-150">{tempRecord.c1TutorDni || "N/A"}</span></p>
+                            <p>• {language === 'ca' ? "Tel. Tutor: " : "Tel. Tutor: "} <span className="text-zinc-150">{tempRecord.c1TutorTelefon || "N/A"}</span></p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="bg-zinc-950/45 p-2 rounded-xl border border-white/5 text-[10px] text-zinc-500 font-mono">
+                          🧑 {language === 'ca' ? "Participant adult (Major d'edat)" : "Participante adulto (Mayor de edad)"}
+                        </div>
+                      )}
+
+                      {/* DNI File layout inside card */}
+                      <div className="overflow-hidden rounded-xl border border-white/5 bg-zinc-950/60 p-2.5 space-y-2">
+                        <span className="text-[8px] font-mono font-bold text-zinc-500 uppercase tracking-widest block">
+                          {language === 'ca' ? "VERIFICACIÓ DOCUMENTACIÓ OFICIAL DNI/NIE:" : "VERIFICACIÓN DOCUMENTACIÓN OFICIAL DNI/NIE:"}
+                        </span>
+                        <div className="flex items-center gap-2.5">
+                          {tempRecord.c1DniUrl ? (
+                            <div 
+                              onClick={() => setZoomedDniUrl(tempRecord.c1DniUrl)}
+                              className="relative group overflow-hidden rounded-lg w-16 h-10 bg-zinc-90 w-16 md:w-20 md:h-12 border border-white/10 flex-shrink-0 cursor-zoom-in shadow-md"
+                              title={language === 'ca' ? "Clic per ampliar DNI" : "Clic para ampliar DNI"}
+                            >
+                              <img src={tempRecord.c1DniUrl} alt="DNI Comparser 1" className="w-full h-full object-cover group-hover:scale-110 transition duration-300" referrerPolicy="no-referrer" />
+                              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+                                <Sparkles size={11} className="text-[#ff0090] animate-spin" />
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="rounded-lg w-16 h-10 md:w-20 md:h-12 bg-zinc-900 border border-dashed border-white/10 flex items-center justify-center flex-shrink-0 text-zinc-650">
+                              <AlertTriangle size={14} className="text-amber-500" />
+                            </div>
+                          )}
+                          <div className="min-w-0 flex-1 space-y-1">
+                            <p className="text-[10px] font-bold text-zinc-300 truncate font-mono">
+                              {tempRecord.c1DniUrl ? `DNI_P1_${tempRecord.c1Nom.toUpperCase()}.PNG` : (language === 'ca' ? "Sense fitxer pujat" : "Sin archivo subido")}
+                            </p>
+                            <button 
+                              type="button" 
+                              onClick={() => setZoomedDniUrl(tempRecord.c1DniUrl || 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=800')}
+                              className="text-[9px] text-[#ff0090] font-black hover:underline tracking-tight block uppercase text-left"
+                            >
+                              {tempRecord.c1DniUrl ? (language === 'ca' ? "🔍 Auditar Document" : "🔍 Auditar Documento") : (language === 'ca' ? "⚠️ Veure demo genèrica" : "⚠️ Ver demo genérica")}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
                     </div>
 
-                    {/* C2 info panel */}
-                    <div className="bg-[#121212] p-3 rounded-xl border border-white/5 space-y-1">
-                      <p className="font-bold text-[11px] text-zinc-300 font-mono uppercase pb-1 border-b border-white/5">
-                        {language === 'ca' ? "Comparser 2 (Acompanyant)" : "Comparser 2 (Acompañante)"}
+                    {/* Comparser 2 Sheet card */}
+                    <div className="bg-[#121212] p-4 rounded-2xl border border-white/5 space-y-3 relative overflow-hidden">
+                      <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-white/2 to-transparent pointer-events-none rounded-bl-3xl flex items-center justify-end pr-3 pt-3">
+                        <span className="font-mono text-zinc-800 text-lg font-bold">#2</span>
+                      </div>
+
+                      <p className="font-bold text-[10px] text-zinc-400 font-mono uppercase pb-1.5 border-b border-white/5 tracking-wider">
+                        {language === 'ca' ? "Segon Comparser" : "Segundo Comparsero"}
                       </p>
-                      <p className="font-bold text-white mt-1">{tempRecord.c2Nom} {tempRecord.c2Cognoms}</p>
-                      <p className="text-zinc-500 truncate">{tempRecord.c2Email}</p>
-                      <p className="text-zinc-500">{tempRecord.c2Telefon}</p>
-                      <p className="text-[10px] text-zinc-400 font-mono pt-1">
-                        {language === 'ca' ? "Talla vestimenta: " : "Talla vestuario: "}<strong className="text-white font-sans text-[11px]">{tempRecord.c2Talla}</strong>
-                      </p>
+
+                      <div className="space-y-1.5">
+                        <p className="text-[10px] text-zinc-500 font-mono">{language === 'ca' ? "Nom Sencer:" : "Nombre Completo:"}</p>
+                        <p className="font-black text-white text-sm">{tempRecord.c2Nom} {tempRecord.c2Cognoms}</p>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 pt-1">
+                        <div className="bg-zinc-950 p-2 rounded-xl border border-white/5 min-w-0">
+                          <p className="text-[9px] text-zinc-500 font-mono truncate">{language === 'ca' ? "Correu Electrònic:" : "Correo Electrónico:"}</p>
+                          <p className="font-bold text-zinc-200 mt-0.5 truncate flex items-center gap-1" title={tempRecord.c2Email}>
+                            <Mail size={10} className="text-[#ff0090]" /> {tempRecord.c2Email || "N/A"}
+                          </p>
+                        </div>
+                        <div className="bg-zinc-950 p-2 rounded-xl border border-white/5 min-w-0">
+                          <p className="text-[9px] text-zinc-500 font-mono truncate">{language === 'ca' ? "Telèfon Mòbil:" : "Teléfono Móvil:"}</p>
+                          <p className="font-bold text-zinc-200 mt-0.5 truncate flex items-center gap-1">
+                            <Phone size={10} className="text-[#ff0090]" /> {tempRecord.c2Telefon}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 pt-1">
+                        <div className="bg-zinc-950 p-2 rounded-xl border border-white/5">
+                          <p className="text-[9px] text-zinc-500 font-mono">{language === 'ca' ? "Talla Armilla:" : "Talla Chaleco:"}</p>
+                          <p className="font-extrabold text-[#ff0090] text-xs mt-0.5 flex items-center gap-1">
+                            <CheckSquare size={11} /> {tempRecord.c2Talla}
+                          </p>
+                        </div>
+                        <div className="bg-zinc-950 p-2 rounded-xl border border-white/5">
+                          <p className="text-[9px] text-zinc-500 font-mono">{language === 'ca' ? "Adquisició Vestitori:" : "Adquisición Vestuario:"}</p>
+                          <p className="font-bold text-zinc-300 text-[10px] mt-0.5 uppercase tracking-wide">
+                            {tempRecord.c2UniformeTipus === 'lloguer' 
+                              ? (language === 'ca' ? "租 Lloguer" : "租 Alquiler") 
+                              : (language === 'ca' ? "🛒 Compra" : "🛒 Compra")}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Minor indicator & Tutor Box for C2 */}
+                      {tempRecord.c2EsMenor ? (
+                        <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 space-y-1.5 text-[11px] animate-pulse">
+                          <p className="font-bold text-amber-400 font-mono uppercase tracking-tight flex items-center gap-1">
+                            <AlertTriangle size={12} /> {language === 'ca' ? "PARTICIPANT MENOR D'EDAT" : "PARTICIPANTE MENOR DE EDAD"}
+                          </p>
+                          <div className="text-zinc-300 space-y-1 pl-1">
+                            <p>• {language === 'ca' ? "Tutor Legal: " : "Tutor Legal: "} <strong className="text-white">{tempRecord.c2TutorNom} {tempRecord.c2TutorCognoms}</strong></p>
+                            <p>• {language === 'ca' ? "DNI Tutor: " : "DNI Tutor: "} <span className="font-mono text-zinc-150">{tempRecord.c2TutorDni || "N/A"}</span></p>
+                            <p>• {language === 'ca' ? "Tel. Tutor: " : "Tel. Tutor: "} <span className="text-zinc-150">{tempRecord.c2TutorTelefon || "N/A"}</span></p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="bg-zinc-950/45 p-2 rounded-xl border border-white/5 text-[10px] text-zinc-500 font-mono">
+                          🧑 {language === 'ca' ? "Participant adult (Major d'edat)" : "Participante adulto (Mayor de edad)"}
+                        </div>
+                      )}
+
+                      {/* DNI File layout inside card */}
+                      <div className="overflow-hidden rounded-xl border border-white/5 bg-zinc-950/60 p-2.5 space-y-2">
+                        <span className="text-[8px] font-mono font-bold text-zinc-500 uppercase tracking-widest block">
+                          {language === 'ca' ? "VERIFICACIÓ DOCUMENTATION OFICIAL DNI/NIE:" : "VERIFICACIÓN DOCUMENTACIÓN OFICIAL DNI/NIE:"}
+                        </span>
+                        <div className="flex items-center gap-2.5">
+                          {tempRecord.c2DniUrl ? (
+                            <div 
+                              onClick={() => setZoomedDniUrl(tempRecord.c2DniUrl)}
+                              className="relative group overflow-hidden rounded-lg w-16 h-10 bg-zinc-90 w-16 md:w-20 md:h-12 border border-white/10 flex-shrink-0 cursor-zoom-in shadow-md"
+                              title={language === 'ca' ? "Clic per ampliar DNI" : "Clic para ampliar DNI"}
+                            >
+                              <img src={tempRecord.c2DniUrl} alt="DNI Comparser 2" className="w-full h-full object-cover group-hover:scale-110 transition duration-300" referrerPolicy="no-referrer" />
+                              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+                                <Sparkles size={11} className="text-[#ff0090] animate-spin" />
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="rounded-lg w-16 h-10 md:w-20 md:h-12 bg-zinc-900 border border-dashed border-white/10 flex items-center justify-center flex-shrink-0 text-zinc-650">
+                              <AlertTriangle size={14} className="text-amber-500" />
+                            </div>
+                          )}
+                          <div className="min-w-0 flex-1 space-y-1">
+                            <p className="text-[10px] font-bold text-zinc-300 truncate font-mono">
+                              {tempRecord.c2DniUrl ? `DNI_P2_${tempRecord.c2Nom.toUpperCase()}.PNG` : (language === 'ca' ? "Sense fitxer pujat" : "Sin archivo subido")}
+                            </p>
+                            <button 
+                              type="button" 
+                              onClick={() => setZoomedDniUrl(tempRecord.c2DniUrl || 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=800')}
+                              className="text-[9px] text-[#ff0090] font-black hover:underline tracking-tight block uppercase text-left"
+                            >
+                              {tempRecord.c2DniUrl ? (language === 'ca' ? "🔍 Auditar Document" : "🔍 Auditar Documento") : (language === 'ca' ? "⚠️ Veure demo genèrica" : "⚠️ Ver demo genérica")}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
                     </div>
 
                   </div>
 
-                  {/* Complement and Extras items table brief */}
-                  <div className="bg-[#121212] p-3 rounded-xl border border-white/5 text-xs">
-                    <p className="font-bold text-[11px] text-zinc-300 font-mono uppercase pb-1 mb-2 border-b border-white/5">
-                      {language === 'ca' ? "Càlcul d'Import i Complements contractats" : "Cálculo de Importe y Complementos contratados"}
-                    </p>
-                    <div className="flex justify-between items-center text-zinc-400">
-                      <span>{language === 'ca' ? "Categoria d'inscripció: " : "Categoría de inscripción: "}<strong>{tempRecord.categoria}</strong></span>
-                      <span>{language === 'ca' ? "Total Liquidació: " : "Total Liquidación: "}<strong className="text-brand text-sm">{tempRecord.preuCalculat}€</strong></span>
+                  {/* Questionnaire answers section if populated */}
+                  {tempRecord.respostesCuestionari && Object.keys(tempRecord.respostesCuestionari).length > 0 && (
+                    <div className="p-3 bg-[#121212] rounded-xl border border-white/5 space-y-2 text-xs">
+                      <p className="font-bold text-[10px] text-zinc-400 font-mono uppercase pb-1.5 border-b border-white/5 tracking-wider flex items-center gap-1.5">
+                        <FileText size={12} className="text-[#ff0090]" />
+                        {language === 'ca' ? "📋 RESPOSTES COMPLEMENTÀRIES AL FORMULARI" : "📋 RESPUESTAS COMPLEMENTARIAS AL FORMULARIO"}
+                      </p>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        {Object.entries(tempRecord.respostesCuestionari).map(([clau, valor]) => (
+                          <div key={clau} className="p-2.5 rounded-xl bg-zinc-950 border border-white/5 flex items-center justify-between gap-2 min-w-0">
+                            <span className="text-zinc-500 font-medium truncate shrink-0">{clau}:</span>
+                            <span className="text-white font-bold font-mono text-right truncate">
+                              {typeof valor === 'boolean' 
+                                ? (valor ? (language === 'ca' ? "SÍ" : "SÍ") : (language === 'ca' ? "NO" : "NO")) 
+                                : String(valor)}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      <span className="bg-white/5 px-2.5 py-1 rounded text-[10px] text-zinc-300">
-                        {tempRecord.teDomasBalco 
-                          ? (language === 'ca' ? "✔ Inclou Domàs de Balcó" : "✔ Incluye Tapiz de Balcón") 
-                          : (language === 'ca' ? "🗙 Sense Domàs de Balcó" : "🗙 Sin Tapiz de Balcón")}
-                      </span>
-                      <span className="bg-white/5 px-2.5 py-1 rounded text-[10px] text-zinc-300">
-                        {tempRecord.teMocadorsExtra > 0 
-                          ? (language === 'ca' ? `✔ Inclou +${tempRecord.teMocadorsExtra} mocador(s) extres` : `✔ Incluye +${tempRecord.teMocadorsExtra} pañuelo(s) extras`) 
-                          : (language === 'ca' ? "🗙 Sense mocadors extres" : "🗙 Sin pañuelos extras")}
-                      </span>
+                  )}
+
+                  {/* Uniform selections if populated */}
+                  {tempRecord.seleccionsUniforme && Object.keys(tempRecord.seleccionsUniforme).length > 0 && (
+                    <div className="p-3 bg-[#121212] rounded-xl border border-white/5 space-y-2 text-xs">
+                      <p className="font-bold text-[10px] text-zinc-400 font-mono uppercase pb-1.5 border-b border-white/5 tracking-wider flex items-center gap-1.5">
+                        <CheckSquare size={12} className="text-[#ff0090]" />
+                        {language === 'ca' ? "👚 INVENTARI ADDICIONAL DE VESTUARI SOL·LICITAT" : "👚 INVENTARIO ADICIONAL DE VESTUARIO SOLICITADO"}
+                      </p>
+                      <div className="space-y-1.5 text-[11px]">
+                        {Object.entries(tempRecord.seleccionsUniforme).map(([nomProducte, dadesVal]) => {
+                          const dades = dadesVal as { c1Talla?: string; c2Talla?: string; quantitat?: number };
+                          return (
+                            <div key={nomProducte} className="flex justify-between items-center bg-zinc-950 p-2.5 rounded-xl border border-white/5">
+                              <div>
+                                <span className="text-zinc-200 font-extrabold">{nomProducte}</span>
+                                <span className="text-zinc-550 ml-2 font-mono text-[10px] bg-white/5 px-2 py-0.5 rounded text-zinc-400 font-bold">Qty: {dades.quantitat}</span>
+                              </div>
+                              <div className="text-right flex items-center gap-3 text-[10px] font-mono text-zinc-400">
+                                {dades.c1Talla && (
+                                  <div>
+                                    P1: <span className="text-white bg-[#ff0090]/15 px-1.5 py-0.5 rounded font-black text-[10px] font-sans">{dades.c1Talla}</span>
+                                  </div>
+                                )}
+                                {dades.c2Talla && (
+                                  <div>
+                                    P2: <span className="text-zinc-100 bg-zinc-800 px-1.5 py-0.5 rounded font-bold text-[10px] font-sans">{dades.c2Talla}</span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Highly polished receipt accounting breakdown box */}
+                  <div className="bg-[#121212] p-4 rounded-2xl border border-white/5 text-xs">
+                    <p className="font-bold text-[10px] text-zinc-405 text-zinc-300 font-mono uppercase pb-1.5 mb-2 border-b border-white/5 tracking-wider">
+                      {language === 'ca' ? "💵 DESGLOSSAMENT ANALÍTIC DEL REBUT DE COMPRA" : "💵 DESGLOSE ANALÍTICO DEL RECIBO DE COMPRA"}
+                    </p>
+                    
+                    <div className="space-y-2 text-[11px] font-mono text-zinc-450 text-zinc-400">
+                      
+                      {/* Standard fee block */}
+                      <div className="flex justify-between items-center">
+                        <span className="flex items-center gap-1.5 text-zinc-300">
+                          <CheckCircle size={10} className="text-green-500" />
+                          {language === 'ca' ? "Quota general d'inscripció de parella:" : "Cuota general de inscripción de pareja:"}
+                        </span>
+                        <span className="text-zinc-200 font-bold">
+                          {tempRecord.categoria === CategoriaParella.ADULT ? "30.00" : "20.00"}€
+                        </span>
+                      </div>
+
+                      {/* Balcony flag */}
+                      <div className="flex justify-between items-center">
+                        <span className="flex items-center gap-1.5">
+                          <span className={`w-1.5 h-1.5 rounded-full ${tempRecord.teDomasBalco ? 'bg-[#ff0090]' : 'bg-zinc-750'}`} />
+                          {language === 'ca' ? "Estandart / Domàs de Balcó Oficial tast 2026:" : "Estandarte / Domás de Balcón Oficial tast 2026:"}
+                        </span>
+                        <span className={`font-bold ${tempRecord.teDomasBalco ? 'text-zinc-200' : 'text-zinc-600'}`}>
+                          {tempRecord.teDomasBalco ? "+15.00€" : "0.00€"}
+                        </span>
+                      </div>
+
+                      {/* Scarf element */}
+                      <div className="flex justify-between items-center">
+                        <span className="flex items-center gap-1.5">
+                          <span className={`w-1.5 h-1.5 rounded-full ${tempRecord.teMocadorsExtra > 0 ? 'bg-cyan-500 animate-pulse' : 'bg-zinc-750'}`} />
+                          {language === 'ca' ? "Mocadors / Fulards addicionals de colla:" : "Pañuelos / Fulards adicionales de colla:"} 
+                          {tempRecord.teMocadorsExtra > 0 && <span className="bg-white/5 px-2 py-0.5 rounded text-[8px] font-bold text-zinc-305">({tempRecord.teMocadorsExtra} u.)</span>}
+                        </span>
+                        <span className={`font-bold ${tempRecord.teMocadorsExtra > 0 ? 'text-zinc-200' : 'text-zinc-600'}`}>
+                          {tempRecord.teMocadorsExtra > 0 ? `+${tempRecord.teMocadorsExtra * 5}.00€` : "0.00€"}
+                        </span>
+                      </div>
+
+                      {/* Clothing uniform selection */}
+                      {(tempRecord.c1UniformeTipus || tempRecord.c2UniformeTipus) && (
+                        <div className="flex justify-between items-center bg-zinc-950 p-2 rounded-xl mt-1 border border-white/5">
+                          <span className="text-zinc-500 font-bold uppercase text-[9px]">{language === 'ca' ? "KIT COMPARPERS COMPLET VESTIT:" : "KIT COMPARTIDO COMPLETO VESTUARIO:"}</span>
+                          <span className="text-emerald-500 font-bold text-[10px] tracking-tight">{language === 'ca' ? "GRATUÏT / SOTA QUOTA" : "GRATUITO / BAJO CUOTA"}</span>
+                        </div>
+                      )}
+
+                      <div className="flex justify-between items-center border-t border-white/10 pt-2.5 mt-2.5 text-xs font-bold text-white">
+                        <span className="uppercase text-zinc-150 flex items-center gap-1 text-[11px] font-sans">
+                          <Zap size={12} className="text-[#ff0090]" />
+                          {language === 'ca' ? "TOTAL QUOTA LIQUIDACIÓN:" : "TOTAL CUOTA LIQUIDACIÓN:"}
+                        </span>
+                        <span className="text-xl font-black text-[#ff0090] bg-zinc-950/90 border border-white/5 px-3 py-1 rounded-xl shadow-inner font-mono tracking-tight">
+                          {tempRecord.preuCalculat}.00€
+                        </span>
+                      </div>
                     </div>
                   </div>
 
@@ -873,6 +1169,40 @@ export default function AdminScanner({
                       <Check size={14} className="stroke-[3]" /> {language === 'ca' ? "Desar i Finalitzar Fitxa" : "Guardar y Finalizar Ficha"}
                     </button>
                   </div>
+
+                  {/* Zoom Document Overlay Modal */}
+                  {zoomedDniUrl && (
+                    <div 
+                      className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-md flex flex-col items-center justify-center p-4 transition-all animate-fadeIn" 
+                      onClick={() => setZoomedDniUrl(null)}
+                      id="dni-zoom-portal-modal"
+                    >
+                      <div className="absolute top-4 right-4 text-white hover:text-[#ff0090] cursor-pointer p-2 bg-white/5 hover:bg-[#ff0090]/15 rounded-full transition" onClick={() => setZoomedDniUrl(null)}>
+                        <X size={24} />
+                      </div>
+                      <div className="max-w-3xl w-full bg-zinc-950 border border-white/10 rounded-3xl p-5 flex flex-col items-center space-y-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+                        <div className="w-full flex items-center justify-between border-b border-white/5 pb-3">
+                          <h5 className="font-sans font-black text-xs text-zinc-400 font-mono tracking-wider uppercase flex items-center gap-2">
+                            <ShieldCheck size={14} className="text-[#ff0090]" />
+                            {language === 'ca' ? "CONTROL DOCUMENTAL ORIGINAL DNI / NIE DE SECRETARIA" : "CONTROL DOCUMENTAL ORIGINAL DNI / NIE DE SECRETARÍA"}
+                          </h5>
+                          <button type="button" className="text-xs text-zinc-450 hover:text-white font-mono font-bold px-3 py-1 bg-zinc-90 w-auto bg-zinc-900 rounded-lg hover:bg-neutral-800 transition" onClick={() => setZoomedDniUrl(null)}>
+                            {language === 'ca' ? "Tancar" : "Cerrar"}
+                          </button>
+                        </div>
+                        <div className="w-full max-h-[60vh] overflow-auto flex items-center justify-center rounded-2xl bg-zinc-900 border border-white/5 p-2 shadow-inner">
+                          <img src={zoomedDniUrl} alt="Zoomed DNI Document" className="max-w-full max-h-[55vh] object-contain rounded-lg shadow-lg" referrerPolicy="no-referrer" />
+                        </div>
+                        <div className="text-center font-sans bg-[#ff0090]/5 p-3 rounded-xl border border-[#ff0090]/20 w-full">
+                          <p className="text-[11px] text-zinc-350 leading-relaxed font-semibold">
+                            {language === 'ca' 
+                              ? "Consell d'Auditoria: Verifiqueu que el nom del titular coincideix literalment amb l'alta i que és resident actual del sector."
+                              : "Consejo de Auditoría: Verifique que el nombre del titular coincida literalmente con el alta y que sea residente actual del sector."}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                 </div>
               ) : (
