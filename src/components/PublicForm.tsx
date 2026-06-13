@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 import { CategoriaParella, SistemaConfig, Inscripcio, EstatPagament, EstatVerificacio, EstatInscripcio } from '../types';
 import { useLanguage } from '../LanguageContext';
-import TranslatedText from './TranslatedText';
+import TranslatedText, { TranslatedOption } from './TranslatedText';
 
 interface PublicFormProps {
   config: SistemaConfig;
@@ -1659,7 +1659,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
                     >
                       <option value="">{language === 'ca' ? "-- Selecciona una opció --" : "-- Selecciona una opción --"}</option>
                       {q.opcions?.map((opt, i) => (
-                        <option key={i} value={opt}>{opt}</option>
+                        <TranslatedOption key={i} value={opt} />
                       ))}
                     </select>
                   )}
@@ -1782,7 +1782,9 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
                 {genericExtras.map((extr) => (
                   <div key={extr.id} className="flex items-center justify-between p-4 bg-zinc-50 rounded-2xl border border-zinc-100">
                     <div className="space-y-0.5">
-                      <h4 className="font-sans font-bold text-sm text-zinc-850">{extr.nom}</h4>
+                      <h4 className="font-sans font-bold text-sm text-zinc-850">
+                        <TranslatedText text={extr.nom} />
+                      </h4>
                       <p className="text-zinc-500 text-xs">
                         {language === 'ca' 
                           ? "Complement addicional configurat per l'administració de l'entitat." 

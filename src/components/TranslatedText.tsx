@@ -61,3 +61,44 @@ export default function TranslatedText({
     </Component>
   );
 }
+
+// React custom hook to translate a raw text string reactively
+export function useTranslatedText(text: string): string {
+  const { language } = useLanguage();
+  const [translated, setTranslated] = useState(text);
+
+  useEffect(() => {
+    if (!text || !text.trim()) {
+      setTranslated('');
+      return;
+    }
+    let isMounted = true;
+    async function doTranslation() {
+      try {
+        const res = await translateText(text, 'auto', language);
+        if (isMounted) {
+          setTranslated(res);
+        }
+      } catch (e) {
+        if (isMounted) setTranslated(text);
+      }
+    }
+    doTranslation();
+    return () => {
+      isMounted = false;
+    };
+  }, [text, language]);
+
+  return translated;
+}
+
+// Option element helper to dynamically translate options in drop-down selects
+export function TranslatedOption({ value, ...props }: { value: string } & React.OptionHTMLAttributes<HTMLOptionElement>) {
+  const translated = useTranslatedText(value);
+  return (
+    <option value={value} {...props}>
+      {translated}
+    </option>
+  );
+}
+

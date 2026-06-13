@@ -22,6 +22,7 @@ import {
   QrCode
 } from 'lucide-react';
 import { useLanguage } from '../LanguageContext';
+import TranslatedText from './TranslatedText';
 import { Inscripcio, EstatPagament, EstatVerificacio, EstatInscripcio, MetodePagament, CategoriaParella, SistemaConfig } from '../types';
 
 interface AdminFichaProps {
@@ -561,23 +562,30 @@ export default function AdminFicha({ registration, config, onBack, onSave }: Adm
                 </span>
                 <div className="divide-y divide-zinc-200/60 text-xs space-y-3 pt-1">
                   {Object.entries(registration.respostesCuestionari).map(([key, value]) => {
-                    // Match key question text statically representation for realistic view
-                    let label = `Pregunta (${key})`;
-                    if (key === 'preg-1') {
+                    // Match key question text dynamically from config or use fallbacks
+                    let label = "";
+                    const configPregunta = config?.preguntesFormulari?.find(p => p.id === key);
+                    if (configPregunta) {
+                      label = configPregunta.titol;
+                    } else if (key === 'preg-1' || key === 'q-1') {
                       label = language === 'ca' ? "Primera vegada tolerant amb El Tast?" : "¿Primera vez saliendo con El Tast?";
-                    }
-                    if (key === 'preg-2') {
+                    } else if (key === 'preg-2' || key === 'q-2') {
                       label = language === 'ca' ? "Participació al dinar de germanor de la colla?" : "¿Participación en la comida de hermandad de la colla?";
-                    }
-                    if (key === 'preg-3') {
+                    } else if (key === 'preg-3' || key === 'q-3') {
                       label = language === 'ca' ? "Intoleràncies alimentàries o comentaris dietètics:" : "Intolerancias alimentarias o comentarios dietéticos:";
+                    } else {
+                      label = key;
                     }
                     
                     return (
                       <div key={key} className="pt-2">
-                        <p className="font-bold text-zinc-800 mb-1 leading-relaxed">{label}</p>
+                        <p className="font-bold text-zinc-800 mb-1 leading-relaxed">
+                          <TranslatedText text={label} />
+                        </p>
                         <p className="text-zinc-600 font-mono italic">
-                          {value === true ? 'Sí' : value === false ? 'No' : String(value || (language === 'ca' ? 'Sense resposta' : 'Sin respuesta'))}
+                          {value === true ? 'Sí' : value === false ? 'No' : (
+                            <TranslatedText text={String(value || (language === 'ca' ? 'Sense resposta' : 'Sin respuesta'))} />
+                          )}
                         </p>
                       </div>
                     );

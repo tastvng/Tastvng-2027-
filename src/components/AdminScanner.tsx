@@ -27,8 +27,9 @@ import {
   FileText,
   X
 } from 'lucide-react';
-import { Inscripcio, EstatPagament, EstatVerificacio, EstatInscripcio, MetodePagament, CategoriaParella } from '../types';
+import { Inscripcio, EstatPagament, EstatVerificacio, EstatInscripcio, MetodePagament, CategoriaParella, SistemaConfig } from '../types';
 import { useLanguage } from '../LanguageContext';
+import TranslatedText from './TranslatedText';
 import jsQR from 'jsqr';
 
 const checkAllMaterialDelivered = (rec: Inscripcio): boolean => {
@@ -47,6 +48,7 @@ const checkAllMaterialDelivered = (rec: Inscripcio): boolean => {
 
 interface AdminScannerProps {
   inscripcions: Inscripcio[];
+  config?: SistemaConfig;
   onSelectInscripcio: (id: string) => void;
   onBack: () => void;
   onAddLog?: (txt: string) => void;
@@ -55,6 +57,7 @@ interface AdminScannerProps {
 
 export default function AdminScanner({ 
   inscripcions, 
+  config,
   onSelectInscripcio, 
   onBack, 
   onAddLog,
@@ -940,16 +943,36 @@ export default function AdminScanner({
                         {language === 'ca' ? "📋 RESPOSTES COMPLEMENTÀRIES AL FORMULARI" : "📋 RESPUESTAS COMPLEMENTARIAS AL FORMULARIO"}
                       </p>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                        {Object.entries(tempRecord.respostesCuestionari).map(([clau, valor]) => (
-                          <div key={clau} className="p-2.5 rounded-xl bg-zinc-950 border border-white/5 flex items-center justify-between gap-2 min-w-0">
-                            <span className="text-zinc-500 font-medium truncate shrink-0">{clau}:</span>
-                            <span className="text-white font-bold font-mono text-right truncate">
-                              {typeof valor === 'boolean' 
-                                ? (valor ? (language === 'ca' ? "SÍ" : "SÍ") : (language === 'ca' ? "NO" : "NO")) 
-                                : String(valor)}
-                            </span>
-                          </div>
-                        ))}
+                        {Object.entries(tempRecord.respostesCuestionari).map(([clau, valor]) => {
+                          let label = "";
+                          const configPregunta = config?.preguntesFormulari?.find(p => p.id === clau);
+                          if (configPregunta) {
+                            label = configPregunta.titol;
+                          } else if (clau === 'preg-1' || clau === 'q-1') {
+                            label = language === 'ca' ? "Primera vegada tolerant amb El Tast?" : "¿Primera vez saliendo con El Tast?";
+                          } else if (clau === 'preg-2' || clau === 'q-2') {
+                            label = language === 'ca' ? "Participació al dinar de germanor de la colla?" : "¿Participación en la comida de hermandad de la colla?";
+                          } else if (clau === 'preg-3' || clau === 'q-3') {
+                            label = language === 'ca' ? "Intoleràncies alimentàries o comentaris dietètics:" : "Intolerancias alimentarias o comentarios dietéticos:";
+                          } else {
+                            label = clau;
+                          }
+                          
+                          return (
+                            <div key={clau} className="p-2.5 rounded-xl bg-zinc-950 border border-white/5 flex items-center justify-between gap-2 min-w-0">
+                              <span className="text-zinc-500 font-medium truncate shrink-0 max-w-[60%]">
+                                <TranslatedText text={label} />:
+                              </span>
+                              <span className="text-white font-bold font-mono text-right truncate">
+                                {typeof valor === 'boolean' 
+                                  ? (valor ? (language === 'ca' ? "SÍ" : "SÍ") : (language === 'ca' ? "NO" : "NO")) 
+                                  : (
+                                    <TranslatedText text={String(valor)} />
+                                  )}
+                              </span>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   )}

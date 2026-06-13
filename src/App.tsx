@@ -765,6 +765,7 @@ export default function App() {
             {view === 'admin-scanner' && (
               <AdminScanner 
                 inscripcions={inscripcions}
+                config={config}
                 onSelectInscripcio={(id) => {
                   setEditId(id);
                   setView('admin-ficha');
