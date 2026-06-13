@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import { Inscripcio, EstatPagament, EstatVerificacio, EstatInscripcio, MetodePagament } from '../types';
 import { useLanguage } from '../LanguageContext';
+import jsQR from 'jsqr';
 
 interface AdminScannerProps {
   inscripcions: Inscripcio[];
@@ -60,11 +61,33 @@ export default function AdminScanner({
   const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Synchronous multi-device pairing key (Randomly generated once per PC admin session)
-  const [syncKey] = useState(() => Math.random().toString(36).substring(2, 8).toUpperCase());
+  // Synchronous multi-device pairing key (Persisted to prevent unlinking on view toggle)
+  const [syncKey] = useState(() => {
+    try {
+      const savedKey = localStorage.getItem('tast_scanner_sync_key');
+      if (savedKey && savedKey.trim().length === 6) {
+        return savedKey.trim().toUpperCase();
+      }
+      const newKey = Math.random().toString(36).substring(2, 8).toUpperCase();
+      localStorage.setItem('tast_scanner_sync_key', newKey);
+      return newKey;
+    } catch (e) {
+      return Math.random().toString(36).substring(2, 8).toUpperCase();
+    }
+  });
+
   const [isLinkedDeviceActive, setIsLinkedDeviceActive] = useState(false);
   const [showPairingModal, setShowPairingModal] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
+
+  // Fallback and manual search states
+  const [manualSearchText, setManualSearchText] = useState('');
+  const [searchFeedback, setSearchFeedback] = useState<string | null>(null);
+
+  // Webcam live scanner refs
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const animationFrameId = useRef<number | null>(null);
+  const isWebcamScanning = useRef<boolean>(false);
 
   // SSE and HTTPS Polling double engine sync service
   useEffect(() => {
@@ -204,9 +227,81 @@ export default function AdminScanner({
 
   useEffect(() => {
     return () => {
-      stopCamera();
+      isWebcamScanning.current = false;
+      if (animationFrameId.current) {
+        cancelAnimationFrame(animationFrameId.current);
+        animationFrameId.current = null;
+      }
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
+      }
     };
   }, []);
+
+  const scanPCFrame = () => {
+    if (!videoRef.current || !streamRef.current || !isWebcamScanning.current) {
+      return;
+    }
+
+    const video = videoRef.current;
+    if (video.readyState === video.HAVE_ENOUGH_DATA) {
+      if (!canvasRef.current) {
+        canvasRef.current = document.createElement('canvas');
+      }
+      const canvas = canvasRef.current;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        
+        try {
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          const code = jsQR(imageData.data, imageData.width, imageData.height, {
+            inversionAttempts: 'dontInvert'
+          });
+
+          if (code && code.data) {
+            let decodedId = code.data.trim();
+
+            // Support scanning full query parameter URLs or deep-links safely
+            if (decodedId.includes('://') || decodedId.includes('?')) {
+              try {
+                const urlObj = new URL(decodedId);
+                const idParam = urlObj.searchParams.get('id') || urlObj.searchParams.get('code') || urlObj.searchParams.get('codi');
+                if (idParam) {
+                  decodedId = idParam;
+                } else {
+                  // Fallback: take final segment
+                  const pieces = urlObj.pathname.split('/').filter(Boolean);
+                  if (pieces.length > 0) {
+                    decodedId = pieces[pieces.length - 1];
+                  }
+                }
+              } catch (e) {
+                // block
+              }
+            }
+
+            // Trigger scan on matched ID
+            if (decodedId) {
+              triggerSynchronousScan(decodedId);
+              // Stop camera after scanning successfully to let user view details cleanly
+              stopCamera();
+              return;
+            }
+          }
+        } catch (e) {
+          // ignore frame read errors
+        }
+      }
+    }
+
+    if (isWebcamScanning.current) {
+      animationFrameId.current = requestAnimationFrame(scanPCFrame);
+    }
+  };
 
   const startCamera = async () => {
     setErrorMessage(null);
@@ -217,11 +312,19 @@ export default function AdminScanner({
       });
       streamRef.current = stream;
       setHasCameraPermission(true);
+      isWebcamScanning.current = true;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        // Wait a small delay before capturing frames to make sure stream is active
+        setTimeout(() => {
+          if (isWebcamScanning.current) {
+            animationFrameId.current = requestAnimationFrame(scanPCFrame);
+          }
+        }, 300);
       }
     } catch (e: any) {
       setHasCameraPermission(false);
+      isWebcamScanning.current = false;
       setErrorMessage(language === 'ca' 
         ? "Permís de càmera absent o dispositiu de captura ocupat." 
         : "Permiso de cámara ausente o dispositivo de captura ocupado.");
@@ -229,6 +332,11 @@ export default function AdminScanner({
   };
 
   const stopCamera = () => {
+    isWebcamScanning.current = false;
+    if (animationFrameId.current) {
+      cancelAnimationFrame(animationFrameId.current);
+      animationFrameId.current = null;
+    }
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop());
       streamRef.current = null;
@@ -238,8 +346,13 @@ export default function AdminScanner({
 
   // Perform synchronous data transmission (Scanner triggered!)
   const triggerSynchronousScan = (idOrCode: string) => {
+    if (!idOrCode) return;
+    const cleanId = idOrCode.trim().toLowerCase();
+    
+    // Support robust case-insensitive and trimmed checking
     const parentRecord = inscripcions.find(
-      i => i.id === idOrCode || i.codiSeguiment === idOrCode
+      i => i.id.trim().toLowerCase() === cleanId || 
+           i.codiSeguiment.trim().toLowerCase() === cleanId
     );
     if (!parentRecord) return;
 
@@ -257,6 +370,30 @@ export default function AdminScanner({
       // Create local copies of statuses so they can edit this sheet on screen!
       setTempRecord({ ...parentRecord });
     }, 600);
+  };
+
+  const handleManualSearch = () => {
+    if (!manualSearchText.trim()) return;
+    const cleanQuery = manualSearchText.trim().toLowerCase();
+    
+    // Find matching inscription by exact ID, code tracking, or name patterns
+    const match = inscripcions.find(
+      i => i.id.trim().toLowerCase() === cleanQuery || 
+           i.codiSeguiment.trim().toLowerCase() === cleanQuery ||
+           i.codiSeguiment.toLowerCase().includes(cleanQuery) ||
+           `${i.c1Nom} ${i.c1Cognoms}`.toLowerCase().includes(cleanQuery) ||
+           `${i.c2Nom} ${i.c2Cognoms}`.toLowerCase().includes(cleanQuery)
+    );
+    
+    if (match) {
+      setSearchFeedback(null);
+      setManualSearchText('');
+      triggerSynchronousScan(match.id);
+    } else {
+      setSearchFeedback(language === 'ca' 
+        ? "No s'ha trobat cap inscripció amb aquest criteri." 
+        : "No se encontró ninguna inscripción con este criterio.");
+    }
   };
 
   const handleMobileSelectionChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -788,6 +925,42 @@ export default function AdminScanner({
                       >
                         <Camera size={12} className="text-[#ff0090]" /> {language === 'ca' ? "Activar Càmera PC" : "Activar Cámara PC"}
                       </button>
+                    )}
+                  </div>
+
+                  {/* Fallback search code input panel */}
+                  <div className="mt-8 relative z-20 w-full max-w-sm px-4 bg-zinc-900/60 p-4 rounded-2xl border border-white/5 space-y-2">
+                    <p className="text-[10px] text-zinc-400 font-mono font-bold uppercase tracking-wider text-left">
+                      {language === 'ca' ? "O cerqueu manualment pel codi o nom:" : "O busque manualmente por código o nombre:"}
+                    </p>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={manualSearchText}
+                        onChange={(e) => {
+                          setManualSearchText(e.target.value);
+                          setSearchFeedback(null);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            handleManualSearch();
+                          }
+                        }}
+                        placeholder="Ex: TAST-2026-1234, Joan..."
+                        className="flex-1 bg-zinc-950 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white uppercase font-mono font-bold focus:outline-none focus:border-[#ff0090]"
+                        id="input-manual-clerk-search"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleManualSearch}
+                        className="bg-zinc-850 hover:bg-zinc-800 border border-white/10 text-white font-bold text-xs px-3.5 py-1.5 rounded-xl transition cursor-pointer shrink-0"
+                        id="btn-manual-clerk-search"
+                      >
+                        {language === 'ca' ? "Cercar" : "Buscar"}
+                      </button>
+                    </div>
+                    {searchFeedback && (
+                      <p className="text-[9px] text-[#ff0090] font-bold text-left animate-pulse">{searchFeedback}</p>
                     )}
                   </div>
 
