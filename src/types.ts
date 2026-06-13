@@ -83,6 +83,10 @@ export interface Inscripcio {
   metodePagament: MetodePagament | null;
   estatDni: EstatVerificacio;
   entregaMaterial: EstatInscripcio;
+  entregaC1Uniforme?: boolean;
+  entregaC2Uniforme?: boolean;
+  entregaDomas?: boolean;
+  entregaMocadors?: boolean;
   llistaEspera?: boolean;
   
   creadoEn: string;

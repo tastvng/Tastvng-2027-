@@ -31,6 +31,20 @@ import { Inscripcio, EstatPagament, EstatVerificacio, EstatInscripcio, MetodePag
 import { useLanguage } from '../LanguageContext';
 import jsQR from 'jsqr';
 
+const checkAllMaterialDelivered = (rec: Inscripcio): boolean => {
+  const hasC1 = !!rec.c1Talla;
+  const hasC2 = !!rec.c2Talla;
+  const hasDomas = rec.teDomasBalco;
+  const hasMocadors = rec.teMocadorsExtra > 0;
+
+  const c1Ok = hasC1 ? (rec.entregaC1Uniforme ?? (rec.entregaMaterial === EstatInscripcio.ENTREGAT)) : true;
+  const c2Ok = hasC2 ? (rec.entregaC2Uniforme ?? (rec.entregaMaterial === EstatInscripcio.ENTREGAT)) : true;
+  const domasOk = hasDomas ? (rec.entregaDomas ?? (rec.entregaMaterial === EstatInscripcio.ENTREGAT)) : true;
+  const mocadorsOk = hasMocadors ? (rec.entregaMocadors ?? (rec.entregaMaterial === EstatInscripcio.ENTREGAT)) : true;
+
+  return c1Ok && c2Ok && domasOk && mocadorsOk;
+};
+
 interface AdminScannerProps {
   inscripcions: Inscripcio[];
   onSelectInscripcio: (id: string) => void;
@@ -1095,22 +1109,138 @@ export default function AdminScanner({
                       </div>
 
                       {/* Material delivery form */}
-                      <div className="space-y-1.5 text-xs">
+                      <div className="space-y-1.5 text-xs col-span-1 md:col-span-3 bg-zinc-900/40 p-4 rounded-2xl border border-white/5">
                         <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest font-mono">
-                          {language === 'ca' ? "Lliurament de Fulard" : "Entrega de Pañuelo"}
+                          {language === 'ca' ? "Lliurament de Fulard / Material Escollit" : "Entrega de Pañuelo / Material Elegido"}
                         </label>
-                        <select
-                          value={tempRecord.entregaMaterial}
-                          onChange={(e) => setTempRecord({ ...tempRecord, entregaMaterial: e.target.value as EstatInscripcio })}
-                          className="w-full bg-[#121212] border border-white/10 rounded-xl px-3 py-2 text-xs font-mono text-white tracking-tight cursor-pointer focus:border-[#ff0090]"
-                        >
-                          <option value={EstatInscripcio.PENDENT}>
-                            {language === 'ca' ? "⚠️ MATERIAL PENDENT" : "⚠️ MATERIAL PENDIENTE"}
-                          </option>
-                          <option value={EstatInscripcio.ENTREGAT}>
-                            {language === 'ca' ? "✔ MATERIAL COMPLET LLIURAT" : "✔ MATERIAL COMPLETO ENTREGADO"}
-                          </option>
-                        </select>
+                        
+                        <div className="flex flex-col xl:flex-row gap-4 pt-1">
+                          {/* Left helper overall control */}
+                          <div className="xl:w-1/3 space-y-1.5">
+                            <span className="text-[10px] text-zinc-400 font-mono block">{language === 'ca' ? "Estat Global:" : "Estado Global:"}</span>
+                            <select
+                              value={tempRecord.entregaMaterial}
+                              onChange={(e) => {
+                                const val = e.target.value as EstatInscripcio;
+                                const hasC1 = !!tempRecord.c1Talla;
+                                const hasC2 = !!tempRecord.c2Talla;
+                                const hasDomas = tempRecord.teDomasBalco;
+                                const hasMocadors = tempRecord.teMocadorsExtra > 0;
+                                setTempRecord({ 
+                                  ...tempRecord, 
+                                  entregaMaterial: val,
+                                  entregaC1Uniforme: val === EstatInscripcio.ENTREGAT ? true : (hasC1 ? tempRecord.entregaC1Uniforme : undefined),
+                                  entregaC2Uniforme: val === EstatInscripcio.ENTREGAT ? true : (hasC2 ? tempRecord.entregaC2Uniforme : undefined),
+                                  entregaDomas: val === EstatInscripcio.ENTREGAT ? true : (hasDomas ? tempRecord.entregaDomas : undefined),
+                                  entregaMocadors: val === EstatInscripcio.ENTREGAT ? true : (hasMocadors ? tempRecord.entregaMocadors : undefined),
+                                });
+                              }}
+                              className="w-full bg-[#121212] border border-white/10 rounded-xl px-3 py-2 text-xs font-mono text-white tracking-tight cursor-pointer focus:border-[#ff0090]"
+                            >
+                              <option value={EstatInscripcio.PENDENT}>
+                                {language === 'ca' ? "⚠️ MATERIAL PARCIAL / PENDENT" : "⚠️ MATERIAL PARCIAL / PENDIENTE"}
+                              </option>
+                              <option value={EstatInscripcio.ENTREGAT}>
+                                {language === 'ca' ? "✔ MATERIAL COMPLET LLIURAT" : "✔ MATERIAL COMPLETO ENTREGADO"}
+                              </option>
+                            </select>
+                          </div>
+
+                          {/* Right side individual checkboxes */}
+                          <div className="flex-1 space-y-1.5">
+                            <span className="text-[10px] text-zinc-400 font-mono block">{language === 'ca' ? "Selecció de la Comanda realitzada:" : "Selección del Pedido realizado:"}</span>
+                            
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-neutral-950 p-2.5 rounded-xl border border-white/5">
+                              {/* 1. Comparser 1 size */}
+                              {tempRecord.c1Talla && (
+                                <label className="flex items-center gap-2 text-[11px] font-sans text-zinc-300 hover:text-white cursor-pointer select-none">
+                                  <input 
+                                    type="checkbox"
+                                    checked={tempRecord.entregaC1Uniforme ?? (tempRecord.entregaMaterial === EstatInscripcio.ENTREGAT)}
+                                    onChange={(e) => {
+                                      const checked = e.target.checked;
+                                      const newRecord = { ...tempRecord, entregaC1Uniforme: checked };
+                                      const allChecked = checkAllMaterialDelivered(newRecord);
+                                      newRecord.entregaMaterial = allChecked ? EstatInscripcio.ENTREGAT : EstatInscripcio.PENDENT;
+                                      setTempRecord(newRecord);
+                                    }}
+                                    className="rounded border-zinc-800 bg-[#121212] text-[#ff0090] focus:ring-0 focus:ring-offset-0 w-3.5 h-3.5 cursor-pointer accent-[#ff0090]"
+                                  />
+                                  <span>
+                                    {language === 'ca' ? "P1 Talla: " : "P1 Talla: "} <strong className="font-mono text-[#ff0090]">{tempRecord.c1Talla}</strong>
+                                    {tempRecord.c1UniformeTipus && <span className="text-[9px] text-zinc-500 block">({tempRecord.c1UniformeTipus})</span>}
+                                  </span>
+                                </label>
+                              )}
+
+                              {/* 2. Comparser 2 size */}
+                              {tempRecord.c2Talla && (
+                                <label className="flex items-center gap-2 text-[11px] font-sans text-zinc-300 hover:text-white cursor-pointer select-none">
+                                  <input 
+                                    type="checkbox"
+                                    checked={tempRecord.entregaC2Uniforme ?? (tempRecord.entregaMaterial === EstatInscripcio.ENTREGAT)}
+                                    onChange={(e) => {
+                                      const checked = e.target.checked;
+                                      const newRecord = { ...tempRecord, entregaC2Uniforme: checked };
+                                      const allChecked = checkAllMaterialDelivered(newRecord);
+                                      newRecord.entregaMaterial = allChecked ? EstatInscripcio.ENTREGAT : EstatInscripcio.PENDENT;
+                                      setTempRecord(newRecord);
+                                    }}
+                                    className="rounded border-zinc-800 bg-[#121212] text-[#ff0090] focus:ring-0 focus:ring-offset-0 w-3.5 h-3.5 cursor-pointer accent-[#ff0090]"
+                                  />
+                                  <span>
+                                    {language === 'ca' ? "P2 Talla: " : "P2 Talla: "} <strong className="font-mono text-[#ff0090]">{tempRecord.c2Talla}</strong>
+                                    {tempRecord.c2UniformeTipus && <span className="text-[9px] text-zinc-500 block">({tempRecord.c2UniformeTipus})</span>}
+                                  </span>
+                                </label>
+                              )}
+
+                              {/* 3. Domàs de balcó */}
+                              {tempRecord.teDomasBalco && (
+                                <label className="flex items-center gap-2 text-[11px] font-sans text-zinc-300 hover:text-white cursor-pointer select-none">
+                                  <input 
+                                    type="checkbox"
+                                    checked={tempRecord.entregaDomas ?? (tempRecord.entregaMaterial === EstatInscripcio.ENTREGAT)}
+                                    onChange={(e) => {
+                                      const checked = e.target.checked;
+                                      const newRecord = { ...tempRecord, entregaDomas: checked };
+                                      const allChecked = checkAllMaterialDelivered(newRecord);
+                                      newRecord.entregaMaterial = allChecked ? EstatInscripcio.ENTREGAT : EstatInscripcio.PENDENT;
+                                      setTempRecord(newRecord);
+                                    }}
+                                    className="rounded border-zinc-800 bg-[#121212] text-[#ff0090] focus:ring-0 focus:ring-offset-0 w-3.5 h-3.5 cursor-pointer accent-[#ff0090]"
+                                  />
+                                  <span>
+                                    {language === 'ca' ? "🏡 Domàs de Balcó" : "🏡 Domás de Balcón"}
+                                    <span className="text-[9px] text-zinc-500 block">(1 u.)</span>
+                                  </span>
+                                </label>
+                              )}
+
+                              {/* 4. Mocadors Extra */}
+                              {tempRecord.teMocadorsExtra > 0 && (
+                                <label className="flex items-center gap-2 text-[11px] font-sans text-zinc-300 hover:text-white cursor-pointer select-none">
+                                  <input 
+                                    type="checkbox"
+                                    checked={tempRecord.entregaMocadors ?? (tempRecord.entregaMaterial === EstatInscripcio.ENTREGAT)}
+                                    onChange={(e) => {
+                                      const checked = e.target.checked;
+                                      const newRecord = { ...tempRecord, entregaMocadors: checked };
+                                      const allChecked = checkAllMaterialDelivered(newRecord);
+                                      newRecord.entregaMaterial = allChecked ? EstatInscripcio.ENTREGAT : EstatInscripcio.PENDENT;
+                                      setTempRecord(newRecord);
+                                    }}
+                                    className="rounded border-zinc-800 bg-[#121212] text-[#ff0090] focus:ring-0 focus:ring-offset-0 w-3.5 h-3.5 cursor-pointer accent-[#ff0090]"
+                                  />
+                                  <span>
+                                    {language === 'ca' ? "🧣 Mocadors Extra" : "🧣 Pañuelos Extra"}
+                                    <span className="text-[9px] text-[#ff0090] block">({tempRecord.teMocadorsExtra} u. sol·licitats)</span>
+                                  </span>
+                                </label>
+                              )}
+                            </div>
+                          </div>
+                        </div>
                       </div>
 
                     </div>

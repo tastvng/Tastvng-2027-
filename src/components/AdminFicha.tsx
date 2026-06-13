@@ -38,6 +38,22 @@ export default function AdminFicha({ registration, config, onBack, onSave }: Adm
   const [metodePagament, setMetodePagament] = useState<MetodePagament | null>(registration.metodePagament);
   const [estatDni, setEstatDni] = useState<EstatVerificacio>(registration.estatDni);
   const [entregaMaterial, setEntregaMaterial] = useState<EstatInscripcio>(registration.entregaMaterial);
+  const [entregaC1Uniforme, setEntregaC1Uniforme] = useState<boolean>(() => {
+    if (registration.entregaC1Uniforme !== undefined) return registration.entregaC1Uniforme;
+    return registration.entregaMaterial === EstatInscripcio.ENTREGAT;
+  });
+  const [entregaC2Uniforme, setEntregaC2Uniforme] = useState<boolean>(() => {
+    if (registration.entregaC2Uniforme !== undefined) return registration.entregaC2Uniforme;
+    return registration.entregaMaterial === EstatInscripcio.ENTREGAT;
+  });
+  const [entregaDomas, setEntregaDomas] = useState<boolean>(() => {
+    if (registration.entregaDomas !== undefined) return registration.entregaDomas;
+    return registration.entregaMaterial === EstatInscripcio.ENTREGAT;
+  });
+  const [entregaMocadors, setEntregaMocadors] = useState<boolean>(() => {
+    if (registration.entregaMocadors !== undefined) return registration.entregaMocadors;
+    return registration.entregaMaterial === EstatInscripcio.ENTREGAT;
+  });
   const [llistaEspera, setLlistaEspera] = useState<boolean>(!!registration.llistaEspera);
 
   // Participant Editable configurations
@@ -132,6 +148,10 @@ export default function AdminFicha({ registration, config, onBack, onSave }: Adm
       metodePagament: estatPagament === EstatPagament.PAGAT ? metodePagament : null,
       estatDni,
       entregaMaterial,
+      entregaC1Uniforme,
+      entregaC2Uniforme,
+      entregaDomas,
+      entregaMocadors,
       llistaEspera,
       actualizadoEn: new Date().toISOString()
     };
@@ -784,19 +804,26 @@ export default function AdminFicha({ registration, config, onBack, onSave }: Adm
             </div>
 
             {/* Segment 3: Material Delivery */}
-            <div className="space-y-2 border-t border-zinc-900 pt-4">
+            <div className="space-y-2 border-t border-zinc-900 pt-4" id="segment-material-delivery">
               <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider font-mono">
                 {language === 'ca' ? "Lliurament de Fulard / Mocador / Armilla" : "Entrega de Pañuelo / Pañoleta / Chaleco"}
               </label>
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
-                  onClick={() => setEntregaMaterial(EstatInscripcio.PENDENT)}
+                  onClick={() => {
+                    setEntregaMaterial(EstatInscripcio.PENDENT);
+                    setEntregaC1Uniforme(false);
+                    setEntregaC2Uniforme(false);
+                    setEntregaDomas(false);
+                    setEntregaMocadors(false);
+                  }}
                   className={`py-2 rounded-xl text-xs font-bold transition-all ${
                     entregaMaterial === EstatInscripcio.PENDENT 
                       ? 'bg-zinc-850 text-white border border-zinc-700' 
                       : 'bg-zinc-900 text-zinc-500 hover:bg-zinc-850'
                   }`}
+                  id="btn-material-pendent"
                 >
                   {language === 'ca' ? "Pendent d'entregar" : "Pendiente de entregar"}
                 </button>
@@ -804,7 +831,10 @@ export default function AdminFicha({ registration, config, onBack, onSave }: Adm
                   type="button"
                   onClick={() => {
                     setEntregaMaterial(EstatInscripcio.ENTREGAT);
-                    // Standard visual quality of life check
+                    setEntregaC1Uniforme(true);
+                    setEntregaC2Uniforme(true);
+                    setEntregaDomas(true);
+                    setEntregaMocadors(true);
                     if (estatDni === EstatVerificacio.PENDENT) {
                       setEstatDni(EstatVerificacio.VALIDAT);
                     }
@@ -814,9 +844,109 @@ export default function AdminFicha({ registration, config, onBack, onSave }: Adm
                       ? 'bg-fuchsia-600 text-white shadow shadow-fuchsia-600/10' 
                       : 'bg-zinc-900 text-zinc-500 hover:bg-zinc-850'
                   }`}
+                  id="btn-material-entregat"
                 >
                   {language === 'ca' ? "Lliurat Complet" : "Entregado Completo"}
                 </button>
+              </div>
+
+              {/* Checklist details matching ordered elements */}
+              <div className="mt-2 text-xs bg-zinc-950/60 p-3 rounded-2xl border border-zinc-900 space-y-2">
+                <span className="block text-[9px] font-mono font-bold text-zinc-500 uppercase tracking-widest">
+                  {language === 'ca' ? "DETALL DE LA COMANDA A LLIURAR:" : "DETALLE DEL PEDIDO A ENTREGAR:"}
+                </span>
+
+                <div className="space-y-2 text-[11px]">
+                  {/* 1. Comparser 1 size */}
+                  {c1Talla && (
+                    <label className="flex items-center gap-2.5 text-zinc-300 hover:text-white cursor-pointer select-none">
+                      <input 
+                        type="checkbox"
+                        checked={entregaC1Uniforme}
+                        onChange={(e) => {
+                          const val = e.target.checked;
+                          setEntregaC1Uniforme(val);
+                          const allChecked = val && (!c2Talla || entregaC2Uniforme) && (!registration.teDomasBalco || entregaDomas) && (!(registration.teMocadorsExtra > 0) || entregaMocadors);
+                          setEntregaMaterial(allChecked ? EstatInscripcio.ENTREGAT : EstatInscripcio.PENDENT);
+                        }}
+                        className="rounded border-zinc-800 bg-[#121212] text-[#ff0090] focus:ring-0 focus:ring-offset-0 w-3.5 h-3.5 cursor-pointer accent-[#ff0090]"
+                        id="chk-entrega-c1"
+                      />
+                      <span className="leading-tight">
+                        {language === 'ca' ? "👚 Vestidor Coparticipant 1 - Talla: " : "👚 Vestuario Coparticipante 1 - Talla: "}
+                        <strong className="font-mono text-[#ff0090]">{c1Talla}</strong> 
+                        <span className="text-[10px] text-zinc-500 ml-1">({c1UniformeTipus})</span>
+                      </span>
+                    </label>
+                  )}
+
+                  {/* 2. Comparser 2 size */}
+                  {c2Talla && (
+                    <label className="flex items-center gap-2.5 text-zinc-300 hover:text-white cursor-pointer select-none">
+                      <input 
+                        type="checkbox"
+                        checked={entregaC2Uniforme}
+                        onChange={(e) => {
+                          const val = e.target.checked;
+                          setEntregaC2Uniforme(val);
+                          const allChecked = (!c1Talla || entregaC1Uniforme) && val && (!registration.teDomasBalco || entregaDomas) && (!(registration.teMocadorsExtra > 0) || entregaMocadors);
+                          setEntregaMaterial(allChecked ? EstatInscripcio.ENTREGAT : EstatInscripcio.PENDENT);
+                        }}
+                        className="rounded border-zinc-800 bg-[#121212] text-[#ff0090] focus:ring-0 focus:ring-offset-0 w-3.5 h-3.5 cursor-pointer accent-[#ff0090]"
+                        id="chk-entrega-c2"
+                      />
+                      <span className="leading-tight">
+                        {language === 'ca' ? "👚 Vestidor Coparticipant 2 - Talla: " : "👚 Vestuario Coparticipante 2 - Talla: "}
+                        <strong className="font-mono text-[#ff0090]">{c2Talla}</strong> 
+                        <span className="text-[10px] text-zinc-500 ml-1">({c2UniformeTipus})</span>
+                      </span>
+                    </label>
+                  )}
+
+                  {/* 3. Domàs de balcó */}
+                  {registration.teDomasBalco && (
+                    <label className="flex items-center gap-2.5 text-zinc-300 hover:text-white cursor-pointer select-none">
+                      <input 
+                        type="checkbox"
+                        checked={entregaDomas}
+                        onChange={(e) => {
+                          const val = e.target.checked;
+                          setEntregaDomas(val);
+                          const allChecked = (!c1Talla || entregaC1Uniforme) && (!c2Talla || entregaC2Uniforme) && val && (!(registration.teMocadorsExtra > 0) || entregaMocadors);
+                          setEntregaMaterial(allChecked ? EstatInscripcio.ENTREGAT : EstatInscripcio.PENDENT);
+                        }}
+                        className="rounded border-zinc-800 bg-[#121212] text-[#ff0090] focus:ring-0 focus:ring-offset-0 w-3.5 h-3.5 cursor-pointer accent-[#ff0090]"
+                        id="chk-entrega-domas"
+                      />
+                      <span className="leading-tight">
+                        {language === 'ca' ? "🏡 Domàs de Balcó Oficial" : "🏡 Domás de Balcón Oficial"} 
+                        <span className="text-[10px] text-zinc-500 ml-1">(1 unitat)</span>
+                      </span>
+                    </label>
+                  )}
+
+                  {/* 4. Mocadors Extra */}
+                  {registration.teMocadorsExtra > 0 && (
+                    <label className="flex items-center gap-2.5 text-zinc-300 hover:text-white cursor-pointer select-none">
+                      <input 
+                        type="checkbox"
+                        checked={entregaMocadors}
+                        onChange={(e) => {
+                          const val = e.target.checked;
+                          setEntregaMocadors(val);
+                          const allChecked = (!c1Talla || entregaC1Uniforme) && (!c2Talla || entregaC2Uniforme) && (!registration.teDomasBalco || entregaDomas) && val;
+                          setEntregaMaterial(allChecked ? EstatInscripcio.ENTREGAT : EstatInscripcio.PENDENT);
+                        }}
+                        className="rounded border-zinc-800 bg-[#121212] text-[#ff0090] focus:ring-0 focus:ring-offset-0 w-3.5 h-3.5 cursor-pointer accent-[#ff0090]"
+                        id="chk-entrega-mocadors"
+                      />
+                      <span className="leading-tight">
+                        {language === 'ca' ? "🧣 Mocadors Extra de Colla" : "🧣 Pañuelos Extra de Colla"} 
+                        <strong className="text-[#ff0090] font-mono ml-1">({registration.teMocadorsExtra} u.)</strong>
+                      </span>
+                    </label>
+                  )}
+                </div>
               </div>
             </div>
 
