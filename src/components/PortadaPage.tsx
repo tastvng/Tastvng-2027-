@@ -17,8 +17,8 @@ export interface PortadaConfig {
   bgColor: string;
   bgImatgeUrl: string;
   bgVideoUrl: string;
-  
-  contingutTipus: 'none' | 'imatge' | 'video';
+
+  contingutTipus: 'none' | 'imatge' | 'video' | 'alternar';
   contingutImatgeUrl: string;
   contingutVideoUrl: string;
   
