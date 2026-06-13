@@ -421,212 +421,210 @@ export default function AdminPortada({ language, onAddLog }: AdminPortadaProps) 
         {/* Left Side: Parameters customize form */}
         <div className="lg:col-span-7 space-y-6">
           
-          {/* Subtitle / Language segment tabs */}
-          <div className="flex justify-between items-center bg-zinc-900 border border-zinc-800 rounded-xl p-1 flex-wrap gap-2">
-            <div className="flex items-center gap-1">
-              <span className="text-[10px] font-mono px-3 text-zinc-500 uppercase tracking-widest font-bold">Idioma Continguts:</span>
-              <button
-                type="button"
-                onClick={() => setActiveLangTab('ca')}
-                className={`text-[10px] font-sans font-black tracking-tight px-3 py-1.5 rounded-lg transition-all cursor-pointer uppercase ${
-                  activeLangTab === 'ca' 
-                    ? 'bg-[#ff0090] text-white shadow-md' 
-                    : 'text-zinc-400 hover:text-white'
-                }`}
-              >
-                Català (VNG)
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveLangTab('es')}
-                className={`text-[10px] font-sans font-black tracking-tight px-3 py-1.5 rounded-lg transition-all cursor-pointer uppercase ${
-                  activeLangTab === 'es' 
-                    ? 'bg-[#ff0090] text-white shadow-md' 
-                    : 'text-zinc-400 hover:text-white'
-                }`}
-              >
-                Castellano
-              </button>
-            </div>
-
-            <div className="flex items-center gap-1.5 pr-3">
-              <label className="flex items-center gap-1.5 cursor-pointer text-[10px] text-zinc-400 select-none">
-                <input 
-                  type="checkbox"
-                  checked={autoTranslate}
-                  onChange={(e) => setAutoTranslate(e.target.checked)}
-                  className="rounded border-zinc-700 bg-zinc-800 text-[#ff0090] focus:ring-0 accent-[#ff0090] w-3 h-3 cursor-pointer"
-                />
-                <span className={autoTranslate ? "text-[#ff0090] font-black uppercase tracking-wider animate-pulse" : "uppercase tracking-wider"}>
-                  {language === 'ca' ? "Auto-traducció IA ✨" : "Auto-traducción IA ✨"}
-                </span>
-              </label>
-            </div>
-          </div>
-
-          {/* Texts Segment according to language tab */}
+          {/* Texts Segment - ONE SINGLE FIELD FOR BOTH LANGUAGES */}
           <div className="bg-zinc-50 border border-zinc-150 rounded-2xl p-5 space-y-4 text-left">
-            <h4 className="font-sans font-bold text-xs text-zinc-700 uppercase tracking-widest flex items-center gap-1.5 border-b border-zinc-200 pb-2">
-              <FileText size={14} className="text-[#ff0090]" />
-              {language === 'ca' ? "Títols i Copys de Text" : "Títulos y Copys de Texto"}
-              <span className="text-[9px] bg-zinc-800 text-white font-mono font-extrabold px-1.5 py-0.5 rounded ml-auto">
-                {activeLangTab.toUpperCase()}
-              </span>
-            </h4>
+            <div className="flex justify-between items-center border-b border-zinc-200 pb-2">
+              <h4 className="font-sans font-bold text-xs text-zinc-700 uppercase tracking-widest flex items-center gap-1.5">
+                <FileText size={14} className="text-[#ff0090]" />
+                {language === 'ca' ? "Textos de la Coberta" : "Textos de la Portada"}
+              </h4>
+              <div className="flex items-center gap-10">
+                <label className="flex items-center gap-1.5 cursor-pointer text-[10px] text-zinc-500 select-none">
+                  <input 
+                    type="checkbox"
+                    checked={autoTranslate}
+                    onChange={(e) => setAutoTranslate(e.target.checked)}
+                    className="rounded border-zinc-300 bg-white text-[#ff0090] focus:ring-0 accent-[#ff0090] w-3 h-3 cursor-pointer"
+                  />
+                  <span className={autoTranslate ? "text-[#ff0090] font-black uppercase tracking-wider animate-pulse" : "uppercase tracking-wider"}>
+                    Sincro IA ✨
+                  </span>
+                </label>
+                <span className="text-[9px] bg-zinc-805 bg-[#ff0090] text-white font-mono font-extrabold px-1.5 py-0.5 rounded">
+                  {language.toUpperCase()} ACTIU
+                </span>
+              </div>
+            </div>
 
-            {activeLangTab === 'ca' ? (
-              <div className="space-y-4">
-                <div>
-                  <div className="flex justify-between items-center mb-1">
-                    <label className="block text-[10px] text-zinc-550 uppercase font-mono font-extrabold">Títol de la Portada (CAT) *</label>
-                    {translatingFields['titolES'] && <span className="text-[9px] text-[#ff0090] font-black animate-pulse flex items-center gap-1">✨ Traduint a l'espanyol...</span>}
-                  </div>
-                  <input 
-                    type="text"
-                    required
-                    value={config.titolCA}
-                    onChange={(e) => updateField('titolCA', e.target.value)}
-                    onBlur={() => handleBlurTranslate('titolCA', 'titolES', 'ca', 'es')}
-                    placeholder="El títol principal cridaner..."
-                    className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all placeholder-zinc-400"
-                  />
+            <div className="space-y-4">
+              {/* Títol / Título */}
+              <div>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="block text-[10px] text-zinc-550 uppercase font-mono font-extrabold">
+                    {language === 'ca' ? "Títol de la Portada *" : "Título de la Portada *"}
+                  </label>
+                  {translatingFields['titol'] && <span className="text-[8px] text-[#ff0090] font-black animate-pulse">✨ Sincronitzant IA...</span>}
                 </div>
-                <div>
-                  <div className="flex justify-between items-center mb-1">
-                    <label className="block text-[10px] text-zinc-550 uppercase font-mono font-extrabold">Subtítol superior (CAT)</label>
-                    {translatingFields['subtitolES'] && <span className="text-[9px] text-[#ff0090] font-black animate-pulse flex items-center gap-1">✨ Traduint a l'espanyol...</span>}
-                  </div>
-                  <input 
-                    type="text"
-                    value={config.subtitolCA}
-                    onChange={(e) => updateField('subtitolCA', e.target.value)}
-                    onBlur={() => handleBlurTranslate('subtitolCA', 'subtitolES', 'ca', 'es')}
-                    placeholder="Ex: Benvinguts a les comparses d'El Tast..."
-                    className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all"
-                  />
-                </div>
-                <div>
-                  <div className="flex justify-between items-center mb-1">
-                    <label className="block text-[10px] text-zinc-550 uppercase font-mono font-extrabold">Descripció o Reglament breu (CAT) *</label>
-                    {translatingFields['descripcioES'] && <span className="text-[9px] text-[#ff0090] font-black animate-pulse flex items-center gap-1">✨ Traduint a l'espanyol...</span>}
-                  </div>
-                  <textarea 
-                    rows={4}
-                    required
-                    value={config.descripcioCA}
-                    onChange={(e) => updateField('descripcioCA', e.target.value)}
-                    onBlur={() => handleBlurTranslate('descripcioCA', 'descripcioES', 'ca', 'es')}
-                    placeholder="Descriu breument com funciona el registre..."
-                    className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all resize-none leading-relaxed"
-                  />
-                </div>
-                <div>
-                  <div className="flex justify-between items-center mb-1">
-                    <label className="block text-[10px] text-zinc-550 uppercase font-mono font-extrabold">Text del Botó Principal (CAT) *</label>
-                    {translatingFields['botoTextES'] && <span className="text-[9px] text-[#ff0090] font-black animate-pulse flex items-center gap-1">✨ Traduint a l'espanyol...</span>}
-                  </div>
-                  <input 
-                    type="text"
-                    required
-                    value={config.botoTextCA}
-                    onChange={(e) => updateField('botoTextCA', e.target.value)}
-                    onBlur={() => handleBlurTranslate('botoTextCA', 'botoTextES', 'ca', 'es')}
-                    placeholder="Ex: Iniciar Formulari..."
-                    className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all"
-                  />
-                </div>
-                <div>
-                  <div className="flex justify-between items-center mb-1">
-                    <label className="block text-[10px] text-zinc-550 uppercase font-mono font-extrabold">Text de l'Etiqueta / Badge (CAT)</label>
-                    {translatingFields['badgeTextES'] && <span className="text-[9px] text-[#ff0090] font-black animate-pulse flex items-center gap-1">✨ Traduint a l'espanyol...</span>}
-                  </div>
-                  <input 
-                    type="text"
-                    value={config.badgeTextCA || ''}
-                    onChange={(e) => updateField('badgeTextCA', e.target.value)}
-                    onBlur={() => handleBlurTranslate('badgeTextCA', 'badgeTextES', 'ca', 'es')}
-                    placeholder="Ex: Inscripcions Obertes 2026..."
-                    className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all"
-                  />
-                </div>
+                <input 
+                  type="text"
+                  required
+                  value={language === 'ca' ? (config.titolCA ?? '') : (config.titolES ?? '')}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (language === 'ca') {
+                      updateField('titolCA', val);
+                    } else {
+                      updateField('titolES', val);
+                    }
+                  }}
+                  onBlur={async (e) => {
+                    if (!autoTranslate) return;
+                    const val = e.target.value;
+                    const { syncDetectAndTranslate } = await import('../translateService');
+                    syncDetectAndTranslate(
+                      val,
+                      (translated) => updateField('titolCA', translated),
+                      (translated) => updateField('titolES', translated),
+                      (loading) => setTranslatingFields(prev => ({ ...prev, titol: loading }))
+                    );
+                  }}
+                  placeholder={language === 'ca' ? "El títol principal cridaner..." : "El título principal llamativo..."}
+                  className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all placeholder-zinc-400 font-sans"
+                />
               </div>
-            ) : (
-              <div className="space-y-4">
-                <div>
-                  <div className="flex justify-between items-center mb-1">
-                    <label className="block text-[10px] text-zinc-550 uppercase font-mono font-extrabold">Título de la Portada (ESP) *</label>
-                    {translatingFields['titolCA'] && <span className="text-[9px] text-[#ff0090] font-black animate-pulse flex items-center gap-1">✨ Traduciendo al catalán...</span>}
-                  </div>
-                  <input 
-                    type="text"
-                    required
-                    value={config.titolES}
-                    onChange={(e) => updateField('titolES', e.target.value)}
-                    onBlur={() => handleBlurTranslate('titolES', 'titolCA', 'es', 'ca')}
-                    placeholder="El título principal llamativo..."
-                    className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all placeholder-zinc-400"
-                  />
+
+              {/* Subtítol / Subtítulo */}
+              <div>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="block text-[10px] text-zinc-550 uppercase font-mono font-extrabold">
+                    {language === 'ca' ? "Subtítol superior" : "Subtítulo superior"}
+                  </label>
+                  {translatingFields['subtitol'] && <span className="text-[8px] text-[#ff0090] font-black animate-pulse">✨ Sincronitzant IA...</span>}
                 </div>
-                <div>
-                  <div className="flex justify-between items-center mb-1">
-                    <label className="block text-[10px] text-zinc-550 uppercase font-mono font-extrabold">Subtítulo superior (ESP)</label>
-                    {translatingFields['subtitolCA'] && <span className="text-[9px] text-[#ff0090] font-black animate-pulse flex items-center gap-1">✨ Traduciendo al catalán...</span>}
-                  </div>
-                  <input 
-                    type="text"
-                    value={config.subtitolES}
-                    onChange={(e) => updateField('subtitolES', e.target.value)}
-                    onBlur={() => handleBlurTranslate('subtitolES', 'subtitolCA', 'es', 'ca')}
-                    placeholder="Ej: Bienvenidos a las comparsas de El Tast..."
-                    className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all"
-                  />
-                </div>
-                <div>
-                  <div className="flex justify-between items-center mb-1">
-                    <label className="block text-[10px] text-zinc-550 uppercase font-mono font-extrabold">Descripción o Reglamento breve (ESP) *</label>
-                    {translatingFields['descripcioCA'] && <span className="text-[9px] text-[#ff0090] font-black animate-pulse flex items-center gap-1">✨ Traduciendo al catalán...</span>}
-                  </div>
-                  <textarea 
-                    rows={4}
-                    required
-                    value={config.descripcioES}
-                    onChange={(e) => updateField('descripcioES', e.target.value)}
-                    onBlur={() => handleBlurTranslate('descripcioES', 'descripcioCA', 'es', 'ca')}
-                    placeholder="Describe brevemente cómo funciona el registro..."
-                    className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all resize-none leading-relaxed"
-                  />
-                </div>
-                <div>
-                  <div className="flex justify-between items-center mb-1">
-                    <label className="block text-[10px] text-zinc-550 uppercase font-mono font-extrabold">Texto del Botón Principal (ESP) *</label>
-                    {translatingFields['botoTextCA'] && <span className="text-[9px] text-[#ff0090] font-black animate-pulse flex items-center gap-1">✨ Traduciendo al catalán...</span>}
-                  </div>
-                  <input 
-                    type="text"
-                    required
-                    value={config.botoTextES}
-                    onChange={(e) => updateField('botoTextES', e.target.value)}
-                    onBlur={() => handleBlurTranslate('botoTextES', 'botoTextCA', 'es', 'ca')}
-                    placeholder="Ej: Iniciar Formulario..."
-                    className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all"
-                  />
-                </div>
-                <div>
-                  <div className="flex justify-between items-center mb-1">
-                    <label className="block text-[10px] text-zinc-550 uppercase font-mono font-extrabold">Texto de la Etiqueta / Badge (ESP)</label>
-                    {translatingFields['badgeTextCA'] && <span className="text-[9px] text-[#ff0090] font-black animate-pulse flex items-center gap-1">✨ Traduciendo al catalán...</span>}
-                  </div>
-                  <input 
-                    type="text"
-                    value={config.badgeTextES || ''}
-                    onChange={(e) => updateField('badgeTextES', e.target.value)}
-                    onBlur={() => handleBlurTranslate('badgeTextES', 'badgeTextCA', 'es', 'ca')}
-                    placeholder="Ej: Inscripciones Abiertas 2026..."
-                    className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all"
-                  />
-                </div>
+                <input 
+                  type="text"
+                  value={language === 'ca' ? (config.subtitolCA ?? '') : (config.subtitolES ?? '')}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (language === 'ca') {
+                      updateField('subtitolCA', val);
+                    } else {
+                      updateField('subtitolES', val);
+                    }
+                  }}
+                  onBlur={async (e) => {
+                    if (!autoTranslate) return;
+                    const val = e.target.value;
+                    const { syncDetectAndTranslate } = await import('../translateService');
+                    syncDetectAndTranslate(
+                      val,
+                      (translated) => updateField('subtitolCA', translated),
+                      (translated) => updateField('subtitolES', translated),
+                      (loading) => setTranslatingFields(prev => ({ ...prev, subtitol: loading }))
+                    );
+                  }}
+                  placeholder={language === 'ca' ? "Ex: Benvinguts a les comparses d'El Tast..." : "Ej: Bienvenidos a las comparsas de El Tast..."}
+                  className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all placeholder-zinc-400 font-sans"
+                />
               </div>
-            )}
+
+              {/* Descripció / Descripción */}
+              <div>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="block text-[10px] text-zinc-550 uppercase font-mono font-extrabold">
+                    {language === 'ca' ? "Descripció o Reglament breu *" : "Descripción o Reglamento breve *"}
+                  </label>
+                  {translatingFields['descripcio'] && <span className="text-[8px] text-[#ff0090] font-black animate-pulse">✨ Sincronitzant IA...</span>}
+                </div>
+                <textarea 
+                  rows={4}
+                  required
+                  value={language === 'ca' ? (config.descripcioCA ?? '') : (config.descripcioES ?? '')}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (language === 'ca') {
+                      updateField('descripcioCA', val);
+                    } else {
+                      updateField('descripcioES', val);
+                    }
+                  }}
+                  onBlur={async (e) => {
+                    if (!autoTranslate) return;
+                    const val = e.target.value;
+                    const { syncDetectAndTranslate } = await import('../translateService');
+                    syncDetectAndTranslate(
+                      val,
+                      (translated) => updateField('descripcioCA', translated),
+                      (translated) => updateField('descripcioES', translated),
+                      (loading) => setTranslatingFields(prev => ({ ...prev, descripcio: loading }))
+                    );
+                  }}
+                  placeholder={language === 'ca' ? "Descriu breument com funciona el registre..." : "Describe brevemente cómo funciona el registro..."}
+                  className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all placeholder-zinc-400 font-sans resize-none leading-relaxed"
+                />
+              </div>
+
+              {/* Text del Botó Principal */}
+              <div>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="block text-[10px] text-zinc-550 uppercase font-mono font-extrabold">
+                    {language === 'ca' ? "Text del Botó Principal *" : "Texto del Botón Principal *"}
+                  </label>
+                  {translatingFields['botoText'] && <span className="text-[8px] text-[#ff0090] font-black animate-pulse">✨ Sincronitzant IA...</span>}
+                </div>
+                <input 
+                  type="text"
+                  required
+                  value={language === 'ca' ? (config.botoTextCA ?? '') : (config.botoTextES ?? '')}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (language === 'ca') {
+                      updateField('botoTextCA', val);
+                    } else {
+                      updateField('botoTextES', val);
+                    }
+                  }}
+                  onBlur={async (e) => {
+                    if (!autoTranslate) return;
+                    const val = e.target.value;
+                    const { syncDetectAndTranslate } = await import('../translateService');
+                    syncDetectAndTranslate(
+                      val,
+                      (translated) => updateField('botoTextCA', translated),
+                      (translated) => updateField('botoTextES', translated),
+                      (loading) => setTranslatingFields(prev => ({ ...prev, botoText: loading }))
+                    );
+                  }}
+                  placeholder={language === 'ca' ? "Ex: Iniciar Formulari..." : "Ej: Iniciar Formulario..."}
+                  className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all placeholder-zinc-400 font-sans"
+                />
+              </div>
+
+              {/* Text de l'Etiqueta / Badge */}
+              <div>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="block text-[10px] text-zinc-550 uppercase font-mono font-extrabold">
+                    {language === 'ca' ? "Text de l'Etiqueta / Badge" : "Texto de la Etiqueta / Badge"}
+                  </label>
+                  {translatingFields['badgeText'] && <span className="text-[8px] text-[#ff0090] font-black animate-pulse">✨ Sincronitzant IA...</span>}
+                </div>
+                <input 
+                  type="text"
+                  value={language === 'ca' ? (config.badgeTextCA ?? '') : (config.badgeTextES ?? '')}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (language === 'ca') {
+                      updateField('badgeTextCA', val);
+                    } else {
+                      updateField('badgeTextES', val);
+                    }
+                  }}
+                  onBlur={async (e) => {
+                    if (!autoTranslate) return;
+                    const val = e.target.value;
+                    const { syncDetectAndTranslate } = await import('../translateService');
+                    syncDetectAndTranslate(
+                      val,
+                      (translated) => updateField('badgeTextCA', translated),
+                      (translated) => updateField('badgeTextES', translated),
+                      (loading) => setTranslatingFields(prev => ({ ...prev, badgeText: loading }))
+                    );
+                  }}
+                  placeholder={language === 'ca' ? "Ex: Inscripcions Obertes 2026..." : "Ej: Inscripciones Abiertas 2026..."}
+                  className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all placeholder-zinc-400 font-sans"
+                />
+              </div>
+            </div>
           </div>
 
           {/* Background customizable rules with photos, HTML, video */}
@@ -1386,33 +1384,39 @@ export default function AdminPortada({ language, onAddLog }: AdminPortadaProps) 
             </p>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Text de copyright / Principal (Català) */}
-              <div className="space-y-1">
-                <label className="block text-[10px] text-zinc-650 font-mono font-bold uppercase tracking-wider">
-                  {language === 'ca' ? "Text del Peu de Pàgina (Català)" : "Texto del Pie de Página (Catalán)"}
-                </label>
+              {/* Text de copyright / Principal - UNIFIED SINGLE FIELD */}
+              <div className="space-y-1 md:col-span-2">
+                <div className="flex justify-between items-center mb-1">
+                  <label className="block text-[10px] text-zinc-650 font-mono font-bold uppercase tracking-wider">
+                    {language === 'ca' ? "Text del Peu de Pàgina *" : "Texto del Pie de Página *"}
+                  </label>
+                  {translatingFields['footerText'] && <span className="text-[8px] text-[#ff0090] font-black animate-pulse">✨ Sincronitzant IA...</span>}
+                </div>
                 <input 
                   type="text"
-                  value={config.footerTextCA ?? ''}
-                  onChange={(e) => updateField('footerTextCA', e.target.value)}
-                  onBlur={() => handleBlurTranslate('footerTextCA', 'footerTextES', 'ca', 'es')}
+                  required
+                  value={language === 'ca' ? (config.footerTextCA ?? '') : (config.footerTextES ?? '')}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (language === 'ca') {
+                      updateField('footerTextCA', val);
+                    } else {
+                      updateField('footerTextES', val);
+                    }
+                  }}
+                  onBlur={async (e) => {
+                    if (!autoTranslate) return;
+                    const val = e.target.value;
+                    const { syncDetectAndTranslate } = await import('../translateService');
+                    syncDetectAndTranslate(
+                      val,
+                      (translated) => updateField('footerTextCA', translated),
+                      (translated) => updateField('footerTextES', translated),
+                      (loading) => setTranslatingFields(prev => ({ ...prev, footerText: loading }))
+                    );
+                  }}
                   className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-0"
-                  placeholder="Ex: © 2026 ASSOCIACIÓ COMPARSES EL TAST"
-                />
-              </div>
-
-              {/* Text de copyright / Principal (Castellà) */}
-              <div className="space-y-1">
-                <label className="block text-[10px] text-zinc-650 font-mono font-bold uppercase tracking-wider">
-                  {language === 'ca' ? "Text del Peu de Pàgina (Castellà)" : "Texto del Pie de Página (Castellano)"}
-                </label>
-                <input 
-                  type="text"
-                  value={config.footerTextES ?? ''}
-                  onChange={(e) => updateField('footerTextES', e.target.value)}
-                  onBlur={() => handleBlurTranslate('footerTextES', 'footerTextCA', 'es', 'ca')}
-                  className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-0"
-                  placeholder="Ex: © 2026 ASOCIACIÓN COMPARSAS EL TAST"
+                  placeholder={language === 'ca' ? "Ex: © 2026 ASSOCIACIÓ COMPARSES EL TAST" : "Ej: © 2026 ASOCIACIÓN COMPARSAS EL TAST"}
                 />
               </div>
 
@@ -1439,33 +1443,38 @@ export default function AdminPortada({ language, onAddLog }: AdminPortadaProps) 
                 </div>
               </div>
 
-              {/* Enllaç 1 - Català */}
-              <div className="space-y-1">
-                <label className="block text-[10px] text-zinc-650 font-mono font-bold uppercase tracking-wider">
-                  {language === 'ca' ? "Esment Enllaç 1 (Català)" : "Etiqueta Enlace 1 (Catalán)"}
-                </label>
+              {/* Enllaç 1 - UNIFIED SINGLE FIELD */}
+              <div className="space-y-1 md:col-span-2">
+                <div className="flex justify-between items-center mb-1">
+                  <label className="block text-[10px] text-zinc-650 font-mono font-bold uppercase tracking-wider">
+                    {language === 'ca' ? "Etiqueta Enllaç 1" : "Etiqueta Enlace 1"}
+                  </label>
+                  {translatingFields['footerLink1Label'] && <span className="text-[8px] text-[#ff0090] font-black animate-pulse">✨ Sincronitzant IA...</span>}
+                </div>
                 <input 
                   type="text"
-                  value={config.footerLink1LabelCA ?? ''}
-                  onChange={(e) => updateField('footerLink1LabelCA', e.target.value)}
-                  onBlur={() => handleBlurTranslate('footerLink1LabelCA', 'footerLink1LabelES', 'ca', 'es')}
+                  value={language === 'ca' ? (config.footerLink1LabelCA ?? '') : (config.footerLink1LabelES ?? '')}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (language === 'ca') {
+                      updateField('footerLink1LabelCA', val);
+                    } else {
+                      updateField('footerLink1LabelES', val);
+                    }
+                  }}
+                  onBlur={async (e) => {
+                    if (!autoTranslate) return;
+                    const val = e.target.value;
+                    const { syncDetectAndTranslate } = await import('../translateService');
+                    syncDetectAndTranslate(
+                      val,
+                      (translated) => updateField('footerLink1LabelCA', translated),
+                      (translated) => updateField('footerLink1LabelES', translated),
+                      (loading) => setTranslatingFields(prev => ({ ...prev, footerLink1Label: loading }))
+                    );
+                  }}
                   className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-0"
-                  placeholder="Ex: Normativa"
-                />
-              </div>
-
-              {/* Enllaç 1 - Castellà */}
-              <div className="space-y-1">
-                <label className="block text-[10px] text-zinc-650 font-mono font-bold uppercase tracking-wider">
-                  {language === 'ca' ? "Esment Enllaç 1 (Castellà)" : "Etiqueta Enlace 1 (Castellano)"}
-                </label>
-                <input 
-                  type="text"
-                  value={config.footerLink1LabelES ?? ''}
-                  onChange={(e) => updateField('footerLink1LabelES', e.target.value)}
-                  onBlur={() => handleBlurTranslate('footerLink1LabelES', 'footerLink1LabelCA', 'es', 'ca')}
-                  className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-0"
-                  placeholder="Ex: Normativa"
+                  placeholder={language === 'ca' ? "Ex: Normativa" : "Ej: Normativa"}
                 />
               </div>
 
@@ -1483,33 +1492,38 @@ export default function AdminPortada({ language, onAddLog }: AdminPortadaProps) 
                 />
               </div>
 
-              {/* Enllaç 2 - Català */}
-              <div className="space-y-1">
-                <label className="block text-[10px] text-zinc-650 font-mono font-bold uppercase tracking-wider">
-                  {language === 'ca' ? "Esment Enllaç 2 (Català)" : "Etiqueta Enlace 2 (Catalán)"}
-                </label>
+              {/* Enllaç 2 - UNIFIED SINGLE FIELD */}
+              <div className="space-y-1 md:col-span-2">
+                <div className="flex justify-between items-center mb-1">
+                  <label className="block text-[10px] text-zinc-650 font-mono font-bold uppercase tracking-wider">
+                    {language === 'ca' ? "Etiqueta Enllaç 2" : "Etiqueta Enlace 2"}
+                  </label>
+                  {translatingFields['footerLink2Label'] && <span className="text-[8px] text-[#ff0090] font-black animate-pulse">✨ Sincronitzant IA...</span>}
+                </div>
                 <input 
                   type="text"
-                  value={config.footerLink2LabelCA ?? ''}
-                  onChange={(e) => updateField('footerLink2LabelCA', e.target.value)}
-                  onBlur={() => handleBlurTranslate('footerLink2LabelCA', 'footerLink2LabelES', 'ca', 'es')}
+                  value={language === 'ca' ? (config.footerLink2LabelCA ?? '') : (config.footerLink2LabelES ?? '')}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (language === 'ca') {
+                      updateField('footerLink2LabelCA', val);
+                    } else {
+                      updateField('footerLink2LabelES', val);
+                    }
+                  }}
+                  onBlur={async (e) => {
+                    if (!autoTranslate) return;
+                    const val = e.target.value;
+                    const { syncDetectAndTranslate } = await import('../translateService');
+                    syncDetectAndTranslate(
+                      val,
+                      (translated) => updateField('footerLink2LabelCA', translated),
+                      (translated) => updateField('footerLink2LabelES', translated),
+                      (loading) => setTranslatingFields(prev => ({ ...prev, footerLink2Label: loading }))
+                    );
+                  }}
                   className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-0"
-                  placeholder="Ex: secretaria@eltast.cat"
-                />
-              </div>
-
-              {/* Enllaç 2 - Castellà */}
-              <div className="space-y-1">
-                <label className="block text-[10px] text-zinc-650 font-mono font-bold uppercase tracking-wider">
-                  {language === 'ca' ? "Esment Enllaç 2 (Castellà)" : "Etiqueta Enlace 2 (Castellano)"}
-                </label>
-                <input 
-                  type="text"
-                  value={config.footerLink2LabelES ?? ''}
-                  onChange={(e) => updateField('footerLink2LabelES', e.target.value)}
-                  onBlur={() => handleBlurTranslate('footerLink2LabelES', 'footerLink2LabelCA', 'es', 'ca')}
-                  className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-0"
-                  placeholder="Ex: secretaria@eltast.cat"
+                  placeholder={language === 'ca' ? "Ex: secretaria@eltast.cat" : "Ej: secretaria@eltast.cat"}
                 />
               </div>
 

@@ -43,3 +43,30 @@ export async function translateText(
   
   return text;
 }
+
+export async function syncDetectAndTranslate(
+  text: string,
+  onUpdateCa: (val: string) => void,
+  onUpdateEs: (val: string) => void,
+  setLoadingState?: (loading: boolean) => void
+) {
+  if (!text || !text.trim()) return;
+  if (setLoadingState) setLoadingState(true);
+  try {
+    const [translatedCa, translatedEs] = await Promise.all([
+      translateText(text, 'auto', 'ca'),
+      translateText(text, 'auto', 'es')
+    ]);
+    if (translatedCa && translatedCa.trim()) {
+      onUpdateCa(translatedCa.trim());
+    }
+    if (translatedEs && translatedEs.trim()) {
+      onUpdateEs(translatedEs.trim());
+    }
+  } catch (err) {
+    console.error("Error in syncDetectAndTranslate:", err);
+  } finally {
+    if (setLoadingState) setLoadingState(false);
+  }
+}
+
