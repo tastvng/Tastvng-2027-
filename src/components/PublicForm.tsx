@@ -835,7 +835,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
             <div className="flex justify-between items-center mb-5 pb-2 border-b border-zinc-100">
               <h3 className="font-sans font-bold text-zinc-900 text-lg flex items-center gap-2">
                 <div className="w-2.5 h-2.5 bg-fuchsia-500 rounded-full" />
-                {language === 'ca' ? 'Comparser/a 1 (Representant)' : 'Comparsero/a 1 (Representante)'}
+                {language === 'ca' ? 'Comparser/a 1' : 'Comparsero/a 1'}
               </h3>
               <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-150 px-2 py-0.5 rounded-full font-mono uppercase tracking-tight flex items-center gap-1 shadow-sm shrink-0" title={language === 'ca' ? "Sincronitzat amb la base de dades" : "Sincronizado con la base de datos"}>
                 <Database size={9} /> {language === 'ca' ? 'Enllaç BBDD' : 'Enlace BBDD'}
