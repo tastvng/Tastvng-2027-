@@ -97,6 +97,8 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
   const teDomasBalco = teDomasBalcoQty > 0;
   const [teMocadorsExtra, setTeMocadorsExtra] = useState(0);
   const [genericExtrasQty, setGenericExtrasQty] = useState<Record<string, number>>({});
+  const [c1ExtrasSeleccionats, setC1ExtrasSeleccionats] = useState<Record<string, number>>({});
+  const [c2ExtrasSeleccionats, setC2ExtrasSeleccionats] = useState<Record<string, number>>({});
   
   // Checkboxes
   const [acceptaRGPD, setAcceptaRGPD] = useState(false);
@@ -206,7 +208,17 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
     .filter(t => t.tipus === 'extra_generic' && t.actiu)
     .reduce((sum, t) => sum + (genericExtrasQty[t.id] || 0) * t.valor, 0);
 
-  const totalCalculat = basePrice + domasCost + mocadorsCost + genericExtrasCost;
+  const c1ExtrasCost = Object.entries(c1ExtrasSeleccionats).reduce((total, [id, qty]) => {
+    const extra = (config.tarifesDinamiques || []).find(t => t.id === id);
+    return total + (extra ? extra.valor * Number(qty) : 0);
+  }, 0);
+
+  const c2ExtrasCost = Object.entries(c2ExtrasSeleccionats).reduce((total, [id, qty]) => {
+    const extra = (config.tarifesDinamiques || []).find(t => t.id === id);
+    return total + (extra ? extra.valor * Number(qty) : 0);
+  }, 0);
+
+  const totalCalculat = basePrice + domasCost + mocadorsCost + genericExtrasCost + c1ExtrasCost + c2ExtrasCost;
 
   // Initialize dynamic answers on layout load
   useEffect(() => {
@@ -553,6 +565,24 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
         }
       });
 
+      const extresGuardats: { id: string; nom: string; quantitat: number; preuUnitari: number }[] = [];
+      Object.entries(c1ExtrasSeleccionats).forEach(([id, qty]) => {
+        if (Number(qty) > 0) {
+          const extraDef = (config.tarifesDinamiques || []).find((t: any) => t.id === id);
+          if (extraDef) {
+            extresGuardats.push({ id, nom: extraDef.nom, quantitat: Number(qty), preuUnitari: extraDef.valor });
+          }
+        }
+      });
+      Object.entries(c2ExtrasSeleccionats).forEach(([id, qty]) => {
+        if (Number(qty) > 0) {
+          const extraDef = (config.tarifesDinamiques || []).find((t: any) => t.id === id);
+          if (extraDef) {
+            extresGuardats.push({ id, nom: extraDef.nom, quantitat: Number(qty), preuUnitari: extraDef.valor });
+          }
+        }
+      });
+
       const novaInscripcio: Inscripcio = {
         id: randomId,
         codiSeguiment,
@@ -583,6 +613,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
         c2UniformeTipus,
         respostesCuestionari: finalRespostes,
         seleccionsUniforme,
+        extresSeleccionats: extresGuardats,
         preuCalculat: totalCalculat,
         teDomasBalco,
         teMocadorsExtra,
@@ -1204,6 +1235,49 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
                 );
               })}
 
+              {/* Extras per Comparser 1 */}
+              {(() => {
+                const extrasForThisComparser = (config.tarifesDinamiques || []).filter(t => t.actiu && t.tipus === 'extra_generic');
+                if (extrasForThisComparser.length === 0) return null;
+                return (
+                  <div className="pt-4 border-t border-zinc-200/60 pb-2">
+                    <label className="block text-xs font-bold text-zinc-700 tracking-tight mb-3">
+                      {language === 'ca' ? 'Extras / Complements' : 'Extras / Complementos'}
+                    </label>
+                    <div className="space-y-3">
+                      {extrasForThisComparser.map(extr => {
+                        const qty = c1ExtrasSeleccionats[extr.id] || 0;
+                        return (
+                          <div key={extr.id} className="flex justify-between items-center bg-zinc-50 border border-zinc-200 rounded-xl p-3">
+                            <div>
+                              <span className="block text-xs font-bold text-zinc-800">{extr.nom}</span>
+                              <span className="block text-[10px] text-zinc-500 font-mono">+{extr.valor}€</span>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <button
+                                type="button"
+                                onClick={() => setC1ExtrasSeleccionats(prev => ({ ...prev, [extr.id]: Math.max(0, (prev[extr.id] || 0) - 1) }))}
+                                className="w-7 h-7 rounded-md bg-white border border-zinc-200 flex items-center justify-center cursor-pointer text-zinc-500 shadow-sm font-bold hover:bg-zinc-100"
+                              >
+                                -
+                              </button>
+                              <span className="text-xs font-bold font-mono w-4 text-center">{qty}</span>
+                              <button
+                                type="button"
+                                onClick={() => setC1ExtrasSeleccionats(prev => ({ ...prev, [extr.id]: (prev[extr.id] || 0) + 1 }))}
+                                className="w-7 h-7 rounded-md bg-white border border-zinc-200 flex items-center justify-center cursor-pointer text-zinc-500 shadow-sm font-bold hover:bg-zinc-100"
+                              >
+                                +
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* DNI upload zona */}
               <div className="pt-2">
                 <label className="block text-xs font-bold text-zinc-700 tracking-tight mb-1.5">
@@ -1616,6 +1690,49 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
                   </div>
                 );
               })}
+
+              {/* Extras per Comparser 2 */}
+              {(() => {
+                const extrasForThisComparser = (config.tarifesDinamiques || []).filter(t => t.actiu && t.tipus === 'extra_generic');
+                if (extrasForThisComparser.length === 0) return null;
+                return (
+                  <div className="pt-4 border-t border-zinc-200/60 pb-2">
+                    <label className="block text-xs font-bold text-zinc-700 tracking-tight mb-3">
+                      {language === 'ca' ? 'Extras / Complements' : 'Extras / Complementos'}
+                    </label>
+                    <div className="space-y-3">
+                      {extrasForThisComparser.map(extr => {
+                        const qty = c2ExtrasSeleccionats[extr.id] || 0;
+                        return (
+                          <div key={extr.id} className="flex justify-between items-center bg-zinc-50 border border-zinc-200 rounded-xl p-3">
+                            <div>
+                              <span className="block text-xs font-bold text-zinc-800">{extr.nom}</span>
+                              <span className="block text-[10px] text-zinc-500 font-mono">+{extr.valor}€</span>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <button
+                                type="button"
+                                onClick={() => setC2ExtrasSeleccionats(prev => ({ ...prev, [extr.id]: Math.max(0, (prev[extr.id] || 0) - 1) }))}
+                                className="w-7 h-7 rounded-md bg-white border border-zinc-200 flex items-center justify-center cursor-pointer text-zinc-500 shadow-sm font-bold hover:bg-zinc-100"
+                              >
+                                -
+                              </button>
+                              <span className="text-xs font-bold font-mono w-4 text-center">{qty}</span>
+                              <button
+                                type="button"
+                                onClick={() => setC2ExtrasSeleccionats(prev => ({ ...prev, [extr.id]: (prev[extr.id] || 0) + 1 }))}
+                                className="w-7 h-7 rounded-md bg-white border border-zinc-200 flex items-center justify-center cursor-pointer text-zinc-500 shadow-sm font-bold hover:bg-zinc-100"
+                              >
+                                +
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* DNI upload zona */}
               <div className="pt-2">
