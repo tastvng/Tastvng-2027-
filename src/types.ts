@@ -50,12 +50,6 @@ export interface Inscripcio {
   c1Telefon: string;
   c1Talla: string; // Talla samarreta o armilla
   c1DniUrl: string; // Foto o fitxer de DNI
-  c1EsMenor?: boolean;
-  c1TutorNom?: string;
-  c1TutorCognoms?: string;
-  c1TutorDni?: string;
-  c1TutorTelefon?: string;
-  c1UniformeTipus?: 'compra' | 'lloguer';
   
   // Comparser 2
   c2Nom: string;
@@ -64,16 +58,9 @@ export interface Inscripcio {
   c2Telefon: string;
   c2Talla: string;
   c2DniUrl: string; // Foto o fitxer de DNI
-  c2EsMenor?: boolean;
-  c2TutorNom?: string;
-  c2TutorCognoms?: string;
-  c2TutorDni?: string;
-  c2TutorTelefon?: string;
-  c2UniformeTipus?: 'compra' | 'lloguer';
 
   // Camps dinàmics i addicionals
   respostesCuestionari: Record<string, string | boolean>;
-  seleccionsUniforme?: Record<string, { c1Talla: string; c2Talla: string; quantitat: number }>;
   preuCalculat: number;
   teDomasBalco: boolean;
   teMocadorsExtra: number;
@@ -83,30 +70,9 @@ export interface Inscripcio {
   metodePagament: MetodePagament | null;
   estatDni: EstatVerificacio;
   entregaMaterial: EstatInscripcio;
-  entregaC1Uniforme?: boolean;
-  entregaC2Uniforme?: boolean;
-  entregaDomas?: boolean;
-  entregaMocadors?: boolean;
-  llistaEspera?: boolean;
   
   creadoEn: string;
   actualizadoEn: string;
-}
-
-export interface TarifaConcept {
-  id: string;
-  nom: string;
-  valor: number;
-  actiu: boolean;
-  tipus: 'categoria_adult' | 'categoria_juvenil' | 'extra_domas' | 'extra_mocador' | 'extra_generic';
-}
-
-export interface LiniaUniforme {
-  id: string;
-  nom: string;
-  nomES: string;
-  opcions: string[];
-  requeixQuantitat?: boolean;
 }
 
 export interface SistemaConfig {
@@ -115,48 +81,15 @@ export interface SistemaConfig {
   preuDomasBalco: number;
   preuMocadorExtra: number;
   preguntesFormulari: PreguntaDinamica[];
-  logoText?: string;
-  titolPrincipal?: string;
-  titolSecundari?: string;
-  subtitol?: string;
-  logoColor?: string;
-  titolSeccioTarifes?: string;
-  tarifesDinamiques?: TarifaConcept[];
-  titolFormulariDinamic?: string;
-  logoImgUrl?: string;
-  logoUseImage?: boolean;
-  nomUniforme?: string;
-  nomUniformeES?: string;
-  opcionsUniforme?: string[];
-  liniisUniforme?: LiniaUniforme[];
-  textLegalAutoritzacioMenors?: string;
-  textLegalAutoritzacioMenorsES?: string;
-  estatInscripcions?: 'obertes' | 'espera' | 'tancades';
-  googleSheetSyncUrl?: string;
-  googleSheetSyncActive?: boolean;
 }
 
 export interface NoticiaXarxes {
   id: string;
-  xarxa?: 'instagram' | 'facebook' | 'entitat';
+  xarxa: 'instagram' | 'facebook';
   usuari: string;
   text: string;
   imatgeUrl?: string;
   dataPublicacio: string;
-  enllacUrl?: string;
-  likes?: number;
-  tipus?: 'normal' | 'video' | 'nota' | 'alerta';
-  videoUrl?: string;
-  ressaltat?: boolean;
-  titol?: string;
-}
-
-export interface StaffMember {
-  id: string;
-  nom: string;
-  usuari: string;
-  rol: 'SuperAdministrador' | 'Secretaria' | 'Mesa d\'Entrega' | 'Coordinador';
-  contrasenya: string;
-  creadoEn: string;
-  actiu: boolean;
+  enllacUrl: string;
+  likes: number;
 }

@@ -3,173 +3,67 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { Lock, User, AlertCircle, ArrowLeft, Eye, EyeOff, Sparkle } from 'lucide-react';
-import { useLanguage } from '../LanguageContext';
-import { supabase, isSupabaseConfigured } from '../supabaseClient';
 
 interface AdminLoginProps {
-  onLoginSuccess: (rememberMe: boolean) => void;
+  onLoginSuccess: () => void;
   onBackToPublic: () => void;
 }
 
 export default function AdminLogin({ onLoginSuccess, onBackToPublic }: AdminLoginProps) {
-  const { language } = useLanguage();
-  
-  const [rememberMe, setRememberMe] = useState(() => {
-    return localStorage.getItem('tast_remember_me_enabled') === 'true';
-  });
-
-  const [username, setUsername] = useState(() => {
-    const r = localStorage.getItem('tast_remember_me_enabled') === 'true';
-    return r ? (localStorage.getItem('tast_saved_username') || '') : '';
-  });
-  const [password, setPassword] = useState(() => {
-    const r = localStorage.getItem('tast_remember_me_enabled') === 'true';
-    return r ? (localStorage.getItem('tast_saved_password') || '') : '';
-  });
-
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [errorError, setErrorError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
 
-  useEffect(() => {
-    const isEnabled = localStorage.getItem('tast_remember_me_enabled') === 'true';
-    if (isEnabled) {
-      const savedUser = localStorage.getItem('tast_saved_username') || '';
-      const savedPass = localStorage.getItem('tast_saved_password') || '';
-      if (savedUser && !username) setUsername(savedUser);
-      if (savedPass && !password) setPassword(savedPass);
-    }
-  }, []);
-
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!username.trim() || !password.trim()) {
-      setErrorError(language === 'ca' 
-        ? "Si us plau, introduïu l'usuari i la contrasenya." 
-        : "Por favor, introduzca el usuario y la contraseña.");
+      setErrorError("Si us plau, introduïu l'usuari i la contrasenya.");
       return;
     }
 
     setIsVerifying(true);
     setErrorError(null);
 
-    try {
-      // Accepting 'admin'/'admin' or 'tast'/'tast' or 'tastvng@gmail.com'/'eltast2026' or 'tastvng@gmail.com'/'tast'
-      const isEmergencyUser = (username === 'admin' && password === 'admin') || 
-                              (username === 'tast' && password === 'tast') ||
-                              (username.toLowerCase() === 'tastvng@gmail.com' && (password === 'tast' || password === 'eltast2026')) ||
-                              (username === 'secretaria' && password === 'eltast2026');
-
-      let isValid = isEmergencyUser;
-
-      // Remedy 1 & 2: Direct lookup from manually added staff profiles in Supabase setting 'tast_staff_2026'
-      if (isSupabaseConfigured && supabase) {
-        try {
-          const { data, error } = await supabase
-            .from('settings')
-            .select('value')
-            .eq('key', 'tast_staff_2026')
-            .maybeSingle();
-
-          if (!error && data) {
-            const rawVal = data.value;
-            let staffList: any[] = [];
-            if (rawVal) {
-              if (typeof rawVal === 'string') {
-                staffList = JSON.parse(rawVal);
-              } else {
-                staffList = rawVal;
-              }
-            }
-
-            if (Array.isArray(staffList) && staffList.length > 0) {
-              // Sincronizar en LocalStorage para redundancia local inmediata
-              localStorage.setItem('tast_staff_2026', JSON.stringify(staffList));
-              window.dispatchEvent(new Event('staffChanged'));
-
-              if (!isValid) {
-                const found = staffList.find((s: any) => 
-                  (s.usuari?.toLowerCase() === username.toLowerCase() || s.nom?.toLowerCase() === username.toLowerCase()) && 
-                  s.contrasenya === password && 
-                  s.actiu !== false
-                );
-                if (found) {
-                  isValid = true;
-                }
-              }
-            }
-          }
-        } catch (jwtErr) {
-          console.error("Live Supabase credentials fetch failed:", jwtErr);
-        }
-      }
-
-      // LocalStorage fallback if still not found
-      if (!isValid) {
-        try {
-          const savedStaff = localStorage.getItem('tast_staff_2026');
-          if (savedStaff) {
-            const staffList = JSON.parse(savedStaff);
-            const found = staffList.find((s: any) => 
-              (s.usuari?.toLowerCase() === username.toLowerCase() || s.nom?.toLowerCase() === username.toLowerCase()) && 
-              s.contrasenya === password && 
-              s.actiu !== false
-            );
-            if (found) {
-              isValid = true;
-            }
-          }
-        } catch (e) {
-          console.error("Error verifying dynamic staff credentials from LocalStorage backup:", e);
-        }
-      }
+    // Simulate cryptographic delay
+    setTimeout(() => {
+      // Accepting 'admin'/'admin' or 'tast'/'tast' or 'Tastvng@gmail.com'/'tast'
+      const isValid = (username === 'admin' && password === 'admin') || 
+                      (username === 'tast' && password === 'tast') ||
+                      (username.toLowerCase() === 'tastvng@gmail.com' && password === 'tast') ||
+                      (username === 'secretaria' && password === 'eltast2026');
 
       setIsVerifying(false);
       if (isValid) {
-        if (rememberMe) {
-          localStorage.setItem('tast_remember_me_enabled', 'true');
-          localStorage.setItem('tast_saved_username', username);
-          localStorage.setItem('tast_saved_password', password);
-        } else {
-          localStorage.setItem('tast_remember_me_enabled', 'false');
-          localStorage.removeItem('tast_saved_username');
-          localStorage.removeItem('tast_saved_password');
-        }
-        onLoginSuccess(rememberMe);
+        onLoginSuccess();
       } else {
-        setErrorError(language === 'ca'
-          ? "L'usuari o la contrasenya no són correctes. Proveu amb credencials vàlides de secretaria."
-          : "El usuario o la contraseña no son correctos. Pruebe con credenciales válidas de secretaría.");
+        setErrorError("L'usuari o la contrasenya no són correctes. Proveu amb admin / admin o tast / tast.");
       }
-    } catch (err: any) {
-      setIsVerifying(false);
-      setErrorError(err.message || String(err));
-    }
+    }, 1000);
   };
 
   return (
     <div className="max-w-md mx-auto py-12 px-4">
       <div className="text-center mb-8">
         <span className="text-[10px] bg-zinc-900 text-fuchsia-400 font-bold px-2.5 py-1 rounded-full uppercase tracking-wider font-mono border border-zinc-800">
-          {language === 'ca' ? 'Àrea Administrativa Protegida' : 'Área Administrativa Protegida'}
+          Àrea Administrativa Protegida
         </span>
         <h1 className="font-sans font-black text-3xl text-zinc-900 tracking-tight mt-3">
-          {language === 'ca' ? 'Entrada Secretaria' : 'Entrada Secretaría'}
+          Entrada Secretaria
         </h1>
         <p className="text-zinc-500 text-xs mt-1">
-          {language === 'ca'
-            ? 'Inicieu sessió per validar DNIs, comprovar cobraments i lliurar material.'
-            : 'Inicie sesión para validar DNIs, comprobar cobros y entregar material.'}
+          Inicieu sessió per validar DNIs, comprovar cobraments i lliurar material.
         </p>
       </div>
 
       <motion.div 
-         initial={{ y: 15, opacity: 0 }}
-         animate={{ y: 0, opacity: 1 }}
-         className="bg-zinc-950 border border-zinc-800 rounded-3xl p-8 shadow-2xl text-white relative overflow-hidden"
+        initial={{ y: 15, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        className="bg-zinc-950 border border-zinc-800 rounded-3xl p-8 shadow-2xl text-white relative overflow-hidden"
       >
         <div className="absolute top-0 right-0 p-8 text-zinc-900 pointer-events-none -mr-4 -mt-4">
           <Sparkle size={100} className="stroke-[0.5]" />
@@ -178,9 +72,9 @@ export default function AdminLogin({ onLoginSuccess, onBackToPublic }: AdminLogi
         <form onSubmit={handleSubmit} className="space-y-6">
           {errorError && (
             <motion.div 
-               initial={{ scale: 0.95, opacity: 0 }} 
-               animate={{ scale: 1, opacity: 1 }}
-               className="bg-red-500/10 border border-red-500/30 text-red-400 text-xs p-3.5 rounded-xl flex gap-1.5 items-start font-sans leading-relaxed"
+              initial={{ scale: 0.95, opacity: 0 }} 
+              animate={{ scale: 1, opacity: 1 }}
+              className="bg-red-500/10 border border-red-500/30 text-red-400 text-xs p-3.5 rounded-xl flex gap-1.5 items-start font-sans leading-relaxed"
             >
               <AlertCircle size={16} className="shrink-0 mt-0.5" />
               <span>{errorError}</span>
@@ -188,9 +82,7 @@ export default function AdminLogin({ onLoginSuccess, onBackToPublic }: AdminLogi
           )}
 
           <div>
-            <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider font-mono mb-1.5">
-              {language === 'ca' ? 'Usuari o Correu *' : 'Usuario o Correo *'}
-            </label>
+            <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider font-mono mb-1.5">Usuari o Correu *</label>
             <div className="relative">
               <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-zinc-500 pointer-events-none">
                 <User size={16} />
@@ -200,16 +92,14 @@ export default function AdminLogin({ onLoginSuccess, onBackToPublic }: AdminLogi
                 value={username} 
                 onChange={(e) => setUsername(e.target.value)}
                 className="w-full bg-zinc-900/60 border border-zinc-800 focus:border-fuchsia-500 focus:bg-zinc-900 rounded-xl pl-10 pr-4 py-3 text-sm focus:outline-none transition-all placeholder-zinc-600 font-sans text-white text-left"
-                placeholder={language === 'ca' ? "Introduïu el vostre usuari corporatiu" : "Introduzca su usuario corporativo"}
+                placeholder="Introduïu 'admin' per provar"
                 id="input-login-username"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider font-mono mb-1.5">
-              {language === 'ca' ? 'Contrasenya *' : 'Contraseña *'}
-            </label>
+            <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider font-mono mb-1.5">Contrasenya *</label>
             <div className="relative">
               <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-zinc-500 pointer-events-none">
                 <Lock size={16} />
@@ -219,7 +109,7 @@ export default function AdminLogin({ onLoginSuccess, onBackToPublic }: AdminLogi
                 value={password} 
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full bg-zinc-900/60 border border-zinc-800 focus:border-fuchsia-500 focus:bg-zinc-900 rounded-xl pl-10 pr-10 py-3 text-sm focus:outline-none transition-all placeholder-zinc-600 font-sans text-white text-left"
-                placeholder={language === 'ca' ? "Introduïu la vostra clau secreta" : "Introduzca su clave secreta"}
+                placeholder="Contrasenya ('admin')"
                 id="input-login-password"
               />
               <button
@@ -232,47 +122,37 @@ export default function AdminLogin({ onLoginSuccess, onBackToPublic }: AdminLogi
             </div>
           </div>
 
-          {/* Remember me toggle */}
-          <div className="flex items-center">
-            <label className="flex items-center gap-2.5 text-xs text-zinc-400 select-none cursor-pointer group">
-              <input
-                type="checkbox"
-                checked={rememberMe}
-                onChange={(e) => setRememberMe(e.target.checked)}
-                className="rounded border-zinc-800 bg-zinc-900 focus:ring-0 focus:ring-offset-0 cursor-pointer accent-fuchsia-600 w-4 h-4"
-                id="remember_me_checkbox"
-              />
-              <span className="group-hover:text-zinc-200 transition-colors">
-                {language === 'ca' ? "Recorda'm en aquest dispositiu" : "Recuérdame en este dispositivo"}
-              </span>
-            </label>
-          </div>
-
           <button
             type="submit"
             disabled={isVerifying}
-            className="w-full py-3.5 bg-fuchsia-600 hover:bg-fuchsia-500 text-white font-bold rounded-xl shadow-lg shadow-fuchsia-600/25 transition-all text-sm flex items-center justify-center gap-1.5 disabled:opacity-50 cursor-pointer"
+            className="w-full py-3.5 bg-fuchsia-600 hover:bg-fuchsia-500 text-white font-bold rounded-xl shadow-lg shadow-fuchsia-600/25 transition-all text-sm flex items-center justify-center gap-1.5 disabled:opacity-50"
             id="btn-login-submit"
           >
             {isVerifying ? (
               <span className="flex items-center gap-2">
                 <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-                {language === 'ca' ? 'Sincronitzant credencials...' : 'Sincronizando credenciales...'}
+                Sincronitzant credencials...
               </span>
             ) : (
-              language === 'ca' ? "Inicia Sessió" : "Iniciar Sesión"
+              "Inicia Sessió"
             )}
           </button>
         </form>
+
+        <div className="border-t border-zinc-900 mt-6 pt-4 text-center">
+          <p className="text-[11px] text-zinc-500 font-sans">
+            Dades de proves ràpide: <strong className="text-zinc-400">admin / admin</strong> o <strong className="text-zinc-400">tast / tast</strong>
+          </p>
+        </div>
       </motion.div>
 
       <div className="text-center mt-6">
         <button 
           onClick={onBackToPublic}
-          className="text-xs text-zinc-500 hover:text-zinc-800 font-semibold inline-flex items-center gap-1.5 cursor-pointer"
+          className="text-xs text-zinc-500 hover:text-zinc-800 font-semibold inline-flex items-center gap-1.5"
           id="btn-back-to-form"
         >
-          <ArrowLeft size={12} /> {language === 'ca' ? 'Tornar al Formulari de Parella' : 'Volver al Formulario de Pareja'}
+          <ArrowLeft size={12} /> Tornar al Formulari de Parella
         </button>
       </div>
     </div>

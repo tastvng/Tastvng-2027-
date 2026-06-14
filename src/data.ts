@@ -34,7 +34,7 @@ export const COMPARTIDES_XARXES: NoticiaXarxes[] = [
   {
     id: 'not-2',
     xarxa: 'facebook',
-    usuari: 'Associació Cultural El Tast',
+    usuari: 'Associació Gastronòmica El Tast',
     text: '📢 ATENCIÓ COMPARSERES I COMPARSERS! Enguany facilitem el sistema d\'inscripció. Podeu carregar el DNI directament des de la web i rebreu el codi QR de confirmació al vostre correu. En el moment de la recollida del material a la seu, només ens heu d\'ensenyar el QR, farem el pagament (Bizum o efectiu) i us endureu el mocador i la comanda en segons! 🍬🍬🍬 El Tast, cada any millor!',
     dataPublicacio: 'Ahir',
     enllacUrl: 'https://facebook.com',
@@ -57,15 +57,6 @@ export const CONFIG_INICIAL: SistemaConfig = {
   preuJuvenil: 60.00,
   preuDomasBalco: 15.00,
   preuMocadorExtra: 6.00,
-  estatInscripcions: 'obertes',
-  titolSeccioTarifes: 'Tarifes i Cànons 2026',
-  tarifesDinamiques: [
-    { id: 'adults', nom: 'Preu Parella Adulta (€)', valor: 90.00, actiu: true, tipus: 'categoria_adult' },
-    { id: 'juvenils', nom: 'Preu Parella Juvenil (€)', valor: 60.00, actiu: true, tipus: 'categoria_juvenil' },
-    { id: 'domas', nom: 'Cànon Domàs de Balcó (€)', valor: 15.00, actiu: true, tipus: 'extra_domas' },
-    { id: 'mocador', nom: 'Cànon Mocador Extra (€)', valor: 6.00, actiu: true, tipus: 'extra_mocador' }
-  ],
-  titolFormulariDinamic: "Preguntes del Qüestionari d'El Tast",
   preguntesFormulari: [
     {
       id: 'preg-1',
@@ -89,35 +80,7 @@ export const CONFIG_INICIAL: SistemaConfig = {
       requerit: false,
       activa: true
     }
-  ],
-  logoText: 'T',
-  titolPrincipal: 'EL TAST',
-  titolSecundari: 'VILANOVA',
-  subtitol: 'Vilanova i la Geltrú 2026',
-  logoColor: '#ff0090',
-  logoImgUrl: '',
-  logoUseImage: false,
-  nomUniforme: "Talla de Samarreta",
-  nomUniformeES: "Talla de Camiseta",
-  opcionsUniforme: ["XS", "S", "M", "L", "XL", "XXL", "3XL"],
-  liniisUniforme: [
-    {
-      id: 'lin-1',
-      nom: "Talla de Samarreta Oficial",
-      nomES: "Talla de Camiseta Oficial",
-      opcions: ["XS", "S", "M", "L", "XL", "XXL", "3XL"],
-      requeixQuantitat: false
-    },
-    {
-      id: 'lin-2',
-      nom: "Talla de Jaqueta Tècnica",
-      nomES: "Talla de Chaqueta Técnica",
-      opcions: ["S", "M", "L", "XL", "XXL"],
-      requeixQuantitat: true
-    }
-  ],
-  textLegalAutoritzacioMenors: "AUTORITZACIÓ DE MENORS D'EDAT\n\nEn condició de tutor/a legal del menor inscrit, declaro sota la meva responsabilitat que autoritzo expressament la seva participació a l'esdeveniment i activitats organitzades per l'Associació Cultural El Tast (Vilanova i la Geltrú 2026).\n\nCertifico que el menor es troba en condicions físiques i de salut aptes per al correcte desenvolupament de l'activitat, i m'en faig responsable de qualsevol incidència que se'n derivi del seu estat previ de salut, així com del compliment de la normativa vigent de l'organització.",
-  textLegalAutoritzacioMenorsES: "AUTORIZACIÓN DE MENORES DE EDAD\n\nEn condición de tutor/a legal del menor inscrito, declaro bajo mi responsabilidad que autorizo expresamente su participación en el evento y actividades organizadas por la Associació Cultural El Tast (Vilanova i la Geltrú 2026).\n\nCertifico que el menor se encuentra en condiciones físicas y de salud aptas para el correcto desarrollo de la actividad, y me hago responsable de cualquier incidencia que se derive de su estado previo de salud, así como del cumplimiento de la normativa de la organización."
+  ]
 };
 
 export const INSCRIPCIONS_INICIALS: Inscripcio[] = [
