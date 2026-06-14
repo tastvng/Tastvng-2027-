@@ -397,15 +397,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
       if (!c2TutorAccepta) tempErrors.c2TutorAccepta = language === 'ca' ? "Cal acceptar l'autorització de menors" : "Es necesario aceptar la autorización de menores";
     }
 
-    // Validate dynamic visible fields
-    config.preguntesFormulari.forEach(q => {
-      if (q.activa && q.requerit) {
-        const ans = respostesCuestionari[q.id];
-        if (q.tipus === 'text' && (!ans || String(ans).trim() === '')) {
-          tempErrors[q.id] = language === 'ca' ? "Aquesta pregunta és obligatòria" : "Esta pregunta es obligatoria";
-        }
-      }
-    });
+    // Dynamic visible fields are now bypassed as they are removed from PublicForm to keep it minimal and comments-only
 
     if (c1Email.trim().toLowerCase() === c2Email.trim().toLowerCase() && c1Email.trim() !== '') {
       tempErrors.c2Email = language === 'ca' ? "Els correus electrònics no poden ser idèntics" : "Los correos electrónicos no pueden ser idénticos";
@@ -1621,82 +1613,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
           </div>
         </div>
 
-        {/* Dynamic customized questionnaire part */}
-        {config.preguntesFormulari.some(q => q.activa) && (
-          <div className="bg-white rounded-3xl p-6 border border-zinc-200 shadow-sm">
-            <h3 className="font-sans font-bold text-zinc-900 text-lg mb-5 pb-2 border-b border-zinc-100 flex items-center gap-2">
-              <Sparkles className="text-fuchsia-500" size={18} />
-              {config.titolFormulariDinamic ? (
-                <TranslatedText text={config.titolFormulariDinamic} />
-              ) : (
-                language === 'ca' ? "Preguntes del Qüestionari d'El Tast" : "Preguntas del Cuestionario de El Tast"
-              )}
-            </h3>
 
-            <div className="space-y-5">
-              {config.preguntesFormulari.filter(q => q.activa).map((q) => (
-                <div key={q.id}>
-                  <label className="block text-sm font-semibold text-zinc-800 mb-1.5 flex items-center gap-1.5">
-                    <TranslatedText text={q.titol} />
-                    {q.requerit && <span className="text-red-500">*</span>}
-                  </label>
-
-                  {q.tipus === 'text' && (
-                    <input 
-                      type="text"
-                      value={String(respostesCuestionari[q.id] || '')}
-                      onChange={(e) => setRespostesCuestionari(prev => ({ ...prev, [q.id]: e.target.value }))}
-                      placeholder={language === 'ca' ? "Escriu la teva resposta" : "Escribe tu respuesta"}
-                      className={`w-full bg-zinc-50 border ${errors[q.id] ? 'border-red-500' : 'border-zinc-200'} focus:border-fuchsia-500 focus:bg-white rounded-xl px-4 py-3 text-sm focus:outline-none transition-all`}
-                    />
-                  )}
-
-                  {q.tipus === 'select' && (
-                    <select
-                      value={String(respostesCuestionari[q.id] || '')}
-                      onChange={(e) => setRespostesCuestionari(prev => ({ ...prev, [q.id]: e.target.value }))}
-                      className="w-full bg-zinc-50 border border-zinc-200 focus:border-fuchsia-500 focus:bg-white rounded-xl px-4 py-3 text-sm focus:outline-none transition-all cursor-pointer"
-                    >
-                      <option value="">{language === 'ca' ? "-- Selecciona una opció --" : "-- Selecciona una opción --"}</option>
-                      {q.opcions?.map((opt, i) => (
-                        <TranslatedOption key={i} value={opt} />
-                      ))}
-                    </select>
-                  )}
-
-                  {q.tipus === 'boolean' && (
-                    <div className="flex items-center gap-3 mt-1.5">
-                      <button
-                        type="button"
-                        onClick={() => setRespostesCuestionari(prev => ({ ...prev, [q.id]: true }))}
-                        className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                          respostesCuestionari[q.id] === true 
-                            ? 'bg-fuchsia-500 text-white' 
-                            : 'bg-zinc-100 hover:bg-zinc-200 text-zinc-700'
-                        }`}
-                      >
-                        {language === 'ca' ? 'Sí' : 'Sí'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setRespostesCuestionari(prev => ({ ...prev, [q.id]: false }))}
-                        className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                          respostesCuestionari[q.id] === false 
-                            ? 'bg-fuchsia-500 text-white' 
-                            : 'bg-zinc-100 hover:bg-zinc-200 text-zinc-700'
-                        }`}
-                      >
-                        No
-                      </button>
-                    </div>
-                  )}
-
-                  {errors[q.id] && <p className="text-red-500 text-xs font-mono mt-1">{errors[q.id]}</p>}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
 
         {/* Extra Accessories Order Section */}
         {(() => {
@@ -1807,6 +1724,26 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
             </div>
           );
         })()}
+
+        {/* Comments/Observations Section */}
+        <div className="bg-white rounded-3xl p-6 border border-zinc-200 shadow-sm space-y-4">
+          <h3 className="font-sans font-bold text-zinc-900 text-lg pb-2 border-b border-zinc-100 flex items-center gap-2">
+            💬 {language === 'ca' ? 'Comentaris i Observacions' : 'Comentarios y Observaciones'}
+          </h3>
+          <p className="text-zinc-500 text-xs">
+            {language === 'ca' 
+              ? 'Introduïu qualsevol comentari, intolerància alimentària o petició especial aquí.' 
+              : 'Introduzca cualquier comentario, intolerancia alimenticia o petición especial aquí.'}
+          </p>
+          <textarea
+            value={String(respostesCuestionari['preg-3'] || '')}
+            onChange={(e) => setRespostesCuestionari(prev => ({ ...prev, 'preg-3': e.target.value }))}
+            placeholder={language === 'ca' ? "Comentaris o observacions addicionals..." : "Comentarios o observaciones adicionales..."}
+            rows={4}
+            className="w-full bg-zinc-50 border border-zinc-200 focus:border-fuchsia-500 focus:bg-white rounded-2xl px-4 py-3 text-sm focus:outline-none transition-all resize-none shadow-inner"
+            id="comments-textarea"
+          />
+        </div>
 
         {/* Legal RGPD and Payment policy */}
         <div className="bg-white rounded-3xl p-6 border border-zinc-200 shadow-sm space-y-4">
