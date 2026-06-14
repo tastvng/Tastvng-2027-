@@ -225,7 +225,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
       setTimeout(async () => {
         try {
           const stream = await navigator.mediaDevices.getUserMedia({ 
-            video: { facingMode: 'environment' } 
+            video: { facingMode: { ideal: 'environment' } } 
           });
           streamRef.current = stream;
           if (videoRef.current) {
