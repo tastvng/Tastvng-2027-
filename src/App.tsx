@@ -24,7 +24,8 @@ import {
   CategoriaParella, 
   EstatPagament, 
   EstatVerificacio, 
-  EstatInscripcio 
+  EstatInscripcio,
+  NoticiaXarxes
 } from './types';
 
 import { 
@@ -50,6 +51,7 @@ export default function App() {
   // Persistence States
   const [config, setConfig] = useState<SistemaConfig>(CONFIG_INICIAL);
   const [inscripcions, setInscripcions] = useState<Inscripcio[]>([]);
+  const [noticies, setNoticies] = useState<NoticiaXarxes[]>([]);
   const [activeRegistration, setActiveRegistration] = useState<Inscripcio | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean>(false);
@@ -65,7 +67,31 @@ export default function App() {
     try {
       const savedConfig = localStorage.getItem('tast_config_2026');
       if (savedConfig) {
-        setConfig(JSON.parse(savedConfig));
+        const parsed = JSON.parse(savedConfig);
+        let updated = false;
+        if (!parsed.titolSeccioTarifes || !parsed.tarifesDinamiques) {
+          parsed.titolSeccioTarifes = parsed.titolSeccioTarifes || CONFIG_INICIAL.titolSeccioTarifes || 'Tarifes i Cànons 2026';
+          parsed.tarifesDinamiques = parsed.tarifesDinamiques || [
+            { id: 'adults', nom: 'Preu Parella Adulta (€)', valor: parsed.preuAdult ?? 90.00, actiu: true, tipus: 'categoria_adult' },
+            { id: 'juvenils', nom: 'Preu Parella Juvenil (€)', valor: parsed.preuJuvenil ?? 60.00, actiu: true, tipus: 'categoria_juvenil' },
+            { id: 'domas', nom: 'Cànon Domàs de Balcó (€)', valor: parsed.preuDomasBalco ?? 15.00, actiu: true, tipus: 'extra_domas' },
+            { id: 'mocador', nom: 'Cànon Mocador Extra (€)', valor: parsed.preuMocadorExtra ?? 6.00, actiu: true, tipus: 'extra_mocador' }
+          ];
+          updated = true;
+        }
+        if (!parsed.titolFormulariDinamic) {
+          parsed.titolFormulariDinamic = CONFIG_INICIAL.titolFormulariDinamic || "Preguntes del Qüestionari d'El Tast";
+          updated = true;
+        }
+        if (parsed.logoUseImage === undefined) {
+          parsed.logoUseImage = false;
+          parsed.logoImgUrl = '';
+          updated = true;
+        }
+        if (updated) {
+          localStorage.setItem('tast_config_2026', JSON.stringify(parsed));
+        }
+        setConfig(parsed);
       } else {
         localStorage.setItem('tast_config_2026', JSON.stringify(CONFIG_INICIAL));
       }
@@ -77,6 +103,16 @@ export default function App() {
         setInscripcions(INSCRIPCIONS_INICIALS);
         localStorage.setItem('tast_inscripcions_2026', JSON.stringify(INSCRIPCIONS_INICIALS));
       }
+
+      const savedNoticies = localStorage.getItem('tast_noticies_2026');
+      import('./data').then((module) => {
+        if (savedNoticies) {
+          setNoticies(JSON.parse(savedNoticies));
+        } else {
+          setNoticies(module.COMPARTIDES_XARXES);
+          localStorage.setItem('tast_noticies_2026', JSON.stringify(module.COMPARTIDES_XARXES));
+        }
+      });
 
       const savedLogin = localStorage.getItem('tast_admin_session_2026');
       if (savedLogin === 'true') {
@@ -110,6 +146,27 @@ export default function App() {
     addLog(`Preinscripció realitzada amb èxit per a: ${newReg.c1Nom} & ${newReg.c2Nom}. Codi: ${newReg.codiSeguiment}`);
   };
 
+  const addRegistrationManual = (newReg: Inscripcio) => {
+    const updated = [newReg, ...inscripcions];
+    setInscripcions(updated);
+    localStorage.setItem('tast_inscripcions_2026', JSON.stringify(updated));
+    addLog(`Parella afegida manualment des del taulell: ${newReg.c1Nom} & ${newReg.c2Nom}. Codi: ${newReg.codiSeguiment}`);
+  };
+
+  const deleteRegistration = (id: string) => {
+    const itemToDelete = inscripcions.find(i => i.id === id);
+    const updated = inscripcions.filter(i => i.id !== id);
+    setInscripcions(updated);
+    localStorage.setItem('tast_inscripcions_2026', JSON.stringify(updated));
+    addLog(`S'ha eliminat la inscripció de la parella: ${itemToDelete ? `${itemToDelete.c1Nom} & ${itemToDelete.c2Nom}` : id}`);
+  };
+
+  const saveNoticies = (newNoticies: NoticiaXarxes[]) => {
+    setNoticies(newNoticies);
+    localStorage.setItem('tast_noticies_2026', JSON.stringify(newNoticies));
+    addLog("S'han actualitzat les notícies de la xarxa social.");
+  };
+
   const updateRegistration = (updatedReg: Inscripcio) => {
     const updated = inscripcions.map(i => i.id === updatedReg.id ? updatedReg : i);
     setInscripcions(updated);
@@ -131,23 +188,79 @@ export default function App() {
     addLog("Sessió de secretaria tancada de manera segura.");
   };
 
+  // Dynamic Staff state to update header visual dynamically
+  const [staffCount, setStaffCount] = useState<number>(3);
+  useEffect(() => {
+    const updateCount = () => {
+      try {
+        const saved = localStorage.getItem('tast_staff_2026');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          setStaffCount(parsed.length);
+        } else {
+          // Initialize defaults
+          const defaults = [
+            { id: 'st-0', nom: 'Secretaria General', usuari: 'secretaria', rol: 'Secretaria', contrasenya: 'eltast2026', creadoEn: '01/01/2026', actiu: true },
+            { id: 'st-1', nom: 'Jordi Altiplà', usuari: 'jordia', rol: 'Coordinador', contrasenya: 'jordia123', creadoEn: '02/02/2026', actiu: true },
+            { id: 'st-2', nom: 'Mireia VNG', usuari: 'mireiav', rol: 'Mesa d\'Entrega', contrasenya: 'mireia99', creadoEn: '15/03/2026', actiu: true }
+          ];
+          localStorage.setItem('tast_staff_2026', JSON.stringify(defaults));
+          setStaffCount(3);
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    updateCount();
+    window.addEventListener('storage', updateCount);
+    window.addEventListener('staffChanged', updateCount);
+    return () => {
+      window.removeEventListener('storage', updateCount);
+      window.removeEventListener('staffChanged', updateCount);
+    };
+  }, []);
+
+  const logoText = config.logoText || 'T';
+  const titolPrincipal = config.titolPrincipal || 'EL TAST';
+  const titolSecundari = config.titolSecundari || 'VILANOVA';
+  const subtitol = config.subtitol || 'Vilanova i la Geltrú 2026';
+  const logoColor = config.logoColor || '#ff0090';
+
   return (
     <div className="min-h-screen bg-dark-bg text-white flex flex-col justify-between selection:bg-brand selection:text-white" id="app-root-container">
       {/* Top Banner header of El Tast branding style */}
       <header className="bg-dark-card text-white py-4 px-6 border-b border-white/10 flex justify-between items-center relative overflow-hidden shadow-2xl">
         {/* Abstract vector background lines representing festival confetti lights */}
-        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-brand via-brand/60 to-brand" />
+        <div className="absolute top-0 left-0 right-0 h-1" style={{ backgroundColor: logoColor }} />
         
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded bg-brand flex items-center justify-center font-bold text-black tracking-widest text-lg border border-white/10 shadow-lg shadow-brand/20">
-            T
-          </div>
+          {config.logoUseImage && config.logoImgUrl ? (
+            <img 
+              src={config.logoImgUrl} 
+              alt="Logo El Tast" 
+              className="w-9 h-9 object-contain rounded-lg shadow-lg border border-white/10 shrink-0"
+              referrerPolicy="no-referrer"
+            />
+          ) : (
+            <div 
+              className="w-8 h-8 rounded flex items-center justify-center font-bold text-black tracking-widest text-lg border border-white/10 shadow-lg uppercase transition-all shrink-0"
+              style={{ backgroundColor: logoColor, boxShadow: `0 4px 12px ${logoColor}40` }}
+            >
+              {logoText}
+            </div>
+          )}
           <div>
             <h1 className="font-sans font-black text-sm md:text-base leading-none text-white tracking-tight">
-              EL TAST <span className="text-brand">VILANOVA</span>
+              {titolPrincipal} <span style={{ color: logoColor }}>{titolSecundari}</span>
             </h1>
-            <p className="font-mono text-[9px] text-zinc-500 tracking-widest font-semibold uppercase mt-0.5">Vilanova i la Geltrú 2026</p>
+            <p className="font-mono text-[9px] text-zinc-500 tracking-widest font-semibold uppercase mt-0.5">{subtitol}</p>
           </div>
+        </div>
+
+        {/* Dynamic Staff Quick Indicator matchingFocused CSS Selector */}
+        <div className="hidden sm:flex items-center gap-2 px-3 py-1 bg-white/5 border border-white/10 rounded-lg text-[10px] text-zinc-400 font-mono">
+          <ShieldCheck size={12} className="text-fuchsia-500 animate-pulse" />
+          <span>Staff Acreditat: <strong className="text-fuchsia-400 font-extrabold">{staffCount} membres</strong></span>
         </div>
 
         {/* Live operational log display (real-time feedback logger in page margin) */}
@@ -201,7 +314,7 @@ export default function App() {
                 
                 {/* Right side activity social bar */}
                 <div className="lg:col-span-1 space-y-6">
-                  <NotificationFeed onAddLog={addLog} />
+                  <NotificationFeed onAddLog={addLog} noticies={noticies} />
                   
                   {/* Practical guidance card */}
                   <div className="bg-dark-card rounded-3xl p-6 border border-white/10 shadow-lg space-y-4">
@@ -209,7 +322,7 @@ export default function App() {
                       <Clock size={14} className="text-brand" /> Horaris de secretaria:
                     </h4>
                     <p className="text-xs text-zinc-400 leading-relaxed font-sans">
-                      Dimecres i divendres, de 18:00h a 21:30h directament a la seu social de l'Associació Gastronòmica El Tast.
+                      Dimecres i divendres, de 18:00h a 21:30h directament a la seu social de l'Associació Cultural El Tast.
                     </p>
                     <div className="pt-2 border-t border-white/10 flex items-center justify-between text-[10px] text-zinc-500 font-mono">
                       <span>Inscripció lliure, parelles d'Adults/Juvenils sota reglament</span>
@@ -242,6 +355,7 @@ export default function App() {
             {view === 'admin-dashboard' && (
               <AdminDashboard 
                 inscripcions={inscripcions}
+                config={config}
                 onSelectInscripcio={(id) => {
                   setEditId(id);
                   setView('admin-ficha');
@@ -250,6 +364,8 @@ export default function App() {
                 onGoToConfig={() => setView('admin-config')}
                 onLogout={handleAdminLogout}
                 onAddLog={addLog}
+                onDeleteInscripcio={deleteRegistration}
+                onAddInscripcioManual={addRegistrationManual}
               />
             )}
 
@@ -271,6 +387,8 @@ export default function App() {
                 config={config}
                 onBack={() => setView('admin-dashboard')}
                 onSave={saveConfig}
+                noticies={noticies}
+                onSaveNoticies={saveNoticies}
               />
             )}
 
@@ -284,6 +402,7 @@ export default function App() {
                 }}
                 onBack={() => setView('admin-dashboard')}
                 onAddLog={addLog}
+                onSaveInscripcio={updateRegistration}
               />
             )}
           </motion.div>
@@ -293,7 +412,7 @@ export default function App() {
       {/* Footer information bar */}
       <footer className="bg-zinc-950 py-6 px-8 text-center text-white border-t border-zinc-900 mt-12">
         <p className="font-sans font-black text-xs tracking-tight text-white flex items-center justify-center gap-1">
-          ASSOCIACIÓ GASTRONÒMICA EL TAST <span className="text-fuchsia-500">•</span> LES COMPARSES DE VILANOVA
+          ASSOCIACIÓ CULTURAL EL TAST <span className="text-fuchsia-500">•</span> LES COMPARSES DE VILANOVA
         </p>
         <p className="text-[10px] text-zinc-500 font-mono mt-1 uppercase tracking-wider">
           disseny del quadre de comandament i formulari integral 2026

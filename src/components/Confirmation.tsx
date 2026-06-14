@@ -135,7 +135,7 @@ export default function Confirmation({ registration, onClear }: ConfirmationProp
               <MapPin className="shrink-0 text-fuchsia-500 mt-0.5" size={16} />
               <div>
                 <p className="font-bold text-zinc-800">Seu d'El Tast Vilanova</p>
-                <p className="text-zinc-500 leading-relaxed">Presenteu-vos a la secretaria de l'associació gastronòmica presentant aquest codi.</p>
+                <p className="text-zinc-500 leading-relaxed">Presenteu-vos a la secretaria de l'associació cultural presentant aquest codi.</p>
               </div>
             </div>
 

@@ -22,26 +22,37 @@ import {
   Sliders,
   Compass,
   CreditCard,
-  FileText
+  FileText,
+  Plus,
+  Trash2,
+  ShieldCheck,
+  UserCheck,
+  Key
 } from 'lucide-react';
-import { Inscripcio, CategoriaParella, EstatPagament, EstatVerificacio, EstatInscripcio, MetodePagament } from '../types';
+import { Inscripcio, CategoriaParella, EstatPagament, EstatVerificacio, EstatInscripcio, MetodePagament, SistemaConfig, StaffMember } from '../types';
 
 interface AdminDashboardProps {
   inscripcions: Inscripcio[];
+  config: SistemaConfig;
   onSelectInscripcio: (id: string) => void;
   onGoToScanner: () => void;
   onGoToConfig: () => void;
   onLogout: () => void;
   onAddLog?: (txt: string) => void;
+  onDeleteInscripcio?: (id: string) => void;
+  onAddInscripcioManual?: (newReg: Inscripcio) => void;
 }
 
 export default function AdminDashboard({ 
   inscripcions, 
+  config,
   onSelectInscripcio, 
   onGoToScanner, 
   onGoToConfig, 
   onLogout,
-  onAddLog
+  onAddLog,
+  onDeleteInscripcio,
+  onAddInscripcioManual
 }: AdminDashboardProps) {
   // Search and filter states
   const [searchQuery, setSearchQuery] = useState('');
@@ -49,6 +60,191 @@ export default function AdminDashboard({
   const [filterPagament, setFilterPagament] = useState<string>('ALL');
   const [filterDni, setFilterDni] = useState<string>('ALL');
   const [filterEntrega, setFilterEntrega] = useState<string>('ALL');
+
+  // Staff management state
+  const [showStaffModal, setShowStaffModal] = useState(false);
+  const [staffList, setStaffList] = useState<StaffMember[]>(() => {
+    try {
+      const saved = localStorage.getItem('tast_staff_2026');
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    const defaults: StaffMember[] = [
+      { id: 'st-0', nom: 'Secretaria General', usuari: 'secretaria', rol: 'Secretaria', contrasenya: 'eltast2026', creadoEn: '01/01/2026', actiu: true },
+      { id: 'st-1', nom: 'Jordi Altiplà', usuari: 'jordia', rol: 'Coordinador', contrasenya: 'jordia123', creadoEn: '02/02/2026', actiu: true },
+      { id: 'st-2', nom: 'Mireia VNG', usuari: 'mireiav', rol: 'Mesa d\'Entrega', contrasenya: 'mireia99', creadoEn: '15/03/2026', actiu: true }
+    ];
+    localStorage.setItem('tast_staff_2026', JSON.stringify(defaults));
+    return defaults;
+  });
+
+  // Manual staff member introduction state
+  const [newStaffNom, setNewStaffNom] = useState('');
+  const [newStaffUsuari, setNewStaffUsuari] = useState('');
+  const [newStaffContrasenya, setNewStaffContrasenya] = useState('');
+  const [newStaffRol, setNewStaffRol] = useState<'SuperAdministrador' | 'Secretaria' | 'Mesa d\'Entrega' | 'Coordinador'>('Secretaria');
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [inscriptionDeleteConfirmId, setInscriptionDeleteConfirmId] = useState<string | null>(null);
+
+  // Manual add couple modal state
+  const [showAddModal, setShowAddModal] = useState(false);
+
+  // Form states for manual registration
+  const [newCategoria, setNewCategoria] = useState<CategoriaParella>(CategoriaParella.ADULT);
+  
+  const [newC1Nom, setNewC1Nom] = useState('');
+  const [newC1Cognoms, setNewC1Cognoms] = useState('');
+  const [newC1Email, setNewC1Email] = useState('');
+  const [newC1Telefon, setNewC1Telefon] = useState('');
+  const [newC1Talla, setNewC1Talla] = useState('M');
+  
+  const [newC2Nom, setNewC2Nom] = useState('');
+  const [newC2Cognoms, setNewC2Cognoms] = useState('');
+  const [newC2Email, setNewC2Email] = useState('');
+  const [newC2Telefon, setNewC2Telefon] = useState('');
+  const [newC2Talla, setNewC2Talla] = useState('M');
+
+  const [newDomas, setNewDomas] = useState(false);
+  const [newMocadors, setNewMocadors] = useState(0);
+
+  const [newEstatPagament, setNewEstatPagament] = useState<EstatPagament>(EstatPagament.PENDENT);
+  const [newMetodePagament, setNewMetodePagament] = useState<MetodePagament>(MetodePagament.EFECTIU);
+
+  const basePreu = newCategoria === CategoriaParella.ADULT ? config.preuAdult : config.preuJuvenil;
+  const domasPreu = newDomas ? config.preuDomasBalco : 0;
+  const mocadorsPreu = newMocadors * config.preuMocadorExtra;
+  const calculatedPreu = basePreu + domasPreu + mocadorsPreu;
+
+  const handleSubmitManual = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newC1Nom.trim() || !newC2Nom.trim()) {
+      alert("Si us plau, omple com a mínim els noms de tots dos participants.");
+      return;
+    }
+
+    const tracker = 'TAST-2026-' + Math.floor(1000 + Math.random() * 9000);
+
+    const novaInscripcio: Inscripcio = {
+      id: 'ins-' + Math.random().toString(36).substr(2, 9),
+      codiSeguiment: tracker,
+      categoria: newCategoria,
+      c1Nom: newC1Nom.trim(),
+      c1Cognoms: newC1Cognoms.trim(),
+      c1Email: newC1Email.trim() || 'secretaria@eltast.cat',
+      c1Telefon: newC1Telefon.trim() || '600000000',
+      c1Talla: newC1Talla,
+      c1DniUrl: 'https://images.unsplash.com/photo-1554080353-a576cf803bda?q=80&w=600&auto=format&fit=crop',
+      c2Nom: newC2Nom.trim(),
+      c2Cognoms: newC2Cognoms.trim(),
+      c2Email: newC2Email.trim() || 'secretaria@eltast.cat',
+      c2Telefon: newC2Telefon.trim() || '600000000',
+      c2Talla: newC2Talla,
+      c2DniUrl: 'https://images.unsplash.com/photo-1554080353-a576cf803bda?q=80&w=600&auto=format&fit=crop',
+      respostesCuestionari: {},
+      preuCalculat: calculatedPreu,
+      teDomasBalco: newDomas,
+      teMocadorsExtra: newMocadors,
+      estatPagament: newEstatPagament,
+      metodePagament: newEstatPagament === EstatPagament.PAGAT ? newMetodePagament : null,
+      estatDni: EstatVerificacio.VALIDAT,
+      entregaMaterial: EstatInscripcio.PENDENT,
+      creadoEn: new Date().toISOString(),
+      actualizadoEn: new Date().toISOString()
+    };
+
+    if (onAddInscripcioManual) {
+      onAddInscripcioManual(novaInscripcio);
+    }
+
+    // Reset Form
+    setNewC1Nom('');
+    setNewC1Cognoms('');
+    setNewC1Email('');
+    setNewC1Telefon('');
+    setNewC2Nom('');
+    setNewC2Cognoms('');
+    setNewC2Email('');
+    setNewC2Telefon('');
+    setNewDomas(false);
+    setNewMocadors(0);
+    setNewEstatPagament(EstatPagament.PENDENT);
+    setShowAddModal(false);
+  };
+
+  const handleAddStaffMember = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newStaffNom.trim() || !newStaffUsuari.trim() || !newStaffContrasenya.trim()) {
+      alert("Si us plau, omple tots els camps d’identificació manuals per al membre del staff.");
+      return;
+    }
+
+    const nouMembre: StaffMember = {
+      id: 'st-' + Math.random().toString(36).substr(2, 9),
+      nom: newStaffNom.trim(),
+      usuari: newStaffUsuari.trim().toLowerCase(),
+      rol: newStaffRol,
+      contrasenya: newStaffContrasenya.trim(),
+      creadoEn: new Date().toLocaleDateString('ca-ES'),
+      actiu: true
+    };
+
+    const updated = [...staffList, nouMembre];
+    setStaffList(updated);
+    localStorage.setItem('tast_staff_2026', JSON.stringify(updated));
+    window.dispatchEvent(new Event('staffChanged'));
+
+    if (onAddLog) {
+      onAddLog(`S'ha afegit ${newStaffNom} (${newStaffRol}) al personal d'administració.`);
+    }
+
+    // Reset fields
+    setNewStaffNom('');
+    setNewStaffUsuari('');
+    setNewStaffContrasenya('');
+    setNewStaffRol('Secretaria');
+  };
+
+  const handleUpdateStaffRol = (id: string, rol: 'SuperAdministrador' | 'Secretaria' | 'Mesa d\'Entrega' | 'Coordinador') => {
+    const updated = staffList.map(s => s.id === id ? { ...s, rol } : s);
+    setStaffList(updated);
+    localStorage.setItem('tast_staff_2026', JSON.stringify(updated));
+    window.dispatchEvent(new Event('staffChanged'));
+    if (onAddLog) {
+      onAddLog(`S'ha canviat el rol del perfil d'administrador.`);
+    }
+  };
+
+  const handleToggleStaffActiu = (id: string) => {
+    const updated = staffList.map(s => s.id === id ? { ...s, actiu: !s.actiu } : s);
+    setStaffList(updated);
+    localStorage.setItem('tast_staff_2026', JSON.stringify(updated));
+    window.dispatchEvent(new Event('staffChanged'));
+    if (onAddLog) {
+      onAddLog(`Estat d'accés del perfil de staff modificat.`);
+    }
+  };
+
+  const handleRemoveStaffMember = (id: string, name: string) => {
+    if (deleteConfirmId === id) {
+      const updated = staffList.filter(s => s.id !== id);
+      setStaffList(updated);
+      localStorage.setItem('tast_staff_2026', JSON.stringify(updated));
+      window.dispatchEvent(new Event('staffChanged'));
+      if (onAddLog) {
+        onAddLog(`Retirat ${name} del canal de personal habilitat.`);
+      }
+      setDeleteConfirmId(null);
+    } else {
+      setDeleteConfirmId(id);
+      // Automatically reset confirmation after 3.5 seconds of inactivity
+      setTimeout(() => {
+        setDeleteConfirmId(prev => prev === id ? null : prev);
+      }, 3500);
+    }
+  };
 
   // Stats calculation
   const totalInscrites = inscripcions.length;
@@ -213,6 +409,14 @@ export default function AdminDashboard({
           </button>
 
           <button 
+            onClick={() => setShowStaffModal(true)}
+            className="text-xs bg-zinc-900 hover:bg-[#ff0090]/15 hover:text-white hover:border-[#ff0090] border border-zinc-800 font-bold px-4 py-2.5 rounded-xl transition-all flex items-center gap-1.5 focus:outline-none shadow-md shadow-fuchsia-500/5 cursor-pointer"
+            id="btn-nav-staff"
+          >
+            <ShieldCheck size={14} className="text-[#ff0090]" /> Gestió de Staff
+          </button>
+
+          <button 
             onClick={onLogout}
             className="text-xs bg-red-950/20 text-red-400 hover:bg-red-950/40 border border-red-900/30 font-bold px-4 py-2.5 rounded-xl transition flex items-center gap-1"
             title="Tancar Sessió"
@@ -311,6 +515,15 @@ export default function AdminDashboard({
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
+              <button 
+                type="button"
+                onClick={() => setShowAddModal(true)}
+                className="bg-zinc-900 hover:bg-black text-white font-bold text-xs px-4 py-3 rounded-2xl transition-all shadow flex items-center gap-1.5"
+                id="btn-add-couple-manual"
+              >
+                <Plus size={15} className="text-[#ff0090]" /> Afegir Parella Manual
+              </button>
+
               <button 
                 onClick={exportToExcel}
                 className="bg-green-600 hover:bg-green-700 text-white font-bold text-xs px-4 py-3 rounded-2xl transition-all shadow flex items-center gap-1.5"
@@ -499,12 +712,39 @@ export default function AdminDashboard({
 
                     {/* Quick navigation action triggers */}
                     <td className="px-6 py-4.5 text-center">
-                      <button 
-                        type="button"
-                        className="p-1 px-2.5 bg-zinc-100 hover:bg-fuchsia-600 hover:text-white rounded-lg transition-all inline-flex items-center gap-1 font-semibold group-hover:scale-105"
-                      >
-                        Obrir <ChevronRight size={12} />
-                      </button>
+                      <div className="flex items-center justify-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                        <button 
+                          onClick={() => onSelectInscripcio(item.id)}
+                          type="button"
+                          className="p-1 px-2.5 bg-zinc-100 hover:bg-fuchsia-600 hover:text-white rounded-lg transition-all inline-flex items-center gap-1 font-semibold hover:scale-105"
+                        >
+                          Obrir <ChevronRight size={12} />
+                        </button>
+                        {onDeleteInscripcio && (
+                          <button
+                            onClick={() => {
+                              if (inscriptionDeleteConfirmId === item.id) {
+                                onDeleteInscripcio(item.id);
+                                setInscriptionDeleteConfirmId(null);
+                              } else {
+                                setInscriptionDeleteConfirmId(item.id);
+                                setTimeout(() => {
+                                  setInscriptionDeleteConfirmId(prev => prev === item.id ? null : prev);
+                                }, 4000);
+                              }
+                            }}
+                            type="button"
+                            className={`p-1.5 rounded-lg transition-all hover:scale-105 font-bold font-sans flex items-center gap-1 ${
+                              inscriptionDeleteConfirmId === item.id 
+                                ? 'bg-red-600 text-white animate-pulse text-[10px] px-2' 
+                                : 'bg-zinc-100 hover:bg-red-600 hover:text-white text-red-500'
+                            }`}
+                            title={inscriptionDeleteConfirmId === item.id ? "Clica un altre cop per confirmar l'eliminació" : "Eliminar parella"}
+                          >
+                            {inscriptionDeleteConfirmId === item.id ? "Eliminar?" : <Trash2 size={13} />}
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -556,6 +796,505 @@ export default function AdminDashboard({
           ))}
         </div>
       </div>
+
+      {/* Manual Registration Modal Overlay */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm font-sans" onClick={() => setShowAddModal(false)}>
+          <div className="bg-white rounded-3xl border border-zinc-150 shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 space-y-6 text-zinc-900 relative animate-in fade-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-center pb-3 border-b border-zinc-100">
+              <div>
+                <h3 className="font-sans font-black text-lg text-zinc-900 flex items-center gap-1.5 uppercase tracking-wide">
+                  <Plus size={20} className="text-[#ff0090]" /> Registre Manual de Parella
+                </h3>
+                <p className="text-xs text-zinc-500 font-mono">Secretaria de l'Associació El Tast • 2026</p>
+              </div>
+              <button 
+                type="button" 
+                onClick={() => setShowAddModal(false)}
+                className="p-1.5 px-3 bg-zinc-100 hover:bg-zinc-250 text-zinc-650 rounded-lg text-xs font-bold transition"
+              >
+                Tancar ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmitManual} className="space-y-5 text-xs text-zinc-800">
+              {/* Category selector */}
+              <div>
+                <label className="block text-[10px] text-zinc-500 uppercase font-mono mb-1.5 font-bold">Categoria de la Parella *</label>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2.5 p-3.5 bg-zinc-50 hover:bg-zinc-100 rounded-2xl cursor-pointer border border-zinc-200 flex-1">
+                    <input 
+                      type="radio" 
+                      name="modal-categoria" 
+                      value={CategoriaParella.ADULT}
+                      checked={newCategoria === CategoriaParella.ADULT}
+                      onChange={() => setNewCategoria(CategoriaParella.ADULT)}
+                      className="accent-[#ff0090]"
+                    />
+                    <div>
+                      <p className="font-bold text-zinc-850 text-xs">Adults (Preu: {config.preuAdult}€)</p>
+                      <p className="text-[10px] text-zinc-500 font-mono">A partir de 16 anys</p>
+                    </div>
+                  </label>
+
+                  <label className="flex items-center gap-2.5 p-3.5 bg-zinc-50 hover:bg-zinc-100 rounded-2xl cursor-pointer border border-zinc-200 flex-1">
+                    <input 
+                      type="radio" 
+                      name="modal-categoria" 
+                      value={CategoriaParella.JUVENIL}
+                      checked={newCategoria === CategoriaParella.JUVENIL}
+                      onChange={() => setNewCategoria(CategoriaParella.JUVENIL)}
+                      className="accent-[#ff0090]"
+                    />
+                    <div>
+                      <p className="font-bold text-zinc-850 text-xs">Juvenils (Preu: {config.preuJuvenil}€)</p>
+                      <p className="text-[10px] text-zinc-500 font-mono">Fins als 15 anys inclòs</p>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {/* Comparser 1 Box */}
+                <div className="p-4 bg-zinc-50 rounded-2xl border border-zinc-150 space-y-3.5">
+                  <h4 className="font-sans font-bold text-xs text-[#ff0090] uppercase tracking-wider">Primer Comparser</h4>
+                  
+                  <div>
+                    <label className="block text-[10px] text-zinc-500 uppercase font-mono mb-0.5">Nom *</label>
+                    <input 
+                      type="text" 
+                      required
+                      value={newC1Nom}
+                      onChange={(e) => setNewC1Nom(e.target.value)}
+                      placeholder="Ex. Joan"
+                      className="w-full bg-white border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3 py-2 text-xs focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] text-zinc-500 uppercase font-mono mb-0.5">Cognoms *</label>
+                    <input 
+                      type="text" 
+                      required
+                      value={newC1Cognoms}
+                      onChange={(e) => setNewC1Cognoms(e.target.value)}
+                      placeholder="Ex. Garcia Perez"
+                      className="w-full bg-white border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3 py-2 text-xs focus:outline-none"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[10px] text-zinc-500 uppercase font-mono mb-0.5">Mòbil (Opcional)</label>
+                      <input 
+                        type="tel" 
+                        value={newC1Telefon}
+                        onChange={(e) => setNewC1Telefon(e.target.value)}
+                        placeholder="600000000"
+                        className="w-full bg-white border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3 py-2 text-xs focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-zinc-500 uppercase font-mono mb-0.5">Talla Camisa</label>
+                      <select
+                        value={newC1Talla}
+                        onChange={(e) => setNewC1Talla(e.target.value)}
+                        className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2 text-xs focus:outline-none cursor-pointer font-bold"
+                      >
+                        <option value="XS">XS</option>
+                        <option value="S">S</option>
+                        <option value="M">M</option>
+                        <option value="L">L</option>
+                        <option value="XL">XL</option>
+                        <option value="XXL">XXL</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] text-zinc-500 uppercase font-mono mb-0.5">E-mail (Opcional)</label>
+                    <input 
+                      type="email" 
+                      value={newC1Email}
+                      onChange={(e) => setNewC1Email(e.target.value)}
+                      placeholder="joan@example.com"
+                      className="w-full bg-white border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3 py-2 text-xs focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                {/* Comparser 2 Box */}
+                <div className="p-4 bg-zinc-50 rounded-2xl border border-zinc-150 space-y-3.5">
+                  <h4 className="font-sans font-bold text-xs text-[#ff0090] uppercase tracking-wider">Segon Comparser</h4>
+                  
+                  <div>
+                    <label className="block text-[10px] text-zinc-500 uppercase font-mono mb-0.5">Nom *</label>
+                    <input 
+                      type="text" 
+                      required
+                      value={newC2Nom}
+                      onChange={(e) => setNewC2Nom(e.target.value)}
+                      placeholder="Ex. Marta"
+                      className="w-full bg-white border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3 py-2 text-xs focus:outline-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] text-zinc-500 uppercase font-mono mb-0.5">Cognoms *</label>
+                    <input 
+                      type="text" 
+                      required
+                      value={newC2Cognoms}
+                      onChange={(e) => setNewC2Cognoms(e.target.value)}
+                      placeholder="Ex. Lopez Pujol"
+                      className="w-full bg-white border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3 py-2 text-xs focus:outline-none"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[10px] text-zinc-500 uppercase font-mono mb-0.5">Mòbil (Opcional)</label>
+                      <input 
+                        type="tel" 
+                        value={newC2Telefon}
+                        onChange={(e) => setNewC2Telefon(e.target.value)}
+                        placeholder="611000000"
+                        className="w-full bg-white border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3 py-2 text-xs focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-zinc-500 uppercase font-mono mb-0.5">Talla Camisa</label>
+                      <select
+                        value={newC2Talla}
+                        onChange={(e) => setNewC2Talla(e.target.value)}
+                        className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2 text-xs focus:outline-none cursor-pointer font-bold"
+                      >
+                        <option value="XS">XS</option>
+                        <option value="S">S</option>
+                        <option value="M">M</option>
+                        <option value="L">L</option>
+                        <option value="XL">XL</option>
+                        <option value="XXL">XXL</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] text-zinc-500 uppercase font-mono mb-0.5">E-mail (Opcional)</label>
+                    <input 
+                      type="email" 
+                      value={newC2Email}
+                      onChange={(e) => setNewC2Email(e.target.value)}
+                      placeholder="marta@example.com"
+                      className="w-full bg-white border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3 py-2 text-xs focus:outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Extras and Payment state */}
+              <div className="p-4 bg-zinc-50 rounded-2xl border border-zinc-150 grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-3">
+                  <h4 className="font-bold text-xs text-zinc-800 uppercase tracking-wide">Complements i Extres</h4>
+                  
+                  <label className="flex items-center gap-2.5 cursor-pointer py-1.5">
+                    <input 
+                      type="checkbox"
+                      checked={newDomas}
+                      onChange={(e) => setNewDomas(e.target.checked)}
+                      className="rounded accent-[#ff0090] h-4 w-4"
+                    />
+                    <div>
+                      <p className="font-bold text-xs">Domàs Corporatiu (+{config.preuDomasBalco}€)</p>
+                      <p className="text-[10px] text-zinc-500">Un mocador gegant ideal per decorar balconeres</p>
+                    </div>
+                  </label>
+
+                  <div className="flex justify-between items-center py-1 border-t border-zinc-200 pt-2.5">
+                    <div>
+                      <p className="font-bold text-xs">Mocadors Extra de Comparsa (+{config.preuMocadorExtra}€/u.)</p>
+                      <p className="text-[10px] text-zinc-500">Mocadors adicionals oficials del Tast</p>
+                    </div>
+                    <input 
+                      type="number"
+                      min={0}
+                      value={newMocadors}
+                      onChange={(e) => setNewMocadors(Math.max(0, Number(e.target.value)))}
+                      className="w-14 bg-white border border-zinc-200 focus:border-[#ff0090] rounded-xl px-2 py-1 text-xs text-center font-bold"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-3 md:border-l md:border-zinc-200 md:pl-4">
+                  <h4 className="font-bold text-xs text-zinc-800 uppercase tracking-wide">Estat del Pagament</h4>
+                  
+                  <div>
+                    <label className="block text-[10px] text-zinc-500 uppercase font-mono mb-1">Estat de Liquidació</label>
+                    <select
+                      value={newEstatPagament}
+                      onChange={(e) => setNewEstatPagament(e.target.value as EstatPagament)}
+                      className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2 text-xs focus:outline-none cursor-pointer font-semibold"
+                    >
+                      <option value={EstatPagament.PENDENT}>Pendent de Pagament</option>
+                      <option value={EstatPagament.PAGAT}>S'ha rebut correctament (Cobrat)</option>
+                    </select>
+                  </div>
+
+                  {newEstatPagament === EstatPagament.PAGAT && (
+                    <div>
+                      <label className="block text-[10px] text-zinc-500 uppercase font-mono mb-1">Mètode de Cobrament</label>
+                      <select
+                        value={newMetodePagament}
+                        onChange={(e) => setNewMetodePagament(e.target.value as MetodePagament)}
+                        className="w-full bg-white border border-zinc-200 rounded-xl px-3 py-2 text-xs focus:outline-none cursor-pointer font-semibold"
+                      >
+                        <option value={MetodePagament.EFECTIU}>Efectiu a secretaria</option>
+                        <option value={MetodePagament.BIZUM}>Bizum rebut a caixa</option>
+                      </select>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Total display action area */}
+              <div className="flex flex-col sm:flex-row justify-between items-center p-4 bg-zinc-950 text-white rounded-2xl gap-4">
+                <div>
+                  <span className="block text-[10px] text-zinc-400 font-mono uppercase tracking-wide">Total a Liquidar</span>
+                  <span className="font-sans font-black text-xl text-[#ff0090]">
+                    {calculatedPreu}€ <span className="text-[10px] font-normal text-zinc-400">({basePreu}€ base + {domasPreu + mocadorsPreu}€ extres)</span>
+                  </span>
+                </div>
+
+                <div className="flex gap-2 w-full sm:w-auto">
+                  <button
+                    type="button"
+                    onClick={() => setShowAddModal(false)}
+                    className="flex-1 sm:flex-initial px-4 py-2.5 bg-zinc-850 hover:bg-zinc-800 font-bold border border-zinc-750 text-zinc-300 rounded-xl transition"
+                  >
+                    Cancel·lar
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 sm:flex-initial px-5 py-2.5 bg-[#ff0090] text-black hover:bg-[#ff0090]/90 font-black rounded-xl transition-all shadow-md uppercase tracking-wider text-xs"
+                  >
+                    Alta de Parella
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* 2. Modal: Gestió de Staff i Administradors */}
+      {showStaffModal && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl border border-zinc-200 shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden">
+            
+            {/* Header */}
+            <div className="p-6 border-b border-zinc-100 flex justify-between items-center bg-zinc-950 text-white animate-fade-in">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-fuchsia-600 rounded-xl">
+                  <ShieldCheck size={20} className="text-white" />
+                </div>
+                <div>
+                  <h3 className="font-sans font-black text-base text-white tracking-tight">Gestió de Staff i Administradors</h3>
+                  <p className="text-[11px] text-zinc-400 font-sans">Afegeix administradors, assigna rols o gestiona permisos de l'equip del Tast</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowStaffModal(false)}
+                className="p-1.5 px-3 text-xs bg-zinc-900 border border-zinc-800 hover:bg-zinc-850 rounded-xl transition font-mono tracking-tighter"
+              >
+                Tancar (esc)
+              </button>
+            </div>
+
+            {/* Content (Scrollable) */}
+            <div className="p-6 overflow-y-auto space-y-6 flex-1 bg-zinc-50">
+              
+              {/* Grid 2 Columns: Add member / Current members */}
+              <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+                
+                {/* 1. Add Staff Member Form (Manual Introduction) */}
+                <div className="lg:col-span-2 bg-white rounded-2xl p-5 border border-zinc-200 shadow-sm space-y-4">
+                  <h4 className="font-sans font-bold text-xs text-zinc-800 uppercase tracking-widest flex items-center gap-1">
+                    <UserCheck size={16} className="text-[#ff0090]" /> Alta de Superadministradors i Staff
+                  </h4>
+                  <div className="h-px bg-zinc-100" />
+
+                  <form onSubmit={handleAddStaffMember} className="space-y-3.5">
+                    <div>
+                      <label className="block text-[10px] text-zinc-500 uppercase font-mono mb-1 font-bold">Nom Complet *</label>
+                      <input 
+                        type="text" 
+                        required
+                        value={newStaffNom}
+                        onChange={(e) => setNewStaffNom(e.target.value)}
+                        placeholder="Ex. Joan Garcia"
+                        className="w-full bg-zinc-50 text-zinc-900 border border-zinc-200 focus:border-[#ff0090] focus:bg-white rounded-xl px-3 py-2 text-xs focus:outline-none transition-all"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] text-zinc-500 uppercase font-mono mb-1 font-bold">Nom d'Usuari *</label>
+                      <div className="relative">
+                        <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-zinc-400 pointer-events-none text-xs font-mono">@</span>
+                        <input 
+                          type="text" 
+                          required
+                          value={newStaffUsuari}
+                          onChange={(e) => setNewStaffUsuari(e.target.value)}
+                          placeholder="Ex. joang"
+                          className="w-full bg-zinc-50 text-zinc-900 border border-zinc-200 focus:border-[#ff0090] focus:bg-white rounded-xl pl-7 pr-3 py-2 text-xs focus:outline-none transition-all"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] text-zinc-500 uppercase font-mono mb-1 font-bold">Contrasenya *</label>
+                      <div className="relative">
+                        <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-zinc-400 pointer-events-none">
+                          <Key size={12} />
+                        </span>
+                        <input 
+                          type="text" 
+                          required
+                          value={newStaffContrasenya}
+                          onChange={(e) => setNewStaffContrasenya(e.target.value)}
+                          placeholder="Clau ràpida format privat"
+                          className="w-full bg-zinc-50 text-zinc-900 border border-zinc-200 focus:border-[#ff0090] focus:bg-white rounded-xl pl-8 pr-3 py-2 text-xs focus:outline-none transition-all font-mono"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] text-zinc-500 uppercase font-mono mb-1 font-bold">Seleccionar Categoria (SuperAdministrador o Staff) *</label>
+                      <select
+                        value={newStaffRol}
+                        onChange={(e) => setNewStaffRol(e.target.value as any)}
+                        className="w-full bg-zinc-50 text-zinc-900 border border-zinc-200 rounded-xl px-3 py-2 text-xs focus:outline-none cursor-pointer font-bold"
+                      >
+                        <option value="SuperAdministrador">👑 SuperAdministrador (Accés i Control Total)</option>
+                        <option value="Secretaria">👥 Staff / Secretaria (Edició i Pagaments)</option>
+                        <option value="Mesa d'Entrega">👥 Staff / Mesa d'Entrega (Lliurament de Dossals)</option>
+                        <option value="Coordinador">👥 Staff / Coordinador Tècnic de Taula</option>
+                      </select>
+                    </div>
+
+                    <button
+                      type="submit"
+                      className="w-full mt-2 py-2.5 bg-zinc-950 text-white hover:bg-black font-bold rounded-xl transition text-xs flex items-center justify-center gap-1 shadow-sm uppercase tracking-wider cursor-pointer font-sans"
+                    >
+                      <Plus size={14} className="text-[#ff0090]" /> Donar d'Alta Membre
+                    </button>
+                  </form>
+                </div>
+
+                {/* 2. Staff Directory */}
+                <div className="lg:col-span-3 bg-white rounded-2xl p-5 border border-zinc-200 shadow-sm space-y-4">
+                  <div className="flex justify-between items-center">
+                    <h4 className="font-sans font-bold text-xs text-zinc-800 uppercase tracking-widest">
+                      Llistat de Personal ({staffList.length})
+                    </h4>
+                    <span className="text-[9px] bg-zinc-100 text-zinc-500 font-mono font-bold px-2 py-0.5 rounded">
+                      2026 ACTIVE SHEETS
+                    </span>
+                  </div>
+                  <div className="h-px bg-zinc-100" />
+
+                  {staffList.length === 0 ? (
+                    <div className="py-8 text-center text-zinc-400 font-sans text-xs">
+                      No hi ha cap membre extra registrat. Utilitzeu el qüestionari manual de l’esquerra enguany.
+                    </div>
+                  ) : (
+                    <div className="space-y-3 max-h-[420px] overflow-y-auto pr-1">
+                      {staffList.map((st) => (
+                        <div 
+                          key={st.id} 
+                          className={`p-3 rounded-xl border transition-all flex flex-col md:flex-row md:items-center justify-between gap-3 ${
+                            st.actiu ? 'bg-white border-zinc-200 hover:bg-zinc-50/50 hover:shadow-xs' : 'bg-zinc-50 border-zinc-150 opacity-60'
+                          }`}
+                        >
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-sm text-zinc-900 leading-none">{st.nom}</span>
+                              <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded font-mono ${
+                                st.rol === 'SuperAdministrador' ? 'bg-red-50 text-red-550 border border-red-200' :
+                                st.rol === 'Secretaria' ? 'bg-fuchsia-50 text-fuchsia-550 border border-fuchsia-200' :
+                                st.rol === 'Coordinador' ? 'bg-blue-50 text-blue-550 border border-blue-200' :
+                                'bg-zinc-100 text-zinc-650 border border-zinc-200'
+                              }`}>
+                                {st.rol}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-3 text-[10px] text-zinc-500 font-mono">
+                              <span>usuari: <strong className="text-zinc-650">@{st.usuari}</strong></span>
+                              <span>clau: <strong className="text-zinc-650">{st.contrasenya}</strong></span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0">
+                            {/* Role changer dropdown */}
+                            <select
+                              value={st.rol}
+                              onChange={(e) => handleUpdateStaffRol(st.id, e.target.value as any)}
+                              className="bg-zinc-100 hover:bg-zinc-200 text-zinc-800 text-[10px] border-none font-bold rounded px-2 py-1 focus:outline-none cursor-pointer"
+                            >
+                              <option value="Secretaria">Secretaria</option>
+                              <option value="Mesa d'Entrega">Mesa d'Entrega</option>
+                              <option value="Coordinador">Coordinador</option>
+                              <option value="SuperAdministrador">Admin</option>
+                            </select>
+
+                            {/* Active Toggle Button */}
+                            <button
+                              onClick={() => handleToggleStaffActiu(st.id)}
+                              className={`text-[9px] font-bold px-2 py-1 rounded transition cursor-pointer ${
+                                st.actiu 
+                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100' 
+                                  : 'bg-zinc-100 text-zinc-400 border border-zinc-200 hover:bg-zinc-200 hover:text-zinc-600'
+                              }`}
+                              title="Habilitar/Deshabilitar accés"
+                            >
+                              {st.actiu ? 'Actiu' : 'Inactiu'}
+                            </button>
+
+                            {/* Delete Button */}
+                            <button
+                              onClick={() => handleRemoveStaffMember(st.id, st.nom)}
+                              className={`px-2 py-1 transition rounded-lg cursor-pointer text-xs font-bold font-sans flex items-center gap-1 ${
+                                deleteConfirmId === st.id 
+                                  ? 'bg-red-650 text-white animate-pulse' 
+                                  : 'text-zinc-400 hover:text-red-500 hover:bg-red-55'
+                              }`}
+                              title={deleteConfirmId === st.id ? "Clica un altre cop per confirmar" : "Retirar accés"}
+                            >
+                              {deleteConfirmId === st.id ? (
+                                <span className="text-[10px] px-1 font-extrabold uppercase">Confirmar?</span>
+                              ) : (
+                                <Trash2 size={13} />
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 bg-zinc-950 border-t border-zinc-900 flex justify-between items-center text-[10px] text-zinc-400 font-mono">
+              <span>Nota: Els usuaris afegits es poden fer servir instantàniament des de la pantalla de login.</span>
+              <span>Associació Cultural El Tast • Vilanova 2026</span>
+            </div>
+
+          </div>
+        </div>
+      )}
     </div>
   );
 }

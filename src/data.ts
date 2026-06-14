@@ -34,7 +34,7 @@ export const COMPARTIDES_XARXES: NoticiaXarxes[] = [
   {
     id: 'not-2',
     xarxa: 'facebook',
-    usuari: 'Associació Gastronòmica El Tast',
+    usuari: 'Associació Cultural El Tast',
     text: '📢 ATENCIÓ COMPARSERES I COMPARSERS! Enguany facilitem el sistema d\'inscripció. Podeu carregar el DNI directament des de la web i rebreu el codi QR de confirmació al vostre correu. En el moment de la recollida del material a la seu, només ens heu d\'ensenyar el QR, farem el pagament (Bizum o efectiu) i us endureu el mocador i la comanda en segons! 🍬🍬🍬 El Tast, cada any millor!',
     dataPublicacio: 'Ahir',
     enllacUrl: 'https://facebook.com',
@@ -57,6 +57,14 @@ export const CONFIG_INICIAL: SistemaConfig = {
   preuJuvenil: 60.00,
   preuDomasBalco: 15.00,
   preuMocadorExtra: 6.00,
+  titolSeccioTarifes: 'Tarifes i Cànons 2026',
+  tarifesDinamiques: [
+    { id: 'adults', nom: 'Preu Parella Adulta (€)', valor: 90.00, actiu: true, tipus: 'categoria_adult' },
+    { id: 'juvenils', nom: 'Preu Parella Juvenil (€)', valor: 60.00, actiu: true, tipus: 'categoria_juvenil' },
+    { id: 'domas', nom: 'Cànon Domàs de Balcó (€)', valor: 15.00, actiu: true, tipus: 'extra_domas' },
+    { id: 'mocador', nom: 'Cànon Mocador Extra (€)', valor: 6.00, actiu: true, tipus: 'extra_mocador' }
+  ],
+  titolFormulariDinamic: "Preguntes del Qüestionari d'El Tast",
   preguntesFormulari: [
     {
       id: 'preg-1',
@@ -80,7 +88,14 @@ export const CONFIG_INICIAL: SistemaConfig = {
       requerit: false,
       activa: true
     }
-  ]
+  ],
+  logoText: 'T',
+  titolPrincipal: 'EL TAST',
+  titolSecundari: 'VILANOVA',
+  subtitol: 'Vilanova i la Geltrú 2026',
+  logoColor: '#ff0090',
+  logoImgUrl: '',
+  logoUseImage: false
 };
 
 export const INSCRIPCIONS_INICIALS: Inscripcio[] = [

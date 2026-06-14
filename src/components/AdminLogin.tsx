@@ -32,16 +32,34 @@ export default function AdminLogin({ onLoginSuccess, onBackToPublic }: AdminLogi
     // Simulate cryptographic delay
     setTimeout(() => {
       // Accepting 'admin'/'admin' or 'tast'/'tast' or 'Tastvng@gmail.com'/'tast'
-      const isValid = (username === 'admin' && password === 'admin') || 
-                      (username === 'tast' && password === 'tast') ||
-                      (username.toLowerCase() === 'tastvng@gmail.com' && password === 'tast') ||
-                      (username === 'secretaria' && password === 'eltast2026');
+      let isValid = (username === 'admin' && password === 'admin') || 
+                    (username === 'tast' && password === 'tast') ||
+                    (username.toLowerCase() === 'tastvng@gmail.com' && password === 'tast') ||
+                    (username === 'secretaria' && password === 'eltast2026');
+
+      // Direct lookup from manually added staff profiles
+      try {
+        const savedStaff = localStorage.getItem('tast_staff_2026');
+        if (savedStaff) {
+          const staffList = JSON.parse(savedStaff);
+          const found = staffList.find((s: any) => 
+            (s.usuari.toLowerCase() === username.toLowerCase() || s.nom.toLowerCase() === username.toLowerCase()) && 
+            s.contrasenya === password && 
+            s.actiu !== false
+          );
+          if (found) {
+            isValid = true;
+          }
+        }
+      } catch (e) {
+        console.error("Error verifying dynamic staff credentials:", e);
+      }
 
       setIsVerifying(false);
       if (isValid) {
         onLoginSuccess();
       } else {
-        setErrorError("L'usuari o la contrasenya no són correctes. Proveu amb admin / admin o tast / tast.");
+        setErrorError("L'usuari o la contrasenya no són correctes. Proveu amb 'admin' / 'admin' o els perfils de staff registrats.");
       }
     }, 1000);
   };

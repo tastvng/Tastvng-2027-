@@ -75,21 +75,53 @@ export interface Inscripcio {
   actualizadoEn: string;
 }
 
+export interface TarifaConcept {
+  id: string;
+  nom: string;
+  valor: number;
+  actiu: boolean;
+  tipus: 'categoria_adult' | 'categoria_juvenil' | 'extra_domas' | 'extra_mocador' | 'extra_generic';
+}
+
 export interface SistemaConfig {
   preuAdult: number;
   preuJuvenil: number;
   preuDomasBalco: number;
   preuMocadorExtra: number;
   preguntesFormulari: PreguntaDinamica[];
+  logoText?: string;
+  titolPrincipal?: string;
+  titolSecundari?: string;
+  subtitol?: string;
+  logoColor?: string;
+  titolSeccioTarifes?: string;
+  tarifesDinamiques?: TarifaConcept[];
+  titolFormulariDinamic?: string;
+  logoImgUrl?: string;
+  logoUseImage?: boolean;
 }
 
 export interface NoticiaXarxes {
   id: string;
-  xarxa: 'instagram' | 'facebook';
+  xarxa?: 'instagram' | 'facebook' | 'entitat';
   usuari: string;
   text: string;
   imatgeUrl?: string;
   dataPublicacio: string;
-  enllacUrl: string;
-  likes: number;
+  enllacUrl?: string;
+  likes?: number;
+  tipus?: 'normal' | 'video' | 'nota' | 'alerta';
+  videoUrl?: string;
+  ressaltat?: boolean;
+  titol?: string;
+}
+
+export interface StaffMember {
+  id: string;
+  nom: string;
+  usuari: string;
+  rol: 'SuperAdministrador' | 'Secretaria' | 'Mesa d\'Entrega' | 'Coordinador';
+  contrasenya: string;
+  creadoEn: string;
+  actiu: boolean;
 }

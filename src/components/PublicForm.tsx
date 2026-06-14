@@ -51,6 +51,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
   // Extras
   const [teDomasBalco, setTeDomasBalco] = useState(false);
   const [teMocadorsExtra, setTeMocadorsExtra] = useState(0);
+  const [genericExtrasSelected, setGenericExtrasSelected] = useState<Record<string, boolean>>({});
   
   // Checkboxes
   const [acceptaRGPD, setAcceptaRGPD] = useState(false);
@@ -71,10 +72,18 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
   const streamRef = useRef<MediaStream | null>(null);
 
   // Calculate live total price
-  const basePrice = categoria === CategoriaParella.ADULT ? config.preuAdult : config.preuJuvenil;
-  const domasCost = teDomasBalco ? config.preuDomasBalco : 0;
-  const mocadorsCost = teMocadorsExtra * config.preuMocadorExtra;
-  const totalCalculat = basePrice + domasCost + mocadorsCost;
+  const basePrice = categoria === CategoriaParella.ADULT 
+    ? (config.tarifesDinamiques?.find(t => t.id === 'adults')?.valor ?? config.preuAdult)
+    : (config.tarifesDinamiques?.find(t => t.id === 'juvenils')?.valor ?? config.preuJuvenil);
+  const domasCost = teDomasBalco ? (config.tarifesDinamiques?.find(t => t.id === 'domas')?.valor ?? config.preuDomasBalco) : 0;
+  const mocadorsCost = teMocadorsExtra * (config.tarifesDinamiques?.find(t => t.id === 'mocador')?.valor ?? config.preuMocadorExtra);
+
+  // Calculate any custom dynamically added active generic extras
+  const genericExtrasCost = (config.tarifesDinamiques || [])
+    .filter(t => t.tipus === 'extra_generic' && t.actiu && genericExtrasSelected[t.id])
+    .reduce((sum, t) => sum + t.valor, 0);
+
+  const totalCalculat = basePrice + domasCost + mocadorsCost + genericExtrasCost;
 
   // Initialize dynamic answers on layout load
   useEffect(() => {
@@ -410,55 +419,81 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
           <p className="text-zinc-400 text-xs mb-5">El preu relatiu canvia automàticament segons la configuració vigent de l'entitat.</p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div 
-              onClick={() => setCategoria(CategoriaParella.ADULT)}
-              className={`p-5 rounded-2xl border-2 cursor-pointer transition-all ${
-                categoria === CategoriaParella.ADULT 
-                  ? 'bg-fuchsia-950/40 border-fuchsia-500 shadow-lg shadow-fuchsia-500/10' 
-                  : 'bg-zinc-950/70 border-zinc-800 hover:border-zinc-700'
-              }`}
-              id="card-cat-adult"
-            >
-              <div className="flex justify-between items-start mb-2">
-                <span className={`text-xs font-bold font-mono ${categoria === CategoriaParella.ADULT ? 'text-fuchsia-400' : 'text-zinc-500'}`}>CATEGORIA SÈNIOR</span>
-                <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${categoria === CategoriaParella.ADULT ? 'border-fuchsia-500' : 'border-zinc-500'}`}>
-                  {categoria === CategoriaParella.ADULT && <div className="w-1.5 h-1.5 bg-fuchsia-500 rounded-full" />}
-                </div>
-              </div>
-              <h4 className="font-sans font-bold text-xl text-white">Parella Adulta</h4>
-              <p className="text-zinc-400 text-xs mt-1 leading-relaxed">
-                Recomanada per a participants de 16 anys o més. Inclou samarretes exclusives de la collada i puros dolços.
-              </p>
-              <div className="text-right mt-3">
-                <span className="font-sans font-extrabold text-2xl text-fuchsia-500">{config.preuAdult}€</span>
-                <span className="text-zinc-400 text-xs font-mono"> / parella</span>
-              </div>
-            </div>
+            {(() => {
+              const adultTarifaObj = (config.tarifesDinamiques || []).find(t => t.id === 'adults') || { nom: 'Parella Adulta', valor: config.preuAdult, actiu: true };
+              const isAdultDisabled = !adultTarifaObj.actiu;
 
-            <div 
-              onClick={() => setCategoria(CategoriaParella.JUVENIL)}
-              className={`p-5 rounded-2xl border-2 cursor-pointer transition-all ${
-                categoria === CategoriaParella.JUVENIL 
-                  ? 'bg-fuchsia-950/40 border-fuchsia-500 shadow-lg shadow-fuchsia-500/10' 
-                  : 'bg-zinc-950/70 border-zinc-800 hover:border-zinc-700'
-              }`}
-              id="card-cat-juvenil"
-            >
-              <div className="flex justify-between items-start mb-2">
-                <span className={`text-xs font-bold font-mono ${categoria === CategoriaParella.JUVENIL ? 'text-fuchsia-400' : 'text-zinc-500'}`}>CATEGORIA JUNIOR</span>
-                <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${categoria === CategoriaParella.JUVENIL ? 'border-fuchsia-500' : 'border-zinc-500'}`}>
-                  {categoria === CategoriaParella.JUVENIL && <div className="w-1.5 h-1.5 bg-fuchsia-500 rounded-full" />}
+              return (
+                <div 
+                  onClick={() => !isAdultDisabled && setCategoria(CategoriaParella.ADULT)}
+                  className={`p-5 rounded-2xl border-2 transition-all ${
+                    isAdultDisabled 
+                      ? 'bg-zinc-950/20 border-zinc-900 opacity-40 cursor-not-allowed'
+                      : categoria === CategoriaParella.ADULT 
+                        ? 'bg-fuchsia-950/40 border-fuchsia-500 shadow-lg shadow-fuchsia-500/10 cursor-pointer' 
+                        : 'bg-zinc-950/70 border-zinc-800 hover:border-zinc-700 cursor-pointer'
+                  }`}
+                  id="card-cat-adult"
+                >
+                  <div className="flex justify-between items-start mb-2">
+                    <span className={`text-xs font-bold font-mono ${isAdultDisabled ? 'text-zinc-600' : categoria === CategoriaParella.ADULT ? 'text-fuchsia-400' : 'text-zinc-500'}`}>
+                      CATEGORIA SÈNIOR {isAdultDisabled && "(No actiu)"}
+                    </span>
+                    {!isAdultDisabled && (
+                      <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${categoria === CategoriaParella.ADULT ? 'border-fuchsia-500' : 'border-zinc-500'}`}>
+                        {categoria === CategoriaParella.ADULT && <div className="w-1.5 h-1.5 bg-fuchsia-500 rounded-full" />}
+                      </div>
+                    )}
+                  </div>
+                  <h4 className="font-sans font-bold text-xl text-white">{adultTarifaObj.nom}</h4>
+                  <p className="text-zinc-400 text-xs mt-1 leading-relaxed">
+                    Recomanada per a participants de 16 anys o més. Inclou samarretes exclusives de la collada i puros dolços.
+                  </p>
+                  <div className="text-right mt-3">
+                    <span className="font-sans font-extrabold text-2xl text-fuchsia-500">{adultTarifaObj.valor}€</span>
+                    <span className="text-zinc-400 text-xs font-mono"> / parella</span>
+                  </div>
                 </div>
-              </div>
-              <h4 className="font-sans font-bold text-xl text-white">Parella Juvenil</h4>
-              <p className="text-zinc-400 text-xs mt-1 leading-relaxed">
-                Ideal per a parelles joves de fins a 15 anys d'edat. Inclou fulard petit de color fúcsia.
-              </p>
-              <div className="text-right mt-3">
-                <span className="font-sans font-extrabold text-2xl text-fuchsia-500">{config.preuJuvenil}€</span>
-                <span className="text-zinc-400 text-xs font-mono"> / parella</span>
-              </div>
-            </div>
+              );
+            })()}
+
+            {(() => {
+              const juvenilTarifaObj = (config.tarifesDinamiques || []).find(t => t.id === 'juvenils') || { nom: 'Parella Juvenil', valor: config.preuJuvenil, actiu: true };
+              const isJuvenilDisabled = !juvenilTarifaObj.actiu;
+
+              return (
+                <div 
+                  onClick={() => !isJuvenilDisabled && setCategoria(CategoriaParella.JUVENIL)}
+                  className={`p-5 rounded-2xl border-2 transition-all ${
+                    isJuvenilDisabled 
+                      ? 'bg-zinc-950/20 border-zinc-900 opacity-40 cursor-not-allowed'
+                      : categoria === CategoriaParella.JUVENIL 
+                        ? 'bg-fuchsia-950/40 border-fuchsia-500 shadow-lg shadow-fuchsia-500/10 cursor-pointer' 
+                        : 'bg-zinc-950/70 border-zinc-800 hover:border-zinc-700 cursor-pointer'
+                  }`}
+                  id="card-cat-juvenil"
+                >
+                  <div className="flex justify-between items-start mb-2">
+                    <span className={`text-xs font-bold font-mono ${isJuvenilDisabled ? 'text-zinc-600' : categoria === CategoriaParella.JUVENIL ? 'text-fuchsia-400' : 'text-zinc-500'}`}>
+                      CATEGORIA JUNIOR {isJuvenilDisabled && "(No actiu)"}
+                    </span>
+                    {!isJuvenilDisabled && (
+                      <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${categoria === CategoriaParella.JUVENIL ? 'border-fuchsia-500' : 'border-zinc-500'}`}>
+                        {categoria === CategoriaParella.JUVENIL && <div className="w-1.5 h-1.5 bg-fuchsia-500 rounded-full" />}
+                      </div>
+                    )}
+                  </div>
+                  <h4 className="font-sans font-bold text-xl text-white">{juvenilTarifaObj.nom}</h4>
+                  <p className="text-zinc-400 text-xs mt-1 leading-relaxed">
+                    Ideal per a parelles joves de fins a 15 anys d'edat. Inclou fulard petit de color fúcsia.
+                  </p>
+                  <div className="text-right mt-3">
+                    <span className="font-sans font-extrabold text-2xl text-fuchsia-500">{juvenilTarifaObj.valor}€</span>
+                    <span className="text-zinc-400 text-xs font-mono"> / parella</span>
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         </div>
 
@@ -754,7 +789,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
           <div className="bg-white rounded-3xl p-6 border border-zinc-200 shadow-sm">
             <h3 className="font-sans font-bold text-zinc-900 text-lg mb-5 pb-2 border-b border-zinc-100 flex items-center gap-2">
               <Sparkles className="text-fuchsia-500" size={18} />
-              Preguntes del Qüestionari d'El Tast
+              {config.titolFormulariDinamic || "Preguntes del Qüestionari d'El Tast"}
             </h3>
 
             <div className="space-y-5">
@@ -822,58 +857,94 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
         )}
 
         {/* Extra Accessories Order Section */}
-        <div className="bg-white rounded-3xl p-6 border border-zinc-200 shadow-sm">
-          <h3 className="font-sans font-bold text-zinc-900 text-lg mb-4 pb-2 border-b border-zinc-100 flex items-center gap-2">
-            🎀 Comandes i Complements Addicionals (Opcional)
-          </h3>
-          <p className="text-zinc-500 text-xs mb-6">Podeu equipar la vostra parella amb el marxandatge oficial de l'entitat.</p>
+        {(() => {
+          const domasTarifaObj = (config.tarifesDinamiques || []).find(t => t.id === 'domas') || { nom: "Domàs per al Balcó de les Comparses", valor: config.preuDomasBalco, actiu: true };
+          const mocadorTarifaObj = (config.tarifesDinamiques || []).find(t => t.id === 'mocador') || { nom: "Mocadors oficials addicionals", valor: config.preuMocadorExtra, actiu: true };
+          const genericExtras = (config.tarifesDinamiques || []).filter(t => t.tipus === 'extra_generic' && t.actiu);
 
-          <div className="space-y-6">
-            <div className="flex items-center justify-between p-4 bg-zinc-50 rounded-2xl border border-zinc-100">
-              <div className="space-y-0.5">
-                <h4 className="font-sans font-bold text-sm text-zinc-800">Domàs per al Balcó de les Comparses</h4>
-                <p className="text-zinc-500 text-xs">Penja l'orgull fúcsia d'El Tast al teu balcó el cap de setmana de carnaval.</p>
-              </div>
-              <div className="flex items-center gap-4">
-                <span className="font-sans font-bold text-sm text-zinc-900">+{config.preuDomasBalco}€</span>
-                <input 
-                  type="checkbox" 
-                  checked={teDomasBalco}
-                  onChange={(e) => setTeDomasBalco(e.target.checked)}
-                  className="w-5 h-5 rounded text-fuchsia-500 outline-none accent-fuchsia-500 cursor-pointer"
-                  id="checkbox-domas"
-                />
+          const hasAnyExtras = domasTarifaObj.actiu || mocadorTarifaObj.actiu || genericExtras.length > 0;
+
+          if (!hasAnyExtras) return null;
+
+          return (
+            <div className="bg-white rounded-3xl p-6 border border-zinc-200 shadow-sm">
+              <h3 className="font-sans font-bold text-zinc-900 text-lg mb-4 pb-2 border-b border-zinc-100 flex items-center gap-2">
+                🎀 Comandes i Complements Addicionals (Opcional)
+              </h3>
+              <p className="text-zinc-500 text-xs mb-6">Podeu equipar la vostra parella o afegir complements oficials de l'entitat.</p>
+
+              <div className="space-y-6">
+                {domasTarifaObj.actiu && (
+                  <div className="flex items-center justify-between p-4 bg-zinc-50 rounded-2xl border border-zinc-100">
+                    <div className="space-y-0.5">
+                      <h4 className="font-sans font-bold text-sm text-zinc-800">{domasTarifaObj.nom}</h4>
+                      <p className="text-zinc-500 text-xs">Penja l'orgull fúcsia d'El Tast al teu balcó el cap de setmana de carnaval.</p>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <span className="font-sans font-bold text-sm text-zinc-950">+{domasTarifaObj.valor}€</span>
+                      <input 
+                        type="checkbox" 
+                        checked={teDomasBalco}
+                        onChange={(e) => setTeDomasBalco(e.target.checked)}
+                        className="w-5 h-5 rounded text-fuchsia-500 outline-none accent-fuchsia-500 cursor-pointer"
+                        id="checkbox-domas"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {mocadorTarifaObj.actiu && (
+                  <div className="flex items-center justify-between p-4 bg-zinc-50 rounded-2xl border border-zinc-100">
+                    <div className="space-y-0.5">
+                      <h4 className="font-sans font-bold text-sm text-zinc-800">{mocadorTarifaObj.nom}</h4>
+                      <p className="text-zinc-500 text-xs">Mocador gran de fil de la colla per a amics, fills o familiars que animen.</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="font-sans font-bold text-sm text-zinc-950 mr-2">+{mocadorTarifaObj.valor}€ / u.</span>
+                      <button
+                        type="button"
+                        onClick={() => setTeMocadorsExtra(prev => Math.max(0, prev - 1))}
+                        className="w-8 h-8 rounded-lg bg-white border border-zinc-200 flex items-center justify-center hover:bg-zinc-100 font-bold text-zinc-700 transition"
+                        id="btn-remove-mocador"
+                      >
+                        <Minus size={14} />
+                      </button>
+                      <span className="font-mono font-bold text-sm text-zinc-900 w-6 text-center">{teMocadorsExtra}</span>
+                      <button
+                        type="button"
+                        onClick={() => setTeMocadorsExtra(prev => prev + 1)}
+                        className="w-8 h-8 rounded-lg bg-white border border-zinc-200 flex items-center justify-center hover:bg-zinc-100 font-bold text-zinc-700 transition"
+                        id="btn-add-mocador"
+                      >
+                        <Plus size={14} />
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Newly added customizable payment/rate lines */}
+                {genericExtras.map((extr) => (
+                  <div key={extr.id} className="flex items-center justify-between p-4 bg-zinc-50 rounded-2xl border border-zinc-100">
+                    <div className="space-y-0.5">
+                      <h4 className="font-sans font-bold text-sm text-zinc-850">{extr.nom}</h4>
+                      <p className="text-zinc-500 text-xs">Complement addicional configurat per l'administració de l'entitat.</p>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <span className="font-sans font-bold text-sm text-zinc-950">+{extr.valor}€</span>
+                      <input 
+                        type="checkbox" 
+                        checked={!!genericExtrasSelected[extr.id]}
+                        onChange={(e) => setGenericExtrasSelected(prev => ({ ...prev, [extr.id]: e.target.checked }))}
+                        className="w-5 h-5 rounded text-fuchsia-500 outline-none accent-fuchsia-500 cursor-pointer"
+                        id={`checkbox-extra-${extr.id}`}
+                      />
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
-
-            <div className="flex items-center justify-between p-4 bg-zinc-50 rounded-2xl border border-zinc-100">
-              <div className="space-y-0.5">
-                <h4 className="font-sans font-bold text-sm text-zinc-800">Mocadors oficials addicionals</h4>
-                <p className="text-zinc-500 text-xs">Mocador gran de fil de la colla per a amics, fills o familiars que animen.</p>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="font-sans font-bold text-sm text-zinc-900 mr-2">+{config.preuMocadorExtra}€ / u.</span>
-                <button
-                  type="button"
-                  onClick={() => setTeMocadorsExtra(prev => Math.max(0, prev - 1))}
-                  className="w-8 h-8 rounded-lg bg-white border border-zinc-200 flex items-center justify-center hover:bg-zinc-100 font-bold text-zinc-700 transition"
-                  id="btn-remove-mocador"
-                >
-                  <Minus size={14} />
-                </button>
-                <span className="font-mono font-bold text-sm text-zinc-900 w-6 text-center">{teMocadorsExtra}</span>
-                <button
-                  type="button"
-                  onClick={() => setTeMocadorsExtra(prev => prev + 1)}
-                  className="w-8 h-8 rounded-lg bg-white border border-zinc-200 flex items-center justify-center hover:bg-zinc-100 font-bold text-zinc-700 transition"
-                  id="btn-add-mocador"
-                >
-                  <Plus size={14} />
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+          );
+        })()}
 
         {/* Legal RGPD and Payment policy */}
         <div className="bg-white rounded-3xl p-6 border border-zinc-200 shadow-sm space-y-4">
@@ -887,7 +958,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
             />
             <div>
               <p className="text-xs text-zinc-700 font-sans leading-relaxed">
-                Accepto que l'Associació Gastronòmica El Tast tracti les meves dades i arxius dels DNIs exclusivament per a la finalitat de validar legalment la pertinença a les comparses 2026. Els fitxers s'eliminaran del servidor acabada la jornada festiva l'acord amb la RGPD europea. *
+                Accepto que l'Associació Cultural El Tast tracti les meves dades i arxius dels DNIs exclusivament per a la finalitat de validar legalment la pertinença a les comparses 2026. Els fitxers s'eliminaran del servidor acabada la jornada festiva l'acord amb la RGPD europea. *
               </p>
               {errors.rgpd && <p className="text-red-500 text-[10px] font-mono mt-0.5">{errors.rgpd}</p>}
             </div>
