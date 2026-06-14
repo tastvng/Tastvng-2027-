@@ -65,7 +65,7 @@ export async function translateText(
       }),
     });
     
-    if (response.status === 429) {
+    if (response.status === 429 || response.status === 503) {
       if (typeof window !== 'undefined' && window.sessionStorage) {
         window.sessionStorage.setItem('tast_translation_quota_exceeded', 'true');
         window.dispatchEvent(new Event('translationQuotaExceeded'));

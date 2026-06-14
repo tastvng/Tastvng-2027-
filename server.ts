@@ -179,7 +179,7 @@ Text: "${text}"`;
       return res.json({ translatedText: translatedText.trim() });
     } catch (error: any) {
       const errMsg = error?.message || String(error);
-      const isQuota = errMsg.includes("429") || errMsg.includes("quota") || errMsg.includes("RESOURCE_EXHAUSTED");
+      const isQuota = errMsg.includes("429") || errMsg.includes("503") || errMsg.includes("quota") || errMsg.includes("RESOURCE_EXHAUSTED") || errMsg.includes("UNAVAILABLE");
       
       if (isQuota) {
         console.warn("Translation API quota exceeded (free tier limit reached). Bypassing translations gracefully.");
