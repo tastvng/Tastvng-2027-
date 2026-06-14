@@ -326,7 +326,7 @@ export default function AdminScanner({
     try {
       setUseRealCamera(true);
       const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: { ideal: 'environment' } } 
+        video: { facingMode: 'environment' } 
       });
       streamRef.current = stream;
       setHasCameraPermission(true);

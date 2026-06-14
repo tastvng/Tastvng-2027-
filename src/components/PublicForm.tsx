@@ -90,10 +90,9 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
   const [respostesCuestionari, setRespostesCuestionari] = useState<Record<string, string | boolean>>({});
   
   // Extras
-  const [teDomasBalcoQty, setTeDomasBalcoQty] = useState(0);
-  const teDomasBalco = teDomasBalcoQty > 0;
+  const [teDomasBalco, setTeDomasBalco] = useState(false);
   const [teMocadorsExtra, setTeMocadorsExtra] = useState(0);
-  const [genericExtrasQty, setGenericExtrasQty] = useState<Record<string, number>>({});
+  const [genericExtrasSelected, setGenericExtrasSelected] = useState<Record<string, boolean>>({});
   
   // Checkboxes
   const [acceptaRGPD, setAcceptaRGPD] = useState(false);
@@ -195,13 +194,13 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
   const basePrice = categoria === CategoriaParella.ADULT 
     ? (config.tarifesDinamiques?.find(t => t.id === 'adults')?.valor ?? config.preuAdult)
     : (config.tarifesDinamiques?.find(t => t.id === 'juvenils')?.valor ?? config.preuJuvenil);
-  const domasCost = teDomasBalcoQty * (config.tarifesDinamiques?.find(t => t.id === 'domas')?.valor ?? config.preuDomasBalco);
+  const domasCost = teDomasBalco ? (config.tarifesDinamiques?.find(t => t.id === 'domas')?.valor ?? config.preuDomasBalco) : 0;
   const mocadorsCost = teMocadorsExtra * (config.tarifesDinamiques?.find(t => t.id === 'mocador')?.valor ?? config.preuMocadorExtra);
 
-  // Calculate any custom dynamically added active generic extras using selected quantities
+  // Calculate any custom dynamically added active generic extras
   const genericExtrasCost = (config.tarifesDinamiques || [])
-    .filter(t => t.tipus === 'extra_generic' && t.actiu)
-    .reduce((sum, t) => sum + (genericExtrasQty[t.id] || 0) * t.valor, 0);
+    .filter(t => t.tipus === 'extra_generic' && t.actiu && genericExtrasSelected[t.id])
+    .reduce((sum, t) => sum + t.valor, 0);
 
   const totalCalculat = basePrice + domasCost + mocadorsCost + genericExtrasCost;
 
@@ -226,7 +225,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
       setTimeout(async () => {
         try {
           const stream = await navigator.mediaDevices.getUserMedia({ 
-            video: { facingMode: { ideal: 'environment' } } 
+            video: { facingMode: 'environment' } 
           });
           streamRef.current = stream;
           if (videoRef.current) {
@@ -374,7 +373,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
     if (!c1Cognoms.trim()) tempErrors.c1Cognoms = language === 'ca' ? "Els cognoms són requerits" : "Los apellidos son requeridos";
     if (!c1Email.trim() || !/\S+@\S+\.\S+/.test(c1Email)) tempErrors.c1Email = language === 'ca' ? "Email vàlid requerit" : "Email válido requerido";
     if (!c1Telefon.trim()) tempErrors.c1Telefon = language === 'ca' ? "El telèfon és requerit" : "El teléfono es requerido";
-    if (!c1DniUrl) tempErrors.c1Dni = language === 'ca' ? "Cal pujar el DNI del/de la Comparser/a 1" : "Es necesario subir el DNI del/de la Comparser/a 1";
+    if (!c1DniUrl) tempErrors.c1Dni = language === 'ca' ? "Cal pujar el DNI del Comparser 1" : "Es necesario subir el DNI del Comparser 1";
 
     if (c1EsMenor) {
       if (!c1TutorNom.trim()) tempErrors.c1TutorNom = language === 'ca' ? "El nom del tutor és requerit" : "El nombre del tutor es requerido";
@@ -388,7 +387,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
     if (!c2Cognoms.trim()) tempErrors.c2Cognoms = language === 'ca' ? "Els cognoms són requerits" : "Los apellidos son requeridos";
     if (!c2Email.trim() || !/\S+@\S+\.\S+/.test(c2Email)) tempErrors.c2Email = language === 'ca' ? "Email vàlid requerit" : "Email válido requerido";
     if (!c2Telefon.trim()) tempErrors.c2Telefon = language === 'ca' ? "El telèfon és requerit" : "El teléfono es requerido";
-    if (!c2DniUrl) tempErrors.c2Dni = language === 'ca' ? "Cal pujar el DNI del/de la Comparser/a 2" : "Es necesario subir el DNI del/de la Comparser/a 2";
+    if (!c2DniUrl) tempErrors.c2Dni = language === 'ca' ? "Cal pujar el DNI del Comparser 2" : "Es necesario subir el DNI del Comparser 2";
 
     if (c2EsMenor) {
       if (!c2TutorNom.trim()) tempErrors.c2TutorNom = language === 'ca' ? "El nom del tutor és requerit" : "El nombre del tutor es requerido";
@@ -398,17 +397,15 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
       if (!c2TutorAccepta) tempErrors.c2TutorAccepta = language === 'ca' ? "Cal acceptar l'autorització de menors" : "Es necesario aceptar la autorización de menores";
     }
 
-    // Validate active required dynamic questions
-    if (config.preguntesFormulari) {
-      config.preguntesFormulari.filter(q => q.activa && q.requerit).forEach(q => {
-        const val = respostesCuestionari[q.id];
-        if (q.tipus === 'text' && (val === undefined || val === null || String(val).trim() === '')) {
-          tempErrors[`question_${q.id}`] = language === 'ca' ? "Aquesta resposta és requerida" : "Esta respuesta es requerida";
-        } else if (q.tipus === 'select' && (val === undefined || val === null || String(val).trim() === '')) {
-          tempErrors[`question_${q.id}`] = language === 'ca' ? "Seleccioneu una opció" : "Seleccione una opción";
+    // Validate dynamic visible fields
+    config.preguntesFormulari.forEach(q => {
+      if (q.activa && q.requerit) {
+        const ans = respostesCuestionari[q.id];
+        if (q.tipus === 'text' && (!ans || String(ans).trim() === '')) {
+          tempErrors[q.id] = language === 'ca' ? "Aquesta pregunta és obligatòria" : "Esta pregunta es obligatoria";
         }
-      });
-    }
+      }
+    });
 
     if (c1Email.trim().toLowerCase() === c2Email.trim().toLowerCase() && c1Email.trim() !== '') {
       tempErrors.c2Email = language === 'ca' ? "Els correus electrònics no poden ser idèntics" : "Los correos electrónicos no pueden ser idénticos";
@@ -537,15 +534,6 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
       const codiSeguiment = `TAST-2026-${sequencialCode}`;
       const randomId = 'ins-' + Math.random().toString(36).substr(2, 9);
 
-      const finalRespostes = {
-        ...respostesCuestionari,
-        'domas_qty': String(teDomasBalcoQty),
-        ...Object.keys(genericExtrasQty).reduce((acc, key) => {
-          acc[`extra_qty_${key}`] = String(genericExtrasQty[key]);
-          return acc;
-        }, {} as Record<string, string>)
-      };
-
       const novaInscripcio: Inscripcio = {
         id: randomId,
         codiSeguiment,
@@ -574,7 +562,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
         c2TutorDni: c2EsMenor ? c2TutorDni : '',
         c2TutorTelefon: c2EsMenor ? c2TutorTelefon : '',
         c2UniformeTipus,
-        respostesCuestionari: finalRespostes,
+        respostesCuestionari,
         seleccionsUniforme,
         preuCalculat: totalCalculat,
         teDomasBalco,
@@ -855,7 +843,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
             <div className="flex justify-between items-center mb-5 pb-2 border-b border-zinc-100">
               <h3 className="font-sans font-bold text-zinc-900 text-lg flex items-center gap-2">
                 <div className="w-2.5 h-2.5 bg-fuchsia-500 rounded-full" />
-                {language === 'ca' ? 'Comparser/a 1' : 'Comparsero/a 1'}
+                {language === 'ca' ? 'Primer Comparser (Representant)' : 'Primer Comparsero (Representante)'}
               </h3>
               <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-150 px-2 py-0.5 rounded-full font-mono uppercase tracking-tight flex items-center gap-1 shadow-sm shrink-0" title={language === 'ca' ? "Sincronitzat amb la base de dades" : "Sincronizado con la base de datos"}>
                 <Database size={9} /> {language === 'ca' ? 'Enllaç BBDD' : 'Enlace BBDD'}
@@ -1248,7 +1236,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
             <div className="flex justify-between items-center mb-5 pb-2 border-b border-zinc-100">
               <h3 className="font-sans font-bold text-zinc-900 text-lg flex items-center gap-2">
                 <div className="w-2.5 h-2.5 bg-fuchsia-500 rounded-full" />
-                {language === 'ca' ? 'Comparser/a 2' : 'Comparsero/a 2'}
+                {language === 'ca' ? 'Segon Comparser' : 'Segundo Comparsero'}
               </h3>
               <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-150 px-2 py-0.5 rounded-full font-mono uppercase tracking-tight flex items-center gap-1 shadow-sm shrink-0" title={language === 'ca' ? "Sincronitzat amb la base de dades" : "Sincronizado con la base de datos"}>
                 <Database size={9} /> {language === 'ca' ? 'Enllaç BBDD' : 'Enlace BBDD'}
@@ -1633,7 +1621,82 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
           </div>
         </div>
 
+        {/* Dynamic customized questionnaire part */}
+        {config.preguntesFormulari.some(q => q.activa) && (
+          <div className="bg-white rounded-3xl p-6 border border-zinc-200 shadow-sm">
+            <h3 className="font-sans font-bold text-zinc-900 text-lg mb-5 pb-2 border-b border-zinc-100 flex items-center gap-2">
+              <Sparkles className="text-fuchsia-500" size={18} />
+              {config.titolFormulariDinamic ? (
+                <TranslatedText text={config.titolFormulariDinamic} />
+              ) : (
+                language === 'ca' ? "Preguntes del Qüestionari d'El Tast" : "Preguntas del Cuestionario de El Tast"
+              )}
+            </h3>
 
+            <div className="space-y-5">
+              {config.preguntesFormulari.filter(q => q.activa).map((q) => (
+                <div key={q.id}>
+                  <label className="block text-sm font-semibold text-zinc-800 mb-1.5 flex items-center gap-1.5">
+                    <TranslatedText text={q.titol} />
+                    {q.requerit && <span className="text-red-500">*</span>}
+                  </label>
+
+                  {q.tipus === 'text' && (
+                    <input 
+                      type="text"
+                      value={String(respostesCuestionari[q.id] || '')}
+                      onChange={(e) => setRespostesCuestionari(prev => ({ ...prev, [q.id]: e.target.value }))}
+                      placeholder={language === 'ca' ? "Escriu la teva resposta" : "Escribe tu respuesta"}
+                      className={`w-full bg-zinc-50 border ${errors[q.id] ? 'border-red-500' : 'border-zinc-200'} focus:border-fuchsia-500 focus:bg-white rounded-xl px-4 py-3 text-sm focus:outline-none transition-all`}
+                    />
+                  )}
+
+                  {q.tipus === 'select' && (
+                    <select
+                      value={String(respostesCuestionari[q.id] || '')}
+                      onChange={(e) => setRespostesCuestionari(prev => ({ ...prev, [q.id]: e.target.value }))}
+                      className="w-full bg-zinc-50 border border-zinc-200 focus:border-fuchsia-500 focus:bg-white rounded-xl px-4 py-3 text-sm focus:outline-none transition-all cursor-pointer"
+                    >
+                      <option value="">{language === 'ca' ? "-- Selecciona una opció --" : "-- Selecciona una opción --"}</option>
+                      {q.opcions?.map((opt, i) => (
+                        <TranslatedOption key={i} value={opt} />
+                      ))}
+                    </select>
+                  )}
+
+                  {q.tipus === 'boolean' && (
+                    <div className="flex items-center gap-3 mt-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setRespostesCuestionari(prev => ({ ...prev, [q.id]: true }))}
+                        className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                          respostesCuestionari[q.id] === true 
+                            ? 'bg-fuchsia-500 text-white' 
+                            : 'bg-zinc-100 hover:bg-zinc-200 text-zinc-700'
+                        }`}
+                      >
+                        {language === 'ca' ? 'Sí' : 'Sí'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setRespostesCuestionari(prev => ({ ...prev, [q.id]: false }))}
+                        className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                          respostesCuestionari[q.id] === false 
+                            ? 'bg-fuchsia-500 text-white' 
+                            : 'bg-zinc-100 hover:bg-zinc-200 text-zinc-700'
+                        }`}
+                      >
+                        No
+                      </button>
+                    </div>
+                  )}
+
+                  {errors[q.id] && <p className="text-red-500 text-xs font-mono mt-1">{errors[q.id]}</p>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Extra Accessories Order Section */}
         {(() => {
@@ -1667,25 +1730,15 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
                           : 'Cuelga el orgullo fucsia de El Tast en tu balcón el fin de semana de carnaval.'}
                       </p>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <span className="font-sans font-bold text-sm text-zinc-950 mr-2">+{domasTarifaObj.valor}€ / u.</span>
-                      <button
-                        type="button"
-                        onClick={() => setTeDomasBalcoQty(prev => Math.max(0, prev - 1))}
-                        className="w-8 h-8 rounded-lg bg-white border border-zinc-200 flex items-center justify-center hover:bg-zinc-100 font-bold text-zinc-700 transition cursor-pointer"
-                        id="btn-remove-domas"
-                      >
-                        <Minus size={14} />
-                      </button>
-                      <span className="font-mono font-bold text-sm text-zinc-900 w-6 text-center">{teDomasBalcoQty}</span>
-                      <button
-                        type="button"
-                        onClick={() => setTeDomasBalcoQty(prev => prev + 1)}
-                        className="w-8 h-8 rounded-lg bg-white border border-zinc-200 flex items-center justify-center hover:bg-zinc-100 font-bold text-zinc-700 transition cursor-pointer"
-                        id="btn-add-domas"
-                      >
-                        <Plus size={14} />
-                      </button>
+                    <div className="flex items-center gap-4">
+                      <span className="font-sans font-bold text-sm text-zinc-950">+{domasTarifaObj.valor}€</span>
+                      <input 
+                        type="checkbox" 
+                        checked={teDomasBalco}
+                        onChange={(e) => setTeDomasBalco(e.target.checked)}
+                        className="w-5 h-5 rounded text-fuchsia-500 outline-none accent-fuchsia-500 cursor-pointer"
+                        id="checkbox-domas"
+                      />
                     </div>
                   </div>
                 )}
@@ -1707,7 +1760,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
                       <button
                         type="button"
                         onClick={() => setTeMocadorsExtra(prev => Math.max(0, prev - 1))}
-                        className="w-8 h-8 rounded-lg bg-white border border-zinc-200 flex items-center justify-center hover:bg-zinc-100 font-bold text-zinc-700 transition cursor-pointer"
+                        className="w-8 h-8 rounded-lg bg-white border border-zinc-200 flex items-center justify-center hover:bg-zinc-100 font-bold text-zinc-700 transition"
                         id="btn-remove-mocador"
                       >
                         <Minus size={14} />
@@ -1716,7 +1769,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
                       <button
                         type="button"
                         onClick={() => setTeMocadorsExtra(prev => prev + 1)}
-                        className="w-8 h-8 rounded-lg bg-white border border-zinc-200 flex items-center justify-center hover:bg-zinc-100 font-bold text-zinc-700 transition cursor-pointer"
+                        className="w-8 h-8 rounded-lg bg-white border border-zinc-200 flex items-center justify-center hover:bg-zinc-100 font-bold text-zinc-700 transition"
                         id="btn-add-mocador"
                       >
                         <Plus size={14} />
@@ -1726,124 +1779,34 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
                 )}
 
                 {/* Newly added customizable payment/rate lines */}
-                {genericExtras.map((extr) => {
-                  const currentQty = genericExtrasQty[extr.id] || 0;
-                  return (
-                    <div key={extr.id} className="flex items-center justify-between p-4 bg-zinc-50 rounded-2xl border border-zinc-100">
-                      <div className="space-y-0.5">
-                        <h4 className="font-sans font-bold text-sm text-zinc-850">
-                          <TranslatedText text={extr.nom} />
-                        </h4>
-                        <p className="text-zinc-500 text-xs">
-                          {language === 'ca' 
-                            ? "Complement addicional configurat per l'administració de l'entitat." 
-                            : "Complemento adicional configurado por la administración de la entidad."}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="font-sans font-bold text-sm text-zinc-950 mr-2">+{extr.valor}€ / u.</span>
-                        <button
-                          type="button"
-                          onClick={() => setGenericExtrasQty(prev => ({ ...prev, [extr.id]: Math.max(0, (prev[extr.id] || 0) - 1) }))}
-                          className="w-8 h-8 rounded-lg bg-white border border-zinc-200 flex items-center justify-center hover:bg-zinc-100 font-bold text-zinc-700 transition cursor-pointer"
-                          id={`btn-remove-extra-${extr.id}`}
-                        >
-                          <Minus size={14} />
-                        </button>
-                        <span className="font-mono font-bold text-sm text-zinc-900 w-6 text-center">{currentQty}</span>
-                        <button
-                          type="button"
-                          onClick={() => setGenericExtrasQty(prev => ({ ...prev, [extr.id]: (prev[extr.id] || 0) + 1 }))}
-                          className="w-8 h-8 rounded-lg bg-white border border-zinc-200 flex items-center justify-center hover:bg-zinc-100 font-bold text-zinc-700 transition cursor-pointer"
-                          id={`btn-add-extra-${extr.id}`}
-                        >
-                          <Plus size={14} />
-                        </button>
-                      </div>
+                {genericExtras.map((extr) => (
+                  <div key={extr.id} className="flex items-center justify-between p-4 bg-zinc-50 rounded-2xl border border-zinc-100">
+                    <div className="space-y-0.5">
+                      <h4 className="font-sans font-bold text-sm text-zinc-850">
+                        <TranslatedText text={extr.nom} />
+                      </h4>
+                      <p className="text-zinc-500 text-xs">
+                        {language === 'ca' 
+                          ? "Complement addicional configurat per l'administració de l'entitat." 
+                          : "Complemento adicional configurado por la administración de la entidad."}
+                      </p>
                     </div>
-                  );
-                })}
+                    <div className="flex items-center gap-4">
+                      <span className="font-sans font-bold text-sm text-zinc-950">+{extr.valor}€</span>
+                      <input 
+                        type="checkbox" 
+                        checked={!!genericExtrasSelected[extr.id]}
+                        onChange={(e) => setGenericExtrasSelected(prev => ({ ...prev, [extr.id]: e.target.checked }))}
+                        className="w-5 h-5 rounded text-fuchsia-500 outline-none accent-fuchsia-500 cursor-pointer"
+                        id={`checkbox-extra-${extr.id}`}
+                      />
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           );
         })()}
-
-        {/* Dinamic Custom Questionnaire Sections */}
-        <div className="bg-white rounded-3xl p-6 border border-zinc-200 shadow-sm space-y-6">
-          <h3 className="font-sans font-bold text-zinc-900 text-lg pb-2 border-b border-zinc-100 flex items-center gap-2">
-            📋 {language === 'ca' ? 'Qüestionari d\'El Tast' : 'Cuestionario de El Tast'}
-          </h3>
-          
-          <div className="space-y-6">
-            {config.preguntesFormulari && config.preguntesFormulari.filter(q => q.activa).map(q => {
-              const errorMsg = errors[`question_${q.id}`];
-              return (
-                <div key={q.id} className="space-y-2 animate-fadeIn">
-                  <label className="block text-sm font-semibold text-zinc-800">
-                    {q.titol} {q.requerit && <span className="text-red-500 font-bold">*</span>}
-                  </label>
-                  
-                  {q.tipus === 'boolean' ? (
-                    <div className="flex gap-4">
-                      <button
-                        type="button"
-                        onClick={() => setRespostesCuestionari(prev => ({ ...prev, [q.id]: true }))}
-                        className={`px-5 py-2.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                          respostesCuestionari[q.id] === true
-                            ? 'bg-fuchsia-600 text-white border-fuchsia-600 shadow-md transform scale-102 font-black'
-                            : 'bg-zinc-50 text-zinc-700 border-zinc-200 hover:bg-zinc-100'
-                        }`}
-                      >
-                        {language === 'ca' ? 'Sí' : 'Sí'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setRespostesCuestionari(prev => ({ ...prev, [q.id]: false }))}
-                        className={`px-5 py-2.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                          respostesCuestionari[q.id] === false
-                            ? 'bg-fuchsia-600 text-white border-fuchsia-600 shadow-md transform scale-102 font-black'
-                            : 'bg-zinc-50 text-zinc-700 border-zinc-200 hover:bg-zinc-100'
-                        }`}
-                      >
-                        {language === 'ca' ? 'No' : 'No'}
-                      </button>
-                    </div>
-                  ) : q.tipus === 'select' ? (
-                    <select
-                      value={String(respostesCuestionari[q.id] || '')}
-                      onChange={(e) => setRespostesCuestionari(prev => ({ ...prev, [q.id]: e.target.value }))}
-                      className="w-full bg-zinc-50 border border-zinc-200 focus:border-fuchsia-500 focus:bg-white rounded-xl px-4 py-2.5 text-xs text-zinc-800 focus:outline-none transition-all shadow-sm"
-                    >
-                      <option value="">
-                        {language === 'ca' ? '-- Seleccioneu una opció --' : '-- Seleccione una opción --'}
-                      </option>
-                      {q.opcions?.map((opt, oIdx) => (
-                        <option key={oIdx} value={opt}>
-                          {opt}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <textarea
-                      value={String(respostesCuestionari[q.id] || '')}
-                      onChange={(e) => setRespostesCuestionari(prev => ({ ...prev, [q.id]: e.target.value }))}
-                      rows={q.id === 'preg-3' ? 4 : 2}
-                      className="w-full bg-zinc-50 border border-zinc-200 focus:border-fuchsia-500 focus:bg-white rounded-2xl px-4 py-3 text-xs text-zinc-800 focus:outline-none transition-all resize-none shadow-inner"
-                      placeholder={language === 'ca' ? "Escriviu la vostra resposta addicional..." : "Escriba su respuesta adicional..."}
-                    />
-                  )}
-                  {errorMsg && <p className="text-red-500 text-[10px] font-mono mt-0.5">{errorMsg}</p>}
-                </div>
-              );
-            })}
-            
-            {(!config.preguntesFormulari || config.preguntesFormulari.filter(q => q.activa).length === 0) && (
-              <p className="text-zinc-400 text-xs text-center py-4 italic">
-                {language === 'ca' ? "No hi ha cap pregunta activa en aquest moment." : "No hay ninguna pregunta activa en este momento."}
-              </p>
-            )}
-          </div>
-        </div>
 
         {/* Legal RGPD and Payment policy */}
         <div className="bg-white rounded-3xl p-6 border border-zinc-200 shadow-sm space-y-4">
@@ -1907,17 +1870,8 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
               <span className="font-sans font-extrabold text-3xl md:text-4xl text-fuchsia-400">{totalCalculat}€</span>
               <span className="text-zinc-400 text-xs font-mono">
                 ({categoria === CategoriaParella.ADULT ? (language === 'ca' ? 'Adults' : 'Adultos') : (language === 'ca' ? 'Juvenil' : 'Juvenil')}: {basePrice}€
-                {teDomasBalcoQty > 0 ? ` + ${teDomasBalcoQty}x ${language === 'ca' ? 'Domàs' : 'Colgadura'}: ${domasCost}€` : ''}
-                {teMocadorsExtra > 0 ? ` + ${teMocadorsExtra}x ${language === 'ca' ? 'mocadors' : 'pañuelos'}: ${mocadorsCost}€` : ''}
-                {Object.entries(genericExtrasQty)
-                  .filter(([_, qty]) => Number(qty) > 0)
-                  .map(([id, qty]) => {
-                    const extra = (config.tarifesDinamiques || []).find(t => t.id === id);
-                    if (!extra) return null;
-                    const qCount = Number(qty);
-                    return ` + ${qCount}x ${extra.nom}: ${qCount * extra.valor}€`;
-                  }).filter(Boolean).join('')}
-                )
+                {teDomasBalco ? ` + ${language === 'ca' ? 'Domàs' : 'Colgadura'}: ${config.preuDomasBalco}€` : ''}
+                {teMocadorsExtra > 0 ? ` + ${teMocadorsExtra} ${language === 'ca' ? 'mocadors' : 'pañuelos'}: ${mocadorsCost}€` : ''})
               </span>
             </div>
           </div>

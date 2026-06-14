@@ -40,7 +40,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { Inscripcio, CategoriaParella, EstatPagament, EstatVerificacio, EstatInscripcio, MetodePagament, SistemaConfig, StaffMember, NoticiaXarxes } from '../types';
-import ExcelJS from 'exceljs';
+import * as XLSX from 'xlsx';
 import AdminPortada from './AdminPortada';
 import AdminPersonalitzacio from './AdminPersonalitzacio';
 import { calculateDailySummaries } from '../dailySummary';
@@ -972,7 +972,7 @@ export default function AdminDashboard({
   };
 
   // Client-side Excel download representing true Excel .xlsx sheet export
-  const exportToExcel = async () => {
+  const exportToExcel = () => {
     if (filteredInscripcions.length === 0) {
       alert("No hi ha dades seleccionades per exportar.");
       return;
@@ -1048,6 +1048,10 @@ export default function AdminDashboard({
       i.creadoEn ? new Date(i.creadoEn).toLocaleString() : ''
     ]);
 
+    // Create a worksheet from headers and rows
+    const wsData = [headers, ...rows];
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+
     // Calculate aggregated day-by-day summaries
     const summaryHeaders = [
       language === 'ca' ? 'DATA INSCRIPCIÓ' : 'FECHA INSCRIPCIÓN',
@@ -1075,34 +1079,19 @@ export default function AdminDashboard({
       s.domasCount,
       s.extraMocadorsCount
     ]);
+    const wsSummaryData = [summaryHeaders, ...summaryRows];
+    const wsSummary = XLSX.utils.aoa_to_sheet(wsSummaryData);
 
-    // Create workbook and worksheets using exceljs
-    const workbook = new ExcelJS.Workbook();
-    
-    const ws = workbook.addWorksheet(language === 'ca' ? "Inscripcions" : "Inscripciones");
-    ws.addRow(headers);
-    rows.forEach(row => ws.addRow(row));
+    // Create workbook and append both worksheets
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, language === 'ca' ? "Inscripcions" : "Inscripciones");
+    XLSX.utils.book_append_sheet(wb, wsSummary, language === 'ca' ? "Cierre del Dia" : "Cierre del Dia");
 
-    const wsSummary = workbook.addWorksheet(language === 'ca' ? "Cierre del Dia" : "Cierre del Dia");
-    wsSummary.addRow(summaryHeaders);
-    summaryRows.forEach(row => wsSummary.addRow(row));
+    // Write workbook to file in standard .xlsx format
+    XLSX.writeFile(wb, `llista_espera_tast_comparses_${new Date().toISOString().slice(0,10)}.xlsx`);
 
-    try {
-      const buffer = await workbook.xlsx.writeBuffer();
-      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-      const url = window.URL.createObjectURL(blob);
-      const anchor = document.createElement('a');
-      anchor.href = url;
-      anchor.download = `llista_espera_tast_comparses_${new Date().toISOString().slice(0,10)}.xlsx`;
-      anchor.click();
-      window.URL.revokeObjectURL(url);
-
-      if (onAddLog) {
-        onAddLog("Exportació a full d'Excel (.xlsx) de dades completada.");
-      }
-    } catch (err) {
-      console.error("Error exporting to Excel via ExcelJS:", err);
-      alert(language === 'ca' ? "Error en generar el fitxer d'Excel d'exportació." : "Error al generar el archivo de Excel de exportación.");
+    if (onAddLog) {
+      onAddLog("Exportació a full d'Excel (.xlsx) de dades completada.");
     }
   };
 

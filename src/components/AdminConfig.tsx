@@ -43,29 +43,6 @@ export default function AdminConfig({ config, onBack, onSave, noticies, onSaveNo
   const [preuMocadorExtra, setPreuMocadorExtra] = useState(config.preuMocadorExtra);
   const [estatInscripcions, setEstatInscripcions] = useState<'obertes' | 'espera' | 'tancades'>(config.estatInscripcions || 'obertes');
 
-  // Supabase dynamic setup states
-  const [dbUrlSetup, setDbUrlSetup] = useState(() => localStorage.getItem('VITE_SUPABASE_URL') || '');
-  const [dbAnonSetup, setDbAnonSetup] = useState(() => localStorage.getItem('VITE_SUPABASE_ANON_KEY') || '');
-  const [dbConfigSaved, setDbConfigSaved] = useState(false);
-
-  const handleSaveLocalSupabase = () => {
-    localStorage.setItem('VITE_SUPABASE_URL', dbUrlSetup.trim());
-    localStorage.setItem('VITE_SUPABASE_ANON_KEY', dbAnonSetup.trim());
-    setDbConfigSaved(true);
-    setTimeout(() => {
-      setDbConfigSaved(false);
-      window.location.reload();
-    }, 1500);
-  };
-
-  const handleClearLocalSupabase = () => {
-    localStorage.removeItem('VITE_SUPABASE_URL');
-    localStorage.removeItem('VITE_SUPABASE_ANON_KEY');
-    setDbUrlSetup('');
-    setDbAnonSetup('');
-    window.location.reload();
-  };
-
   // States for dynamic customizable tariffs/payment lines
   const [titolSeccioTarifes, setTitolSeccioTarifes] = useState(config.titolSeccioTarifes || 'Tarifes i Cànons 2026');
   const [tarifesDinamiques, setTarifesDinamiques] = useState<TarifaConcept[]>(

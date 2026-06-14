@@ -2,25 +2,18 @@ import { createClient } from '@supabase/supabase-js';
 import { Inscripcio } from './types';
 
 const metaEnv = (import.meta as any).env || {};
-const envUrl = metaEnv.VITE_SUPABASE_URL || '';
-const envAnon = metaEnv.VITE_SUPABASE_ANON_KEY || '';
+const supabaseUrl = (metaEnv.VITE_SUPABASE_URL || '').trim();
+const supabaseAnonKey = (metaEnv.VITE_SUPABASE_ANON_KEY || '').trim();
 
-// Fallback to localStorage keys if env is not defined (e.g. in development/preview)
-const localUrl = typeof localStorage !== 'undefined' ? localStorage.getItem('VITE_SUPABASE_URL') || '' : '';
-const localAnon = typeof localStorage !== 'undefined' ? localStorage.getItem('VITE_SUPABASE_ANON_KEY') || '' : '';
+export const isSupabaseConfigured = !!(supabaseUrl && supabaseAnonKey);
 
-const supabaseUrl = envUrl || localUrl;
-const supabaseAnonKey = envAnon || localAnon;
-
-export const isSupabaseConfigured = !!(supabaseUrl && supabaseAnonKey && supabaseUrl.startsWith('http'));
-
-export const supabase = isSupabaseConfigured
-  ? createClient(supabaseUrl, supabaseAnonKey)
+export const supabase = isSupabaseConfigured 
+  ? createClient(supabaseUrl, supabaseAnonKey) 
   : null;
 
 // Clean logging
 if (isSupabaseConfigured) {
-  console.log("Supabase client initialized successfully using config: " + (envUrl ? "ENV" : "LocalStorage"));
+  console.log("Supabase client initialized successfully using environment variables.");
 } else {
   console.log("Supabase is not yet fully configured in your environment. Falling back gracefully to LocalStorage for interface settings.");
 }
@@ -382,9 +375,6 @@ export async function deleteSupabaseInscripcion(id: string): Promise<boolean> {
       .from('inscripcions')
       .delete()
       .eq('id', id);
-    if (response.error) {
-      console.error("Error deleting inscription from Supabase ('inscripciones' and 'inscripcions' tables failed):", response.error.message);
-    }
     return !response.error;
   } catch(e) {
     console.error("Exception deleting inscription from Supabase:", e);
@@ -409,9 +399,6 @@ export async function deleteMultipleSupabaseInscripciones(ids: string[]): Promis
       .from('inscripcions')
       .delete()
       .in('id', ids);
-    if (response.error) {
-      console.error("Error mass deleting inscriptions from Supabase:", response.error.message);
-    }
     return !response.error;
   } catch(e) {
     console.error("Exception deleting multi inscriptions from Supabase:", e);
@@ -436,9 +423,6 @@ export async function clearAllSupabaseInscripciones(): Promise<boolean> {
       .from('inscripcions')
       .delete()
       .neq('id', '_dummy_placeholder_id_string_that_does_not_exist_');
-    if (response.error) {
-      console.error("Error clearing inscriptions from Supabase ('inscripciones' and 'inscripcions' tables failed):", response.error.message);
-    }
     return !response.error;
   } catch(e) {
     console.error("Exception clearing inscriptions from Supabase:", e);
