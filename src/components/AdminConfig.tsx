@@ -96,11 +96,6 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
   };
 
   const handleRemoveTarifa = (id: string) => {
-    const item = tarifesDinamiques.find(t => t.id === id);
-    if (item && item.tipus !== 'extra_generic') {
-      alert("No es poden eliminar les tarifes troncals del sistema (Adults, Juvenils, Domàs o Mocadors), però podeu canviar-ne el preu, el nom o desactivar-ne el seu ús.");
-      return;
-    }
     setTarifesDinamiques(tarifesDinamiques.filter(t => t.id !== id));
   };
 
@@ -999,16 +994,14 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                       title="Fes clic per canviar el nom de la línia"
                     />
 
-                    {tf.tipus === 'extra_generic' && (
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveTarifa(tf.id)}
-                        className="p-1 text-zinc-400 hover:text-red-500 rounded transition shrink-0"
-                        title="Eliminar línia"
-                      >
-                        <Trash2 size={12} />
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveTarifa(tf.id)}
+                      className="p-1 text-zinc-400 hover:text-red-500 rounded transition shrink-0"
+                      title="Eliminar línia"
+                    >
+                      <Trash2 size={12} />
+                    </button>
                   </div>
 
                   <div className="flex items-center gap-2">

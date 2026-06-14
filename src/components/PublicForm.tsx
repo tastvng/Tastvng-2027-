@@ -779,7 +779,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {(() => {
-              const adultTarifaObj = (config.tarifesDinamiques || []).find(t => t.id === 'adults') || { nom: 'Parella Adulta', valor: config.preuAdult, actiu: true };
+              const adultTarifaObj = (config.tarifesDinamiques || []).find(t => t.id === 'adults') || { nom: 'Parella Adulta', valor: config.preuAdult, actiu: !(config.tarifesDinamiques && config.tarifesDinamiques.length > 0) };
               const isAdultDisabled = !adultTarifaObj.actiu;
 
               return (
@@ -821,7 +821,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
             })()}
 
             {(() => {
-              const juvenilTarifaObj = (config.tarifesDinamiques || []).find(t => t.id === 'juvenils') || { nom: 'Parella Juvenil', valor: config.preuJuvenil, actiu: true };
+              const juvenilTarifaObj = (config.tarifesDinamiques || []).find(t => t.id === 'juvenils') || { nom: 'Parella Juvenil', valor: config.preuJuvenil, actiu: !(config.tarifesDinamiques && config.tarifesDinamiques.length > 0) };
               const isJuvenilDisabled = !juvenilTarifaObj.actiu;
 
               return (
@@ -1801,8 +1801,8 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
 
         {/* Extra Accessories Order Section */}
         {(() => {
-          const domasTarifaObj = (config.tarifesDinamiques || []).find(t => t.id === 'domas') || { nom: "Domàs per al Balcó de les Comparses", valor: config.preuDomasBalco, actiu: true };
-          const mocadorTarifaObj = (config.tarifesDinamiques || []).find(t => t.id === 'mocador') || { nom: "Mocadors oficials addicionals", valor: config.preuMocadorExtra, actiu: true };
+          const domasTarifaObj = (config.tarifesDinamiques || []).find(t => t.id === 'domas') || { nom: "Domàs per al Balcó de les Comparses", valor: config.preuDomasBalco, actiu: !(config.tarifesDinamiques && config.tarifesDinamiques.length > 0) };
+          const mocadorTarifaObj = (config.tarifesDinamiques || []).find(t => t.id === 'mocador') || { nom: "Mocadors oficials addicionals", valor: config.preuMocadorExtra, actiu: !(config.tarifesDinamiques && config.tarifesDinamiques.length > 0) };
           const genericExtras = (config.tarifesDinamiques || []).filter(t => t.tipus === 'extra_generic' && t.actiu);
 
           const hasAnyExtras = domasTarifaObj.actiu || mocadorTarifaObj.actiu || genericExtras.length > 0;
