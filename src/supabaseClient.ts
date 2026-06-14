@@ -1,8 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
 import { Inscripcio } from './types';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const metaEnv = (import.meta as any).env || {};
+const supabaseUrl = metaEnv.VITE_SUPABASE_URL;
+const supabaseAnonKey = metaEnv.VITE_SUPABASE_ANON_KEY;
 
 if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error(
@@ -379,6 +380,9 @@ export async function deleteSupabaseInscripcion(id: string): Promise<boolean> {
       .from('inscripcions')
       .delete()
       .eq('id', id);
+    if (response.error) {
+      console.error("Error deleting inscription from Supabase ('inscripciones' and 'inscripcions' tables failed):", response.error.message);
+    }
     return !response.error;
   } catch(e) {
     console.error("Exception deleting inscription from Supabase:", e);
@@ -403,6 +407,9 @@ export async function deleteMultipleSupabaseInscripciones(ids: string[]): Promis
       .from('inscripcions')
       .delete()
       .in('id', ids);
+    if (response.error) {
+      console.error("Error mass deleting inscriptions from Supabase:", response.error.message);
+    }
     return !response.error;
   } catch(e) {
     console.error("Exception deleting multi inscriptions from Supabase:", e);
@@ -427,6 +434,9 @@ export async function clearAllSupabaseInscripciones(): Promise<boolean> {
       .from('inscripcions')
       .delete()
       .neq('id', '_dummy_placeholder_id_string_that_does_not_exist_');
+    if (response.error) {
+      console.error("Error clearing inscriptions from Supabase ('inscripciones' and 'inscripcions' tables failed):", response.error.message);
+    }
     return !response.error;
   } catch(e) {
     console.error("Exception clearing inscriptions from Supabase:", e);

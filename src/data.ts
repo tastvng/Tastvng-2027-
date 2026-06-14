@@ -84,7 +84,7 @@ export const CONFIG_INICIAL: SistemaConfig = {
     },
     {
       id: 'preg-3',
-      titol: 'Teniu alguna intolerància alimentària o requisit dietètic?',
+      titol: 'Comentaris o observacions addicionals:',
       tipus: 'text',
       requerit: false,
       activa: true
@@ -140,7 +140,7 @@ export const INSCRIPCIONS_INICIALS: Inscripcio[] = [
     respostesCuestionari: {
       'preg-1': true,
       'preg-2': 'Sí, tots dos participants',
-      'preg-3': 'Sense gluten per al Comparser 2'
+      'preg-3': 'És possible recollir la roba abans?'
     },
     preuCalculat: 105.00, // 90 + 1 mocador extra (6) + domas (15) o similar
     teDomasBalco: true,
@@ -202,7 +202,7 @@ export const INSCRIPCIONS_INICIALS: Inscripcio[] = [
     respostesCuestionari: {
       'preg-1': true,
       'preg-2': 'Sí, tots dos participants',
-      'preg-3': 'Vegetarians tots dos'
+      'preg-3': 'Gràcies per tot'
     },
     preuCalculat: 60.00,
     teDomasBalco: false,
@@ -233,7 +233,7 @@ export const INSCRIPCIONS_INICIALS: Inscripcio[] = [
     respostesCuestionari: {
       'preg-1': false,
       'preg-2': 'Només Comparser 1',
-      'preg-3': ''
+      'preg-3': 'Cap observació particular'
     },
     preuCalculat: 111.00, // 90 + 15 domàs + 6 mocador extra
     teDomasBalco: true,
@@ -264,7 +264,7 @@ export const INSCRIPCIONS_INICIALS: Inscripcio[] = [
     respostesCuestionari: {
       'preg-1': true,
       'preg-2': 'No volem participar-hi',
-      'preg-3': 'Al·lèrgia a la fruita seca (Arnau)'
+      'preg-3': 'Preferim color clar si és possible'
     },
     preuCalculat: 75.00, // 60 + 15 domas
     teDomasBalco: true,
