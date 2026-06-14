@@ -1173,7 +1173,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
                               setC1UniformeTipus('compra');
                             }
                           }}
-                          className={`text-[10px] px-2.5 py-1 font-bold rounded-md transition-all cursor-pointer ${sel.c1Tipus === 'compra' ? 'bg-fuchsia-100 text-fuchsia-700 shadow-sm' : 'text-zinc-550 hover:text-zinc-855'}`}
+                          className={`text-[10px] px-2.5 py-1 font-bold rounded-md transition-all cursor-pointer ${(!sel.c1Tipus || sel.c1Tipus === 'compra') ? 'bg-fuchsia-100 text-fuchsia-700 shadow-sm' : 'text-zinc-550 hover:text-zinc-855'}`}
                         >
                           {language === 'ca' ? "Compra" : "Compra (Venta)"}
                         </button>
@@ -1586,7 +1586,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
                               setC2UniformeTipus('compra');
                             }
                           }}
-                          className={`text-[10px] px-2.5 py-1 font-bold rounded-md transition-all cursor-pointer ${sel.c2Tipus === 'compra' ? 'bg-fuchsia-100 text-fuchsia-700 shadow-sm' : 'text-zinc-550 hover:text-zinc-855'}`}
+                          className={`text-[10px] px-2.5 py-1 font-bold rounded-md transition-all cursor-pointer ${(!sel.c2Tipus || sel.c2Tipus === 'compra') ? 'bg-fuchsia-100 text-fuchsia-700 shadow-sm' : 'text-zinc-550 hover:text-zinc-855'}`}
                         >
                           {language === 'ca' ? "Compra" : "Compra (Venta)"}
                         </button>
