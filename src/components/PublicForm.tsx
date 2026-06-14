@@ -540,14 +540,18 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
       const codiSeguiment = `TAST-2026-${sequencialCode}`;
       const randomId = 'ins-' + Math.random().toString(36).substr(2, 9);
 
-      const finalRespostes = {
-        ...respostesCuestionari,
-        'domas_qty': String(teDomasBalcoQty),
-        ...Object.keys(genericExtrasQty).reduce((acc, key) => {
-          acc[`extra_qty_${key}`] = String(genericExtrasQty[key]);
-          return acc;
-        }, {} as Record<string, string>)
+      const finalRespostes: Record<string, string> = {
+        ...respostesCuestionari
       };
+
+      if (teDomasBalcoQty > 0) finalRespostes['domas_qty'] = String(teDomasBalcoQty);
+      if (teMocadorsExtra > 0) finalRespostes['mocadors_qty'] = String(teMocadorsExtra);
+      
+      Object.keys(genericExtrasQty).forEach(key => {
+        if (genericExtrasQty[key] > 0) {
+          finalRespostes[`extra_qty_${key}`] = String(genericExtrasQty[key]);
+        }
+      });
 
       const novaInscripcio: Inscripcio = {
         id: randomId,

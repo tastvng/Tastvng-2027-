@@ -573,6 +573,14 @@ export default function AdminFicha({ registration, config, onBack, onSave }: Adm
                       label = language === 'ca' ? "Participació al dinar de germanor de la colla?" : "¿Participación en la comida de hermandad de la colla?";
                     } else if (key === 'preg-3' || key === 'q-3') {
                       label = language === 'ca' ? "Intoleràncies alimentàries o comentaris dietètics:" : "Intolerancias alimentarias o comentarios dietéticos:";
+                    } else if (key === 'domas_qty') {
+                      label = language === 'ca' ? "Quantitat de Domassos:" : "Cantidad de Colgaduras:";
+                    } else if (key === 'mocadors_qty') {
+                      label = language === 'ca' ? "Quantitat de Mocadors Extra:" : "Cantidad de Pañuelos Extra:";
+                    } else if (key.startsWith('extra_qty_')) {
+                      const extraId = key.replace('extra_qty_', '');
+                      const foundExtra = config?.tarifesDinamiques?.find(t => t.id === extraId);
+                      label = foundExtra ? `${foundExtra.nom} (Quantitat):` : key;
                     } else {
                       label = key;
                     }
