@@ -2,23 +2,25 @@ import { createClient } from '@supabase/supabase-js';
 import { Inscripcio } from './types';
 
 const metaEnv = (import.meta as any).env || {};
-const supabaseUrl = metaEnv.VITE_SUPABASE_URL;
-const supabaseAnonKey = metaEnv.VITE_SUPABASE_ANON_KEY;
+const envUrl = metaEnv.VITE_SUPABASE_URL || '';
+const envAnon = metaEnv.VITE_SUPABASE_ANON_KEY || '';
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error(
-    '[El Tast] Falten variables d\'entorn de Supabase.\n' +
-    'Assegura\'t que VITE_SUPABASE_URL i VITE_SUPABASE_ANON_KEY estan configurades.'
-  );
-}
+// Fallback to localStorage keys if env is not defined (e.g. in development/preview)
+const localUrl = typeof localStorage !== 'undefined' ? localStorage.getItem('VITE_SUPABASE_URL') || '' : '';
+const localAnon = typeof localStorage !== 'undefined' ? localStorage.getItem('VITE_SUPABASE_ANON_KEY') || '' : '';
 
-export const isSupabaseConfigured = !!(supabaseUrl && supabaseAnonKey);
+const supabaseUrl = envUrl || localUrl;
+const supabaseAnonKey = envAnon || localAnon;
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const isSupabaseConfigured = !!(supabaseUrl && supabaseAnonKey && supabaseUrl.startsWith('http'));
+
+export const supabase = isSupabaseConfigured
+  ? createClient(supabaseUrl, supabaseAnonKey)
+  : null;
 
 // Clean logging
 if (isSupabaseConfigured) {
-  console.log("Supabase client initialized successfully using environment variables.");
+  console.log("Supabase client initialized successfully using config: " + (envUrl ? "ENV" : "LocalStorage"));
 } else {
   console.log("Supabase is not yet fully configured in your environment. Falling back gracefully to LocalStorage for interface settings.");
 }

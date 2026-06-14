@@ -43,6 +43,29 @@ export default function AdminConfig({ config, onBack, onSave, noticies, onSaveNo
   const [preuMocadorExtra, setPreuMocadorExtra] = useState(config.preuMocadorExtra);
   const [estatInscripcions, setEstatInscripcions] = useState<'obertes' | 'espera' | 'tancades'>(config.estatInscripcions || 'obertes');
 
+  // Supabase dynamic setup states
+  const [dbUrlSetup, setDbUrlSetup] = useState(() => localStorage.getItem('VITE_SUPABASE_URL') || '');
+  const [dbAnonSetup, setDbAnonSetup] = useState(() => localStorage.getItem('VITE_SUPABASE_ANON_KEY') || '');
+  const [dbConfigSaved, setDbConfigSaved] = useState(false);
+
+  const handleSaveLocalSupabase = () => {
+    localStorage.setItem('VITE_SUPABASE_URL', dbUrlSetup.trim());
+    localStorage.setItem('VITE_SUPABASE_ANON_KEY', dbAnonSetup.trim());
+    setDbConfigSaved(true);
+    setTimeout(() => {
+      setDbConfigSaved(false);
+      window.location.reload();
+    }, 1500);
+  };
+
+  const handleClearLocalSupabase = () => {
+    localStorage.removeItem('VITE_SUPABASE_URL');
+    localStorage.removeItem('VITE_SUPABASE_ANON_KEY');
+    setDbUrlSetup('');
+    setDbAnonSetup('');
+    window.location.reload();
+  };
+
   // States for dynamic customizable tariffs/payment lines
   const [titolSeccioTarifes, setTitolSeccioTarifes] = useState(config.titolSeccioTarifes || 'Tarifes i Cànons 2026');
   const [tarifesDinamiques, setTarifesDinamiques] = useState<TarifaConcept[]>(
@@ -454,6 +477,79 @@ export default function AdminConfig({ config, onBack, onSave, noticies, onSaveNo
         
         {/* Left column: Prices configurations */}
         <div className="lg:col-span-1 space-y-6 animate-fadeIn">
+           {/* SUPABASE CONNECTION CARD FOR GOOGLE AI STUDIO SYNC */}
+           <div className="bg-white rounded-3xl border border-zinc-200 p-6 shadow-sm space-y-4 animate-fadeIn" id="config-supabase-sync-card">
+             <div className="border-b border-zinc-100 pb-3">
+               <h3 className="font-sans font-black text-xs text-zinc-900 uppercase tracking-wider flex items-center gap-2">
+                 <span className="text-xl">⚡</span> {language === 'ca' ? "Sincronització amb Vercel i Supabase" : "Sincronización con Vercel y Supabase"}
+               </h3>
+               <p className="text-[10px] text-zinc-400 mt-1">
+                 {language === 'ca'
+                   ? "Enganxa les credencials de connexió per carregar en directe les dades del teu Vercel."
+                   : "Pega las credenciales de conexión para cargar en vivo los datos de tu Vercel."}
+               </p>
+             </div>
+
+             <div className="space-y-3">
+               <div>
+                 <label className="block text-[10px] uppercase font-bold text-zinc-500 mb-1">
+                   SUPABASE URL (VITE_SUPABASE_URL)
+                 </label>
+                 <input
+                   type="text"
+                   value={dbUrlSetup}
+                   onChange={(e) => setDbUrlSetup(e.target.value)}
+                   placeholder="https://your-project.supabase.co"
+                   className="w-full text-xs bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2 text-zinc-800 focus:outline-none focus:border-fuchsia-500 font-mono"
+                   id="input-supabase-url"
+                 />
+               </div>
+
+               <div>
+                 <label className="block text-[10px] uppercase font-bold text-zinc-500 mb-1">
+                   SUPABASE ANON KEY (VITE_SUPABASE_ANON_KEY)
+                 </label>
+                 <input
+                   type="password"
+                   value={dbAnonSetup}
+                   onChange={(e) => setDbAnonSetup(e.target.value)}
+                   placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                   className="w-full text-xs bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2 text-zinc-800 focus:outline-none focus:border-fuchsia-500 font-mono"
+                   id="input-supabase-anon"
+                 />
+               </div>
+
+               {dbConfigSaved && (
+                 <div className="text-[10px] text-green-600 font-bold bg-green-50 px-2 py-1.5 rounded-lg border border-green-200 animate-fadeIn">
+                   {language === 'ca' ? "S'han desat les dades de connexió! Reconfigurant client..." : "¡Guardados los datos de conexión! Reconfigurando cliente..."}
+                 </div>
+               )}
+
+               <div className="flex gap-2 pt-2">
+                 <button
+                   type="button"
+                   onClick={handleSaveLocalSupabase}
+                   className="flex-1 py-2 px-3 bg-fuchsia-600 hover:bg-fuchsia-500 text-white font-sans font-bold text-xs rounded-xl transition shadow flex items-center justify-center gap-1 cursor-pointer"
+                   id="btn-save-local-supabase"
+                 >
+                   {language === 'ca' ? "Sincronitzar Base" : "Sincronizar Base"}
+                 </button>
+
+                 {(localStorage.getItem('VITE_SUPABASE_URL') || localStorage.getItem('VITE_SUPABASE_ANON_KEY')) && (
+                   <button
+                     type="button"
+                     onClick={handleClearLocalSupabase}
+                     className="py-2 px-3 bg-zinc-100 hover:bg-zinc-200 text-zinc-600 font-sans font-bold text-xs rounded-xl transition cursor-pointer"
+                     id="btn-clear-local-supabase"
+                     title={language === 'ca' ? "Descargolar de LocalStorage" : "Desconectar"}
+                   >
+                     {language === 'ca' ? "Desconnectar" : "Desconectar"}
+                   </button>
+                 )}
+               </div>
+             </div>
+           </div>
+
           {/* SEMÀFOR D'ESTAT DE LES INSCRIPCIONS */}
           <div className="bg-white rounded-3xl border border-zinc-200 p-6 shadow-sm space-y-5" id="config-semafor-card">
             <div className="border-b border-zinc-100 pb-3">
