@@ -986,22 +986,25 @@ export default function AdminScanner({
                       </p>
                       <div className="space-y-1.5 text-[11px]">
                         {Object.entries(tempRecord.seleccionsUniforme).map(([nomProducte, dadesVal]) => {
-                          const dades = dadesVal as { c1Talla?: string; c2Talla?: string; quantitat?: number };
+                          const dades = dadesVal as { c1Talla?: string; c2Talla?: string; c1Quantitat?: number; c2Quantitat?: number; c1Tipus?: string; c2Tipus?: string; quantitat?: number };
                           return (
                             <div key={nomProducte} className="flex justify-between items-center bg-zinc-950 p-2.5 rounded-xl border border-white/5">
                               <div>
                                 <span className="text-zinc-200 font-extrabold">{nomProducte}</span>
-                                <span className="text-zinc-550 ml-2 font-mono text-[10px] bg-white/5 px-2 py-0.5 rounded text-zinc-400 font-bold">Qty: {dades.quantitat}</span>
                               </div>
                               <div className="text-right flex items-center gap-3 text-[10px] font-mono text-zinc-400">
                                 {dades.c1Talla && (
                                   <div>
                                     P1: <span className="text-white bg-[#ff0090]/15 px-1.5 py-0.5 rounded font-black text-[10px] font-sans">{dades.c1Talla}</span>
+                                    {(dades.c1Quantitat || dades.quantitat) && <span className="ml-1 text-[#ff0090]">x{dades.c1Quantitat || dades.quantitat}</span>}
+                                    {dades.c1Tipus && <span className="ml-1 text-zinc-500">[{dades.c1Tipus.substring(0,3).toUpperCase()}]</span>}
                                   </div>
                                 )}
                                 {dades.c2Talla && (
                                   <div>
                                     P2: <span className="text-zinc-100 bg-zinc-800 px-1.5 py-0.5 rounded font-bold text-[10px] font-sans">{dades.c2Talla}</span>
+                                    {(dades.c2Quantitat || dades.quantitat) && <span className="ml-1 text-zinc-300">x{dades.c2Quantitat || dades.quantitat}</span>}
+                                    {dades.c2Tipus && <span className="ml-1 text-zinc-500">[{dades.c2Tipus.substring(0,3).toUpperCase()}]</span>}
                                   </div>
                                 )}
                               </div>

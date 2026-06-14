@@ -322,7 +322,7 @@ export default function AdminFicha({ registration, config, onBack, onSave }: Adm
                           <div key={liniaId} className="flex justify-between items-center text-[10px] py-0.5">
                             <span className="text-zinc-500 truncate pr-1">{nomLinia}:</span>
                             <span className="font-mono text-zinc-900 font-extrabold">
-                              {sel.c1Talla} {linia?.requeixQuantitat && `(${sel.quantitat} u)`}
+                              {sel.c1Talla} {linia?.requeixQuantitat && `(${sel.c1Quantitat || sel.quantitat || 1} u)`} {sel.c1Tipus ? `[${sel.c1Tipus.substring(0,3).toUpperCase()}]` : ''}
                             </span>
                           </div>
                         );
@@ -467,7 +467,7 @@ export default function AdminFicha({ registration, config, onBack, onSave }: Adm
                           <div key={liniaId} className="flex justify-between items-center text-[10px] py-0.5">
                             <span className="text-zinc-500 truncate pr-1">{nomLinia}:</span>
                             <span className="font-mono text-zinc-900 font-extrabold font-sans">
-                              {sel.c2Talla} {linia?.requeixQuantitat && `(${sel.quantitat} u)`}
+                              {sel.c2Talla} {linia?.requeixQuantitat && `(${sel.c2Quantitat || sel.quantitat || 1} u)`} {sel.c2Tipus ? `[${sel.c2Tipus.substring(0,3).toUpperCase()}]` : ''}
                             </span>
                           </div>
                         );

@@ -65,8 +65,8 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
   const [c2UniformeTipus, setC2UniformeTipus] = useState<'compra' | 'lloguer'>('compra');
 
   // Dynamic uniform/equipment selections state
-  const [seleccionsUniforme, setSeleccionsUniforme] = useState<Record<string, { c1Talla: string; c2Talla: string; c1Quantitat: number; c2Quantitat: number }>>(() => {
-    const initial: Record<string, { c1Talla: string; c2Talla: string; c1Quantitat: number; c2Quantitat: number }> = {};
+  const [seleccionsUniforme, setSeleccionsUniforme] = useState<Record<string, { c1Talla: string; c2Talla: string; c1Quantitat: number; c2Quantitat: number; c1Tipus: 'compra' | 'lloguer'; c2Tipus: 'compra' | 'lloguer' }>>(() => {
+    const initial: Record<string, { c1Talla: string; c2Talla: string; c1Quantitat: number; c2Quantitat: number; c1Tipus: 'compra' | 'lloguer'; c2Tipus: 'compra' | 'lloguer' }> = {};
     const lines = config.liniisUniforme || [
       {
         id: 'lin-1',
@@ -81,7 +81,9 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
         c1Talla: l.opcions[0] || 'M',
         c2Talla: l.opcions[0] || 'M',
         c1Quantitat: 1,
-        c2Quantitat: 1
+        c2Quantitat: 1,
+        c1Tipus: 'compra',
+        c2Tipus: 'compra'
       };
     });
     return initial;
@@ -1099,7 +1101,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
                   requeixQuantitat: false
                 }
               ]).map((linia) => {
-                const sel = seleccionsUniforme[linia.id] || { c1Talla: linia.opcions[0] || 'M', c2Talla: linia.opcions[0] || 'M', c1Quantitat: 1, c2Quantitat: 1 };
+                const sel = seleccionsUniforme[linia.id] || { c1Talla: linia.opcions[0] || 'M', c2Talla: linia.opcions[0] || 'M', c1Quantitat: 1, c2Quantitat: 1, c1Tipus: 'compra' as const, c2Tipus: 'compra' as const };
                 return (
                   <div key={linia.id} className="space-y-2 p-4 bg-zinc-50 border border-zinc-200 rounded-2xl">
                     <div className="flex justify-between items-center">
@@ -1160,15 +1162,35 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
                       <div className="flex bg-white rounded-lg overflow-hidden border border-zinc-200 p-0.5 shrink-0" id="c1-uniform-adquisicio-container">
                         <button
                           type="button"
-                          onClick={() => setC1UniformeTipus('compra')}
-                          className={`text-[10px] px-2.5 py-1 font-bold rounded-md transition-all cursor-pointer ${c1UniformeTipus === 'compra' ? 'bg-fuchsia-100 text-fuchsia-700 shadow-sm' : 'text-zinc-550 hover:text-zinc-855'}`}
+                          onClick={() => {
+                            const newSel = { ...sel, c1Tipus: 'compra' as const };
+                            setSeleccionsUniforme({
+                              ...seleccionsUniforme,
+                              [linia.id]: newSel
+                            });
+                            const firstId = (config.liniisUniforme && config.liniisUniforme[0]?.id) || 'lin-1';
+                            if (linia.id === firstId) {
+                              setC1UniformeTipus('compra');
+                            }
+                          }}
+                          className={`text-[10px] px-2.5 py-1 font-bold rounded-md transition-all cursor-pointer ${sel.c1Tipus === 'compra' ? 'bg-fuchsia-100 text-fuchsia-700 shadow-sm' : 'text-zinc-550 hover:text-zinc-855'}`}
                         >
                           {language === 'ca' ? "Compra" : "Compra (Venta)"}
                         </button>
                         <button
                           type="button"
-                          onClick={() => setC1UniformeTipus('lloguer')}
-                          className={`text-[10px] px-2.5 py-1 font-bold rounded-md transition-all cursor-pointer ${c1UniformeTipus === 'lloguer' ? 'bg-fuchsia-600 text-white shadow-sm' : 'text-zinc-550 hover:text-zinc-855'}`}
+                          onClick={() => {
+                            const newSel = { ...sel, c1Tipus: 'lloguer' as const };
+                            setSeleccionsUniforme({
+                              ...seleccionsUniforme,
+                              [linia.id]: newSel
+                            });
+                            const firstId = (config.liniisUniforme && config.liniisUniforme[0]?.id) || 'lin-1';
+                            if (linia.id === firstId) {
+                              setC1UniformeTipus('lloguer');
+                            }
+                          }}
+                          className={`text-[10px] px-2.5 py-1 font-bold rounded-md transition-all cursor-pointer ${sel.c1Tipus === 'lloguer' ? 'bg-fuchsia-600 text-white shadow-sm' : 'text-zinc-550 hover:text-zinc-855'}`}
                         >
                           {language === 'ca' ? "Lloguer" : "Alquiler"}
                         </button>
@@ -1492,7 +1514,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
                   requeixQuantitat: false
                 }
               ]).map((linia) => {
-                const sel = seleccionsUniforme[linia.id] || { c1Talla: linia.opcions[0] || 'M', c2Talla: linia.opcions[0] || 'M', c1Quantitat: 1, c2Quantitat: 1 };
+                const sel = seleccionsUniforme[linia.id] || { c1Talla: linia.opcions[0] || 'M', c2Talla: linia.opcions[0] || 'M', c1Quantitat: 1, c2Quantitat: 1, c1Tipus: 'compra' as const, c2Tipus: 'compra' as const };
                 return (
                   <div key={linia.id} className="space-y-2 p-4 bg-zinc-50 border border-zinc-200 rounded-2xl">
                     <div className="flex justify-between items-center">
@@ -1553,15 +1575,35 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
                       <div className="flex bg-white rounded-lg overflow-hidden border border-zinc-200 p-0.5 shrink-0" id="c2-uniform-adquisicio-container">
                         <button
                           type="button"
-                          onClick={() => setC2UniformeTipus('compra')}
-                          className={`text-[10px] px-2.5 py-1 font-bold rounded-md transition-all cursor-pointer ${c2UniformeTipus === 'compra' ? 'bg-fuchsia-100 text-fuchsia-700 shadow-sm' : 'text-zinc-550 hover:text-zinc-855'}`}
+                          onClick={() => {
+                            const newSel = { ...sel, c2Tipus: 'compra' as const };
+                            setSeleccionsUniforme({
+                              ...seleccionsUniforme,
+                              [linia.id]: newSel
+                            });
+                            const firstId = (config.liniisUniforme && config.liniisUniforme[0]?.id) || 'lin-1';
+                            if (linia.id === firstId) {
+                              setC2UniformeTipus('compra');
+                            }
+                          }}
+                          className={`text-[10px] px-2.5 py-1 font-bold rounded-md transition-all cursor-pointer ${sel.c2Tipus === 'compra' ? 'bg-fuchsia-100 text-fuchsia-700 shadow-sm' : 'text-zinc-550 hover:text-zinc-855'}`}
                         >
                           {language === 'ca' ? "Compra" : "Compra (Venta)"}
                         </button>
                         <button
                           type="button"
-                          onClick={() => setC2UniformeTipus('lloguer')}
-                          className={`text-[10px] px-2.5 py-1 font-bold rounded-md transition-all cursor-pointer ${c2UniformeTipus === 'lloguer' ? 'bg-fuchsia-600 text-white shadow-sm' : 'text-zinc-550 hover:text-zinc-855'}`}
+                          onClick={() => {
+                            const newSel = { ...sel, c2Tipus: 'lloguer' as const };
+                            setSeleccionsUniforme({
+                              ...seleccionsUniforme,
+                              [linia.id]: newSel
+                            });
+                            const firstId = (config.liniisUniforme && config.liniisUniforme[0]?.id) || 'lin-1';
+                            if (linia.id === firstId) {
+                              setC2UniformeTipus('lloguer');
+                            }
+                          }}
+                          className={`text-[10px] px-2.5 py-1 font-bold rounded-md transition-all cursor-pointer ${sel.c2Tipus === 'lloguer' ? 'bg-fuchsia-600 text-white shadow-sm' : 'text-zinc-550 hover:text-zinc-855'}`}
                         >
                           {language === 'ca' ? "Lloguer" : "Alquiler"}
                         </button>
