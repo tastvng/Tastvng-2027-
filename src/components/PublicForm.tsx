@@ -90,9 +90,10 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
   const [respostesCuestionari, setRespostesCuestionari] = useState<Record<string, string | boolean>>({});
   
   // Extras
-  const [teDomasBalco, setTeDomasBalco] = useState(false);
+  const [teDomasBalcoQty, setTeDomasBalcoQty] = useState(0);
+  const teDomasBalco = teDomasBalcoQty > 0;
   const [teMocadorsExtra, setTeMocadorsExtra] = useState(0);
-  const [genericExtrasSelected, setGenericExtrasSelected] = useState<Record<string, boolean>>({});
+  const [genericExtrasQty, setGenericExtrasQty] = useState<Record<string, number>>({});
   
   // Checkboxes
   const [acceptaRGPD, setAcceptaRGPD] = useState(false);
@@ -194,13 +195,13 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
   const basePrice = categoria === CategoriaParella.ADULT 
     ? (config.tarifesDinamiques?.find(t => t.id === 'adults')?.valor ?? config.preuAdult)
     : (config.tarifesDinamiques?.find(t => t.id === 'juvenils')?.valor ?? config.preuJuvenil);
-  const domasCost = teDomasBalco ? (config.tarifesDinamiques?.find(t => t.id === 'domas')?.valor ?? config.preuDomasBalco) : 0;
+  const domasCost = teDomasBalcoQty * (config.tarifesDinamiques?.find(t => t.id === 'domas')?.valor ?? config.preuDomasBalco);
   const mocadorsCost = teMocadorsExtra * (config.tarifesDinamiques?.find(t => t.id === 'mocador')?.valor ?? config.preuMocadorExtra);
 
-  // Calculate any custom dynamically added active generic extras
+  // Calculate any custom dynamically added active generic extras using selected quantities
   const genericExtrasCost = (config.tarifesDinamiques || [])
-    .filter(t => t.tipus === 'extra_generic' && t.actiu && genericExtrasSelected[t.id])
-    .reduce((sum, t) => sum + t.valor, 0);
+    .filter(t => t.tipus === 'extra_generic' && t.actiu)
+    .reduce((sum, t) => sum + (genericExtrasQty[t.id] || 0) * t.valor, 0);
 
   const totalCalculat = basePrice + domasCost + mocadorsCost + genericExtrasCost;
 
@@ -526,6 +527,15 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
       const codiSeguiment = `TAST-2026-${sequencialCode}`;
       const randomId = 'ins-' + Math.random().toString(36).substr(2, 9);
 
+      const finalRespostes = {
+        ...respostesCuestionari,
+        'domas_qty': String(teDomasBalcoQty),
+        ...Object.keys(genericExtrasQty).reduce((acc, key) => {
+          acc[`extra_qty_${key}`] = String(genericExtrasQty[key]);
+          return acc;
+        }, {} as Record<string, string>)
+      };
+
       const novaInscripcio: Inscripcio = {
         id: randomId,
         codiSeguiment,
@@ -554,7 +564,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
         c2TutorDni: c2EsMenor ? c2TutorDni : '',
         c2TutorTelefon: c2EsMenor ? c2TutorTelefon : '',
         c2UniformeTipus,
-        respostesCuestionari,
+        respostesCuestionari: finalRespostes,
         seleccionsUniforme,
         preuCalculat: totalCalculat,
         teDomasBalco,
@@ -1647,15 +1657,25 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
                           : 'Cuelga el orgullo fucsia de El Tast en tu balcón el fin de semana de carnaval.'}
                       </p>
                     </div>
-                    <div className="flex items-center gap-4">
-                      <span className="font-sans font-bold text-sm text-zinc-950">+{domasTarifaObj.valor}€</span>
-                      <input 
-                        type="checkbox" 
-                        checked={teDomasBalco}
-                        onChange={(e) => setTeDomasBalco(e.target.checked)}
-                        className="w-5 h-5 rounded text-fuchsia-500 outline-none accent-fuchsia-500 cursor-pointer"
-                        id="checkbox-domas"
-                      />
+                    <div className="flex items-center gap-3">
+                      <span className="font-sans font-bold text-sm text-zinc-950 mr-2">+{domasTarifaObj.valor}€ / u.</span>
+                      <button
+                        type="button"
+                        onClick={() => setTeDomasBalcoQty(prev => Math.max(0, prev - 1))}
+                        className="w-8 h-8 rounded-lg bg-white border border-zinc-200 flex items-center justify-center hover:bg-zinc-100 font-bold text-zinc-700 transition cursor-pointer"
+                        id="btn-remove-domas"
+                      >
+                        <Minus size={14} />
+                      </button>
+                      <span className="font-mono font-bold text-sm text-zinc-900 w-6 text-center">{teDomasBalcoQty}</span>
+                      <button
+                        type="button"
+                        onClick={() => setTeDomasBalcoQty(prev => prev + 1)}
+                        className="w-8 h-8 rounded-lg bg-white border border-zinc-200 flex items-center justify-center hover:bg-zinc-100 font-bold text-zinc-700 transition cursor-pointer"
+                        id="btn-add-domas"
+                      >
+                        <Plus size={14} />
+                      </button>
                     </div>
                   </div>
                 )}
@@ -1677,7 +1697,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
                       <button
                         type="button"
                         onClick={() => setTeMocadorsExtra(prev => Math.max(0, prev - 1))}
-                        className="w-8 h-8 rounded-lg bg-white border border-zinc-200 flex items-center justify-center hover:bg-zinc-100 font-bold text-zinc-700 transition"
+                        className="w-8 h-8 rounded-lg bg-white border border-zinc-200 flex items-center justify-center hover:bg-zinc-100 font-bold text-zinc-700 transition cursor-pointer"
                         id="btn-remove-mocador"
                       >
                         <Minus size={14} />
@@ -1686,7 +1706,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
                       <button
                         type="button"
                         onClick={() => setTeMocadorsExtra(prev => prev + 1)}
-                        className="w-8 h-8 rounded-lg bg-white border border-zinc-200 flex items-center justify-center hover:bg-zinc-100 font-bold text-zinc-700 transition"
+                        className="w-8 h-8 rounded-lg bg-white border border-zinc-200 flex items-center justify-center hover:bg-zinc-100 font-bold text-zinc-700 transition cursor-pointer"
                         id="btn-add-mocador"
                       >
                         <Plus size={14} />
@@ -1696,30 +1716,43 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
                 )}
 
                 {/* Newly added customizable payment/rate lines */}
-                {genericExtras.map((extr) => (
-                  <div key={extr.id} className="flex items-center justify-between p-4 bg-zinc-50 rounded-2xl border border-zinc-100">
-                    <div className="space-y-0.5">
-                      <h4 className="font-sans font-bold text-sm text-zinc-850">
-                        <TranslatedText text={extr.nom} />
-                      </h4>
-                      <p className="text-zinc-500 text-xs">
-                        {language === 'ca' 
-                          ? "Complement addicional configurat per l'administració de l'entitat." 
-                          : "Complemento adicional configurado por la administración de la entidad."}
-                      </p>
+                {genericExtras.map((extr) => {
+                  const currentQty = genericExtrasQty[extr.id] || 0;
+                  return (
+                    <div key={extr.id} className="flex items-center justify-between p-4 bg-zinc-50 rounded-2xl border border-zinc-100">
+                      <div className="space-y-0.5">
+                        <h4 className="font-sans font-bold text-sm text-zinc-850">
+                          <TranslatedText text={extr.nom} />
+                        </h4>
+                        <p className="text-zinc-500 text-xs">
+                          {language === 'ca' 
+                            ? "Complement addicional configurat per l'administració de l'entitat." 
+                            : "Complemento adicional configurado por la administración de la entidad."}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="font-sans font-bold text-sm text-zinc-950 mr-2">+{extr.valor}€ / u.</span>
+                        <button
+                          type="button"
+                          onClick={() => setGenericExtrasQty(prev => ({ ...prev, [extr.id]: Math.max(0, (prev[extr.id] || 0) - 1) }))}
+                          className="w-8 h-8 rounded-lg bg-white border border-zinc-200 flex items-center justify-center hover:bg-zinc-100 font-bold text-zinc-700 transition cursor-pointer"
+                          id={`btn-remove-extra-${extr.id}`}
+                        >
+                          <Minus size={14} />
+                        </button>
+                        <span className="font-mono font-bold text-sm text-zinc-900 w-6 text-center">{currentQty}</span>
+                        <button
+                          type="button"
+                          onClick={() => setGenericExtrasQty(prev => ({ ...prev, [extr.id]: (prev[extr.id] || 0) + 1 }))}
+                          className="w-8 h-8 rounded-lg bg-white border border-zinc-200 flex items-center justify-center hover:bg-zinc-100 font-bold text-zinc-700 transition cursor-pointer"
+                          id={`btn-add-extra-${extr.id}`}
+                        >
+                          <Plus size={14} />
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-4">
-                      <span className="font-sans font-bold text-sm text-zinc-950">+{extr.valor}€</span>
-                      <input 
-                        type="checkbox" 
-                        checked={!!genericExtrasSelected[extr.id]}
-                        onChange={(e) => setGenericExtrasSelected(prev => ({ ...prev, [extr.id]: e.target.checked }))}
-                        className="w-5 h-5 rounded text-fuchsia-500 outline-none accent-fuchsia-500 cursor-pointer"
-                        id={`checkbox-extra-${extr.id}`}
-                      />
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           );
@@ -1807,8 +1840,17 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
               <span className="font-sans font-extrabold text-3xl md:text-4xl text-fuchsia-400">{totalCalculat}€</span>
               <span className="text-zinc-400 text-xs font-mono">
                 ({categoria === CategoriaParella.ADULT ? (language === 'ca' ? 'Adults' : 'Adultos') : (language === 'ca' ? 'Juvenil' : 'Juvenil')}: {basePrice}€
-                {teDomasBalco ? ` + ${language === 'ca' ? 'Domàs' : 'Colgadura'}: ${config.preuDomasBalco}€` : ''}
-                {teMocadorsExtra > 0 ? ` + ${teMocadorsExtra} ${language === 'ca' ? 'mocadors' : 'pañuelos'}: ${mocadorsCost}€` : ''})
+                {teDomasBalcoQty > 0 ? ` + ${teDomasBalcoQty}x ${language === 'ca' ? 'Domàs' : 'Colgadura'}: ${domasCost}€` : ''}
+                {teMocadorsExtra > 0 ? ` + ${teMocadorsExtra}x ${language === 'ca' ? 'mocadors' : 'pañuelos'}: ${mocadorsCost}€` : ''}
+                {Object.entries(genericExtrasQty)
+                  .filter(([_, qty]) => Number(qty) > 0)
+                  .map(([id, qty]) => {
+                    const extra = (config.tarifesDinamiques || []).find(t => t.id === id);
+                    if (!extra) return null;
+                    const qCount = Number(qty);
+                    return ` + ${qCount}x ${extra.nom}: ${qCount * extra.valor}€`;
+                  }).filter(Boolean).join('')}
+                )
               </span>
             </div>
           </div>
