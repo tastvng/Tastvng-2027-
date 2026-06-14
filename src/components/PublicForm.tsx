@@ -373,7 +373,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
     if (!c1Cognoms.trim()) tempErrors.c1Cognoms = language === 'ca' ? "Els cognoms són requerits" : "Los apellidos son requeridos";
     if (!c1Email.trim() || !/\S+@\S+\.\S+/.test(c1Email)) tempErrors.c1Email = language === 'ca' ? "Email vàlid requerit" : "Email válido requerido";
     if (!c1Telefon.trim()) tempErrors.c1Telefon = language === 'ca' ? "El telèfon és requerit" : "El teléfono es requerido";
-    if (!c1DniUrl) tempErrors.c1Dni = language === 'ca' ? "Cal pujar el DNI del Comparser 1" : "Es necesario subir el DNI del Comparser 1";
+    if (!c1DniUrl) tempErrors.c1Dni = language === 'ca' ? "Cal pujar el DNI del/de la Comparser/a 1" : "Es necesario subir el DNI del/de la Comparser/a 1";
 
     if (c1EsMenor) {
       if (!c1TutorNom.trim()) tempErrors.c1TutorNom = language === 'ca' ? "El nom del tutor és requerit" : "El nombre del tutor es requerido";
@@ -387,7 +387,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
     if (!c2Cognoms.trim()) tempErrors.c2Cognoms = language === 'ca' ? "Els cognoms són requerits" : "Los apellidos son requeridos";
     if (!c2Email.trim() || !/\S+@\S+\.\S+/.test(c2Email)) tempErrors.c2Email = language === 'ca' ? "Email vàlid requerit" : "Email válido requerido";
     if (!c2Telefon.trim()) tempErrors.c2Telefon = language === 'ca' ? "El telèfon és requerit" : "El teléfono es requerido";
-    if (!c2DniUrl) tempErrors.c2Dni = language === 'ca' ? "Cal pujar el DNI del Comparser 2" : "Es necesario subir el DNI del Comparser 2";
+    if (!c2DniUrl) tempErrors.c2Dni = language === 'ca' ? "Cal pujar el DNI del/de la Comparser/a 2" : "Es necesario subir el DNI del/de la Comparser/a 2";
 
     if (c2EsMenor) {
       if (!c2TutorNom.trim()) tempErrors.c2TutorNom = language === 'ca' ? "El nom del tutor és requerit" : "El nombre del tutor es requerido";
@@ -835,7 +835,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
             <div className="flex justify-between items-center mb-5 pb-2 border-b border-zinc-100">
               <h3 className="font-sans font-bold text-zinc-900 text-lg flex items-center gap-2">
                 <div className="w-2.5 h-2.5 bg-fuchsia-500 rounded-full" />
-                {language === 'ca' ? 'Primer Comparser (Representant)' : 'Primer Comparsero (Representante)'}
+                {language === 'ca' ? 'Comparser/a 1 (Representant)' : 'Comparsero/a 1 (Representante)'}
               </h3>
               <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-150 px-2 py-0.5 rounded-full font-mono uppercase tracking-tight flex items-center gap-1 shadow-sm shrink-0" title={language === 'ca' ? "Sincronitzat amb la base de dades" : "Sincronizado con la base de datos"}>
                 <Database size={9} /> {language === 'ca' ? 'Enllaç BBDD' : 'Enlace BBDD'}
@@ -1228,7 +1228,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
             <div className="flex justify-between items-center mb-5 pb-2 border-b border-zinc-100">
               <h3 className="font-sans font-bold text-zinc-900 text-lg flex items-center gap-2">
                 <div className="w-2.5 h-2.5 bg-fuchsia-500 rounded-full" />
-                {language === 'ca' ? 'Segon Comparser' : 'Segundo Comparsero'}
+                {language === 'ca' ? 'Comparser/a 2' : 'Comparsero/a 2'}
               </h3>
               <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-150 px-2 py-0.5 rounded-full font-mono uppercase tracking-tight flex items-center gap-1 shadow-sm shrink-0" title={language === 'ca' ? "Sincronitzat amb la base de dades" : "Sincronizado con la base de datos"}>
                 <Database size={9} /> {language === 'ca' ? 'Enllaç BBDD' : 'Enlace BBDD'}
