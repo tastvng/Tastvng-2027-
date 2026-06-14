@@ -57,6 +57,7 @@ export const CONFIG_INICIAL: SistemaConfig = {
   preuJuvenil: 60.00,
   preuDomasBalco: 15.00,
   preuMocadorExtra: 6.00,
+  estatInscripcions: 'obertes',
   titolSeccioTarifes: 'Tarifes i Cànons 2026',
   tarifesDinamiques: [
     { id: 'adults', nom: 'Preu Parella Adulta (€)', valor: 90.00, actiu: true, tipus: 'categoria_adult' },
@@ -65,6 +66,7 @@ export const CONFIG_INICIAL: SistemaConfig = {
     { id: 'mocador', nom: 'Cànon Mocador Extra (€)', valor: 6.00, actiu: true, tipus: 'extra_mocador' }
   ],
   titolFormulariDinamic: "Preguntes del Qüestionari d'El Tast",
+  cuestionariActiu: true,
   preguntesFormulari: [
     {
       id: 'preg-1',
@@ -83,7 +85,7 @@ export const CONFIG_INICIAL: SistemaConfig = {
     },
     {
       id: 'preg-3',
-      titol: 'Teniu alguna intolerància alimentària o requisit dietètic?',
+      titol: 'Comentaris o observacions addicionals:',
       tipus: 'text',
       requerit: false,
       activa: true
@@ -95,7 +97,28 @@ export const CONFIG_INICIAL: SistemaConfig = {
   subtitol: 'Vilanova i la Geltrú 2026',
   logoColor: '#ff0090',
   logoImgUrl: '',
-  logoUseImage: false
+  logoUseImage: false,
+  nomUniforme: "Talla de Samarreta",
+  nomUniformeES: "Talla de Camiseta",
+  opcionsUniforme: ["XS", "S", "M", "L", "XL", "XXL", "3XL"],
+  liniisUniforme: [
+    {
+      id: 'lin-1',
+      nom: "Talla de Samarreta Oficial",
+      nomES: "Talla de Camiseta Oficial",
+      opcions: ["XS", "S", "M", "L", "XL", "XXL", "3XL"],
+      requeixQuantitat: false
+    },
+    {
+      id: 'lin-2',
+      nom: "Talla de Jaqueta Tècnica",
+      nomES: "Talla de Chaqueta Técnica",
+      opcions: ["S", "M", "L", "XL", "XXL"],
+      requeixQuantitat: true
+    }
+  ],
+  textLegalAutoritzacioMenors: "AUTORITZACIÓ DE MENORS D'EDAT\n\nEn condició de tutor/a legal del menor inscrit, declaro sota la meva responsabilitat que autoritzo expressament la seva participació a l'esdeveniment i activitats organitzades per l'Associació Cultural El Tast (Vilanova i la Geltrú 2026).\n\nCertifico que el menor es troba en condicions físiques i de salut aptes per al correcte desenvolupament de l'activitat, i m'en faig responsable de qualsevol incidència que se'n derivi del seu estat previ de salut, així com del compliment de la normativa vigent de l'organització.",
+  textLegalAutoritzacioMenorsES: "AUTORIZACIÓN DE MENORES DE EDAD\n\nEn condición de tutor/a legal del menor inscrito, declaro bajo mi responsabilidad que autorizo expresamente su participación en el evento y actividades organizadas por la Associació Cultural El Tast (Vilanova i la Geltrú 2026).\n\nCertifico que el menor se encuentra en condiciones físicas y de salud aptas para el correcto desarrollo de la actividad, y me hago responsable de cualquier incidencia que se derive de su estado previo de salud, así como del cumplimiento de la normativa de la organización."
 };
 
 export const INSCRIPCIONS_INICIALS: Inscripcio[] = [
@@ -118,7 +141,7 @@ export const INSCRIPCIONS_INICIALS: Inscripcio[] = [
     respostesCuestionari: {
       'preg-1': true,
       'preg-2': 'Sí, tots dos participants',
-      'preg-3': 'Sense gluten per al Comparser 2'
+      'preg-3': 'És possible recollir la roba abans?'
     },
     preuCalculat: 105.00, // 90 + 1 mocador extra (6) + domas (15) o similar
     teDomasBalco: true,
@@ -180,7 +203,7 @@ export const INSCRIPCIONS_INICIALS: Inscripcio[] = [
     respostesCuestionari: {
       'preg-1': true,
       'preg-2': 'Sí, tots dos participants',
-      'preg-3': 'Vegetarians tots dos'
+      'preg-3': 'Gràcies per tot'
     },
     preuCalculat: 60.00,
     teDomasBalco: false,
@@ -211,7 +234,7 @@ export const INSCRIPCIONS_INICIALS: Inscripcio[] = [
     respostesCuestionari: {
       'preg-1': false,
       'preg-2': 'Només Comparser 1',
-      'preg-3': ''
+      'preg-3': 'Cap observació particular'
     },
     preuCalculat: 111.00, // 90 + 15 domàs + 6 mocador extra
     teDomasBalco: true,
@@ -242,7 +265,7 @@ export const INSCRIPCIONS_INICIALS: Inscripcio[] = [
     respostesCuestionari: {
       'preg-1': true,
       'preg-2': 'No volem participar-hi',
-      'preg-3': 'Al·lèrgia a la fruita seca (Arnau)'
+      'preg-3': 'Preferim color clar si és possible'
     },
     preuCalculat: 75.00, // 60 + 15 domas
     teDomasBalco: true,

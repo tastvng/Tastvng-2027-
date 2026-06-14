@@ -3,7 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useLanguage } from '../LanguageContext';
 import { 
   ArrowLeft, 
   Save, 
@@ -20,24 +21,52 @@ import {
   HelpCircle,
   TrendingUp,
   Palette,
-  Type
+  Type,
+  Shirt
 } from 'lucide-react';
-import { SistemaConfig, PreguntaDinamica, NoticiaXarxes, TarifaConcept } from '../types';
+import { SistemaConfig, PreguntaDinamica, NoticiaXarxes, TarifaConcept, LiniaUniforme } from '../types';
 
 interface AdminConfigProps {
   config: SistemaConfig;
   onBack: () => void;
   onSave: (updatedConfig: SistemaConfig) => void;
+  onResetConfig?: () => void;
   noticies?: NoticiaXarxes[];
   onSaveNoticies?: (updatedNoticies: NoticiaXarxes[]) => void;
 }
 
-export default function AdminConfig({ config, onBack, onSave, noticies, onSaveNoticies }: AdminConfigProps) {
+export default function AdminConfig({ config, onBack, onSave, onResetConfig, noticies, onSaveNoticies }: AdminConfigProps) {
+  const { language, t } = useLanguage();
   // Config parameters state
+  const [showResetModal, setShowResetModal] = useState(false);
   const [preuAdult, setPreuAdult] = useState(config.preuAdult);
   const [preuJuvenil, setPreuJuvenil] = useState(config.preuJuvenil);
   const [preuDomasBalco, setPreuDomasBalco] = useState(config.preuDomasBalco);
   const [preuMocadorExtra, setPreuMocadorExtra] = useState(config.preuMocadorExtra);
+  const [estatInscripcions, setEstatInscripcions] = useState<'obertes' | 'espera' | 'tancades'>(config.estatInscripcions || 'obertes');
+
+  // Supabase dynamic setup states
+  const [dbUrlSetup, setDbUrlSetup] = useState(() => localStorage.getItem('VITE_SUPABASE_URL') || '');
+  const [dbAnonSetup, setDbAnonSetup] = useState(() => localStorage.getItem('VITE_SUPABASE_ANON_KEY') || '');
+  const [dbConfigSaved, setDbConfigSaved] = useState(false);
+
+  const handleSaveLocalSupabase = () => {
+    localStorage.setItem('VITE_SUPABASE_URL', dbUrlSetup.trim());
+    localStorage.setItem('VITE_SUPABASE_ANON_KEY', dbAnonSetup.trim());
+    setDbConfigSaved(true);
+    setTimeout(() => {
+      setDbConfigSaved(false);
+      window.location.reload();
+    }, 1500);
+  };
+
+  const handleClearLocalSupabase = () => {
+    localStorage.removeItem('VITE_SUPABASE_URL');
+    localStorage.removeItem('VITE_SUPABASE_ANON_KEY');
+    setDbUrlSetup('');
+    setDbAnonSetup('');
+    window.location.reload();
+  };
 
   // States for dynamic customizable tariffs/payment lines
   const [titolSeccioTarifes, setTitolSeccioTarifes] = useState(config.titolSeccioTarifes || 'Tarifes i Cànons 2026');
@@ -99,8 +128,28 @@ export default function AdminConfig({ config, onBack, onSave, noticies, onSaveNo
   const [logoImgUrl, setLogoImgUrl] = useState(config.logoImgUrl || '');
   const [logoUseImage, setLogoUseImage] = useState(!!config.logoUseImage);
 
+  // Clothing lines & custom equipment options states
+  const [nomUniforme, setNomUniforme] = useState(config.nomUniforme || 'Talla de Samarreta');
+  const [nomUniformeES, setNomUniformeES] = useState(config.nomUniformeES || 'Talla de Camiseta');
+  const [opcionsUniformeCsv, setOpcionsUniformeCsv] = useState(
+    (config.opcionsUniforme || ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL']).join(', ')
+  );
+
+  const [liniisUniforme, setLiniisUniforme] = useState<LiniaUniforme[]>(
+    config.liniisUniforme || [
+      {
+        id: 'lin-1',
+        nom: config.nomUniforme || 'Talla de Samarreta',
+        nomES: config.nomUniformeES || 'Talla de Camiseta',
+        opcions: config.opcionsUniforme || ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'],
+        requeixQuantitat: false
+      }
+    ]
+  );
+
   // Questionnaire questions state
   const [preguntes, setPreguntes] = useState<PreguntaDinamica[]>(config.preguntesFormulari);
+  const [cuestionariActiu, setCuestionariActiu] = useState<boolean>(config.cuestionariActiu !== false);
 
   // Announcements / News Feed State
   const [newsList, setNewsList] = useState<NoticiaXarxes[]>(noticies || []);
@@ -122,7 +171,116 @@ export default function AdminConfig({ config, onBack, onSave, noticies, onSaveNo
   const [newTipus, setNewTipus] = useState<'text' | 'select' | 'boolean'>('text');
   const [newOpcionsCsv, setNewOpcionsCsv] = useState('');
 
+  const [textLegalAutoritzacioMenors, setTextLegalAutoritzacioMenors] = useState(config.textLegalAutoritzacioMenors || "AUTORITZACIÓ DE MENORS D'EDAT\n\nEn condició de tutor/a legal del menor inscrit, declaro sota la meva responsabilitat que autoritzo expressament la seva participació a l'esdeveniment i activitats organitzades per l'Associació Cultural El Tast (Vilanova i la Geltrú 2026).\n\nCertifico que el menor es troba en condicions físiques i de salut aptes per al correcte desenvolupament de l'activitat, i m'en faig responsable de qualsevol incidència que se'n derivi del seu estat previ de salut, així com del cumprimento de la normativa vigent de l'organització.");
+  const [textLegalAutoritzacioMenorsES, setTextLegalAutoritzacioMenorsES] = useState(config.textLegalAutoritzacioMenorsES || "AUTORIZACIÓN DE MENORES DE EDAD\n\nEn condición de tutor/a legal del menor inscrito, declaro bajo mi responsabilidad que autorizo expresamente su participación en el evento y actividades organizadas por la Associació Cultural El Tast (Vilanova i la Geltrú 2026).\n\nCertifico que el menor se encuentra en condiciones físicas y de salud aptas para el correcto desarrollo de la actividad, y me hago responsable de cualquier incidencia que se derive de su estado previo de salud, así como del cumplimiento de la normativa de la organización.");
+
   const [notifSuccess, setNotifSuccess] = useState(false);
+
+  // Google Sheets Real-time sync states
+  const [googleSheetSyncUrl, setGoogleSheetSyncUrl] = useState(config.googleSheetSyncUrl || '');
+  const [googleSheetSyncActive, setGoogleSheetSyncActive] = useState(!!config.googleSheetSyncActive);
+  const [showSyncInstructions, setShowSyncInstructions] = useState(false);
+  const [isTestingSync, setIsTestingSync] = useState(false);
+  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  const testSyncConnection = async () => {
+    if (!googleSheetSyncUrl) {
+      alert(language === 'ca' ? "Introduïu primer l'URL d'Apps Script." : "Introduzca primero la URL de Apps Script.");
+      return;
+    }
+    setIsTestingSync(true);
+    setTestResult(null);
+    try {
+      const testInscripcio = [{
+        id: 'test-conn-id',
+        codiSeguiment: "TEST-CONN",
+        categoria: "adults",
+        c1Nom: "Parella Prova",
+        c1Cognoms: "Sincro 1",
+        c1Email: "secretaria@eltast.cat",
+        c1Telefon: "600000000",
+        c1Talla: "M",
+        c1UniformeTipus: "compra",
+        c1EsMenor: false,
+        c2Nom: "Parella Prova",
+        c2Cognoms: "Sincro 2",
+        c2Email: "secretaria@eltast.cat",
+        c2Telefon: "600000000",
+        c2Talla: "L",
+        c2UniformeTipus: "compra",
+        c2EsMenor: false,
+        preuCalculat: 0,
+        teDomasBalco: false,
+        teMocadorsExtra: 0,
+        estatPagament: "pendent",
+        creadoEn: new Date().toISOString()
+      }] as any[];
+
+      const { syncToGoogleSheet } = await import('../googleSync');
+      const ok = await syncToGoogleSheet(testInscripcio, googleSheetSyncUrl, true);
+      if (ok) {
+        setTestResult({
+          success: true,
+          message: language === 'ca' 
+            ? "Sincronització de prova enviada! Verifiqueu el vostre full de Google Sheets per comprovar que apareix una fila amb 'TEST-CONN'."
+            : "¡Sincronización de prueba enviada! Verifica tu hoja de Google Sheets para comprobar que aparece una fila con 'TEST-CONN'."
+        });
+      } else {
+        setTestResult({
+          success: false,
+          message: language === 'ca'
+            ? "No s'ha pogut completar. Reviseu que la deployed Apps Script URL tingui permisos totals per a tothom ('Anyone')."
+            : "No se pudo completar. Revisa que la URL de Apps Script desplegada tenga permisos de acceso para todos ('Anyone')."
+        });
+      }
+    } catch(e: any) {
+      setTestResult({
+        success: false,
+        message: e.message || "Error"
+      });
+    } finally {
+      setIsTestingSync(false);
+    }
+  };
+
+  const [autoTranslate, setAutoTranslate] = useState(true);
+  const [translatingFields, setTranslatingFields] = useState<Record<string, boolean>>({});
+  const [isQuotaExceeded, setIsQuotaExceeded] = useState(() => {
+    return typeof window !== 'undefined' && window.sessionStorage?.getItem('tast_translation_quota_exceeded') === 'true';
+  });
+
+  useEffect(() => {
+    const handleQuotaExceeded = () => {
+      setIsQuotaExceeded(true);
+    };
+    window.addEventListener('translationQuotaExceeded', handleQuotaExceeded);
+    return () => {
+      window.removeEventListener('translationQuotaExceeded', handleQuotaExceeded);
+    };
+  }, []);
+
+  const handleBlurTranslate = async (
+    textToTranslate: string,
+    setTargetValue: (val: string) => void,
+    targetKey: string,
+    sourceLang: 'ca' | 'es',
+    targetLang: 'ca' | 'es'
+  ) => {
+    if (!autoTranslate || !textToTranslate || !textToTranslate.trim()) return;
+
+    setTranslatingFields(prev => ({ ...prev, [targetKey]: true }));
+    try {
+      const { translateText } = await import('../translateService');
+      const translated = await translateText(textToTranslate, sourceLang, targetLang);
+      if (translated && translated.trim()) {
+        setTargetValue(translated.trim());
+      }
+    } catch (e) {
+      console.error("Auto translation error in AdminConfig:", e);
+    } finally {
+      setTranslatingFields(prev => ({ ...prev, [targetKey]: false }));
+    }
+  };
 
   // States and Handlers for Logo Drag & Drop / Upload
   const [dragActive, setDragActive] = useState(false);
@@ -229,6 +387,25 @@ export default function AdminConfig({ config, onBack, onSave, noticies, onSaveNo
     setNewsList(newsList.filter(p => p.id !== id));
   };
 
+  const handleAddLiniaUniforme = () => {
+    const nova: LiniaUniforme = {
+      id: 'lin-' + Math.random().toString(36).substr(2, 9),
+      nom: 'Nova línia d\'equipament',
+      nomES: 'Nueva línea de equipamiento',
+      opcions: ['S', 'M', 'L', 'XL'],
+      requeixQuantitat: false
+    };
+    setLiniisUniforme([...liniisUniforme, nova]);
+  };
+
+  const handleRemoveLiniaUniforme = (id: string) => {
+    setLiniisUniforme(liniisUniforme.filter(l => l.id !== id));
+  };
+
+  const handleUpdateLiniaUniforme = (id: string, updates: Partial<LiniaUniforme>) => {
+    setLiniisUniforme(liniisUniforme.map(l => l.id === id ? { ...l, ...updates } : l));
+  };
+
   const handleGuardarConfig = () => {
     // Find rates in the array or fall back to single inputs
     const adultsVal = tarifesDinamiques.find(t => t.id === 'adults')?.valor ?? Number(preuAdult);
@@ -251,7 +428,17 @@ export default function AdminConfig({ config, onBack, onSave, noticies, onSaveNo
       subtitol: subtitol.trim(),
       logoColor: logoColor.trim(),
       logoImgUrl: logoImgUrl.trim(),
-      logoUseImage: logoUseImage
+      logoUseImage: logoUseImage,
+      nomUniforme: liniisUniforme[0]?.nom || nomUniforme,
+      nomUniformeES: liniisUniforme[0]?.nomES || nomUniformeES,
+      opcionsUniforme: liniisUniforme[0]?.opcions || (config.opcionsUniforme || ["XS", "S", "M", "L", "XL", "XXL", "3XL"]),
+      liniisUniforme: liniisUniforme,
+      textLegalAutoritzacioMenors: textLegalAutoritzacioMenors,
+      textLegalAutoritzacioMenorsES: textLegalAutoritzacioMenorsES,
+      estatInscripcions: estatInscripcions,
+      googleSheetSyncUrl: googleSheetSyncUrl.trim(),
+      googleSheetSyncActive: googleSheetSyncActive,
+      cuestionariActiu: cuestionariActiu
     };
 
     onSave(updated);
@@ -271,36 +458,513 @@ export default function AdminConfig({ config, onBack, onSave, noticies, onSaveNo
       <div className="flex justify-between items-center bg-zinc-900 border border-zinc-800 rounded-3xl p-5 text-white shadow">
         <button 
           onClick={onBack}
-          className="text-xs bg-zinc-800 hover:bg-zinc-700 font-bold px-4 py-2.5 rounded-xl transition flex items-center gap-1.5"
+          className="text-xs bg-zinc-800 hover:bg-zinc-700 font-bold px-4 py-2.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer"
           id="btn-nav-config-back"
         >
-          <ArrowLeft size={14} /> Tornar al taulell
+          <ArrowLeft size={14} /> {language === 'ca' ? "Tornar al taulell" : "Volver al panel"}
         </button>
 
         <h2 className="font-sans font-extrabold text-base tracking-tight text-white flex items-center gap-2">
-          Personalitza Canons i Cüestionaris
+          {language === 'ca' ? "Personalitza Canons i Cüestionaris" : "Personaliza Cánones y Cuestionarios"}
         </h2>
 
-        <button 
-          onClick={handleGuardarConfig}
-          className="text-xs bg-fuchsia-600 hover:bg-fuchsia-500 font-bold px-5 py-2.5 rounded-xl transition flex items-center gap-1.5 shadow animate-pulse"
-          id="btn-nav-config-save"
-        >
-          {notifSuccess ? "S'ha guardat!" : "Guardar Ajustos"} <Save size={14} />
-        </button>
+        <div className="flex items-center gap-2">
+          {onResetConfig && (
+            <button 
+              type="button"
+              onClick={() => setShowResetModal(true)}
+              className="text-xs bg-zinc-850 hover:bg-zinc-800 border border-zinc-750 hover:text-red-400 hover:border-red-500/30 font-bold px-3 py-2.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer"
+              id="btn-nav-config-reset"
+              title={language === 'ca' ? "Restablir configuració original de fàbrica" : "Restablecer configuración original de fábrica"}
+            >
+              <RefreshCw size={12} className="animate-spin-slow text-red-500" /> 
+              {language === 'ca' ? "Restablir Fàbrica" : "Restablecer Fábrica"}
+            </button>
+          )}
+
+          <button 
+            onClick={handleGuardarConfig}
+            className="text-xs bg-fuchsia-600 hover:bg-fuchsia-500 font-bold px-5 py-2.5 rounded-xl transition flex items-center gap-1.5 shadow animate-pulse cursor-pointer"
+            id="btn-nav-config-save"
+          >
+            {notifSuccess 
+              ? (language === 'ca' ? "S'ha guardat!" : "¡Guardado!") 
+              : (language === 'ca' ? "Guardar Ajustos" : "Guardar Ajustes")} <Save size={14} />
+          </button>
+        </div>
       </div>
 
       {notifSuccess && (
         <div className="bg-green-150 border border-green-200 text-green-800 p-4 rounded-2xl font-bold flex items-center gap-2">
           <CheckCircle size={20} className="text-green-600 animate-bounce" />
-          <span>Configuració del sistema i condicions del qüestionari actualitzades amb èxit!</span>
+          <span>
+            {language === 'ca' 
+              ? "Configuració del sistema i condicions del qüestionari actualitzades amb èxit!" 
+              : "¡Configuración del sistema y condiciones del cuestionario guardadas con éxito!"}
+          </span>
         </div>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
         {/* Left column: Prices configurations */}
-        <div className="lg:col-span-1 space-y-6">
+        <div className="lg:col-span-1 space-y-6 animate-fadeIn">
+          {/* SEMÀFOR D'ESTAT DE LES INSCRIPCIONS */}
+          <div className="bg-white rounded-3xl border border-zinc-200 p-6 shadow-sm space-y-5" id="config-semafor-card">
+            <div className="border-b border-zinc-100 pb-3">
+              <h3 className="font-sans font-black text-sm text-zinc-900 uppercase tracking-wider flex items-center gap-2">
+                <span className="text-xl">🚦</span> {language === 'ca' ? "Semàfor d'Estat de les Inscripcions" : "Semáforo de Estado de Inscripciones"}
+              </h3>
+              <p className="text-[10px] text-zinc-400 mt-1">
+                {language === 'ca' 
+                  ? "Controla la fase de registre. Canvia els indicadors en temps real." 
+                  : "Controla la fase de registro. Modifica los indicadores en tiempo real."}
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              {/* Opció 1: Obertes - VERD */}
+              <button
+                type="button"
+                onClick={() => setEstatInscripcions('obertes')}
+                className={`w-full p-4 rounded-2xl border text-left transition-all flex items-center justify-between cursor-pointer ${
+                  estatInscripcions === 'obertes'
+                    ? 'bg-emerald-50 border-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.15)]'
+                    : 'bg-zinc-50 hover:bg-zinc-100 border-zinc-200'
+                }`}
+                id="btn-semafor-obertes"
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`w-3.5 h-3.5 rounded-full bg-emerald-500 relative shrink-0 ${estatInscripcions === 'obertes' ? 'animate-ping' : ''}`}>
+                    <div className="absolute inset-0 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981]" />
+                  </div>
+                  <div>
+                    <span className="block font-sans font-bold text-xs text-zinc-850">
+                      {language === 'ca' ? "🟢 Inscripcions Obertes" : "🟢 Inscripciones Abiertas"}
+                    </span>
+                    <span className="block text-[10px] text-zinc-400">
+                      {language === 'ca' ? "Registre actiu sense restriccions" : "Registro activo sin restricciones"}
+                    </span>
+                  </div>
+                </div>
+                {estatInscripcions === 'obertes' && (
+                  <span className="text-[10px] uppercase font-mono font-black text-emerald-600 bg-emerald-500/10 px-2 py-0.5 rounded-full">
+                    {language === 'ca' ? "ACTIU" : "ACTIVO"}
+                  </span>
+                )}
+              </button>
+
+              {/* Opció 2: Espera - TARONJA */}
+              <button
+                type="button"
+                onClick={() => setEstatInscripcions('espera')}
+                className={`w-full p-4 rounded-2xl border text-left transition-all flex items-center justify-between cursor-pointer ${
+                  estatInscripcions === 'espera'
+                    ? 'bg-amber-50 border-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.15)]'
+                    : 'bg-zinc-50 hover:bg-zinc-100 border-zinc-200'
+                }`}
+                id="btn-semafor-espera"
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`w-3.5 h-3.5 rounded-full bg-amber-500 relative shrink-0 ${estatInscripcions === 'espera' ? 'animate-ping' : ''}`}>
+                    <div className="absolute inset-0 rounded-full bg-amber-500 shadow-[0_0_8px_#f59e0b]" />
+                  </div>
+                  <div>
+                    <span className="block font-sans font-bold text-xs text-zinc-850">
+                      {language === 'ca' ? "🟡 Llista d'Espera" : "🟡 Lista de Espera"}
+                    </span>
+                    <span className="block text-[10px] text-zinc-400">
+                      {language === 'ca' ? "Aforament complet, noves sol·licituds en llista" : "Aforo completo, nuevas solicitudes en lista"}
+                    </span>
+                  </div>
+                </div>
+                {estatInscripcions === 'espera' && (
+                  <span className="text-[10px] uppercase font-mono font-black text-amber-600 bg-amber-500/10 px-2 py-0.5 rounded-full">
+                    {language === 'ca' ? "ACTIU" : "ACTIVO"}
+                  </span>
+                )}
+              </button>
+
+              {/* Opció 3: Tancades - VERMELL */}
+              <button
+                type="button"
+                onClick={() => setEstatInscripcions('tancades')}
+                className={`w-full p-4 rounded-2xl border text-left transition-all flex items-center justify-between cursor-pointer ${
+                  estatInscripcions === 'tancades'
+                    ? 'bg-rose-50 border-rose-400 shadow-[0_0_20px_rgba(239,68,68,0.25)]'
+                    : 'bg-zinc-50 hover:bg-zinc-100 border-zinc-200'
+                }`}
+                id="btn-semafor-tancades"
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`w-3.5 h-3.5 rounded-full bg-red-600 relative shrink-0 ${estatInscripcions === 'tancades' ? 'animate-pulse' : ''}`}>
+                    <div className="absolute inset-0 rounded-full bg-red-600 shadow-[0_0_12px_#ef4444]" />
+                  </div>
+                  <div>
+                    <span className="block font-sans font-bold text-xs text-zinc-850">
+                      {language === 'ca' ? "🔴 Inscripcions Tancades" : "🔴 Inscripciones Cerradas"}
+                    </span>
+                    <span className="block text-[10px] text-zinc-400">
+                      {language === 'ca' ? "Formulari desactivat per complet" : "Formulario desactivado por completo"}
+                    </span>
+                  </div>
+                </div>
+                {estatInscripcions === 'tancades' && (
+                  <span className="text-[10px] uppercase font-mono font-black text-red-600 bg-red-500/10 px-2 py-0.5 rounded-full animate-bounce">
+                    {language === 'ca' ? "TANCAT" : "CERRADO"}
+                  </span>
+                )}
+              </button>
+            </div>
+
+            {/* Glowing Traffic light representation */}
+            <div className="p-3.5 bg-zinc-950 border border-zinc-850 rounded-2xl flex justify-center items-center gap-5">
+              <span className="text-[10|px] font-mono font-bold tracking-widest text-zinc-500 uppercase shrink-0 mr-1">VISTA:</span>
+              <div className="flex bg-zinc-900 border border-zinc-800 rounded-full px-3 py-1.5 gap-3.5 items-center">
+                {/* Red Light */}
+                <div 
+                  className={`w-5 h-5 rounded-full transition-all duration-300 ${
+                    estatInscripcions === 'tancades'
+                      ? 'bg-red-500 shadow-[0_0_16px_rgba(239,68,68,0.9)] scale-110'
+                      : 'bg-red-950/60 opacity-30'
+                  }`}
+                  title={language === 'ca' ? "Tancades" : "Cerradas"} 
+                />
+                {/* Orange Light */}
+                <div 
+                  className={`w-5 h-5 rounded-full transition-all duration-300 ${
+                    estatInscripcions === 'espera'
+                      ? 'bg-amber-500 shadow-[0_0_16px_rgba(245,158,11,0.9)] scale-110'
+                      : 'bg-amber-950/60 opacity-30'
+                  }`}
+                  title={language === 'ca' ? "Llista d'Espera" : "Lista de Espera"} 
+                />
+                {/* Green Light */}
+                <div 
+                  className={`w-5 h-5 rounded-full transition-all duration-300 ${
+                    estatInscripcions === 'obertes'
+                      ? 'bg-emerald-500 shadow-[0_0_16px_rgba(16,185,129,0.9)] scale-110'
+                      : 'bg-emerald-950/60 opacity-30'
+                  }`}
+                  title={language === 'ca' ? "Obertes" : "Abiertas"} 
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* GOOGLE SHEETS REAL-TIME SYNC CONFIG */}
+          <div className="bg-white rounded-3xl border border-zinc-200 p-6 shadow-sm space-y-5 animate-fadeIn" id="config-googlesheets-card">
+            <div className="border-b border-zinc-100 pb-3">
+              <h3 className="font-sans font-black text-sm text-zinc-900 uppercase tracking-wider flex items-center gap-2">
+                <span className="text-xl">📊</span> {language === 'ca' ? "Sincronització Full de Google" : "Sincronización Hoja de Google"}
+              </h3>
+              <p className="text-[10px] text-zinc-400 mt-1">
+                {language === 'ca' 
+                  ? "Sincronitza i replica totes les dades en temps real en un full de Google Sheets de Google Drive de manera immediata." 
+                  : "Sincroniza y replica todos los datos en tiempo real en una hoja de Google Sheets de Google Drive de manera inmediata."}
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              {/* Toggle Switch */}
+              <div className="flex items-center justify-between p-3.5 bg-zinc-50 border border-zinc-150 rounded-2xl">
+                <div>
+                  <span className="block font-sans font-bold text-xs text-zinc-800">
+                    {language === 'ca' ? "Sincronització Activa" : "Sincronización Activa"}
+                  </span>
+                  <span className="block text-[10px] text-zinc-400 mt-0.5">
+                    {language === 'ca' ? "Sincronitza cada canvi immediatament" : "Sincroniza cada cambio de inmediato"}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setGoogleSheetSyncActive(!googleSheetSyncActive)}
+                  className={`w-11 h-6 flex items-center rounded-full p-0.5 transition-all duration-300 cursor-pointer ${
+                    googleSheetSyncActive ? 'bg-emerald-500' : 'bg-zinc-300'
+                  }`}
+                >
+                  <div className={`bg-white w-5 h-5 rounded-full shadow transition-all duration-300 transform ${
+                    googleSheetSyncActive ? 'translate-x-5' : 'translate-x-0'
+                  }`} />
+                </button>
+              </div>
+
+              {/* URL Input */}
+              <div className="space-y-1">
+                <label className="block text-[10px] text-zinc-500 uppercase font-mono font-bold">
+                  {language === 'ca' ? "URL d'Apps Script de Google" : "URL de Apps Script de Google"}
+                </label>
+                <input
+                  type="url"
+                  value={googleSheetSyncUrl}
+                  onChange={(e) => setGoogleSheetSyncUrl(e.target.value)}
+                  placeholder="https://script.google.com/macros/s/.../exec"
+                  className="w-full bg-zinc-50 border border-zinc-200 focus:border-zinc-900 focus:bg-white rounded-xl px-3 py-2.5 text-xs focus:outline-none font-mono"
+                />
+              </div>
+
+              {/* Actions & Connection Test */}
+              <div className="flex gap-2.5">
+                <button
+                  type="button"
+                  onClick={testSyncConnection}
+                  disabled={isTestingSync || !googleSheetSyncUrl}
+                  className="flex-1 py-2 px-3 bg-zinc-900 hover:bg-zinc-800 text-white font-sans font-bold text-xs rounded-xl transition flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                >
+                  <RefreshCw size={12} className={isTestingSync ? 'animate-spin' : ''} />
+                  {isTestingSync 
+                    ? (language === 'ca' ? "Provant..." : "Probando...") 
+                    : (language === 'ca' ? "Provar Connexió" : "Probar Conexión")}
+                </button>
+              </div>
+
+              {/* Connection Test Response */}
+              {testResult && (
+                <div className={`p-3 rounded-2xl text-xs border ${
+                  testResult.success 
+                    ? 'bg-emerald-50 text-emerald-800 border-emerald-200 shadow-sm animate-fadeIn' 
+                    : 'bg-rose-50 text-rose-800 border-rose-200 animate-fadeIn'
+                }`}>
+                  <p className="font-bold mb-0.5">{testResult.success ? '✓ Sincronitzat' : '✗ El daltabaix'}</p>
+                  <p className="text-[10px] leading-relaxed mb-0">{testResult.message}</p>
+                </div>
+              )}
+
+              {/* Collapsed Instruction Drawer */}
+              <div className="border border-zinc-200 rounded-2xl overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setShowSyncInstructions(!showSyncInstructions)}
+                  className="w-full bg-zinc-50 hover:bg-zinc-100/80 px-4 py-3 text-left flex justify-between items-center transition cursor-pointer"
+                >
+                  <span className="font-sans font-bold text-xs text-zinc-700 flex items-center gap-1.5 mb-0">
+                    <span>💡</span> {language === 'ca' ? "Com configurar-ho?" : "¿Cómo configurarlo?"}
+                  </span>
+                  <span className="text-[10px] text-zinc-400 uppercase font-mono tracking-widest font-bold">
+                    {showSyncInstructions ? (language === 'ca' ? "Amagar" : "Ocultar") : (language === 'ca' ? "Veure" : "Ver")}
+                  </span>
+                </button>
+
+                {showSyncInstructions && (
+                  <div className="p-4 bg-white border-t border-zinc-100 text-[11px] text-zinc-650 leading-relaxed space-y-3.5 animate-fadeIn">
+                    <p>
+                      {language === 'ca' 
+                        ? "Podeu sincronitzar totes les inscripcions en temps real en un full de Google Sheets de Google Drive de manera immediata seguint aquests passos ultra senzills:"
+                        : "Puedes sincronizar todas las inscripciones en tiempo real en una hoja de Google Sheets de Google Drive de manera inmediata siguiendo estos pasos ultra sencillos:"}
+                    </p>
+                    <ol className="list-decimal list-inside space-y-1.5 pl-1">
+                      <li>
+                        {language === 'ca' 
+                          ? "Creeu un full nou de Google Sheets al vostre Google Drive." 
+                          : "Crea una hoja nueva de Google Sheets en tu Google Drive."}
+                      </li>
+                      <li>
+                        {language === 'ca' 
+                          ? "Aneu al menú superior i feu clic a Extensions > Apps Script." 
+                          : "Ve al menú del superior y haz clic en Extensiones > Apps Script."}
+                      </li>
+                      <li>
+                        {language === 'ca' 
+                          ? "Esborreu el codi existent i pegueu-hi exactament el codi de sota:" 
+                          : "Borra el código existente y pega exactamente el código de abajo:"}
+                      </li>
+                    </ol>
+
+                    {/* Code copy block */}
+                    <div className="relative">
+                      <pre className="p-3 bg-zinc-950 text-emerald-400 rounded-xl overflow-x-auto text-[9px] font-mono leading-normal max-h-48 shadow-inner select-all">
+{`function doPost(e) {
+  try {
+    var jsonString = e.postData.contents;
+    var payload = JSON.parse(jsonString);
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+
+    // 1. RAW INSCRIPICTIONS TAB
+    var sheetInsc = ss.getSheetByName("Inscripcions") || ss.insertSheet("Inscripcions");
+    sheetInsc.clear();
+    var headers = [
+      "Codis Seguiment", "Categoria", "C1 Nom", "C1 Cognoms", "C1 Email", "C1 Telèfon", "C1 Talla", "C1 Tipus Uniforme", "C1 Menor", "C1 Nom Tutor", "C1 Cognoms Tutor", "C1 DNI Tutor", "C1 Telèfon Tutor",
+      "C2 Nom", "C2 Cognoms", "C2 Email", "C2 Telèfon", "C2 Talla", "C2 Tipus Uniforme", "C2 Menor", "C2 Nom Tutor", "C2 Cognoms Tutor", "C2 DNI Tutor", "C2 Telèfon Tutor",
+      "Preu Total (€)", "Domàs Balcó", "Mocadors Extra", "Estat Pagament", "Mètode Pagament", "Validació DNI", "Entrega Material", "Llista Espera", "Data Creació"
+    ];
+    sheetInsc.appendRow(headers);
+    sheetInsc.getRange(1, 1, 1, headers.length).setFontWeight("bold").setBackground("#f4f4f5");
+
+    if (payload.data && payload.data.length > 0) {
+      var rowsToWrite = [];
+      for (var i = 0; i < payload.data.length; i++) {
+        var r = payload.data[i];
+        rowsToWrite.push([
+          r.codiSeguiment, r.categoria, r.c1Nom, r.c1Cognoms, r.c1Email, r.c1Telefon, r.c1Talla, r.c1UniformeTipus, r.c1EsMenor, r.c1TutorNom, r.c1TutorCognoms, r.c1TutorDni, r.c1TutorTelefon,
+          r.c2Nom, r.c2Cognoms, r.c2Email, r.c2Telefon, r.c2Talla, r.c2UniformeTipus, r.c2EsMenor, r.c2TutorNom, r.c2TutorCognoms, r.c2TutorDni, r.c2TutorTelefon,
+          r.preuTotal, r.domasBalco, r.mocadorsExtra, r.estatPagament, r.metodePagament, r.validacioDni, r.entregaMaterial, r.llistaEspera, r.dataCreacio
+        ]);
+      }
+      sheetInsc.getRange(2, 1, rowsToWrite.length, headers.length).setValues(rowsToWrite);
+    }
+    for (var col = 1; col <= headers.length; col++) {
+      sheetInsc.autoResizeColumn(col);
+    }
+
+    // 2. DAILY CLOSURE TAB ("Cierre del Dia")
+    var sheetSumm = ss.getSheetByName("Cierre del Dia") || ss.insertSheet("Cierre del Dia");
+    sheetSumm.clear();
+    var sumHeaders = [
+      "Data Inscripció", "Parelles Registrades", "A la Llista d'Espera", "Recaudació Total (€)", "Efectiu (€)", "Bizum (€)", "Inscripcions Adults", "Inscripcions Juvenils", "Total Menors d'Edat", "Domassos Balcó", "Mocadors Extres"
+    ];
+    sheetSumm.appendRow(sumHeaders);
+    sheetSumm.getRange(1, 1, 1, sumHeaders.length).setFontWeight("bold").setBackground("#dcfce7");
+
+    if (payload.summaries && payload.summaries.length > 0) {
+      var sumRows = [];
+      for (var j = 0; j < payload.summaries.length; j++) {
+        var s = payload.summaries[j];
+        sumRows.push([
+          s.dateStr,
+          s.totalRegistrations,
+          s.waitingListCount,
+          s.totalRevenue,
+          s.cashRevenue,
+          s.bizumRevenue,
+          s.adultsCount,
+          s.juvenilsCount,
+          s.minorsCount,
+          s.domasCount,
+          s.extraMocadorsCount
+        ]);
+      }
+      sheetSumm.getRange(2, 1, sumRows.length, sumHeaders.length).setValues(sumRows);
+    }
+    for (var colS = 1; colS <= sumHeaders.length; colS++) {
+      sheetSumm.autoResizeColumn(colS);
+    }
+
+    return ContentService.createTextOutput(JSON.stringify({ success: true }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (error) {
+    return ContentService.createTextOutput(JSON.stringify({ success: false, error: error.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}`}
+                      </pre>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const code = `function doPost(e) {
+  try {
+    var jsonString = e.postData.contents;
+    var payload = JSON.parse(jsonString);
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+
+    // 1. RAW INSCRIPICTIONS TAB
+    var sheetInsc = ss.getSheetByName("Inscripcions") || ss.insertSheet("Inscripcions");
+    sheetInsc.clear();
+    var headers = [
+      "Codis Seguiment", "Categoria", "C1 Nom", "C1 Cognoms", "C1 Email", "C1 Telèfon", "C1 Talla", "C1 Tipus Uniforme", "C1 Menor", "C1 Nom Tutor", "C1 Cognoms Tutor", "C1 DNI Tutor", "C1 Telèfon Tutor",
+      "C2 Nom", "C2 Cognoms", "C2 Email", "C2 Telèfon", "C2 Talla", "C2 Tipus Uniforme", "C2 Menor", "C2 Nom Tutor", "C2 Cognoms Tutor", "C2 DNI Tutor", "C2 Telèfon Tutor",
+      "Preu Total (€)", "Domàs Balcó", "Mocadors Extra", "Estat Pagament", "Mètode Pagament", "Validació DNI", "Entrega Material", "Llista Espera", "Data Creació"
+    ];
+    sheetInsc.appendRow(headers);
+    sheetInsc.getRange(1, 1, 1, headers.length).setFontWeight("bold").setBackground("#f4f4f5");
+
+    if (payload.data && payload.data.length > 0) {
+      var rowsToWrite = [];
+      for (var i = 0; i < payload.data.length; i++) {
+        var r = payload.data[i];
+        rowsToWrite.push([
+          r.codiSeguiment, r.categoria, r.c1Nom, r.c1Cognoms, r.c1Email, r.c1Telefon, r.c1Talla, r.c1UniformeTipus, r.c1EsMenor, r.c1TutorNom, r.c1TutorCognoms, r.c1TutorDni, r.c1TutorTelefon,
+          r.c2Nom, r.c2Cognoms, r.c2Email, r.c2Telefon, r.c2Talla, r.c2UniformeTipus, r.c2EsMenor, r.c2TutorNom, r.c2TutorCognoms, r.c2TutorDni, r.c2TutorTelefon,
+          r.preuTotal, r.domasBalco, r.mocadorsExtra, r.estatPagament, r.metodePagament, r.validacioDni, r.entregaMaterial, r.llistaEspera, r.dataCreacio
+        ]);
+      }
+      sheetInsc.getRange(2, 1, rowsToWrite.length, headers.length).setValues(rowsToWrite);
+    }
+    for (var col = 1; col <= headers.length; col++) {
+      sheetInsc.autoResizeColumn(col);
+    }
+
+    // 2. DAILY CLOSURE TAB ("Cierre del Dia")
+    var sheetSumm = ss.getSheetByName("Cierre del Dia") || ss.insertSheet("Cierre del Dia");
+    sheetSumm.clear();
+    var sumHeaders = [
+      "Data Inscripció", "Parelles Registrades", "A la Llista d'Espera", "Recaudació Total (€)", "Efectiu (€)", "Bizum (€)", "Inscripcions Adults", "Inscripcions Juvenils", "Total Menors d'Edat", "Domassos Balcó", "Mocadors Extres"
+    ];
+    sheetSumm.appendRow(sumHeaders);
+    sheetSumm.getRange(1, 1, 1, sumHeaders.length).setFontWeight("bold").setBackground("#dcfce7");
+
+    if (payload.summaries && payload.summaries.length > 0) {
+      var sumRows = [];
+      for (var j = 0; j < payload.summaries.length; j++) {
+        var s = payload.summaries[j];
+        sumRows.push([
+          s.dateStr,
+          s.totalRegistrations,
+          s.waitingListCount,
+          s.totalRevenue,
+          s.cashRevenue,
+          s.bizumRevenue,
+          s.adultsCount,
+          s.juvenilsCount,
+          s.minorsCount,
+          s.domasCount,
+          s.extraMocadorsCount
+        ]);
+      }
+      sheetSumm.getRange(2, 1, sumRows.length, sumHeaders.length).setValues(sumRows);
+    }
+    for (var colS = 1; colS <= sumHeaders.length; colS++) {
+      sheetSumm.autoResizeColumn(colS);
+    }
+
+    return ContentService.createTextOutput(JSON.stringify({ success: true }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (error) {
+    return ContentService.createTextOutput(JSON.stringify({ success: false, error: error.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}`;
+                          navigator.clipboard.writeText(code);
+                          alert(language === 'ca' ? "Codi d'Apps Script copiat!" : "¡Código de Apps Script copiado!");
+                        }}
+                        className="absolute right-2.5 top-2.5 bg-white/15 hover:bg-white/20 active:scale-95 text-white py-1 px-2 rounded-lg text-[9px] uppercase font-sans font-black transition cursor-pointer select-none"
+                      >
+                        {language === 'ca' ? "Copiar" : "Copiar"}
+                      </button>
+                    </div>
+
+                    <ol className="list-decimal list-inside space-y-1.5 pl-1 font-sans" start={4}>
+                      <li>
+                        {language === 'ca' 
+                          ? "Feu clic a 'Deploia' (a dalt a la dreta) i trieu 'Nova implementació' (New deployment)." 
+                          : "Haz clic en 'Implementar' (arriba a la derecha) y elige 'Nueva implementación' (New deployment)."}
+                      </li>
+                      <li>
+                        {language === 'ca' 
+                          ? "Trieu el tipus canònic 'Aplicació web' (Web App)." 
+                          : "Selecciona el tipo canónico 'Aplicación web' (Web App)."}
+                      </li>
+                      <li>
+                        {language === 'ca' 
+                          ? "Configura: Execute as: 'Me' (El vostre compte de Google) i Who has access: 'Anyone' (Tothom, per donar permisos de sincronia des de la web)." 
+                          : "Configura: Execute as: 'Me' (Tu cuenta de Google) y Who has access: 'Anyone' (Cualquiera, para permitir sincronización desde la web)."}
+                      </li>
+                      <li>
+                        {language === 'ca' 
+                          ? "Autoritzeu l'accés si s'ho demana i copieu l'URL oficial resultant." 
+                          : "Autoriza el acceso si lo solicita y copia la URL oficial resultante."}
+                      </li>
+                      <li>
+                        {language === 'ca' 
+                          ? "Pegueu l'URL copiat dalt i activeu la Sincronització." 
+                          : "Pega la URL copiada arriba y activa la Sincronización."}
+                      </li>
+                    </ol>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
           <div className="bg-white rounded-3xl border border-zinc-200 p-6 shadow-sm space-y-6">
             <h3 className="font-sans font-black text-sm text-zinc-900 pb-3 border-b border-zinc-100 uppercase tracking-wider flex items-center gap-2">
               <Coins size={16} className="text-fuchsia-500" /> {titolSeccioTarifes}
@@ -659,6 +1323,62 @@ export default function AdminConfig({ config, onBack, onSave, noticies, onSaveNo
                   />
                 </div>
               </div>
+
+              {/* Minor legal texts customization */}
+              <div className="pt-4 border-t border-zinc-100 space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="block text-[9px] text-zinc-400 uppercase font-mono tracking-wider font-bold">Autorització de Menors</span>
+                  <label className="flex items-center gap-1 cursor-pointer text-[9px] text-zinc-400 select-none">
+                    <input 
+                      type="checkbox"
+                      checked={autoTranslate && !isQuotaExceeded}
+                      disabled={isQuotaExceeded}
+                      onChange={(e) => setAutoTranslate(e.target.checked)}
+                      className="rounded border-zinc-200 bg-white text-[#ff0090] focus:ring-0 accent-[#ff0090] w-2.5 h-2.5 cursor-pointer disabled:opacity-50"
+                    />
+                    <span className={autoTranslate && !isQuotaExceeded ? "text-[#ff0090] font-bold" : ""}>
+                      {isQuotaExceeded 
+                        ? (language === 'ca' ? "Sincro Límits (Text Directe) ⚠️" : "Sincro Límites (Texto Directo) ⚠️")
+                        : "IA Sincro ✨"}
+                    </span>
+                  </label>
+                </div>
+                
+                <div className="space-y-1">
+                  <div className="flex justify-between items-center">
+                    <label className="block text-xs font-bold text-zinc-700">
+                      {language === 'ca' ? "Text de l'Autorització *" : "Texto de la Autorización *"}
+                    </label>
+                    {translatingFields['minorLegal'] && <span className="text-[9px] text-[#ff0090] font-black animate-pulse">✨ Sincronitzant IA...</span>}
+                  </div>
+                  <textarea
+                    value={language === 'ca' ? textLegalAutoritzacioMenors : textLegalAutoritzacioMenorsES}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (language === 'ca') {
+                        setTextLegalAutoritzacioMenors(val);
+                      } else {
+                        setTextLegalAutoritzacioMenorsES(val);
+                      }
+                    }}
+                    onBlur={async (e) => {
+                      if (!autoTranslate) return;
+                      const val = e.target.value;
+                      const { syncDetectAndTranslate } = await import('../translateService');
+                      syncDetectAndTranslate(
+                        val,
+                        (translated) => setTextLegalAutoritzacioMenors(translated),
+                        (translated) => setTextLegalAutoritzacioMenorsES(translated),
+                        (loading) => setTranslatingFields(prev => ({ ...prev, minorLegal: loading }))
+                      );
+                    }}
+                    rows={4}
+                    className="w-full bg-zinc-50 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-4 py-2 text-xs focus:outline-none transition-all font-sans leading-relaxed shadow-inner"
+                    placeholder={language === 'ca' ? "Text legal de l'autorització..." : "Texto legal de la autorización..."}
+                    id="input-config-minor-legal-unified"
+                  />
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -666,9 +1386,11 @@ export default function AdminConfig({ config, onBack, onSave, noticies, onSaveNo
         {/* Right columns: Questionnaire form builder */}
         <div className="lg:col-span-2 space-y-6">
           <div className="bg-white rounded-3xl border border-zinc-200 p-6 shadow-sm space-y-6">
-            <h3 className="font-sans font-black text-sm text-zinc-900 pb-3 border-b border-zinc-100 uppercase tracking-wider flex items-center gap-2">
-              <LayoutList size={16} className="text-fuchsia-500" /> {titolFormulariDinamic}
-            </h3>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between pb-3 border-b border-zinc-100 gap-3">
+              <h3 className="font-sans font-black text-sm text-zinc-900 uppercase tracking-wider flex items-center gap-2">
+                <LayoutList size={16} className="text-fuchsia-500" /> {titolFormulariDinamic}
+              </h3>
+            </div>
 
             {/* Editable Card Title */}
             <div className="space-y-1">
@@ -804,6 +1526,133 @@ export default function AdminConfig({ config, onBack, onSave, noticies, onSaveNo
                   Afegir Pregunta
                 </button>
               </div>
+            </div>
+          </div>
+
+          {/* SEC_UNIFORMS: Gestor de Línies de Talles i Equipament Personalitzat */}
+          <div className="bg-white rounded-3xl border border-zinc-200 p-6 shadow-sm space-y-6" id="uniform-lines-config-card">
+            <div className="border-b border-zinc-100 pb-3 flex justify-between items-center flex-wrap gap-2">
+              <h3 className="font-sans font-black text-sm text-zinc-900 uppercase tracking-wider flex items-center gap-2">
+                <Shirt size={16} className="text-[#ff0090]" /> {language === 'ca' ? "Gestió de Línies de Talles i Productes" : "Gestor de Líneas de Tallas y Productos"}
+              </h3>
+              <span className="text-[10px] bg-fuchsia-50 text-fuchsia-600 border border-fuchsia-200 rounded-full px-2 py-0.5 font-bold uppercase font-mono">
+                {language === 'ca' ? "Configuració lliure" : "Configuración libre"}
+              </span>
+            </div>
+
+            <p className="text-zinc-500 text-xs">
+              {language === 'ca' 
+                ? "Configureu les diferents línies de material, talles o marxandatge disponibles per als participants de la parella. Cada línia pot rebre opcions de selecció i la possibilitat d'afegir-hi quantitats."
+                : "Configure las diferentes líneas de material, tallas o merchandising disponibles para los participantes de la pareja. Cada línea puede tener opciones de selección y la posibilidad de añadir cantidades."}
+            </p>
+
+            <div className="space-y-4">
+              {liniisUniforme.map((linia, index) => (
+                <div key={linia.id} className="p-4 bg-zinc-50 border border-zinc-200 rounded-2xl space-y-3 relative group">
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] bg-zinc-200 text-zinc-700 font-bold px-2 py-0.5 rounded font-mono">
+                      {language === 'ca' ? `LÍNIA ${index + 1}` : `LÍNEA ${index + 1}`}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveLiniaUniforme(linia.id)}
+                      className="text-zinc-400 hover:text-red-500 transition-colors p-1"
+                      title={language === 'ca' ? "Eliminar línia" : "Eliminar línea"}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+
+                  <div className="space-y-1">
+                    <div className="flex justify-between items-center mb-1">
+                      <label className="block text-[10px] text-zinc-500 uppercase font-mono font-bold">
+                        {language === 'ca' ? "Nom de la línia *" : "Nombre de la línea *"}
+                      </label>
+                      {translatingFields[`line-nom-${linia.id}`] && <span className="text-[8px] text-[#ff0090] font-black animate-pulse">✨ Sincronitzant IA...</span>}
+                    </div>
+                    <input 
+                      type="text"
+                      value={language === 'ca' ? linia.nom : linia.nomES}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (language === 'ca') {
+                          handleUpdateLiniaUniforme(linia.id, { nom: val });
+                        } else {
+                          handleUpdateLiniaUniforme(linia.id, { nomES: val });
+                        }
+                      }}
+                      onBlur={async () => {
+                        const val = language === 'ca' ? linia.nom : linia.nomES;
+                        if (!autoTranslate || !val.trim()) return;
+                        const targetKey = `line-nom-${linia.id}`;
+                        setTranslatingFields(prev => ({ ...prev, [targetKey]: true }));
+                        try {
+                          const { syncDetectAndTranslate } = await import('../translateService');
+                          syncDetectAndTranslate(
+                            val,
+                            (translated) => handleUpdateLiniaUniforme(linia.id, { nom: translated }),
+                            (translated) => handleUpdateLiniaUniforme(linia.id, { nomES: translated }),
+                            () => {}
+                          );
+                        } catch (e) {
+                          console.error(e);
+                        } finally {
+                          setTranslatingFields(prev => ({ ...prev, [targetKey]: false }));
+                        }
+                      }}
+                      className="w-full bg-white border border-zinc-250 focus:border-[#ff0090] rounded-xl px-3 py-2 text-xs font-bold focus:outline-none"
+                      placeholder={language === 'ca' ? "Ex: Talla de Samarreta" : "Ex: Talla de Camiseta"}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] text-zinc-500 uppercase font-mono font-bold mb-1">
+                      {language === 'ca' ? "Opcions de selecció (Separades per comes) *" : "Opciones de selección (Separadas por comas) *"}
+                    </label>
+                    <input 
+                      type="text"
+                      value={linia.opcions.join(', ')}
+                      onChange={(e) => {
+                        const vals = e.target.value.split(',').map(s => s.trim());
+                        handleUpdateLiniaUniforme(linia.id, { opcions: vals });
+                      }}
+                      className="w-full bg-white border border-zinc-250 focus:border-[#ff0090] rounded-xl px-3 py-2 text-xs font-mono focus:outline-none"
+                      placeholder="XS, S, M, L, XL, XXL..."
+                    />
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-1">
+                    <input 
+                      type="checkbox"
+                      id={`check-qty-${linia.id}`}
+                      checked={!!linia.requeixQuantitat}
+                      onChange={(e) => handleUpdateLiniaUniforme(linia.id, { requeixQuantitat: e.target.checked })}
+                      className="rounded text-fuchsia-600 focus:ring-fuchsia-500 h-4 w-4 border-zinc-300 cursor-pointer"
+                    />
+                    <label htmlFor={`check-qty-${linia.id}`} className="text-zinc-700 text-xs font-bold select-none cursor-pointer">
+                      {language === 'ca' 
+                        ? "Permet escollir quantitat de marxandatge/material" 
+                        : "Permitir elegir cantidad de merchandising/material"}
+                    </label>
+                  </div>
+                </div>
+              ))}
+
+              {liniisUniforme.length === 0 && (
+                <div className="text-center py-6 border-2 border-dashed border-zinc-200 rounded-2xl bg-zinc-50/50">
+                  <p className="text-xs text-zinc-400 italic">
+                    {language === 'ca' ? "No hi ha cap línia de talles/productes configurada." : "No hay ninguna línea de tallas/productos configurada."}
+                  </p>
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={handleAddLiniaUniforme}
+                className="w-full py-3 border-2 border-dashed border-zinc-200 hover:border-[#ff0090] text-zinc-500 hover:text-[#ff0090] text-xs font-bold rounded-2xl transition flex items-center justify-center gap-1.5 cursor-pointer bg-white"
+              >
+                <Plus size={14} /> {language === 'ca' ? "Afegir línia de productes/talles" : "Añadir línea de productos/tallas"}
+              </button>
             </div>
           </div>
 
@@ -1022,6 +1871,47 @@ export default function AdminConfig({ config, onBack, onSave, noticies, onSaveNo
           </div>
         </div>
       </div>
+
+      {showResetModal && (
+        <div className="fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-4 backdrop-blur-md font-sans">
+          <div className="bg-white rounded-3xl border border-zinc-200 shadow-2xl max-w-md w-full p-6 space-y-6 text-zinc-900 animate-in fade-in zoom-in-95 duration-200">
+            <div className="text-center space-y-3">
+              <div className="w-12 h-12 bg-red-50 text-red-600 rounded-full flex items-center justify-center mx-auto text-xl">
+                ⚠️
+              </div>
+              <h3 className="font-sans font-black text-lg text-zinc-900 uppercase tracking-wide">
+                {language === 'ca' ? "Restablir de fàbrica?" : "¿Restablecer de fábrica?"}
+              </h3>
+              <p className="text-xs text-zinc-500 leading-relaxed font-semibold">
+                {language === 'ca' 
+                  ? "Esteu segurs que voleu restablir TOTS els preus, condicions, preguntes del qüestionari i personalització de la web a l'estat original? Això esborrarà qualsevol configuració feta i reiniciarà el servei." 
+                  : "¿Está seguro de que desea restablecer TODOS los precios, condiciones, preguntas del cuestionario y personalización del sitio a su estado original? Esto borrará cualquier configuración realizada e iniciará de nuevo."}
+              </p>
+            </div>
+            <div className="flex gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowResetModal(false)}
+                className="flex-1 py-2.5 px-4 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold text-xs rounded-xl transition cursor-pointer"
+              >
+                {language === 'ca' ? "Cancel·lar" : "Cancelar"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowResetModal(false);
+                  if (onResetConfig) {
+                    onResetConfig();
+                  }
+                }}
+                className="flex-1 py-2.5 px-4 bg-red-600 text-white hover:bg-red-700 font-bold text-xs rounded-xl transition shadow cursor-pointer"
+              >
+                {language === 'ca' ? "Sí, restablir-ho tot" : "Sí, restablecer todo"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -19,6 +19,8 @@ import {
   Info
 } from 'lucide-react';
 import { NoticiaXarxes } from '../types';
+import { useLanguage } from '../LanguageContext';
+import TranslatedText from './TranslatedText';
 
 interface NotificationFeedProps {
   onAddLog?: (txt: string) => void;
@@ -37,12 +39,13 @@ function getYoutubeEmbedUrl(url: string = '') {
 }
 
 export default function NotificationFeed({ onAddLog, noticies = COMPARTIDES_XARXES }: NotificationFeedProps) {
+  const { language, t } = useLanguage();
   return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 shadow-xl text-white">
+    <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 shadow-xl text-white font-sans">
       <div className="flex items-center justify-between mb-6 pb-4 border-b border-zinc-800">
         <div>
-          <h3 className="font-sans font-bold text-lg text-fuchsia-500 tracking-tight">Canal d'Avisos i Mitjans</h3>
-          <p className="text-xs text-zinc-400 font-mono font-bold tracking-wider">Comunicacions Oficials El Tast</p>
+          <h3 className="font-sans font-bold text-lg text-fuchsia-500 tracking-tight">{t('feed_title')}</h3>
+          <p className="text-xs text-zinc-400 font-mono font-bold tracking-wider">{t('feed_subtitle')}</p>
         </div>
         <span className="flex h-2.5 w-2.5 relative">
           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#ff0090] opacity-75"></span>
@@ -87,7 +90,7 @@ export default function NotificationFeed({ onAddLog, noticies = COMPARTIDES_XARX
                     </div>
                   ) : post.tipus === 'nota' ? (
                     <div className="p-1.5 rounded-lg bg-blue-600/20 text-blue-400 border border-blue-500/20">
-                      <FileText size={13} className="text-blue-500" />
+                      <FileText size={13} className="text-blue-505" />
                     </div>
                   ) : post.xarxa === 'instagram' ? (
                     <div className="p-1.5 rounded-lg bg-gradient-to-tr from-yellow-500 via-red-500 to-purple-600">
@@ -105,34 +108,50 @@ export default function NotificationFeed({ onAddLog, noticies = COMPARTIDES_XARX
 
                   <div className="flex flex-col">
                     <span className="font-sans font-bold text-xs tracking-tight text-white flex items-center gap-1">
-                      {post.usuari || 'Anunci Oficial'}
+                      {language === 'ca'
+                        ? (post.usuari === 'Associació Cultural El Tast' ? 'Associació Cultural El Tast' : post.usuari || 'Anunci Oficial')
+                        : (post.usuari === 'Associació Cultural El Tast' ? 'Asociación Cultural El Tast' : post.usuari || 'Anuncio Oficial')}
                       {isImportant && (
-                        <span className="px-1.5 py-0.5 rounded-full text-[8px] bg-fuchsia-500 text-white font-extrabold uppercase animate-bounce">
-                          URGENT
+                        <span className="px-1.5 py-0.5 rounded-full text-[8.5px] bg-fuchsia-500 text-white font-extrabold uppercase animate-bounce">
+                          {t('urgent')}
                         </span>
                       )}
                     </span>
-                    <span className="text-[9px] text-zinc-500 font-mono -mt-0.5">{post.dataPublicacio}</span>
+                    <span className="text-[9px] text-zinc-500 font-mono -mt-0.5">
+                      {post.dataPublicacio === "Just ara"
+                        ? (language === 'ca' ? "Just ara" : "Justo ahora")
+                        : post.dataPublicacio}
+                    </span>
                   </div>
                 </div>
 
                 {/* Sub-badge indicating customized type */}
                 <span className="text-[9px] px-2 py-0.5 rounded-md bg-zinc-900 border border-zinc-800 text-zinc-400 font-mono font-bold tracking-tight uppercase">
-                  {post.tipus === 'alerta' ? '🚨 Alerta' : post.tipus === 'video' ? '🎬 Vídeo' : post.tipus === 'nota' ? '📝 Nota' : '📢 Post'}
+                  {post.tipus === 'alerta' ? '🚨' : post.tipus === 'video' ? '🎬' : post.tipus === 'nota' ? '📝' : '📢'}{' '}
+                  {post.tipus === 'alerta' 
+                    ? (language === 'ca' ? 'Alerta' : 'Alerta') 
+                    : post.tipus === 'video' 
+                      ? (language === 'ca' ? 'Vídeo' : 'Video') 
+                      : post.tipus === 'nota' 
+                        ? (language === 'ca' ? 'Nota' : 'Nota') 
+                        : 'Post'}
                 </span>
               </div>
 
               {/* Title if defined */}
               {post.titol && (
                 <h4 className="font-sans font-black text-xs text-white uppercase tracking-tight mb-1.5 leading-tight flex items-center gap-1">
-                  <Sparkles size={11} className="text-[#ff0090] shrink-0" /> {post.titol}
+                  <Sparkles size={11} className="text-[#ff0090] shrink-0" />
+                  <TranslatedText text={post.titol} />
                 </h4>
               )}
 
               {/* Body Text / Description */}
-              <p className={`text-xs leading-relaxed mb-3 font-sans ${isImportant ? 'text-zinc-200 font-medium' : 'text-zinc-350'}`}>
-                {post.text}
-              </p>
+              <TranslatedText 
+                text={post.text} 
+                as="p" 
+                className={`text-xs leading-relaxed mb-3 font-sans ${isImportant ? 'text-zinc-200 font-medium' : 'text-zinc-350'}`} 
+              />
 
               {/* Custom Video Block Embed */}
               {post.tipus === 'video' && post.videoUrl && (
@@ -157,7 +176,7 @@ export default function NotificationFeed({ onAddLog, noticies = COMPARTIDES_XARX
                     <div className="w-full h-full flex flex-col items-center justify-center p-4 text-center text-zinc-400 text-[10px] space-y-2">
                       <Video size={24} className="text-amber-500 animate-pulse" />
                       <div>
-                        <span className="block font-bold">Enllaç de vídeo extern</span>
+                        <span className="block font-bold">{t('external_video')}</span>
                         <a 
                           href={post.videoUrl} 
                           target="_blank" 
@@ -194,7 +213,7 @@ export default function NotificationFeed({ onAddLog, noticies = COMPARTIDES_XARX
                     <Heart size={11} className="text-red-500 fill-red-500" /> {post.likes ?? 12}
                   </button>
                   <span className="flex items-center gap-1">
-                    <Info size={11} className="text-zinc-600" /> Oficial i verificat
+                    <Info size={11} className="text-zinc-600" /> {t('verified')}
                   </span>
                 </div>
                 {post.enllacUrl && (
@@ -204,7 +223,7 @@ export default function NotificationFeed({ onAddLog, noticies = COMPARTIDES_XARX
                     rel="noopener noreferrer" 
                     className="flex items-center gap-0.5 text-[#ff0090] hover:underline font-bold"
                   >
-                    Enllaç extern <ExternalLink size={10} />
+                    {t('external_link')} <ExternalLink size={10} />
                   </a>
                 )}
               </div>
@@ -214,14 +233,14 @@ export default function NotificationFeed({ onAddLog, noticies = COMPARTIDES_XARX
         {noticies.length === 0 && (
           <div className="text-center py-8 text-zinc-500 space-y-2">
             <Info size={20} className="mx-auto text-zinc-600" />
-            <p className="text-xs italic">No hi ha avisos ni recursos de mitjans en aquest moment.</p>
+            <p className="text-xs italic">{t('no_news')}</p>
           </div>
         )}
       </div>
 
       <div className="mt-4 pt-3 border-t border-zinc-800 text-center">
         <span className="text-[9px] text-zinc-600 font-mono uppercase tracking-wider">
-          Canal d'atenció integral i actualitat certificada
+          {t('certified_news')}
         </span>
       </div>
     </div>
