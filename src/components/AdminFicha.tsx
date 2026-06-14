@@ -609,77 +609,141 @@ export default function AdminFicha({ registration, config, onBack, onSave }: Adm
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* DNI Comparser 1 */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-zinc-800 font-bold font-mono">DNI Comparser 1 ({registration.c1Nom})</span>
-                  <div className="flex gap-1">
-                    <button 
-                      onClick={rotateImage1}
-                      className="p-1 px-1.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-600 rounded-md text-[10px] inline-flex items-center gap-1 transition"
-                      title={language === 'ca' ? "Rotar 90 graus" : "Rotar 90 grados"}
-                    >
-                      <RotateCw size={12} /> {language === 'ca' ? "Rotar" : "Rotar"}
-                    </button>
-                    <button 
-                      onClick={() => setActiveZoomUrl(registration.c1DniUrl)}
-                      className="p-1 px-1.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-600 rounded-md text-[10px] inline-flex items-center gap-1 transition"
-                      title={language === 'ca' ? "Ampliar imatge" : "Ampliar imagen"}
-                    >
-                      <ZoomIn size={12} /> {language === 'ca' ? "Lupa" : "Lupa"}
-                    </button>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-zinc-800 font-bold font-mono">DNI Comparser 1 ({registration.c1Nom}) - FRONT</span>
+                    <div className="flex gap-1">
+                      <button 
+                        onClick={rotateImage1}
+                        className="p-1 px-1.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-600 rounded-md text-[10px] inline-flex items-center gap-1 transition"
+                        title={language === 'ca' ? "Rotar 90 graus" : "Rotar 90 grados"}
+                      >
+                        <RotateCw size={12} /> {language === 'ca' ? "Rotar" : "Rotar"}
+                      </button>
+                      <button 
+                        onClick={() => setActiveZoomUrl(registration.c1DniUrl)}
+                        className="p-1 px-1.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-600 rounded-md text-[10px] inline-flex items-center gap-1 transition"
+                        title={language === 'ca' ? "Ampliar imatge" : "Ampliar imagen"}
+                      >
+                        <ZoomIn size={12} /> {language === 'ca' ? "Lupa" : "Lupa"}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div 
+                    className="aspect-[1.58] bg-zinc-150 rounded-2xl overflow-hidden border border-zinc-200 relative cursor-zoom-in flex items-center justify-center bg-zinc-900"
+                    onClick={() => setActiveZoomUrl(registration.c1DniUrl)}
+                  >
+                    <img 
+                      src={registration.c1DniUrl} 
+                      alt="DNI Front Comparser 1" 
+                      style={{ transform: `rotate(${rotacio1}deg)` }}
+                      className="object-contain w-full h-full transition-transform duration-300"
+                      referrerPolicy="no-referrer"
+                    />
+                    <div className="absolute inset-0 bg-black/5 hover:bg-black/25 transition-colors" />
                   </div>
                 </div>
 
-                <div 
-                  className="aspect-[1.58] bg-zinc-150 rounded-2xl overflow-hidden border border-zinc-200 relative cursor-zoom-in flex items-center justify-center bg-zinc-900"
-                  onClick={() => setActiveZoomUrl(registration.c1DniUrl)}
-                >
-                  <img 
-                    src={registration.c1DniUrl} 
-                    alt="DNI Comparser 1" 
-                    style={{ transform: `rotate(${rotacio1}deg)` }}
-                    className="object-contain w-full h-full transition-transform duration-300"
-                    referrerPolicy="no-referrer"
-                  />
-                  <div className="absolute inset-0 bg-black/5 hover:bg-black/25 transition-colors" />
-                </div>
+                {registration.dni_reverso_1 && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-zinc-800 font-bold font-mono">DNI Comparser 1 ({registration.c1Nom}) - REVERS</span>
+                      <button 
+                        onClick={() => setActiveZoomUrl(registration.dni_reverso_1 || '')}
+                        className="p-1 px-1.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-600 rounded-md text-[10px] inline-flex items-center gap-1 transition"
+                        title={language === 'ca' ? "Ampliar imatge" : "Ampliar imagen"}
+                      >
+                        <ZoomIn size={12} /> {language === 'ca' ? "Lupa" : "Lupa"}
+                      </button>
+                    </div>
+
+                    <div 
+                      className="aspect-[1.58] bg-zinc-150 rounded-2xl overflow-hidden border border-zinc-200 relative cursor-zoom-in flex items-center justify-center bg-zinc-900"
+                      onClick={() => setActiveZoomUrl(registration.dni_reverso_1 || '')}
+                    >
+                      <img 
+                        src={registration.dni_reverso_1} 
+                        alt="DNI Reverso Comparser 1" 
+                        style={{ transform: `rotate(${rotacio1}deg)` }}
+                        className="object-contain w-full h-full transition-transform duration-300"
+                        referrerPolicy="no-referrer"
+                      />
+                      <div className="absolute inset-0 bg-black/5 hover:bg-black/25 transition-colors" />
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* DNI Comparser 2 */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-zinc-800 font-bold font-mono">DNI Comparser 2 ({registration.c2Nom})</span>
-                  <div className="flex gap-1">
-                    <button 
-                      onClick={rotateImage2}
-                      className="p-1 px-1.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-600 rounded-md text-[10px] inline-flex items-center gap-1 transition"
-                      title={language === 'ca' ? "Rotar 90 graus" : "Rotar 90 grados"}
-                    >
-                      <RotateCw size={12} /> {language === 'ca' ? "Rotar" : "Rotar"}
-                    </button>
-                    <button 
-                      onClick={() => setActiveZoomUrl(registration.c2DniUrl)}
-                      className="p-1 px-1.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-605 rounded-md text-[10px] inline-flex items-center gap-1 transition"
-                      title={language === 'ca' ? "Ampliar imatge" : "Ampliar imagen"}
-                    >
-                      <ZoomIn size={12} /> {language === 'ca' ? "Lupa" : "Lupa"}
-                    </button>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-zinc-800 font-bold font-mono">DNI Comparser 2 ({registration.c2Nom}) - FRONT</span>
+                    <div className="flex gap-1">
+                      <button 
+                        onClick={rotateImage2}
+                        className="p-1 px-1.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-600 rounded-md text-[10px] inline-flex items-center gap-1 transition"
+                        title={language === 'ca' ? "Rotar 90 graus" : "Rotar 90 grados"}
+                      >
+                        <RotateCw size={12} /> {language === 'ca' ? "Rotar" : "Rotar"}
+                      </button>
+                      <button 
+                        onClick={() => setActiveZoomUrl(registration.c2DniUrl)}
+                        className="p-1 px-1.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-605 rounded-md text-[10px] inline-flex items-center gap-1 transition"
+                        title={language === 'ca' ? "Ampliar imatge" : "Ampliar imagen"}
+                      >
+                        <ZoomIn size={12} /> {language === 'ca' ? "Lupa" : "Lupa"}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div 
+                    className="aspect-[1.58] bg-zinc-150 rounded-2xl overflow-hidden border border-zinc-200 relative cursor-zoom-in flex items-center justify-center bg-zinc-900"
+                    onClick={() => setActiveZoomUrl(registration.c2DniUrl)}
+                  >
+                    <img 
+                      src={registration.c2DniUrl} 
+                      alt="DNI Front Comparser 2" 
+                      style={{ transform: `rotate(${rotacio2}deg)` }}
+                      className="object-contain w-full h-full transition-transform duration-300"
+                      referrerPolicy="no-referrer"
+                    />
+                    <div className="absolute inset-0 bg-black/5 hover:bg-black/25 transition-colors" />
                   </div>
                 </div>
 
-                <div 
-                  className="aspect-[1.58] bg-zinc-150 rounded-2xl overflow-hidden border border-zinc-200 relative cursor-zoom-in flex items-center justify-center bg-zinc-900"
-                  onClick={() => setActiveZoomUrl(registration.c2DniUrl)}
-                >
-                  <img 
-                    src={registration.c2DniUrl} 
-                    alt="DNI Comparser 2" 
-                    style={{ transform: `rotate(${rotacio2}deg)` }}
-                    className="object-contain w-full h-full transition-transform duration-300"
-                    referrerPolicy="no-referrer"
-                  />
-                  <div className="absolute inset-0 bg-black/5 hover:bg-black/25 transition-colors" />
-                </div>
+                {registration.dni_reverso_2 && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-zinc-800 font-bold font-mono">DNI Comparser 2 ({registration.c2Nom}) - REVERS</span>
+                      <button 
+                        onClick={() => setActiveZoomUrl(registration.dni_reverso_2 || '')}
+                        className="p-1 px-1.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-600 rounded-md text-[10px] inline-flex items-center gap-1 transition"
+                        title={language === 'ca' ? "Ampliar imatge" : "Ampliar imagen"}
+                      >
+                        <ZoomIn size={12} /> {language === 'ca' ? "Lupa" : "Lupa"}
+                      </button>
+                    </div>
+
+                    <div 
+                      className="aspect-[1.58] bg-zinc-150 rounded-2xl overflow-hidden border border-zinc-200 relative cursor-zoom-in flex items-center justify-center bg-zinc-900"
+                      onClick={() => setActiveZoomUrl(registration.dni_reverso_2 || '')}
+                    >
+                      <img 
+                        src={registration.dni_reverso_2} 
+                        alt="DNI Reverso Comparser 2" 
+                        style={{ transform: `rotate(${rotacio2}deg)` }}
+                        className="object-contain w-full h-full transition-transform duration-300"
+                        referrerPolicy="no-referrer"
+                      />
+                      <div className="absolute inset-0 bg-black/5 hover:bg-black/25 transition-colors" />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>  </div>
               </div>
             </div>
           </div>

@@ -77,6 +77,10 @@ export interface Inscripcio {
   preuCalculat: number;
   teDomasBalco: boolean;
   teMocadorsExtra: number;
+  dni_reverso_1?: string;
+  dni_reverso_2?: string;
+  extras_seleccionats?: string[];
+  total_pedido?: number;
   
   // Estats de gestió
   estatPagament: EstatPagament;

@@ -197,6 +197,13 @@ function parseInscripcionesRows(rows: any[]): Inscripcio[] {
       preuCalculat: Number(r.preuCalculat !== undefined ? r.preuCalculat : (r.preu_calculat || r.preucalculat || 0)),
       teDomasBalco: r.teDomasBalco !== undefined ? !!r.teDomasBalco : !!(r.te_domas_balco || r.tedomasbalco),
       teMocadorsExtra: Number(r.teMocadorsExtra !== undefined ? r.teMocadorsExtra : (r.te_mocadors_extra || r.temocadorsextra || 0)),
+      dni_reverso_1: r.dni_reverso_1 !== undefined ? r.dni_reverso_1 : (r.dni_revers_1 || r.c1_dni_revers_url || r.c1DniReversUrl || ''),
+      dni_reverso_2: r.dni_reverso_2 !== undefined ? r.dni_reverso_2 : (r.dni_revers_2 || r.c2_dni_revers_url || r.c2DniReversUrl || ''),
+      extras_seleccionats: Array.isArray(r.extras_seleccionats) ? r.extras_seleccionats : 
+                           Array.isArray(r.extrasSeleccionats) ? r.extrasSeleccionats :
+                           typeof r.extras_seleccionats === 'string' ? parseJSON(r.extras_seleccionats) : 
+                           typeof r.extrasSeleccionats === 'string' ? parseJSON(r.extrasSeleccionats) : [],
+      total_pedido: r.total_pedido !== undefined ? Number(r.total_pedido) : (r.totalPedido !== undefined ? Number(r.totalPedido) : undefined),
 
       estatPagament: r.estatPagament || r.estat_pagament || r.estatpagament || 'PENDENT',
       metodePagament: r.metodePagament || r.metode_pagament || r.metodepagament || null,
@@ -282,6 +289,10 @@ export async function saveSupabaseInscripcion(ins: Inscripcio): Promise<boolean>
         preuCalculat: ins.preuCalculat,
         teDomasBalco: ins.teDomasBalco,
         teMocadorsExtra: ins.teMocadorsExtra,
+        dni_reverso_1: ins.dni_reverso_1 || null,
+        dni_reverso_2: ins.dni_reverso_2 || null,
+        extras_seleccionats: ins.extras_seleccionats || null,
+        total_pedido: ins.total_pedido !== undefined ? ins.total_pedido : null,
         estatPagament: ins.estatPagament,
         metodePagament: ins.metodePagament,
         estatDni: ins.estatDni,
@@ -329,6 +340,10 @@ export async function saveSupabaseInscripcion(ins: Inscripcio): Promise<boolean>
         preu_calculat: ins.preuCalculat,
         te_domas_balco: ins.teDomasBalco,
         te_mocadors_extra: ins.teMocadorsExtra,
+        dni_reverso_1: ins.dni_reverso_1 || null,
+        dni_reverso_2: ins.dni_reverso_2 || null,
+        extras_seleccionats: ins.extras_seleccionats || null,
+        total_pedido: ins.total_pedido !== undefined ? ins.total_pedido : null,
         estat_pagament: ins.estatPagament,
         metode_pagament: ins.metodePagament,
         estat_dni: ins.estatDni,

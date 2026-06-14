@@ -41,6 +41,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
   const [c1Telefon, setC1Telefon] = useState('');
   const [c1Talla, setC1Talla] = useState('M');
   const [c1DniUrl, setC1DniUrl] = useState<string | null>(null);
+  const [c1DniReversUrl, setC1DniReversUrl] = useState<string | null>(null);
   const [c1EsMenor, setC1EsMenor] = useState(false);
   const [c1TutorNom, setC1TutorNom] = useState('');
   const [c1TutorCognoms, setC1TutorCognoms] = useState('');
@@ -56,6 +57,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
   const [c2Telefon, setC2Telefon] = useState('');
   const [c2Talla, setC2Talla] = useState('M');
   const [c2DniUrl, setC2DniUrl] = useState<string | null>(null);
+  const [c2DniReversUrl, setC2DniReversUrl] = useState<string | null>(null);
   const [c2EsMenor, setC2EsMenor] = useState(false);
   const [c2TutorNom, setC2TutorNom] = useState('');
   const [c2TutorCognoms, setC2TutorCognoms] = useState('');
@@ -183,7 +185,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
   }, [c2Telefon, existingInscripcions]);
   
   // Camera Modal state
-  const [cameraOwner, setCameraOwner] = useState<'c1' | 'c2' | null>(null);
+  const [cameraOwner, setCameraOwner] = useState<'c1' | 'c2' | 'c1_revers' | 'c2_revers' | null>(null);
   const [cameraActive, setCameraActive] = useState(false);
   const [videoError, setVideoError] = useState<string | null>(null);
   
@@ -217,7 +219,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
   }, [config]);
 
   // Handle webcam capture initialization
-  const startCamera = async (owner: 'c1' | 'c2') => {
+  const startCamera = async (owner: 'c1' | 'c2' | 'c1_revers' | 'c2_revers') => {
     setCameraOwner(owner);
     setVideoError(null);
     try {
@@ -273,6 +275,8 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
         const dataUrl = canvas.toDataURL('image/webp');
         if (cameraOwner === 'c1') setC1DniUrl(dataUrl);
         if (cameraOwner === 'c2') setC2DniUrl(dataUrl);
+        if (cameraOwner === 'c1_revers') setC1DniReversUrl(dataUrl);
+        if (cameraOwner === 'c2_revers') setC2DniReversUrl(dataUrl);
         
         stopCamera();
       }
@@ -324,9 +328,9 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
       
       ctx.font = '14px Arial';
       ctx.fillStyle = '#f3f4f6';
-      ctx.fillText(`NOM: ${cameraOwner === 'c1' ? c1Nom || 'Participant 1' : c2Nom || 'Participant 2'}`, 220, 130);
-      ctx.fillText(`COGNOMS: ${cameraOwner === 'c1' ? c1Cognoms || 'Cognoms 1' : c2Cognoms || 'Cognoms 2'}`, 220, 160);
-      ctx.fillText(`SEXE: M/F   ESTAT: SPANISH`, 220, 190);
+      ctx.fillText(`NOM: ${cameraOwner?.startsWith('c1') ? c1Nom || 'Participant 1' : c2Nom || 'Participant 2'}`, 220, 130);
+      ctx.fillText(`COGNOMS: ${cameraOwner?.startsWith('c1') ? c1Cognoms || 'Cognoms 1' : c2Cognoms || 'Cognoms 2'}`, 220, 160);
+      ctx.fillText(`SEXE: M/F   DNI: ${cameraOwner?.includes('revers') ? 'REVERS / BACK' : 'FRONT / DAVANT'}`, 220, 190);
       ctx.fillText('DATA EXP: 31 DEC 2030', 220, 220);
 
       // Big watermark fuchsia text
@@ -346,12 +350,14 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
       const dataUrl = c.toDataURL('image/webp');
       if (cameraOwner === 'c1') setC1DniUrl(dataUrl);
       if (cameraOwner === 'c2') setC2DniUrl(dataUrl);
+      if (cameraOwner === 'c1_revers') setC1DniReversUrl(dataUrl);
+      if (cameraOwner === 'c2_revers') setC2DniReversUrl(dataUrl);
       stopCamera();
     }
   };
 
   // Convert uploaded files to base64 images
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, owner: 'c1' | 'c2') => {
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, owner: 'c1' | 'c2' | 'c1_revers' | 'c2_revers') => {
     const file = e.target.files?.[0];
     if (file) {
       if (file.size > 10 * 1024 * 1024) {
@@ -362,6 +368,8 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
       reader.onloadend = () => {
         if (owner === 'c1') setC1DniUrl(reader.result as string);
         if (owner === 'c2') setC2DniUrl(reader.result as string);
+        if (owner === 'c1_revers') setC1DniReversUrl(reader.result as string);
+        if (owner === 'c2_revers') setC2DniReversUrl(reader.result as string);
       };
       reader.readAsDataURL(file);
     }
@@ -374,7 +382,8 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
     if (!c1Cognoms.trim()) tempErrors.c1Cognoms = language === 'ca' ? "Els cognoms són requerits" : "Los apellidos son requeridos";
     if (!c1Email.trim() || !/\S+@\S+\.\S+/.test(c1Email)) tempErrors.c1Email = language === 'ca' ? "Email vàlid requerit" : "Email válido requerido";
     if (!c1Telefon.trim()) tempErrors.c1Telefon = language === 'ca' ? "El telèfon és requerit" : "El teléfono es requerido";
-    if (!c1DniUrl) tempErrors.c1Dni = language === 'ca' ? "Cal pujar el DNI del/de la Comparser/a 1" : "Es necesario subir el DNI del/de la Comparser/a 1";
+    if (!c1DniUrl) tempErrors.c1Dni = language === 'ca' ? "Cal pujar la part frontal del DNI del/de la Comparser/a 1" : "Es necesario subir la parte frontal del DNI del/de la Comparser/a 1";
+    if (!c1DniReversUrl) tempErrors.c1DniRevers = language === 'ca' ? "Cal pujar la part posterior del DNI del/de la Comparser/a 1" : "Es necesario subir la parte posterior del DNI del/de la Comparser/a 1";
 
     if (c1EsMenor) {
       if (!c1TutorNom.trim()) tempErrors.c1TutorNom = language === 'ca' ? "El nom del tutor és requerit" : "El nombre del tutor es requerido";
@@ -388,7 +397,8 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
     if (!c2Cognoms.trim()) tempErrors.c2Cognoms = language === 'ca' ? "Els cognoms són requerits" : "Los apellidos son requeridos";
     if (!c2Email.trim() || !/\S+@\S+\.\S+/.test(c2Email)) tempErrors.c2Email = language === 'ca' ? "Email vàlid requerit" : "Email válido requerido";
     if (!c2Telefon.trim()) tempErrors.c2Telefon = language === 'ca' ? "El telèfon és requerit" : "El teléfono es requerido";
-    if (!c2DniUrl) tempErrors.c2Dni = language === 'ca' ? "Cal pujar el DNI del/de la Comparser/a 2" : "Es necesario subir el DNI del/de la Comparser/a 2";
+    if (!c2DniUrl) tempErrors.c2Dni = language === 'ca' ? "Cal pujar la part frontal del DNI del/de la Comparser/a 2" : "Es necesario subir la parte frontal del DNI del/de la Comparser/a 2";
+    if (!c2DniReversUrl) tempErrors.c2DniRevers = language === 'ca' ? "Cal pujar la part posterior del DNI del/de la Comparser/a 2" : "Es necesario subir la parte posterior del DNI del/de la Comparser/a 2";
 
     if (c2EsMenor) {
       if (!c2TutorNom.trim()) tempErrors.c2TutorNom = language === 'ca' ? "El nom del tutor és requerit" : "El nombre del tutor es requerido";
@@ -556,6 +566,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
         c1Telefon,
         c1Talla,
         c1DniUrl: c1DniUrl || '',
+        dni_reverso_1: c1DniReversUrl || '',
         c1EsMenor,
         c1TutorNom: c1EsMenor ? c1TutorNom : '',
         c1TutorCognoms: c1EsMenor ? c1TutorCognoms : '',
@@ -568,6 +579,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
         c2Telefon,
         c2Talla,
         c2DniUrl: c2DniUrl || '',
+        dni_reverso_2: c2DniReversUrl || '',
         c2EsMenor,
         c2TutorNom: c2EsMenor ? c2TutorNom : '',
         c2TutorCognoms: c2EsMenor ? c2TutorCognoms : '',
@@ -579,6 +591,12 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
         preuCalculat: totalCalculat,
         teDomasBalco,
         teMocadorsExtra,
+        extras_seleccionats: [
+          ...(teDomasBalcoQty > 0 ? ['domas'] : []),
+          ...(teMocadorsExtra > 0 ? ['mocador'] : []),
+          ...(config.tarifesDinamiques || []).filter(t => t.tipus === 'extra_generic' && t.actiu && genericExtrasQty[t.id] === 1).map(t => t.id)
+        ],
+        total_pedido: totalCalculat,
         estatPagament: EstatPagament.PENDENT,
         metodePagament: null,
         estatDni: EstatVerificacio.PENDENT,
@@ -1177,7 +1195,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
                 );
               })}
 
-              {/* DNI upload zona */}
+              {/* DNI upload frontal zona */}
               <div className="pt-2">
                 <label className="block text-xs font-bold text-zinc-700 tracking-tight mb-1.5">
                   {language === 'ca' ? 'Foto de la part frontal del DNI *' : 'Foto de la parte frontal del DNI *'}
@@ -1186,12 +1204,12 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
                   <div className="border border-zinc-200 rounded-2xl p-3 bg-zinc-50 flex items-center justify-between gap-3 relative overflow-hidden group">
                     <img 
                       src={c1DniUrl} 
-                      alt="DNI Comparser 1" 
+                      alt="DNI Comparser 1 frontal" 
                       className="w-20 h-14 object-cover rounded-md border border-zinc-200"
                       referrerPolicy="no-referrer"
                     />
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-zinc-800 truncate">DNI_Comparser_1.webp</p>
+                      <p className="text-xs font-semibold text-zinc-800 truncate">DNI_Frontal_Comparser_1.webp</p>
                       <p className="text-[10px] text-zinc-400 font-mono">
                         {language === 'ca' ? 'Arxiu penjat correctament' : 'Archivo subido correctamente'}
                       </p>
@@ -1207,7 +1225,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
                     </button>
                   </div>
                 ) : (
-                  <div className={`border-2 border-dashed ${errors.c1Dni ? 'border-red-300 bg-red-50/20' : 'border-zinc-200 hover:border-fuchsia-300'} rounded-2xl p-5 text-center transition-all`}>
+                  <div className={`border-2 border-dashed ${errors.c1Dni ? 'border-red-300 bg-red-50/20 shadow-sm' : 'border-zinc-200 hover:border-fuchsia-300'} rounded-2xl p-5 text-center transition-all`}>
                     <Upload className="mx-auto text-zinc-400 mb-2" size={24} />
                     <p className="text-xs text-zinc-600 font-semibold mb-1">
                       {language === 'ca' ? 'Arrossega una foto o selecciona un arxiu' : 'Arrastra una foto o selecciona un archivo'}
@@ -1229,6 +1247,66 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
                         onClick={() => startCamera('c1')}
                         className="text-xs bg-fuchsia-600 hover:bg-fuchsia-700 text-white font-bold px-3 py-2 rounded-xl transition-all flex items-center gap-1 shadow-sm cursor-pointer"
                         id="btn-camera-c1"
+                      >
+                        <Camera size={14} /> {language === 'ca' ? 'Fes foto' : 'Hacer foto'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* DNI upload revers zona */}
+              <div className="pt-2">
+                <label className="block text-xs font-bold text-zinc-700 tracking-tight mb-1.5">
+                  {language === 'ca' ? 'Foto de la part posterior del DNI *' : 'Foto de la parte posterior del DNI *'}
+                </label>
+                {c1DniReversUrl ? (
+                  <div className="border border-zinc-200 rounded-2xl p-3 bg-zinc-50 flex items-center justify-between gap-3 relative overflow-hidden group">
+                    <img 
+                      src={c1DniReversUrl} 
+                      alt="DNI Comparser 1 posterior" 
+                      className="w-20 h-14 object-cover rounded-md border border-zinc-200"
+                      referrerPolicy="no-referrer"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-zinc-800 truncate">DNI_Posterior_Comparser_1.webp</p>
+                      <p className="text-[10px] text-zinc-400 font-mono">
+                        {language === 'ca' ? 'Arxiu penjat correctament' : 'Archivo subido correctamente'}
+                      </p>
+                    </div>
+                    <button 
+                      type="button"
+                      onClick={() => setC1DniReversUrl(null)}
+                      className="p-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl transition-colors"
+                      title={language === 'ca' ? "Eliminar arxiu" : "Eliminar archivo"}
+                      id="btn-remove-c1-dni-revers"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                ) : (
+                  <div className={`border-2 border-dashed ${errors.c1DniRevers ? 'border-red-300 bg-red-50/20 shadow-sm' : 'border-zinc-200 hover:border-fuchsia-300'} rounded-2xl p-5 text-center transition-all`}>
+                    <Upload className="mx-auto text-zinc-400 mb-2" size={24} />
+                    <p className="text-xs text-zinc-600 font-semibold mb-1">
+                      {language === 'ca' ? 'Arrossega una foto o selecciona un arxiu' : 'Arrastra una foto o selecciona un archivo'}
+                    </p>
+                    <p className="text-[11px] text-zinc-400 mb-3 font-mono">Format PNG, JPG o WEBP (màx 10MB)</p>
+                    
+                    <div className="flex flex-wrap gap-2 justify-center">
+                      <label className="text-xs bg-zinc-100 hover:bg-zinc-200 text-zinc-800 font-bold px-3 py-2 rounded-xl cursor-pointer transition-colors border border-zinc-200">
+                        {language === 'ca' ? 'Pujar fitxer' : 'Subir archivo'}
+                        <input 
+                          type="file" 
+                          accept="image/*" 
+                          onChange={(e) => handleFileUpload(e, 'c1_revers')} 
+                          className="hidden" 
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => startCamera('c1_revers')}
+                        className="text-xs bg-fuchsia-600 hover:bg-fuchsia-700 text-white font-bold px-3 py-2 rounded-xl transition-all flex items-center gap-1 shadow-sm cursor-pointer"
+                        id="btn-camera-c1-revers"
                       >
                         <Camera size={14} /> {language === 'ca' ? 'Fes foto' : 'Hacer foto'}
                       </button>
@@ -1570,7 +1648,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
                 );
               })}
 
-              {/* DNI upload zona */}
+              {/* DNI upload frontal zona */}
               <div className="pt-2">
                 <label className="block text-xs font-bold text-zinc-700 tracking-tight mb-1.5">
                   {language === 'ca' ? 'Foto de la part frontal del DNI *' : 'Foto de la parte frontal del DNI *'}
@@ -1579,12 +1657,12 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
                   <div className="border border-zinc-200 rounded-2xl p-3 bg-zinc-50 flex items-center justify-between gap-3 relative overflow-hidden group">
                     <img 
                       src={c2DniUrl} 
-                      alt="DNI Comparser 2" 
+                      alt="DNI Comparser 2 frontal" 
                       className="w-20 h-14 object-cover rounded-md border border-zinc-200"
                       referrerPolicy="no-referrer"
                     />
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-zinc-800 truncate">DNI_Comparser_2.webp</p>
+                      <p className="text-xs font-semibold text-zinc-800 truncate">DNI_Frontal_Comparser_2.webp</p>
                       <p className="text-[10px] text-zinc-400 font-mono">
                         {language === 'ca' ? 'Arxiu penjat correctament' : 'Archivo subido correctamente'}
                       </p>
@@ -1600,7 +1678,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
                     </button>
                   </div>
                 ) : (
-                  <div className={`border-2 border-dashed ${errors.c2Dni ? 'border-red-300 bg-red-50/20' : 'border-zinc-200 hover:border-fuchsia-300'} rounded-2xl p-5 text-center transition-all`}>
+                  <div className={`border-2 border-dashed ${errors.c2Dni ? 'border-red-300 bg-red-50/20 shadow-sm' : 'border-zinc-200 hover:border-fuchsia-300'} rounded-2xl p-5 text-center transition-all`}>
                     <Upload className="mx-auto text-zinc-400 mb-2" size={24} />
                     <p className="text-xs text-zinc-600 font-semibold mb-1">
                       {language === 'ca' ? 'Arrossega una foto o selecciona un arxiu' : 'Arrastra una foto o selecciona un archivo'}
@@ -1622,6 +1700,66 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
                         onClick={() => startCamera('c2')}
                         className="text-xs bg-fuchsia-600 hover:bg-fuchsia-700 text-white font-bold px-3 py-2 rounded-xl transition-all flex items-center gap-1 shadow-sm cursor-pointer"
                         id="btn-camera-c2"
+                      >
+                        <Camera size={14} /> {language === 'ca' ? 'Fes foto' : 'Hacer foto'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* DNI upload revers zona */}
+              <div className="pt-2">
+                <label className="block text-xs font-bold text-zinc-700 tracking-tight mb-1.5">
+                  {language === 'ca' ? 'Foto de la part posterior del DNI *' : 'Foto de la parte posterior del DNI *'}
+                </label>
+                {c2DniReversUrl ? (
+                  <div className="border border-zinc-200 rounded-2xl p-3 bg-zinc-50 flex items-center justify-between gap-3 relative overflow-hidden group">
+                    <img 
+                      src={c2DniReversUrl} 
+                      alt="DNI Comparser 2 posterior" 
+                      className="w-20 h-14 object-cover rounded-md border border-zinc-200"
+                      referrerPolicy="no-referrer"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-zinc-800 truncate">DNI_Posterior_Comparser_2.webp</p>
+                      <p className="text-[10px] text-zinc-400 font-mono">
+                        {language === 'ca' ? 'Arxiu penjat correctament' : 'Archivo subido correctamente'}
+                      </p>
+                    </div>
+                    <button 
+                      type="button"
+                      onClick={() => setC2DniReversUrl(null)}
+                      className="p-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl transition-colors"
+                      title={language === 'ca' ? "Eliminar arxiu" : "Eliminar archivo"}
+                      id="btn-remove-c2-dni-revers"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                ) : (
+                  <div className={`border-2 border-dashed ${errors.c2DniRevers ? 'border-red-300 bg-red-50/20 shadow-sm' : 'border-zinc-200 hover:border-fuchsia-300'} rounded-2xl p-5 text-center transition-all`}>
+                    <Upload className="mx-auto text-zinc-400 mb-2" size={24} />
+                    <p className="text-xs text-zinc-600 font-semibold mb-1">
+                      {language === 'ca' ? 'Arrossega una foto o selecciona un arxiu' : 'Arrastra una foto o selecciona un archivo'}
+                    </p>
+                    <p className="text-[11px] text-zinc-400 mb-3 font-mono">Format PNG, JPG o WEBP (màx 10MB)</p>
+                    
+                    <div className="flex flex-wrap gap-2 justify-center">
+                      <label className="text-xs bg-zinc-100 hover:bg-zinc-200 text-zinc-800 font-bold px-3 py-2 rounded-xl cursor-pointer transition-colors border border-zinc-200">
+                        {language === 'ca' ? 'Pujar fitxer' : 'Subir archivo'}
+                        <input 
+                          type="file" 
+                          accept="image/*" 
+                          onChange={(e) => handleFileUpload(e, 'c2_revers')} 
+                          className="hidden" 
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => startCamera('c2_revers')}
+                        className="text-xs bg-fuchsia-600 hover:bg-fuchsia-700 text-white font-bold px-3 py-2 rounded-xl transition-all flex items-center gap-1 shadow-sm cursor-pointer"
+                        id="btn-camera-c2-revers"
                       >
                         <Camera size={14} /> {language === 'ca' ? 'Fes foto' : 'Hacer foto'}
                       </button>
@@ -1725,42 +1863,44 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
                   </div>
                 )}
 
-                {/* Newly added customizable payment/rate lines */}
+                {/* Newly added customizable payment/rate lines as checkboxes */}
                 {genericExtras.map((extr) => {
-                  const currentQty = genericExtrasQty[extr.id] || 0;
+                  const isChecked = genericExtrasQty[extr.id] === 1;
                   return (
-                    <div key={extr.id} className="flex items-center justify-between p-4 bg-zinc-50 rounded-2xl border border-zinc-100">
-                      <div className="space-y-0.5">
-                        <h4 className="font-sans font-bold text-sm text-zinc-850">
-                          <TranslatedText text={extr.nom} />
-                        </h4>
-                        <p className="text-zinc-500 text-xs">
-                          {language === 'ca' 
-                            ? "Complement addicional configurat per l'administració de l'entitat." 
-                            : "Complemento adicional configurado por la administración de la entidad."}
-                        </p>
-                      </div>
+                    <label 
+                      key={extr.id} 
+                      className={`flex items-center justify-between p-4 rounded-2xl border transition-all cursor-pointer select-none ${
+                        isChecked 
+                          ? 'bg-fuchsia-50/40 border-fuchsia-300 ring-1 ring-fuchsia-300' 
+                          : 'bg-zinc-50 border-zinc-100 hover:border-zinc-250'
+                      }`}
+                    >
                       <div className="flex items-center gap-3">
-                        <span className="font-sans font-bold text-sm text-zinc-950 mr-2">+{extr.valor}€ / u.</span>
-                        <button
-                          type="button"
-                          onClick={() => setGenericExtrasQty(prev => ({ ...prev, [extr.id]: Math.max(0, (prev[extr.id] || 0) - 1) }))}
-                          className="w-8 h-8 rounded-lg bg-white border border-zinc-200 flex items-center justify-center hover:bg-zinc-100 font-bold text-zinc-700 transition cursor-pointer"
-                          id={`btn-remove-extra-${extr.id}`}
-                        >
-                          <Minus size={14} />
-                        </button>
-                        <span className="font-mono font-bold text-sm text-zinc-900 w-6 text-center">{currentQty}</span>
-                        <button
-                          type="button"
-                          onClick={() => setGenericExtrasQty(prev => ({ ...prev, [extr.id]: (prev[extr.id] || 0) + 1 }))}
-                          className="w-8 h-8 rounded-lg bg-white border border-zinc-200 flex items-center justify-center hover:bg-zinc-100 font-bold text-zinc-700 transition cursor-pointer"
-                          id={`btn-add-extra-${extr.id}`}
-                        >
-                          <Plus size={14} />
-                        </button>
+                        <input 
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setGenericExtrasQty(prev => ({ ...prev, [extr.id]: checked ? 1 : 0 }));
+                          }}
+                          className="rounded border-zinc-300 text-fuchsia-600 focus:ring-fuchsia-500 w-4.5 h-4.5 accent-fuchsia-600 cursor-pointer"
+                          id={`checkbox-extra-${extr.id}`}
+                        />
+                        <div className="space-y-0.5">
+                          <h4 className="font-sans font-bold text-sm text-zinc-850">
+                            <TranslatedText text={extr.nom} />
+                          </h4>
+                          <p className="text-zinc-500 text-xs">
+                            {language === 'ca' 
+                              ? "Complement addicional opcional configurat per l'administració." 
+                              : "Complemento adicional opcional configurado por la administración."}
+                          </p>
+                        </div>
                       </div>
-                    </div>
+                      <span className="font-sans font-bold text-sm text-zinc-950 font-mono">
+                        +{extr.valor}€
+                      </span>
+                    </label>
                   );
                 })}
               </div>
