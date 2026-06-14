@@ -398,7 +398,17 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
       if (!c2TutorAccepta) tempErrors.c2TutorAccepta = language === 'ca' ? "Cal acceptar l'autorització de menors" : "Es necesario aceptar la autorización de menores";
     }
 
-    // Dynamic visible fields are now bypassed as they are removed from PublicForm to keep it minimal and comments-only
+    // Validate active required dynamic questions
+    if (config.preguntesFormulari) {
+      config.preguntesFormulari.filter(q => q.activa && q.requerit).forEach(q => {
+        const val = respostesCuestionari[q.id];
+        if (q.tipus === 'text' && (val === undefined || val === null || String(val).trim() === '')) {
+          tempErrors[`question_${q.id}`] = language === 'ca' ? "Aquesta resposta és requerida" : "Esta respuesta es requerida";
+        } else if (q.tipus === 'select' && (val === undefined || val === null || String(val).trim() === '')) {
+          tempErrors[`question_${q.id}`] = language === 'ca' ? "Seleccioneu una opció" : "Seleccione una opción";
+        }
+      });
+    }
 
     if (c1Email.trim().toLowerCase() === c2Email.trim().toLowerCase() && c1Email.trim() !== '') {
       tempErrors.c2Email = language === 'ca' ? "Els correus electrònics no poden ser idèntics" : "Los correos electrónicos no pueden ser idénticos";
@@ -1758,24 +1768,81 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
           );
         })()}
 
-        {/* Comments/Observations Section */}
-        <div className="bg-white rounded-3xl p-6 border border-zinc-200 shadow-sm space-y-4">
+        {/* Dinamic Custom Questionnaire Sections */}
+        <div className="bg-white rounded-3xl p-6 border border-zinc-200 shadow-sm space-y-6">
           <h3 className="font-sans font-bold text-zinc-900 text-lg pb-2 border-b border-zinc-100 flex items-center gap-2">
-            💬 {language === 'ca' ? 'Comentaris i Observacions' : 'Comentarios y Observaciones'}
+            📋 {language === 'ca' ? 'Qüestionari d\'El Tast' : 'Cuestionario de El Tast'}
           </h3>
-          <p className="text-zinc-500 text-xs">
-            {language === 'ca' 
-              ? 'Introduïu qualsevol comentari, intolerància alimentària o petició especial aquí.' 
-              : 'Introduzca cualquier comentario, intolerancia alimenticia o petición especial aquí.'}
-          </p>
-          <textarea
-            value={String(respostesCuestionari['preg-3'] || '')}
-            onChange={(e) => setRespostesCuestionari(prev => ({ ...prev, 'preg-3': e.target.value }))}
-            placeholder={language === 'ca' ? "Comentaris o observacions addicionals..." : "Comentarios o observaciones adicionales..."}
-            rows={4}
-            className="w-full bg-zinc-50 border border-zinc-200 focus:border-fuchsia-500 focus:bg-white rounded-2xl px-4 py-3 text-sm focus:outline-none transition-all resize-none shadow-inner"
-            id="comments-textarea"
-          />
+          
+          <div className="space-y-6">
+            {config.preguntesFormulari && config.preguntesFormulari.filter(q => q.activa).map(q => {
+              const errorMsg = errors[`question_${q.id}`];
+              return (
+                <div key={q.id} className="space-y-2 animate-fadeIn">
+                  <label className="block text-sm font-semibold text-zinc-800">
+                    {q.titol} {q.requerit && <span className="text-red-500 font-bold">*</span>}
+                  </label>
+                  
+                  {q.tipus === 'boolean' ? (
+                    <div className="flex gap-4">
+                      <button
+                        type="button"
+                        onClick={() => setRespostesCuestionari(prev => ({ ...prev, [q.id]: true }))}
+                        className={`px-5 py-2.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                          respostesCuestionari[q.id] === true
+                            ? 'bg-fuchsia-600 text-white border-fuchsia-600 shadow-md transform scale-102 font-black'
+                            : 'bg-zinc-50 text-zinc-700 border-zinc-200 hover:bg-zinc-100'
+                        }`}
+                      >
+                        {language === 'ca' ? 'Sí' : 'Sí'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setRespostesCuestionari(prev => ({ ...prev, [q.id]: false }))}
+                        className={`px-5 py-2.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                          respostesCuestionari[q.id] === false
+                            ? 'bg-fuchsia-600 text-white border-fuchsia-600 shadow-md transform scale-102 font-black'
+                            : 'bg-zinc-50 text-zinc-700 border-zinc-200 hover:bg-zinc-100'
+                        }`}
+                      >
+                        {language === 'ca' ? 'No' : 'No'}
+                      </button>
+                    </div>
+                  ) : q.tipus === 'select' ? (
+                    <select
+                      value={String(respostesCuestionari[q.id] || '')}
+                      onChange={(e) => setRespostesCuestionari(prev => ({ ...prev, [q.id]: e.target.value }))}
+                      className="w-full bg-zinc-50 border border-zinc-200 focus:border-fuchsia-500 focus:bg-white rounded-xl px-4 py-2.5 text-xs text-zinc-800 focus:outline-none transition-all shadow-sm"
+                    >
+                      <option value="">
+                        {language === 'ca' ? '-- Seleccioneu una opció --' : '-- Seleccione una opción --'}
+                      </option>
+                      {q.opcions?.map((opt, oIdx) => (
+                        <option key={oIdx} value={opt}>
+                          {opt}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <textarea
+                      value={String(respostesCuestionari[q.id] || '')}
+                      onChange={(e) => setRespostesCuestionari(prev => ({ ...prev, [q.id]: e.target.value }))}
+                      rows={q.id === 'preg-3' ? 4 : 2}
+                      className="w-full bg-zinc-50 border border-zinc-200 focus:border-fuchsia-500 focus:bg-white rounded-2xl px-4 py-3 text-xs text-zinc-800 focus:outline-none transition-all resize-none shadow-inner"
+                      placeholder={language === 'ca' ? "Escriviu la vostra resposta addicional..." : "Escriba su respuesta adicional..."}
+                    />
+                  )}
+                  {errorMsg && <p className="text-red-500 text-[10px] font-mono mt-0.5">{errorMsg}</p>}
+                </div>
+              );
+            })}
+            
+            {(!config.preguntesFormulari || config.preguntesFormulari.filter(q => q.activa).length === 0) && (
+              <p className="text-zinc-400 text-xs text-center py-4 italic">
+                {language === 'ca' ? "No hi ha cap pregunta activa en aquest moment." : "No hay ninguna pregunta activa en este momento."}
+              </p>
+            )}
+          </div>
         </div>
 
         {/* Legal RGPD and Payment policy */}
