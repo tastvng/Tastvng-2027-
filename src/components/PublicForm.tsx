@@ -219,7 +219,34 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
     return total + (extra ? extra.valor * Number(qty) : 0);
   }, 0);
 
-  const totalCalculat = basePrice + domasCost + mocadorsCost + genericExtrasCost + c1ExtrasCost + c2ExtrasCost;
+  const uniformesCost = (config.liniisUniforme || []).reduce((sum, linia) => {
+    // Some lines might have a price specified
+    if (!linia.preu) return sum;
+    const sel = seleccionsUniforme[linia.id];
+    let cost = 0;
+    if (sel) {
+      if (sel.c1Quantitat && sel.c1Tipus === 'compra') {
+        cost += linia.preu * sel.c1Quantitat;
+      }
+      // If no quantity field is enabled for Comparser 1, but we have a selection...
+      else if (!linia.requeixQuantitat && sel.c1Tipus === 'compra') {
+        cost += linia.preu;
+      }
+      
+      if (sel.c2Quantitat && sel.c2Tipus === 'compra') {
+        cost += linia.preu * sel.c2Quantitat;
+      } else if (!linia.requeixQuantitat && sel.c2Tipus === 'compra') {
+        cost += linia.preu;
+      }
+    } else {
+      // By default if no selection interacts, it might just default to buy 1 if they are displayed?
+      // For safety, assume default 1 quantity and 'compra' type if preselected.
+      cost += linia.preu * 2; // one for each comparser
+    }
+    return sum + cost;
+  }, 0);
+
+  const totalCalculat = basePrice + domasCost + mocadorsCost + genericExtrasCost + c1ExtrasCost + c2ExtrasCost + uniformesCost;
 
   // Initialize dynamic answers on layout load
   useEffect(() => {
@@ -1140,10 +1167,15 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
                 const sel = seleccionsUniforme[linia.id] || { c1Talla: linia.opcions[0] || 'M', c2Talla: linia.opcions[0] || 'M', c1Quantitat: 1, c2Quantitat: 1, c1Tipus: 'compra' as const, c2Tipus: 'compra' as const };
                 return (
                   <div key={linia.id} className="space-y-2 p-4 bg-zinc-50 border border-zinc-200 rounded-2xl">
-                    <div className="flex justify-between items-center">
-                      <label className="block text-xs font-bold text-zinc-700 tracking-tight">
+                    <div className="flex justify-between items-center mb-1 bg-white px-3 py-1.5 rounded-lg border border-zinc-100 shadow-sm">
+                      <label className="block text-xs font-bold text-zinc-800 tracking-tight">
                         {language === 'ca' ? linia.nom : linia.nomES} *
                       </label>
+                      {linia.preu ? (
+                        <span className="text-[10px] font-mono text-fuchsia-600 bg-fuchsia-50 rounded px-1.5 py-0.5 border border-fuchsia-100 font-bold tracking-tight">
+                          +{linia.preu}€ {language === 'ca' ? '(compra)' : '(venta)'}
+                        </span>
+                      ) : null}
                     </div>
 
                     <div className="flex gap-2.5">
@@ -1586,10 +1618,15 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
                 const sel = seleccionsUniforme[linia.id] || { c1Talla: linia.opcions[0] || 'M', c2Talla: linia.opcions[0] || 'M', c1Quantitat: 1, c2Quantitat: 1, c1Tipus: 'compra' as const, c2Tipus: 'compra' as const };
                 return (
                   <div key={linia.id} className="space-y-2 p-4 bg-zinc-50 border border-zinc-200 rounded-2xl">
-                    <div className="flex justify-between items-center">
-                      <label className="block text-xs font-bold text-zinc-700 tracking-tight">
+                    <div className="flex justify-between items-center mb-1 bg-white px-3 py-1.5 rounded-lg border border-zinc-100 shadow-sm">
+                      <label className="block text-xs font-bold text-zinc-800 tracking-tight">
                         {language === 'ca' ? linia.nom : linia.nomES} *
                       </label>
+                      {linia.preu ? (
+                        <span className="text-[10px] font-mono text-fuchsia-600 bg-fuchsia-50 rounded px-1.5 py-0.5 border border-fuchsia-100 font-bold tracking-tight">
+                          +{linia.preu}€ {language === 'ca' ? '(compra)' : '(venta)'}
+                        </span>
+                      ) : null}
                     </div>
 
                     <div className="flex gap-2.5">
@@ -1782,215 +1819,10 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
 
         {/* Extra Accessories Order Section */}
         {(() => {
-          const domasTarifaObj = (config.tarifesDinamiques || []).find(t => t.id === 'domas') || { nom: "Domàs per al Balcó de les Comparses", valor: config.preuDomasBalco, actiu: !(config.tarifesDinamiques && config.tarifesDinamiques.length > 0) };
-          const mocadorTarifaObj = (config.tarifesDinamiques || []).find(t => t.id === 'mocador') || { nom: "Mocadors oficials addicionals", valor: config.preuMocadorExtra, actiu: !(config.tarifesDinamiques && config.tarifesDinamiques.length > 0) };
-          const genericExtras = (config.tarifesDinamiques || []).filter(t => t.tipus === 'extra_generic' && t.actiu);
-
-          const hasAnyExtras = domasTarifaObj.actiu || mocadorTarifaObj.actiu || genericExtras.length > 0;
-
-          if (!hasAnyExtras) return null;
-
-          return (
-            <div className="bg-white rounded-3xl p-6 border border-zinc-200 shadow-sm">
-              <h3 className="font-sans font-bold text-zinc-900 text-lg mb-4 pb-2 border-b border-zinc-100 flex items-center gap-2">
-                {language === 'ca' ? '🎀 Comandes i Complements Addicionals (Opcional)' : '🎀 Pedidos y Complementos Adicionales (Opcional)'}
-              </h3>
-              <p className="text-zinc-500 text-xs mb-6">
-                {language === 'ca' ? 'Podeu equipar la vostra parella o afegir complements oficials de l\'entitat.' : 'Podéis equipar a vuestra pareja o añadir complementos oficiales de la entidad.'}
-              </p>
-
-              <div className="space-y-6">
-                {domasTarifaObj.actiu && (
-                  <div className="flex items-center justify-between p-4 bg-zinc-50 rounded-2xl border border-zinc-100">
-                    <div className="space-y-0.5">
-                      <h4 className="font-sans font-bold text-sm text-zinc-800">
-                        {language === 'ca' ? 'Domàs per al Balcó de les Comparses' : 'Colgadura para el Balcón de las Comparsas'}
-                      </h4>
-                      <p className="text-zinc-500 text-xs">
-                        {language === 'ca' 
-                          ? 'Penja l\'orgull fúcsia d\'El Tast al teu balcó el cap de setmana de carnaval.' 
-                          : 'Cuelga el orgullo fucsia de El Tast en tu balcón el fin de semana de carnaval.'}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className="font-sans font-bold text-sm text-zinc-950 mr-2">+{domasTarifaObj.valor}€ / u.</span>
-                      <button
-                        type="button"
-                        onClick={() => setTeDomasBalcoQty(prev => Math.max(0, prev - 1))}
-                        className="w-8 h-8 rounded-lg bg-white border border-zinc-200 flex items-center justify-center hover:bg-zinc-100 font-bold text-zinc-700 transition cursor-pointer"
-                        id="btn-remove-domas"
-                      >
-                        <Minus size={14} />
-                      </button>
-                      <span className="font-mono font-bold text-sm text-zinc-900 w-6 text-center">{teDomasBalcoQty}</span>
-                      <button
-                        type="button"
-                        onClick={() => setTeDomasBalcoQty(prev => prev + 1)}
-                        className="w-8 h-8 rounded-lg bg-white border border-zinc-200 flex items-center justify-center hover:bg-zinc-100 font-bold text-zinc-700 transition cursor-pointer"
-                        id="btn-add-domas"
-                      >
-                        <Plus size={14} />
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {mocadorTarifaObj.actiu && (
-                  <div className="flex items-center justify-between p-4 bg-zinc-50 rounded-2xl border border-zinc-100">
-                    <div className="space-y-0.5">
-                      <h4 className="font-sans font-bold text-sm text-zinc-800">
-                        {language === 'ca' ? 'Mocadors oficials addicionals' : 'Pañuelos oficiales adicionales'}
-                      </h4>
-                      <p className="text-zinc-500 text-xs">
-                        {language === 'ca'
-                          ? 'Mocador gran de fil de la colla per a amics, fills o familiars que animen.'
-                          : 'Pañuelo grande de hilo de la colla para amigos, hijos o familiares que animan.'}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className="font-sans font-bold text-sm text-zinc-950 mr-2">+{mocadorTarifaObj.valor}€ / u.</span>
-                      <button
-                        type="button"
-                        onClick={() => setTeMocadorsExtra(prev => Math.max(0, prev - 1))}
-                        className="w-8 h-8 rounded-lg bg-white border border-zinc-200 flex items-center justify-center hover:bg-zinc-100 font-bold text-zinc-700 transition cursor-pointer"
-                        id="btn-remove-mocador"
-                      >
-                        <Minus size={14} />
-                      </button>
-                      <span className="font-mono font-bold text-sm text-zinc-900 w-6 text-center">{teMocadorsExtra}</span>
-                      <button
-                        type="button"
-                        onClick={() => setTeMocadorsExtra(prev => prev + 1)}
-                        className="w-8 h-8 rounded-lg bg-white border border-zinc-200 flex items-center justify-center hover:bg-zinc-100 font-bold text-zinc-700 transition cursor-pointer"
-                        id="btn-add-mocador"
-                      >
-                        <Plus size={14} />
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Newly added customizable payment/rate lines */}
-                {genericExtras.map((extr) => {
-                  const currentQty = genericExtrasQty[extr.id] || 0;
-                  return (
-                    <div key={extr.id} className="flex items-center justify-between p-4 bg-zinc-50 rounded-2xl border border-zinc-100">
-                      <div className="space-y-0.5">
-                        <h4 className="font-sans font-bold text-sm text-zinc-850">
-                          <TranslatedText text={extr.nom} />
-                        </h4>
-                        <p className="text-zinc-500 text-xs">
-                          {language === 'ca' 
-                            ? "Complement addicional configurat per l'administració de l'entitat." 
-                            : "Complemento adicional configurado por la administración de la entidad."}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="font-sans font-bold text-sm text-zinc-950 mr-2">+{extr.valor}€ / u.</span>
-                        <button
-                          type="button"
-                          onClick={() => setGenericExtrasQty(prev => ({ ...prev, [extr.id]: Math.max(0, (prev[extr.id] || 0) - 1) }))}
-                          className="w-8 h-8 rounded-lg bg-white border border-zinc-200 flex items-center justify-center hover:bg-zinc-100 font-bold text-zinc-700 transition cursor-pointer"
-                          id={`btn-remove-extra-${extr.id}`}
-                        >
-                          <Minus size={14} />
-                        </button>
-                        <span className="font-mono font-bold text-sm text-zinc-900 w-6 text-center">{currentQty}</span>
-                        <button
-                          type="button"
-                          onClick={() => setGenericExtrasQty(prev => ({ ...prev, [extr.id]: (prev[extr.id] || 0) + 1 }))}
-                          className="w-8 h-8 rounded-lg bg-white border border-zinc-200 flex items-center justify-center hover:bg-zinc-100 font-bold text-zinc-700 transition cursor-pointer"
-                          id={`btn-add-extra-${extr.id}`}
-                        >
-                          <Plus size={14} />
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          );
+          return null;
         })()}
 
-        {/* Dinamic Custom Questionnaire Sections */}
-        {config.cuestionariActiu !== false && (
-          <div className="bg-white rounded-3xl p-6 border border-zinc-200 shadow-sm space-y-6">
-            <h3 className="font-sans font-bold text-zinc-900 text-lg pb-2 border-b border-zinc-100 flex items-center gap-2">
-              📋 {language === 'ca' ? 'Qüestionari d\'El Tast' : 'Cuestionario de El Tast'}
-            </h3>
-            
-            <div className="space-y-6">
-              {config.preguntesFormulari && config.preguntesFormulari.filter(q => q.activa).map(q => {
-                const errorMsg = errors[`question_${q.id}`];
-                return (
-                  <div key={q.id} className="space-y-2 animate-fadeIn">
-                    <label className="block text-sm font-semibold text-zinc-800">
-                      {q.titol} {q.requerit && <span className="text-red-500 font-bold">*</span>}
-                    </label>
-                    
-                    {q.tipus === 'boolean' ? (
-                      <div className="flex gap-4">
-                        <button
-                          type="button"
-                          onClick={() => setRespostesCuestionari(prev => ({ ...prev, [q.id]: true }))}
-                          className={`px-5 py-2.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                            respostesCuestionari[q.id] === true
-                              ? 'bg-fuchsia-600 text-white border-fuchsia-600 shadow-md transform scale-102 font-black'
-                              : 'bg-zinc-50 text-zinc-700 border-zinc-200 hover:bg-zinc-100'
-                          }`}
-                        >
-                          {language === 'ca' ? 'Sí' : 'Sí'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setRespostesCuestionari(prev => ({ ...prev, [q.id]: false }))}
-                          className={`px-5 py-2.5 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
-                            respostesCuestionari[q.id] === false
-                              ? 'bg-fuchsia-600 text-white border-fuchsia-600 shadow-md transform scale-102 font-black'
-                              : 'bg-zinc-50 text-zinc-700 border-zinc-200 hover:bg-zinc-100'
-                          }`}
-                        >
-                          {language === 'ca' ? 'No' : 'No'}
-                        </button>
-                      </div>
-                    ) : q.tipus === 'select' ? (
-                      <select
-                        value={String(respostesCuestionari[q.id] || '')}
-                        onChange={(e) => setRespostesCuestionari(prev => ({ ...prev, [q.id]: e.target.value }))}
-                        className="w-full bg-zinc-50 border border-zinc-200 focus:border-fuchsia-500 focus:bg-white rounded-xl px-4 py-2.5 text-xs text-zinc-800 focus:outline-none transition-all shadow-sm"
-                      >
-                        <option value="">
-                          {language === 'ca' ? '-- Seleccioneu una opció --' : '-- Seleccione una opción --'}
-                        </option>
-                        {q.opcions?.map((opt, oIdx) => (
-                          <option key={oIdx} value={opt}>
-                            {opt}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <textarea
-                        value={String(respostesCuestionari[q.id] || '')}
-                        onChange={(e) => setRespostesCuestionari(prev => ({ ...prev, [q.id]: e.target.value }))}
-                        rows={q.id === 'preg-3' ? 4 : 2}
-                        className="w-full bg-zinc-50 border border-zinc-200 focus:border-fuchsia-500 focus:bg-white rounded-2xl px-4 py-3 text-xs text-zinc-800 focus:outline-none transition-all resize-none shadow-inner"
-                        placeholder={language === 'ca' ? "Escriviu la vostra resposta addicional..." : "Escriba su respuesta adicional..."}
-                      />
-                    )}
-                    {errorMsg && <p className="text-red-500 text-[10px] font-mono mt-0.5">{errorMsg}</p>}
-                  </div>
-                );
-              })}
-              
-              {(!config.preguntesFormulari || config.preguntesFormulari.filter(q => q.activa).length === 0) && (
-                <p className="text-zinc-400 text-xs text-center py-4 italic">
-                  {language === 'ca' ? "No hi ha cap pregunta activa en aquest moment." : "No hay ninguna pregunta activa en este momento."}
-                </p>
-              )}
-            </div>
-          </div>
-        )}
+        {/* Dinamic Custom Questionnaire Sections Disabled */}
 
         {/* Legal RGPD and Payment policy */}
         <div className="bg-white rounded-3xl p-6 border border-zinc-200 shadow-sm space-y-4">

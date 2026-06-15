@@ -108,6 +108,7 @@ export interface LiniaUniforme {
   nomES: string;
   opcions: string[];
   requeixQuantitat?: boolean;
+  preu?: number;
 }
 
 export interface SistemaConfig {

@@ -1473,19 +1473,38 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                     />
                   </div>
 
-                  <div className="flex items-center gap-2 pt-1">
-                    <input 
-                      type="checkbox"
-                      id={`check-qty-${linia.id}`}
-                      checked={!!linia.requeixQuantitat}
-                      onChange={(e) => handleUpdateLiniaUniforme(linia.id, { requeixQuantitat: e.target.checked })}
-                      className="rounded text-fuchsia-600 focus:ring-fuchsia-500 h-4 w-4 border-zinc-300 cursor-pointer"
-                    />
-                    <label htmlFor={`check-qty-${linia.id}`} className="text-zinc-700 text-xs font-bold select-none cursor-pointer">
-                      {language === 'ca' 
-                        ? "Permet escollir quantitat de marxandatge/material" 
-                        : "Permitir elegir cantidad de merchandising/material"}
-                    </label>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1 border-t border-zinc-100 mt-2">
+                    <div className="flex items-center gap-2">
+                      <input 
+                        type="checkbox"
+                        id={`check-qty-${linia.id}`}
+                        checked={!!linia.requeixQuantitat}
+                        onChange={(e) => handleUpdateLiniaUniforme(linia.id, { requeixQuantitat: e.target.checked })}
+                        className="rounded text-fuchsia-600 focus:ring-fuchsia-500 h-4 w-4 border-zinc-300 cursor-pointer"
+                      />
+                      <label htmlFor={`check-qty-${linia.id}`} className="text-zinc-700 text-xs font-bold select-none cursor-pointer">
+                        {language === 'ca' 
+                          ? "Permet escollir quantitat de marxandatge/material" 
+                          : "Permitir elegir cantidad de merchandising/material"}
+                      </label>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <label className="text-zinc-700 text-xs font-bold select-none whitespace-nowrap">
+                        {language === 'ca' ? "Preu Unitari:" : "Precio Unitario:"}
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={linia.preu || 0}
+                          onChange={(e) => handleUpdateLiniaUniforme(linia.id, { preu: parseFloat(e.target.value) || 0 })}
+                          className="w-20 bg-white border border-zinc-250 focus:border-[#ff0090] rounded-lg px-2 py-1 text-xs font-mono font-bold text-right"
+                        />
+                        <span className="absolute right-2 top-1.5 text-[10px] font-bold text-zinc-400">€</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
               ))}
