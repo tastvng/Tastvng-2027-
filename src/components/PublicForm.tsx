@@ -220,28 +220,25 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
   }, 0);
 
   const uniformesCost = (config.liniisUniforme || []).reduce((sum, linia) => {
-    // Some lines might have a price specified
-    if (!linia.preu) return sum;
-    const sel = seleccionsUniforme[linia.id];
     let cost = 0;
+    const sel = seleccionsUniforme[linia.id];
+    
     if (sel) {
-      if (sel.c1Quantitat && sel.c1Tipus === 'compra') {
-        cost += linia.preu * sel.c1Quantitat;
-      }
-      // If no quantity field is enabled for Comparser 1, but we have a selection...
-      else if (!linia.requeixQuantitat && sel.c1Tipus === 'compra') {
-        cost += linia.preu;
+      const p1 = sel.c1Tipus === 'lloguer' ? (linia.preuLloguer || 0) : (linia.preu || 0);
+      if (sel.c1Quantitat) {
+        cost += p1 * sel.c1Quantitat;
+      } else if (!linia.requeixQuantitat) {
+        cost += p1;
       }
       
-      if (sel.c2Quantitat && sel.c2Tipus === 'compra') {
-        cost += linia.preu * sel.c2Quantitat;
-      } else if (!linia.requeixQuantitat && sel.c2Tipus === 'compra') {
-        cost += linia.preu;
+      const p2 = sel.c2Tipus === 'lloguer' ? (linia.preuLloguer || 0) : (linia.preu || 0);
+      if (sel.c2Quantitat) {
+        cost += p2 * sel.c2Quantitat;
+      } else if (!linia.requeixQuantitat) {
+        cost += p2;
       }
     } else {
-      // By default if no selection interacts, it might just default to buy 1 if they are displayed?
-      // For safety, assume default 1 quantity and 'compra' type if preselected.
-      cost += linia.preu * 2; // one for each comparser
+      cost += (linia.preu || 0) * 2;
     }
     return sum + cost;
   }, 0);
@@ -1171,10 +1168,19 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
                       <label className="block text-xs font-bold text-zinc-800 tracking-tight">
                         {language === 'ca' ? linia.nom : linia.nomES} *
                       </label>
-                      {linia.preu ? (
-                        <span className="text-[10px] font-mono text-fuchsia-600 bg-fuchsia-50 rounded px-1.5 py-0.5 border border-fuchsia-100 font-bold tracking-tight">
-                          +{linia.preu}€ {language === 'ca' ? '(compra)' : '(venta)'}
-                        </span>
+                      {(linia.preu || linia.preuLloguer) ? (
+                        <div className="flex gap-1.5 flex-wrap justify-end">
+                          {linia.preu ? (
+                            <span className="text-[10px] font-mono text-fuchsia-600 bg-fuchsia-50 rounded px-1.5 py-0.5 border border-fuchsia-100 font-bold tracking-tight">
+                              +{linia.preu}€ {language === 'ca' ? '(compra)' : '(venta)'}
+                            </span>
+                          ) : null}
+                          {linia.preuLloguer ? (
+                            <span className="text-[10px] font-mono text-sky-600 bg-sky-50 rounded px-1.5 py-0.5 border border-sky-100 font-bold tracking-tight">
+                              +{linia.preuLloguer}€ {language === 'ca' ? '(lloguer)' : '(alquiler)'}
+                            </span>
+                          ) : null}
+                        </div>
                       ) : null}
                     </div>
 
@@ -1622,10 +1628,19 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
                       <label className="block text-xs font-bold text-zinc-800 tracking-tight">
                         {language === 'ca' ? linia.nom : linia.nomES} *
                       </label>
-                      {linia.preu ? (
-                        <span className="text-[10px] font-mono text-fuchsia-600 bg-fuchsia-50 rounded px-1.5 py-0.5 border border-fuchsia-100 font-bold tracking-tight">
-                          +{linia.preu}€ {language === 'ca' ? '(compra)' : '(venta)'}
-                        </span>
+                      {(linia.preu || linia.preuLloguer) ? (
+                        <div className="flex gap-1.5 flex-wrap justify-end">
+                          {linia.preu ? (
+                            <span className="text-[10px] font-mono text-fuchsia-600 bg-fuchsia-50 rounded px-1.5 py-0.5 border border-fuchsia-100 font-bold tracking-tight">
+                              +{linia.preu}€ {language === 'ca' ? '(compra)' : '(venta)'}
+                            </span>
+                          ) : null}
+                          {linia.preuLloguer ? (
+                            <span className="text-[10px] font-mono text-sky-600 bg-sky-50 rounded px-1.5 py-0.5 border border-sky-100 font-bold tracking-tight">
+                              +{linia.preuLloguer}€ {language === 'ca' ? '(lloguer)' : '(alquiler)'}
+                            </span>
+                          ) : null}
+                        </div>
                       ) : null}
                     </div>
 

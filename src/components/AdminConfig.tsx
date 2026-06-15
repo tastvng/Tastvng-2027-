@@ -1489,20 +1489,39 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                       </label>
                     </div>
 
-                    <div className="flex items-center gap-2">
-                      <label className="text-zinc-700 text-xs font-bold select-none whitespace-nowrap">
-                        {language === 'ca' ? "Preu Unitari:" : "Precio Unitario:"}
-                      </label>
-                      <div className="relative">
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={linia.preu || 0}
-                          onChange={(e) => handleUpdateLiniaUniforme(linia.id, { preu: parseFloat(e.target.value) || 0 })}
-                          className="w-20 bg-white border border-zinc-250 focus:border-[#ff0090] rounded-lg px-2 py-1 text-xs font-mono font-bold text-right"
-                        />
-                        <span className="absolute right-2 top-1.5 text-[10px] font-bold text-zinc-400">€</span>
+                    <div className="flex flex-wrap items-center gap-4">
+                      <div className="flex items-center gap-2">
+                        <label className="text-zinc-700 text-xs font-bold select-none whitespace-nowrap">
+                          {language === 'ca' ? "Preu Venda:" : "Precio Venta:"}
+                        </label>
+                        <div className="relative">
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={linia.preu || 0}
+                            onChange={(e) => handleUpdateLiniaUniforme(linia.id, { preu: parseFloat(e.target.value) || 0 })}
+                            className="w-20 bg-white border border-zinc-250 focus:border-[#ff0090] rounded-lg px-2 py-1 text-xs font-mono font-bold text-right"
+                          />
+                          <span className="absolute right-2 top-1.5 text-[10px] font-bold text-zinc-400">€</span>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                        <label className="text-zinc-700 text-xs font-bold select-none whitespace-nowrap">
+                          {language === 'ca' ? "Preu Lloguer:" : "Precio Alquiler:"}
+                        </label>
+                        <div className="relative">
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={linia.preuLloguer || 0}
+                            onChange={(e) => handleUpdateLiniaUniforme(linia.id, { preuLloguer: parseFloat(e.target.value) || 0 })}
+                            className="w-20 bg-white border border-zinc-250 focus:border-sky-500 rounded-lg px-2 py-1 text-xs font-mono font-bold text-right"
+                          />
+                          <span className="absolute right-2 top-1.5 text-[10px] font-bold text-zinc-400">€</span>
+                        </div>
                       </div>
                     </div>
                   </div>
