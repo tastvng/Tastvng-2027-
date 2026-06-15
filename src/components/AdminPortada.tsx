@@ -106,14 +106,31 @@ export default function AdminPortada({ language, onAddLog }: AdminPortadaProps) 
     return PORTADA_CONFIG_DEFAULTS;
   });
 
+  const [estatInscripcions, setEstatInscripcions] = useState<'obertes' | 'espera' | 'tancades'>('obertes');
+
   // Load from Supabase on mount
   useEffect(() => {
     async function loadConfig() {
-      if (!isSupabaseConfigured) return;
+      if (!isSupabaseConfigured) {
+        const scJson = localStorage.getItem('tast_config_2026');
+        if (scJson) {
+          try {
+            const sc = JSON.parse(scJson);
+            if (sc.estatInscripcions) setEstatInscripcions(sc.estatInscripcions);
+          } catch {}
+        }
+        return;
+      }
       try {
         const dbConfig = await getSupabaseSettings();
         if (dbConfig) {
           setConfig({ ...PORTADA_CONFIG_DEFAULTS, ...dbConfig });
+        }
+        
+        const { getSupabaseSetting } = await import('../supabaseClient');
+        const sc = await getSupabaseSetting('tast_config_2026', null);
+        if (sc && sc.estatInscripcions) {
+          setEstatInscripcions(sc.estatInscripcions);
         }
       } catch (e) {
         console.error("Error fetching admin config from Supabase:", e);
@@ -131,10 +148,26 @@ export default function AdminPortada({ language, onAddLog }: AdminPortadaProps) 
     // Save to localStorage as a fast local copy fallback
     localStorage.setItem('tast_portada_config_2026', JSON.stringify(config));
     
+    const scJson = localStorage.getItem('tast_config_2026');
+    if (scJson) {
+      try {
+        const sc = JSON.parse(scJson);
+        sc.estatInscripcions = estatInscripcions;
+        localStorage.setItem('tast_config_2026', JSON.stringify(sc));
+      } catch {}
+    }
+    
     // Save to Supabase using settings table
     let synced = false;
     if (isSupabaseConfigured) {
       synced = await saveSupabaseSettings(config);
+      
+      const { getSupabaseSetting, saveSupabaseSetting } = await import('../supabaseClient');
+      const sc = await getSupabaseSetting('tast_config_2026', null);
+      if (sc) {
+        sc.estatInscripcions = estatInscripcions;
+        await saveSupabaseSetting('tast_config_2026', sc);
+      }
     }
     
     // Dispatch custom event to let App know configuration changed
@@ -451,6 +484,79 @@ export default function AdminPortada({ language, onAddLog }: AdminPortadaProps) 
               <div className={`w-4 h-4 rounded-full bg-white transition-transform ${config.cuestionariActiu !== false ? 'translate-x-6' : 'translate-x-0'}`} />
             </button>
           </div>
+        </div>
+      </div>
+
+      {/* SEMÀFOR D'ESTAT DE LES INSCRIPCIONS (MOVED FROM ADMINCONFIG) */}
+      <div className="bg-white rounded-3xl border border-zinc-200 p-6 shadow-sm space-y-5" id="config-semafor-card">
+        <div className="border-b border-zinc-100 pb-3">
+          <h3 className="font-sans font-black text-sm text-zinc-900 uppercase tracking-wider flex items-center gap-2">
+            <span className="text-xl">🚦</span> {language === 'ca' ? "Semàfor d'Estat de les Inscripcions" : "Semáforo de Estado de Inscripciones"}
+          </h3>
+          <p className="text-[10px] text-zinc-400 mt-1">
+            {language === 'ca' 
+              ? "Controla la fase de registre. Canvia els indicadors en temps real." 
+              : "Controla la fase de registro. Modifica los indicadores en tiempo real."}
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {/* Opció 1: Obertes - VERD */}
+          <button
+            type="button"
+            onClick={() => setEstatInscripcions('obertes')}
+            className={`w-full p-3 rounded-2xl border text-left transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
+              estatInscripcions === 'obertes'
+                ? 'bg-emerald-50 border-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.15)]'
+                : 'bg-zinc-50 hover:bg-zinc-100 border-zinc-200'
+            }`}
+            id="btn-semafor-obertes"
+          >
+            <div className={`w-6 h-6 mb-2 rounded-full bg-emerald-500 relative shrink-0 ${estatInscripcions === 'obertes' ? 'animate-ping' : ''}`}>
+              <div className="absolute inset-0 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981]" />
+            </div>
+            <span className="block font-sans font-bold text-xs text-zinc-850">
+              {language === 'ca' ? "Inscripcions Obertes" : "Inscripciones Abiertas"}
+            </span>
+          </button>
+
+          {/* Opció 2: Espera - TARONJA */}
+          <button
+            type="button"
+            onClick={() => setEstatInscripcions('espera')}
+            className={`w-full p-3 rounded-2xl border text-left transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
+              estatInscripcions === 'espera'
+                ? 'bg-amber-50 border-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.15)]'
+                : 'bg-zinc-50 hover:bg-zinc-100 border-zinc-200'
+            }`}
+            id="btn-semafor-espera"
+          >
+            <div className={`w-6 h-6 mb-2 rounded-full bg-amber-500 relative shrink-0 ${estatInscripcions === 'espera' ? 'animate-ping' : ''}`}>
+              <div className="absolute inset-0 rounded-full bg-amber-500 shadow-[0_0_8px_#f59e0b]" />
+            </div>
+            <span className="block font-sans font-bold text-xs text-zinc-850">
+              {language === 'ca' ? "Llista d'Espera" : "Lista de Espera"}
+            </span>
+          </button>
+
+          {/* Opció 3: Tancades - VERMELL */}
+          <button
+            type="button"
+            onClick={() => setEstatInscripcions('tancades')}
+            className={`w-full p-3 rounded-2xl border text-left transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
+              estatInscripcions === 'tancades'
+                ? 'bg-rose-50 border-rose-400 shadow-[0_0_20px_rgba(239,68,68,0.25)]'
+                : 'bg-zinc-50 hover:bg-zinc-100 border-zinc-200'
+            }`}
+            id="btn-semafor-tancades"
+          >
+            <div className={`w-6 h-6 mb-2 rounded-full bg-red-600 relative shrink-0 ${estatInscripcions === 'tancades' ? 'animate-pulse' : ''}`}>
+              <div className="absolute inset-0 rounded-full bg-red-600 shadow-[0_0_12px_#ef4444]" />
+            </div>
+            <span className="block font-sans font-bold text-xs text-zinc-850">
+              {language === 'ca' ? "Inscripcions Tancades" : "Inscripciones Cerradas"}
+            </span>
+          </button>
         </div>
       </div>
 

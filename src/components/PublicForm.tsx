@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   Camera, 
   Upload, 
+  Check,
   ShieldCheck, 
   Trash2, 
   Sparkles, 
@@ -1246,29 +1247,19 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
                     </label>
                     <div className="space-y-3">
                       {extrasForThisComparser.map(extr => {
-                        const qty = c1ExtrasSeleccionats[extr.id] || 0;
+                        const isChecked = (c1ExtrasSeleccionats[extr.id] || 0) > 0;
                         return (
-                          <div key={extr.id} className="flex justify-between items-center bg-zinc-50 border border-zinc-200 rounded-xl p-3">
+                          <div key={extr.id} 
+                               onClick={() => setC1ExtrasSeleccionats(prev => ({ ...prev, [extr.id]: isChecked ? 0 : 1 }))}
+                               className={`flex justify-between items-center bg-zinc-50 border rounded-xl p-3 cursor-pointer transition-colors ${isChecked ? 'border-[#ff0090] bg-fuchsia-50/50' : 'border-zinc-200 hover:border-zinc-300'}`}>
                             <div>
                               <span className="block text-xs font-bold text-zinc-800">{extr.nom}</span>
                               <span className="block text-[10px] text-zinc-500 font-mono">+{extr.valor}€</span>
                             </div>
-                            <div className="flex items-center gap-3">
-                              <button
-                                type="button"
-                                onClick={() => setC1ExtrasSeleccionats(prev => ({ ...prev, [extr.id]: Math.max(0, (prev[extr.id] || 0) - 1) }))}
-                                className="w-7 h-7 rounded-md bg-white border border-zinc-200 flex items-center justify-center cursor-pointer text-zinc-500 shadow-sm font-bold hover:bg-zinc-100"
-                              >
-                                -
-                              </button>
-                              <span className="text-xs font-bold font-mono w-4 text-center">{qty}</span>
-                              <button
-                                type="button"
-                                onClick={() => setC1ExtrasSeleccionats(prev => ({ ...prev, [extr.id]: (prev[extr.id] || 0) + 1 }))}
-                                className="w-7 h-7 rounded-md bg-white border border-zinc-200 flex items-center justify-center cursor-pointer text-zinc-500 shadow-sm font-bold hover:bg-zinc-100"
-                              >
-                                +
-                              </button>
+                            <div className="flex items-center">
+                              <div className={`w-6 h-6 rounded border flex items-center justify-center transition-colors ${isChecked ? 'bg-[#ff0090] border-[#ff0090]' : 'bg-white border-zinc-300'}`}>
+                                {isChecked && <Check className="w-4 h-4 text-white" />}
+                              </div>
                             </div>
                           </div>
                         );
@@ -1702,29 +1693,19 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
                     </label>
                     <div className="space-y-3">
                       {extrasForThisComparser.map(extr => {
-                        const qty = c2ExtrasSeleccionats[extr.id] || 0;
+                        const isChecked = (c2ExtrasSeleccionats[extr.id] || 0) > 0;
                         return (
-                          <div key={extr.id} className="flex justify-between items-center bg-zinc-50 border border-zinc-200 rounded-xl p-3">
+                          <div key={extr.id} 
+                               onClick={() => setC2ExtrasSeleccionats(prev => ({ ...prev, [extr.id]: isChecked ? 0 : 1 }))}
+                               className={`flex justify-between items-center bg-zinc-50 border rounded-xl p-3 cursor-pointer transition-colors ${isChecked ? 'border-[#ff0090] bg-fuchsia-50/50' : 'border-zinc-200 hover:border-zinc-300'}`}>
                             <div>
                               <span className="block text-xs font-bold text-zinc-800">{extr.nom}</span>
                               <span className="block text-[10px] text-zinc-500 font-mono">+{extr.valor}€</span>
                             </div>
-                            <div className="flex items-center gap-3">
-                              <button
-                                type="button"
-                                onClick={() => setC2ExtrasSeleccionats(prev => ({ ...prev, [extr.id]: Math.max(0, (prev[extr.id] || 0) - 1) }))}
-                                className="w-7 h-7 rounded-md bg-white border border-zinc-200 flex items-center justify-center cursor-pointer text-zinc-500 shadow-sm font-bold hover:bg-zinc-100"
-                              >
-                                -
-                              </button>
-                              <span className="text-xs font-bold font-mono w-4 text-center">{qty}</span>
-                              <button
-                                type="button"
-                                onClick={() => setC2ExtrasSeleccionats(prev => ({ ...prev, [extr.id]: (prev[extr.id] || 0) + 1 }))}
-                                className="w-7 h-7 rounded-md bg-white border border-zinc-200 flex items-center justify-center cursor-pointer text-zinc-500 shadow-sm font-bold hover:bg-zinc-100"
-                              >
-                                +
-                              </button>
+                            <div className="flex items-center">
+                              <div className={`w-6 h-6 rounded border flex items-center justify-center transition-colors ${isChecked ? 'bg-[#ff0090] border-[#ff0090]' : 'bg-white border-zinc-300'}`}>
+                                {isChecked && <Check className="w-4 h-4 text-white" />}
+                              </div>
                             </div>
                           </div>
                         );
