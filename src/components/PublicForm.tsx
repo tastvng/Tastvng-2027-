@@ -1172,7 +1172,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
                         <div className="flex gap-1.5 flex-wrap justify-end">
                           {linia.preu && (!sel || !sel.c1Tipus || sel.c1Tipus === 'compra') ? (
                             <span className="text-[10px] font-mono text-fuchsia-600 bg-fuchsia-50 rounded px-1.5 py-0.5 border border-fuchsia-100 font-bold tracking-tight">
-                              +{linia.preu}€ {language === 'ca' ? '(compra)' : '(venta)'}
+                              +{linia.preu}€ (compra)
                             </span>
                           ) : null}
                           {linia.preuLloguer && sel && sel.c1Tipus === 'lloguer' ? (
@@ -1249,7 +1249,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
                           }}
                           className={`text-[10px] px-2.5 py-1 font-bold rounded-md transition-all cursor-pointer ${(!sel.c1Tipus || sel.c1Tipus === 'compra') ? 'bg-fuchsia-100 text-fuchsia-700 shadow-sm' : 'text-zinc-550 hover:text-zinc-855'}`}
                         >
-                          {language === 'ca' ? "Compra" : "Compra (Venta)"}
+                          Compra
                         </button>
                         <button
                           type="button"
@@ -1632,7 +1632,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
                         <div className="flex gap-1.5 flex-wrap justify-end">
                           {linia.preu && (!sel || !sel.c2Tipus || sel.c2Tipus === 'compra') ? (
                             <span className="text-[10px] font-mono text-fuchsia-600 bg-fuchsia-50 rounded px-1.5 py-0.5 border border-fuchsia-100 font-bold tracking-tight">
-                              +{linia.preu}€ {language === 'ca' ? '(compra)' : '(venta)'}
+                              +{linia.preu}€ (compra)
                             </span>
                           ) : null}
                           {linia.preuLloguer && sel && sel.c2Tipus === 'lloguer' ? (
@@ -1709,7 +1709,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
                           }}
                           className={`text-[10px] px-2.5 py-1 font-bold rounded-md transition-all cursor-pointer ${(!sel.c2Tipus || sel.c2Tipus === 'compra') ? 'bg-fuchsia-100 text-fuchsia-700 shadow-sm' : 'text-zinc-550 hover:text-zinc-855'}`}
                         >
-                          {language === 'ca' ? "Compra" : "Compra (Venta)"}
+                          Compra
                         </button>
                         <button
                           type="button"
@@ -1919,14 +1919,14 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
                   
                   const c1Qty = sel.c1Quantitat || (linia.requeixQuantitat ? 0 : 1);
                   const p1 = sel.c1Tipus === 'lloguer' ? (linia.preuLloguer || 0) : (linia.preu || 0);
-                  const t1 = sel.c1Tipus === 'lloguer' ? (language === 'ca' ? 'Llog.' : 'Alq.') : (language === 'ca' ? 'Comp.' : 'Vent.');
+                  const t1 = sel.c1Tipus === 'lloguer' ? (language === 'ca' ? 'Llog.' : 'Alq.') : 'Comp.';
                   if (c1Qty > 0 && p1 > 0) {
                     str += ` + ${c1Qty}x ${lnNom} (${t1}): ${c1Qty * p1}€`;
                   }
                   
                   const c2Qty = sel.c2Quantitat || (linia.requeixQuantitat ? 0 : 1);
                   const p2 = sel.c2Tipus === 'lloguer' ? (linia.preuLloguer || 0) : (linia.preu || 0);
-                  const t2 = sel.c2Tipus === 'lloguer' ? (language === 'ca' ? 'Llog.' : 'Alq.') : (language === 'ca' ? 'Comp.' : 'Vent.');
+                  const t2 = sel.c2Tipus === 'lloguer' ? (language === 'ca' ? 'Llog.' : 'Alq.') : 'Comp.';
                   if (c2Qty > 0 && p2 > 0) {
                     str += ` + ${c2Qty}x ${lnNom} (${t2}): ${c2Qty * p2}€`;
                   }

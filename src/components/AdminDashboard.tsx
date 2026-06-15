@@ -978,115 +978,420 @@ export default function AdminDashboard({
       return;
     }
 
-    const headers = [
-      'CODI SEGUIMENT',
-      'CATEGORIA',
-      'NOM COMPARSER 1',
-      'COGNOMS COMPARSER 1',
-      'EMAIL COMPARSER 1',
-      'TELEFON COMPARSER 1',
-      'TALLA COMPARSER 1',
-      'ADQUISICIÓ UNIFORME 1',
-      'C1 MENOR D\'EDAT?',
-      'C1 NOM TUTOR',
-      'C1 COGNOMS TUTOR',
-      'C1 DNI TUTOR',
-      'C1 TELEFON TUTOR',
-      'NOM COMPARSER 2',
-      'COGNOMS COMPARSER 2',
-      'EMAIL COMPARSER 2',
-      'TELEFON COMPARSER 2',
-      'TALLA COMPARSER 2',
-      'ADQUISICIÓ UNIFORME 2',
-      'C2 MENOR D\'EDAT?',
-      'C2 NOM TUTOR',
-      'C2 COGNOMS TUTOR',
-      'C2 DNI TUTOR',
-      'C2 TELEFON TUTOR',
-      'PREU TOTAL (€)',
-      'DOMAS BALCO?',
-      'MOCADORS EXTRA',
-      'ESTAT PAGAMENT',
-      'METODE PAGAMENT',
-      'VALIDACIO DNI',
-      'ENTREGA MATERIAL',
-      'DATA CREACIO'
-    ];
-
-    const rows = filteredInscripcions.map(i => [
-      i.codiSeguiment,
-      i.categoria,
-      i.c1Nom,
-      i.c1Cognoms,
-      i.c1Email,
-      i.c1Telefon,
-      i.c1Talla,
-      i.c1UniformeTipus === 'lloguer' ? (language === 'ca' ? 'LLOGUER' : 'ALQUILER') : (language === 'ca' ? 'COMPRA' : 'COMPRA'),
-      i.c1EsMenor ? 'SÍ' : 'NO',
-      i.c1EsMenor ? (i.c1TutorNom || '') : '',
-      i.c1EsMenor ? (i.c1TutorCognoms || '') : '',
-      i.c1EsMenor ? (i.c1TutorDni || '') : '',
-      i.c1EsMenor ? (i.c1TutorTelefon || '') : '',
-      i.c2Nom,
-      i.c2Cognoms,
-      i.c2Email,
-      i.c2Telefon,
-      i.c2Talla,
-      i.c2UniformeTipus === 'lloguer' ? (language === 'ca' ? 'LLOGUER' : 'ALQUILER') : (language === 'ca' ? 'COMPRA' : 'COMPRA'),
-      i.c2EsMenor ? 'SÍ' : 'NO',
-      i.c2EsMenor ? (i.c2TutorNom || '') : '',
-      i.c2EsMenor ? (i.c2TutorCognoms || '') : '',
-      i.c2EsMenor ? (i.c2TutorDni || '') : '',
-      i.c2EsMenor ? (i.c2TutorTelefon || '') : '',
-      i.preuCalculat,
-      i.teDomasBalco ? 'SÍ' : 'NO',
-      i.teMocadorsExtra,
-      i.estatPagament,
-      i.metodePagament || 'CAP',
-      i.estatDni,
-      i.entregaMaterial,
-      i.creadoEn ? new Date(i.creadoEn).toLocaleString() : ''
-    ]);
-
-    // Calculate aggregated day-by-day summaries
-    const summaryHeaders = [
-      language === 'ca' ? 'DATA INSCRIPCIÓ' : 'FECHA INSCRIPCIÓN',
-      language === 'ca' ? 'PARELLES REGISTRADES' : 'PAREJAS REGISTRADAS',
-      language === 'ca' ? "A LA LLISTA D'ESPERA" : 'EN LISTA DE ESPERA',
-      language === 'ca' ? 'RECAUDACIÓ TOTAL (€)' : 'RECAUDACIÓN TOTAL (€)',
-      language === 'ca' ? 'EFECTIU (€)' : 'EFECTIVO (€)',
-      language === 'ca' ? 'BIZUM (€)' : 'BIZUM (€)',
-      language === 'ca' ? 'INSCRIPCIONS ADULTS' : 'INSCRIPCIONES ADULTOS',
-      language === 'ca' ? 'INSCRIPCIONS JUVENILS' : 'INSCRIPCIONES JUVENILES',
-      language === 'ca' ? "TOTAL MENORS D'EDAT" : 'TOTAL MENORES DE EDAD',
-      language === 'ca' ? 'DOMASSOS BALCÓ' : 'COBERTORES BALCÓN',
-      language === 'ca' ? 'MOCADORS EXTRES' : 'PAÑUELOS EXTRAS'
-    ];
-    const summaryRows = calculateDailySummaries(filteredInscripcions).map((s: any) => [
-      s.dateStr,
-      s.totalRegistrations,
-      s.waitingListCount,
-      s.totalRevenue,
-      s.cashRevenue,
-      s.bizumRevenue,
-      s.adultsCount,
-      s.juvenilsCount,
-      s.minorsCount,
-      s.domasCount,
-      s.extraMocadorsCount
-    ]);
-
-    // Create workbook and worksheets using exceljs
+    // Create workbook and worksheet
     const workbook = new ExcelJS.Workbook();
+    const ws = workbook.addWorksheet("COMPARSA 2026");
+
+    // Define headers in Valencian / Catalan
+    const headers = [
+      'Marca temporal',
+      'Dirección de correo electrónico',
+      'PAREJA',
+      'BANDERA',
+      'NOM I COGNOM COMPARSER',
+      'NOM I COGNOM COMPARSERA',
+      'TELÈFON',
+      'CORREU ELECTRÒNIC',
+      'PREU PARELLA',
+      'ARMILLA',
+      'PREU ARMILLA',
+      'TALLA ARMILLA (En el cas de Compra o lloguer)',
+      'CLAVELLS',
+      'PRE U CLA VEL S',
+      'CORBATÍ',
+      'PRE U COR BATI',
+      'ESMO RZAR',
+      'PREU ESMORZ AR',
+      'TOTAL A PAGAR',
+      'PAGAT',
+      'PDTE. PAG',
+      'FORMA PAGAMENT',
+      'M',
+      'FECHA INSCRIPCIÓN',
+      'PREPARADO',
+      'ENTREGADO',
+      'ENVI O WHATS',
+      'FIN INSCPCION',
+      'PULSERA',
+      'ENVIADO MAIL CONF. PREENS'
+    ];
+
+    // Add header row
+    const headerRow = ws.addRow(headers);
     
-    const ws = workbook.addWorksheet(language === 'ca' ? "Inscripcions" : "Inscripciones");
-    ws.addRow(headers);
-    rows.forEach(row => ws.addRow(row));
+    // Style header row
+    headerRow.height = 28;
+    headerRow.eachCell((cell) => {
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FF4B0082' } // Dark purple #4B0082
+      };
+      cell.font = {
+        name: 'Arial',
+        size: 10,
+        bold: true,
+        color: { argb: 'FFFFFFFF' } // White
+      };
+      cell.alignment = {
+        horizontal: 'center',
+        vertical: 'middle',
+        wrapText: true
+      };
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FF3B006C' } },
+        left: { style: 'thin', color: { argb: 'FF3B006C' } },
+        bottom: { style: 'thin', color: { argb: 'FF3B006C' } },
+        right: { style: 'thin', color: { argb: 'FF3B006C' } }
+      };
+    });
 
-    const wsSummary = workbook.addWorksheet(language === 'ca' ? "Cierre del Dia" : "Cierre del Dia");
-    wsSummary.addRow(summaryHeaders);
-    summaryRows.forEach(row => wsSummary.addRow(row));
+    // Enable filters on all columns
+    ws.autoFilter = {
+      from: { row: 1, column: 1 },
+      to: { row: 1, column: 30 }
+    };
 
+    // Helper for dynamic concept values
+    const getExtraInfo = (i: Inscripcio, nameRegex: RegExp) => {
+      // 1. Search in extresSeleccionats
+      const foundInSel = (i.extresSeleccionats || []).find(e => nameRegex.test(e.nom));
+      if (foundInSel) {
+        return {
+          qty: foundInSel.quantitat,
+          price: foundInSel.preuUnitari,
+          total: foundInSel.quantitat * foundInSel.preuUnitari
+        };
+      }
+      // 2. Search in respostesCuestionari keys
+      const qtyKey = Object.keys(i.respostesCuestionari || {}).find(k => {
+        if (k.startsWith('extra_qty_')) {
+          const extraId = k.replace('extra_qty_', '');
+          const extraDef = config?.tarifesDinamiques?.find((t: any) => t.id === extraId);
+          return extraDef && nameRegex.test(extraDef.nom);
+        }
+        return false;
+      });
+      if (qtyKey) {
+        const extraId = qtyKey.replace('extra_qty_', '');
+        const extraDef = config?.tarifesDinamiques?.find((t: any) => t.id === extraId);
+        const qty = Number(i.respostesCuestionari[qtyKey]) || 0;
+        if (extraDef && qty > 0) {
+          return {
+            qty,
+            price: extraDef.valor,
+            total: qty * extraDef.valor
+          };
+        }
+      }
+      // 3. Direct template fallback
+      const anyExtraDef = config?.tarifesDinamiques?.find((t: any) => nameRegex.test(t.nom));
+      if (anyExtraDef) {
+         const qty = Number(i.respostesCuestionari[`extra_qty_${anyExtraDef.id}`]) || 0;
+         if (qty > 0) {
+           return {
+             qty,
+             price: anyExtraDef.valor,
+             total: qty * anyExtraDef.valor
+           };
+         }
+      }
+      return null;
+    };
+
+    // Add data rows
+    filteredInscripcions.forEach((i, idx) => {
+      const rowNum = idx + 2;
+
+      // A (Marca temporal)
+      const dMarca = i.creadoEn ? new Date(i.creadoEn) : null;
+      
+      // B (Email)
+      const email = i.c1Email || "";
+
+      // C (Pareja)
+      const pareja = i.codiSeguiment || "";
+
+      // D (Bandera)
+      let bandera = (i.categoria === CategoriaParella.JUVENIL || String(i.categoria).toUpperCase() === 'JUVENIL') 
+        ? 'Juvenil (13 a 16)' 
+        : 'Adult (A partir de 16 anys)';
+      if (i.llistaEspera) {
+        bandera = "LLISTA D'ESPERA " + bandera;
+      }
+
+      // E (Nom Comparser)
+      const comparser1 = `${i.c1Nom || ""} ${i.c1Cognoms || ""}`.trim();
+
+      // F (Nom Comparsera)
+      const comparser2 = `${i.c2Nom || ""} ${i.c2Cognoms || ""}`.trim();
+
+      // G (Telefon)
+      const telefon = i.c1Telefon || "";
+
+      // H (Correu Electronic)
+      const correuElectronic = i.c2Email || "";
+
+      // I (Preu Parella)
+      const preuParella = i.categoria === CategoriaParella.ADULT 
+        ? (config.preuAdult || 90) 
+        : (config.preuJuvenil || 60);
+
+      // J (Armilla)
+      const liniaIdFirst = config.liniisUniforme?.[0]?.id || 'lin-1';
+      const selUni = i.seleccionsUniforme?.[liniaIdFirst];
+      const tip1 = selUni?.c1Tipus || i.c1UniformeTipus;
+      let armillaVal = 'NO';
+      if (tip1 === 'lloguer' || tip1 === 'compra') {
+        armillaVal = tip1.toUpperCase();
+      }
+
+      // K (Preu Armilla)
+      const preuArmilla = armillaVal === 'NO' ? "" : (tip1 === 'lloguer' ? (config.liniisUniforme?.[0]?.preuLloguer || 30) : (config.liniisUniforme?.[0]?.preu || 30));
+
+      // L (Talla Armilla)
+      const tallaArmilla = armillaVal === 'NO' ? "" : (selUni?.c1Talla || i.c1Talla || "M");
+
+      // M (Clavells)
+      const clavellsInfo = getExtraInfo(i, /clavell|clavel/i);
+      const clavellsVal = clavellsInfo ? "SI" : "NO";
+
+      // N (Preu Clavells)
+      const preuClavells = clavellsInfo ? clavellsInfo.total : "";
+
+      // O (Corbati)
+      const corbatiInfo = getExtraInfo(i, /corbat/i);
+      const corbatiVal = corbatiInfo ? "SI" : "NO";
+
+      // P (Preu Corbati)
+      const preuCorbati = corbatiInfo ? corbatiInfo.total : "";
+
+      // Q (Esmorzar)
+      const esmorzarInfo = getExtraInfo(i, /esmorz|almuerz/i);
+      const esmorzarVal = esmorzarInfo ? "SI" : "NO";
+
+      // R (Preu Esmorzar)
+      const preuEsmorzar = esmorzarInfo ? esmorzarInfo.total : "";
+
+      // S (Total a Pagar) - Formula exactly matching requested:
+      // =SI(I2="",0,I2)+SI(K2="",0,K2)+SI(P2="",0,P2)+SI(R2="",0,R2)
+      const totalFormula = { formula: `IF(I${rowNum}="",0,I${rowNum})+IF(K${rowNum}="",0,K${rowNum})+IF(P${rowNum}="",0,P${rowNum})+IF(R${rowNum}="",0,R${rowNum})` };
+
+      // T (Pagat)
+      const isPaid = i.estatPagament === EstatPagament.PAGAT || String(i.estatPagament).toUpperCase() === 'PAGAT';
+      const pagatAmount = isPaid ? i.preuCalculat : 0;
+
+      // U (Pdte. Pag) - Formula exactly matching requested:
+      // =SI(S2="","",S2-T2)
+      const pdteFormula = { formula: `IF(S${rowNum}="","",S${rowNum}-T${rowNum})` };
+
+      // V (Forma Pagament)
+      let formaPag = "";
+      if (i.metodePagament) {
+        if (i.metodePagament === 'EFECTIU' || i.metodePagament === 'METALIC' || String(i.metodePagament).toUpperCase() === 'EFECTIVO' || String(i.metodePagament).toUpperCase() === 'METALICO') {
+          formaPag = "METALICO";
+        } else {
+          formaPag = String(i.metodePagament).toUpperCase();
+        }
+      }
+
+      // W (M)
+      const mVal = (i.creadoEn && i.c1Email) ? 'TRUE' : 'FALSE';
+
+      // X (Fecha Inscripcion)
+      let dataInscripcio = dMarca;
+      if (i.actualizadoEn) {
+        const dAct = new Date(i.actualizadoEn);
+        if (!isNaN(dAct.getTime())) {
+          dataInscripcio = dAct;
+        }
+      }
+
+      // Y (Preparado)
+      const preparado = (i.entregaMaterial === 'PREPARAT' || i.entregaMaterial === 'ENTREGAT') ? 'SI' : '';
+
+      // Z (Entregado)
+      const entregado = i.entregaMaterial === 'ENTREGAT' || i.respostesCuestionari?.['entregado'] === true || String(i.respostesCuestionari?.['entregado']).toUpperCase() === 'SI' || i.respostesCuestionari?.['entrega'] === true;
+
+      // AA (Envio whats)
+      const envioWhats = i.respostesCuestionari?.['envi_whats'] === true || i.respostesCuestionari?.['whats'] === true || String(i.respostesCuestionari?.['envi_whats']).toUpperCase() === 'SI' || i.respostesCuestionari?.['envio_whats'] === true;
+
+      // AB (Fin inscripcion)
+      const finInscripcio = 'SI';
+
+      // AC (Pulsera)
+      const pulsera = i.respostesCuestionari?.['pulsera'] === true || String(i.respostesCuestionari?.['pulsera']).toUpperCase() === 'SI' || i.entregaMaterial === 'ENTREGAT';
+
+      // AD (Enviado mail conf)
+      const mailEnviat = (i.respostesCuestionari?.estatCorreu !== 'fallat' && i.respostesCuestionari?.estatCorreu !== 'error');
+
+      // Add row to worksheet
+      ws.addRow([
+        dMarca,             // A
+        email,              // B
+        pareja,             // C
+        bandera,            // D
+        comparser1,         // E
+        comparser2,         // F
+        telefon,            // G
+        correuElectronic,   // H
+        preuParella,        // I
+        armillaVal,         // J
+        preuArmilla,        // K
+        tallaArmilla,       // L
+        clavellsVal,        // M
+        preuClavells,       // N
+        corbatiVal,         // O
+        preuCorbati,        // P
+        esmorzarVal,        // Q
+        preuEsmorzar,       // R
+        totalFormula,       // S  (Formula)
+        pagatAmount,        // T
+        pdteFormula,        // U  (Formula)
+        formaPag,           // V
+        mVal,               // W
+        dataInscripcio,     // X
+        preparado,          // Y
+        entregado,          // Z   (Checkbox boolean)
+        envioWhats,         // AA  (Checkbox boolean)
+        finInscripcio,      // AB
+        pulsera,            // AC  (Checkbox boolean)
+        mailEnviat          // AD  (Checkbox boolean)
+      ]);
+
+      // Access row to apply styles cell-by-cell
+      const addedRow = ws.getRow(rowNum);
+      const borderObj = {
+        top: { style: 'thin', color: { argb: 'FFD3D3D3' } },
+        left: { style: 'thin', color: { argb: 'FFD3D3D3' } },
+        bottom: { style: 'thin', color: { argb: 'FFD3D3D3' } },
+        right: { style: 'thin', color: { argb: 'FFD3D3D3' } }
+      };
+
+      addedRow.eachCell({ includeEmpty: true }, (cell, colNum) => {
+        // Set basic font
+        cell.font = { name: 'Arial', size: 9 };
+        cell.border = borderObj;
+        cell.alignment = { vertical: 'middle', wrapText: false };
+
+        // Set number formats
+        if (colNum === 1) { // Marca temporal (A)
+          cell.numFormat = 'dd/mm/yyyy hh:mm:ss';
+        }
+        else if (colNum === 24) { // Fecha inscripcion (X)
+          cell.numFormat = 'dd/mm/yy';
+          cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        }
+        else if ([9, 11, 14, 16, 18, 19, 20, 21].includes(colNum)) { // Financial values
+          cell.numFormat = '#,##0.00" €"';
+          cell.alignment = { horizontal: 'right', vertical: 'middle' };
+        }
+        else if ([3, 7, 10, 12, 13, 15, 17, 23, 25, 26, 27, 28, 29, 30].includes(colNum)) { // Boolean status and shorter inputs
+          cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        }
+
+        // Column solid fill colors
+        if (colNum === 3 || colNum === 4) { // PAREJA & BANDERA -> AMARILLO (#FFFF00)
+          cell.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FFFFFF00' }
+          };
+        } else if (colNum === 6) { // NOM I COGNOM COMPARSERA -> ROSA CLARO (#FFB6C1)
+          cell.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FFFFB6C1' }
+          };
+        } else if (colNum === 7) { // TELÈFON -> CYAN (#00FFFF)
+          cell.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FF00FFFF' }
+          };
+        } else {
+          // default white background
+          cell.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FFFFFFFF' }
+          };
+        }
+
+        // Exact conditional formatting rules
+        // 1. ARMILLA (Col 10): "LLOGUER" -> light green, "COMPRA" -> light blue
+        if (colNum === 10) {
+          if (cell.value === 'LLOGUER') {
+            cell.fill = {
+              type: 'pattern',
+              pattern: 'solid',
+              fgColor: { argb: 'FFE2EFDA' } // Light green
+            };
+          } else if (cell.value === 'COMPRA') {
+            cell.fill = {
+              type: 'pattern',
+              pattern: 'solid',
+              fgColor: { argb: 'FFDDEBF7' } // Light blue
+            };
+          }
+        }
+
+        // 2. PDTE. PAG (Col 21): > 0 -> light red, = 0 -> light green
+        if (colNum === 21) {
+          const pdteVal = (i.preuCalculat || 90) - pagatAmount;
+          if (pdteVal > 0) {
+            cell.fill = {
+              type: 'pattern',
+              pattern: 'solid',
+              fgColor: { argb: 'FFFFC7CE' } // Light red
+            };
+          } else {
+            cell.fill = {
+              type: 'pattern',
+              pattern: 'solid',
+              fgColor: { argb: 'FFC6EFCE' } // Light green
+            };
+          }
+        }
+
+        // 3. FORMA PAGAMENT (Col 22): Con valor -> light green (#90EE90)
+        if (colNum === 22 && formaPag) {
+          cell.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FF90EE90' } // Green
+          };
+        }
+
+        // 4. PREPARADO (Col 25): "SI" -> light green
+        if (colNum === 25 && preparado === 'SI') {
+          cell.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: 'FFE2EFDA' } // Light green
+          };
+        }
+      });
+    });
+
+    // Inmovilizar fila 1 y columnas hasta H (Freeze row 1 and columns A to H)
+    ws.views = [
+      { state: 'frozen', xSplit: 8, ySplit: 1, activeCell: 'I2', style: 'none' }
+    ];
+
+    // Elegant auto column width fitting adjusted to cell contents
+    ws.columns.forEach(column => {
+      let maxLen = 12;
+      column.eachCell({ includeEmpty: true }, (cell) => {
+        const valStr = cell.value ? String(cell.value) : "";
+        if (valStr.length > maxLen) {
+          maxLen = valStr.length;
+        }
+      });
+      column.width = Math.min(maxLen + 4, 32); // Safe padding + upper bound
+    });
+
+    // Write buffer and download Excel document
     try {
       const buffer = await workbook.xlsx.writeBuffer();
       const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
