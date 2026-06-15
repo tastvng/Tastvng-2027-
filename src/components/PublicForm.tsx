@@ -1170,12 +1170,12 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
                       </label>
                       {(linia.preu || linia.preuLloguer) ? (
                         <div className="flex gap-1.5 flex-wrap justify-end">
-                          {linia.preu ? (
+                          {linia.preu && (!sel || !sel.c1Tipus || sel.c1Tipus === 'compra') ? (
                             <span className="text-[10px] font-mono text-fuchsia-600 bg-fuchsia-50 rounded px-1.5 py-0.5 border border-fuchsia-100 font-bold tracking-tight">
                               +{linia.preu}€ {language === 'ca' ? '(compra)' : '(venta)'}
                             </span>
                           ) : null}
-                          {linia.preuLloguer ? (
+                          {linia.preuLloguer && sel && sel.c1Tipus === 'lloguer' ? (
                             <span className="text-[10px] font-mono text-sky-600 bg-sky-50 rounded px-1.5 py-0.5 border border-sky-100 font-bold tracking-tight">
                               +{linia.preuLloguer}€ {language === 'ca' ? '(lloguer)' : '(alquiler)'}
                             </span>
@@ -1186,7 +1186,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
 
                     <div className="flex gap-2.5">
                       <select 
-                        value={sel.c1Talla} 
+                        value={sel.c1Talla}
                         onChange={(e) => {
                           const newSel = { ...sel, c1Talla: e.target.value };
                           setSeleccionsUniforme({
@@ -1630,12 +1630,12 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
                       </label>
                       {(linia.preu || linia.preuLloguer) ? (
                         <div className="flex gap-1.5 flex-wrap justify-end">
-                          {linia.preu ? (
+                          {linia.preu && (!sel || !sel.c2Tipus || sel.c2Tipus === 'compra') ? (
                             <span className="text-[10px] font-mono text-fuchsia-600 bg-fuchsia-50 rounded px-1.5 py-0.5 border border-fuchsia-100 font-bold tracking-tight">
                               +{linia.preu}€ {language === 'ca' ? '(compra)' : '(venta)'}
                             </span>
                           ) : null}
-                          {linia.preuLloguer ? (
+                          {linia.preuLloguer && sel && sel.c2Tipus === 'lloguer' ? (
                             <span className="text-[10px] font-mono text-sky-600 bg-sky-50 rounded px-1.5 py-0.5 border border-sky-100 font-bold tracking-tight">
                               +{linia.preuLloguer}€ {language === 'ca' ? '(lloguer)' : '(alquiler)'}
                             </span>
@@ -1646,7 +1646,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
 
                     <div className="flex gap-2.5">
                       <select 
-                        value={sel.c2Talla} 
+                        value={sel.c2Talla}
                         onChange={(e) => {
                           const newSel = { ...sel, c2Talla: e.target.value };
                           setSeleccionsUniforme({
@@ -1911,6 +1911,28 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
                     const qCount = Number(qty);
                     return ` + ${qCount}x ${extra.nom}: ${qCount * extra.valor}€`;
                   }).filter(Boolean).join('')}
+                {(config.liniisUniforme || []).map((linia) => {
+                  const sel = seleccionsUniforme[linia.id];
+                  if (!sel) return '';
+                  let str = '';
+                  const lnNom = language === 'ca' ? linia.nom : linia.nomES;
+                  
+                  const c1Qty = sel.c1Quantitat || (linia.requeixQuantitat ? 0 : 1);
+                  const p1 = sel.c1Tipus === 'lloguer' ? (linia.preuLloguer || 0) : (linia.preu || 0);
+                  const t1 = sel.c1Tipus === 'lloguer' ? (language === 'ca' ? 'Llog.' : 'Alq.') : (language === 'ca' ? 'Comp.' : 'Vent.');
+                  if (c1Qty > 0 && p1 > 0) {
+                    str += ` + ${c1Qty}x ${lnNom} (${t1}): ${c1Qty * p1}€`;
+                  }
+                  
+                  const c2Qty = sel.c2Quantitat || (linia.requeixQuantitat ? 0 : 1);
+                  const p2 = sel.c2Tipus === 'lloguer' ? (linia.preuLloguer || 0) : (linia.preu || 0);
+                  const t2 = sel.c2Tipus === 'lloguer' ? (language === 'ca' ? 'Llog.' : 'Alq.') : (language === 'ca' ? 'Comp.' : 'Vent.');
+                  if (c2Qty > 0 && p2 > 0) {
+                    str += ` + ${c2Qty}x ${lnNom} (${t2}): ${c2Qty * p2}€`;
+                  }
+                  
+                  return str;
+                }).filter(Boolean).join('')}
                 )
               </span>
             </div>
