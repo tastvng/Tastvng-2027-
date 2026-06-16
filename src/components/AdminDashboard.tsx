@@ -136,6 +136,7 @@ export default function AdminDashboard({
   // Bulk and complete deletion helpers
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [showClearConfirmModal, setShowClearConfirmModal] = useState(false);
+  const [clearConfirmText, setClearConfirmText] = useState('');
   const [showBulkDeleteConfirmModal, setShowBulkDeleteConfirmModal] = useState(false);
 
   // Staff management state
@@ -952,9 +953,14 @@ export default function AdminDashboard({
 
   const handleClearAll = () => {
     if (onClearAllInscripcions) {
+      const now = new Date();
+      console.warn(
+        `[AVÍS DE SEGURETAT - BUIDAT DE BASE DE DADES]\nFecha: ${now.toLocaleDateString()}\nHora: ${now.toLocaleTimeString()}\nS'estan esborrant un total de ${inscripcions.length} registres de la taula 'inscripciones'.\nTinent l'ordre de buidar completament la base de dades activa.`
+      );
       onClearAllInscripcions();
       setSelectedIds([]);
       setShowClearConfirmModal(false);
+      setClearConfirmText('');
     }
   };
 
@@ -1649,7 +1655,10 @@ export default function AdminDashboard({
 
                 <button 
                   type="button"
-                  onClick={() => setShowClearConfirmModal(true)}
+                  onClick={() => {
+                    setClearConfirmText('');
+                    setShowClearConfirmModal(true);
+                  }}
                   className="bg-red-600 hover:bg-red-700 text-white font-bold text-xs px-4 py-3 rounded-2xl transition-all shadow flex items-center gap-1.5 cursor-pointer"
                   id="btn-clear-all"
                 >
@@ -2910,18 +2919,35 @@ export default function AdminDashboard({
               Estàs 100% segur de que vols esborrar-ho tot de la base de dades d'inscripcions d'El Tast? Aquesta acció és irreversible i eliminarà totes les dades registrades fins ara.
             </p>
 
+            <div className="space-y-2">
+              <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider block">
+                Escriu "BORRAR" en majúscules per habilitar el buidat:
+              </label>
+              <input
+                type="text"
+                value={clearConfirmText}
+                onChange={(e) => setClearConfirmText(e.target.value)}
+                placeholder="Escriu BORRAR en majúscules"
+                className="w-full px-3 py-2 border border-zinc-200 rounded-xl text-xs bg-zinc-50 text-zinc-900 focus:outline-none focus:ring-1 focus:ring-red-500 font-bold tracking-wider placeholder-zinc-400"
+              />
+            </div>
+
             <div className="flex gap-2.5 pt-2">
               <button
                 type="button"
-                onClick={() => setShowClearConfirmModal(false)}
-                className="flex-1 py-2.5 px-4 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold text-xs rounded-xl transition"
+                onClick={() => {
+                  setShowClearConfirmModal(false);
+                  setClearConfirmText('');
+                }}
+                className="flex-1 py-2.5 px-4 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold text-xs rounded-xl transition cursor-pointer"
               >
                 No, cancel·lar
               </button>
               <button
                 type="button"
                 onClick={handleClearAll}
-                className="flex-1 py-1 px-4 bg-red-650 text-white hover:bg-red-700 font-bold text-xs rounded-xl transition"
+                disabled={clearConfirmText !== 'BORRAR'}
+                className="flex-1 py-1 px-4 bg-red-650 disabled:bg-zinc-100 text-white disabled:text-zinc-400 hover:bg-red-700 font-bold text-xs rounded-xl transition cursor-pointer disabled:cursor-not-allowed"
               >
                 Sí, vull esborrar-ho tot
               </button>
