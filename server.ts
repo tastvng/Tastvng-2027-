@@ -25,16 +25,25 @@ async function startServer() {
   // API Route to send a real SMTP email
   app.post("/api/send-email", async (req, res) => {
     try {
-      const { smtpConfig, emailData } = req.body;
-      if (!smtpConfig || !emailData) {
-        return res.status(400).json({ error: "Falten paràmetres smtpConfig o emailData" });
+      const { emailData } = req.body;
+      if (!emailData) {
+        return res.status(400).json({ error: "Faltat paràmetre emailData" });
       }
 
-      const { host, port, user, pass, senderName } = smtpConfig;
+      const host = process.env.SMTP_HOST;
+      const port = process.env.SMTP_PORT;
+      const user = process.env.SMTP_USER;
+      const pass = process.env.SMTP_PASSWORD;
+      const senderName = process.env.SMTP_SENDER_NAME || "Inscripcions El Tast";
+
       const { to, subject, html, attachments } = emailData;
 
-      if (!host || !port || !user || !pass || !to || !subject || !html) {
-        return res.status(400).json({ error: "Falten camps obligatoris de la configuració SMTP o del correu" });
+      if (!host || !port || !user || !pass) {
+        return res.status(500).json({ error: "La configuració de correu SMTP del servidor no està llesta. Si us plau, configureu les variables d'entorn SMTP_HOST, SMTP_PORT, SMTP_USER i SMTP_PASSWORD al servidor." });
+      }
+
+      if (!to || !subject || !html) {
+        return res.status(400).json({ error: "Falten camps obligatoris del correu (to, subject o html)" });
       }
 
       const portNum = parseInt(port, 10);
@@ -60,7 +69,7 @@ async function startServer() {
 
       // Base email options
       const mailOptions: any = {
-        from: `"${senderName || 'Inscripcions El Tast'}" <${user}>`,
+        from: `"${senderName}" <${user}>`,
         to,
         subject,
         html,

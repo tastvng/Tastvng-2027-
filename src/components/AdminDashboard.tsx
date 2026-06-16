@@ -214,19 +214,6 @@ export default function AdminDashboard({
   const handleResendEmail = async (item: Inscripcio) => {
     setRowSmtpSending(prev => ({ ...prev, [item.id]: 'sending' }));
 
-    const host = localStorage.getItem('tast_smtp_host') || smtpHost;
-    const port = localStorage.getItem('tast_smtp_port') || smtpPort;
-    const user = localStorage.getItem('tast_smtp_usuari') || smtpUsuari;
-    const pass = localStorage.getItem('tast_smtp_contrasenya') || smtpContrasenya;
-
-    if (!host || !port || !user || !pass) {
-      alert(language === 'ca' 
-        ? "Configureu i deseu el servidor SMTP primer a la pestanya 'Configuració SMTP'." 
-        : "Configure y guarde el servidor SMTP primero en la pestaña 'Configuración SMTP'.");
-      setRowSmtpSending(prev => ({ ...prev, [item.id]: 'error' }));
-      return;
-    }
-
     try {
       const emailList = [item.c1Email, item.c2Email].filter(Boolean).filter(email => email.includes('@'));
       if (emailList.length === 0) {
@@ -385,7 +372,6 @@ export default function AdminDashboard({
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            smtpConfig: { host, port, user, pass, senderName: language === 'ca' ? "Inscripcions El Tast" : "Inscripciones El Tast" },
             emailData: {
               to: emailTo,
               subject: emailSubject,
@@ -504,11 +490,11 @@ export default function AdminDashboard({
 
   // Test send mail with SMTP server
   const handleTestSmtp = async () => {
-    if (!smtpHost.trim() || !smtpPort.trim() || !smtpUsuari.trim() || !smtpContrasenya.trim()) {
+    if (!smtpTestDestinatari.trim()) {
       setSmtpTestStatus('error');
       setSmtpTestMsg(language === 'ca' 
-        ? "Si us plau, omple tots els camps del servidor SMTP (host, port, usuari i contrasenya) abans de provar."
-        : "Por favor, rellena todos los campos del servidor SMTP (host, port, usuario y contraseña) antes de probar."
+        ? "Si us plau, introduïu una adreça de correu de destí per fer la prova."
+        : "Por favor, introduzca una dirección de correo de destino para realizar la prueba."
       );
       return;
     }
@@ -523,15 +509,8 @@ export default function AdminDashboard({
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          smtpConfig: {
-            host: smtpHost,
-            port: smtpPort,
-            user: smtpUsuari,
-            pass: smtpContrasenya,
-            senderName: language === 'ca' ? "Inscripcions El Tast" : "Inscripciones El Tast"
-          },
           emailData: {
-            to: smtpTestDestinatari || smtpUsuari,
+            to: smtpTestDestinatari.trim(),
             subject: language === 'ca' ? "Provador de Connexió SMTP - El Tast" : "Probador de Conexión SMTP - El Tast",
             html: `
               <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 30px; border: 1px solid #e1e1e6; border-radius: 20px; background-color: #ffffff;">
@@ -551,11 +530,9 @@ export default function AdminDashboard({
                 </p>
                 <div style="background-color: #f8f9fa; padding: 20px; border-radius: 14px; font-family: monospace; font-size: 12px; border: 1px solid #ebd4e0; color: #333333; margin: 25px 0;">
                   <strong style="color: #ff0090;">⚙️ DETALLS DE CONNEXIÓ:</strong><br/>
-                  • Servidor: ${smtpHost}<br/>
-                  • Port: ${smtpPort}<br/>
-                  • Usuari: ${smtpUsuari}<br/>
+                  • Servidor: Configurat de forma segura a les variables d'entorn de servidor (SMTP_HOST)<br/>
                   • Data/Hora: ${new Date().toLocaleString()}<br/>
-                  • Control: TLS Cryptographic Tunnel Actiu
+                  • Canal de seguretat: TLS Cryptographic Tunnel Actiu
                 </div>
                 <p style="font-size: 14px; line-height: 1.6; color: #333333;">
                   ${language === 'ca'
@@ -565,7 +542,7 @@ export default function AdminDashboard({
                 <div style="border-top: 1px solid #eaeaea; margin: 25px 0; padding-top: 15px; text-align: center;">
                   <p style="font-size: 11px; color: #999999; margin: 0;">
                     Desenvolupat per a l'Associació Cultural El Tast de Vilanova i la Geltrú.<br/>
-                    Aquest és un correu de control tècnic autoritzat pel vostre propi SMTP.
+                    Aquest és un correu de control tècnic autoritzat pel vostre propio SMTP.
                   </p>
                 </div>
               </div>
@@ -2006,98 +1983,31 @@ export default function AdminDashboard({
               </h3>
               <p className="text-xs text-zinc-500">
                 {language === 'ca'
-                  ? "Configura el protocol SMTP de secretaria per enviar rebuts de preinscripció i justificants QR directament als usuaris de forma automàtica."
-                  : "Configura el protocolo SMTP de secretaría para enviar billetes de preinscripción y justificantes QR directamente a los usuarios de forma automática."}
+                  ? "Configuració de seguretat centralitzada de de la teva entitat de forma real."
+                  : "Configuración de seguridad centralizada de tu entidad de forma real."}
               </p>
             </div>
           </div>
 
-          <form onSubmit={handleSaveSmtp} className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-2">
-              <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wider">
-                {language === 'ca' ? "Servidor SMTP Host" : "Servidor SMTP Host"}
-              </label>
-              <input
-                type="text"
-                value={smtpHost}
-                onChange={(e) => setSmtpHost(e.target.value)}
-                placeholder="smtp.gmail.com"
-                className="w-full bg-zinc-50 border border-zinc-200 focus:border-fuchsia-500 rounded-2xl px-4 py-3 text-xs focus:outline-none transition-all font-sans text-zinc-800"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wider">
-                {language === 'ca' ? "Port de sortida (Port)" : "Puerto de salida (Port)"}
-              </label>
-              <input
-                type="text"
-                value={smtpPort}
-                onChange={(e) => setSmtpPort(e.target.value)}
-                placeholder="587"
-                className="w-full bg-zinc-50 border border-zinc-200 focus:border-fuchsia-500 rounded-2xl px-4 py-3 text-xs focus:outline-none transition-all font-sans text-zinc-800"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wider">
-                {language === 'ca' ? "Compte de Correu (Usuari)" : "Cuenta de Correo (Usuario)"}
-              </label>
-              <input
-                type="email"
-                value={smtpUsuari}
-                onChange={(e) => setSmtpUsuari(e.target.value)}
-                placeholder="tastvng@gmail.com"
-                className="w-full bg-zinc-50 border border-zinc-200 focus:border-fuchsia-500 rounded-2xl px-4 py-3 text-xs focus:outline-none transition-all font-sans text-zinc-800"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wider">
-                {language === 'ca' ? "Contrasenya / Token d'Aplicació (Password)" : "Contraseña / Token de Aplicación (Password)"}
-              </label>
-              <div className="relative">
-                <input
-                  type={showSmtpPassword ? "text" : "password"}
-                  value={smtpContrasenya}
-                  onChange={(e) => setSmtpContrasenya(e.target.value)}
-                  placeholder="••••••••••••••••"
-                  className="w-full bg-zinc-50 border border-zinc-200 focus:border-fuchsia-500 rounded-2xl px-4 py-3 pr-10 text-xs focus:outline-none transition-all font-sans text-zinc-800"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowSmtpPassword(!showSmtpPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-[#ff0090] cursor-pointer"
-                >
-                  {showSmtpPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
+          <div className="bg-fuchsia-50/55 border border-fuchsia-100 rounded-2xl p-4 flex gap-3 text-xs text-zinc-600 leading-relaxed">
+            <ShieldCheck size={24} className="text-[#ff0090] shrink-0 mt-0.5" />
+            <div>
+              <p className="font-bold text-zinc-900">
+                {language === 'ca' ? "Avís sobre seguretat del proveïdor" : "Aviso sobre seguridad del proveedor"}
+              </p>
+              <p className="mt-0.5 text-[11px] text-zinc-500">
+                {language === 'ca'
+                  ? "Com a mesura de seguretat avançada, les credencials del servidor SMTP (User, Password, Host, Port) s'han traslladat des de la base de dades directa cap a variables d'entorn d'execució xifrada del servidor. El frontend i el navegador mai tenen accés a aquestes claus."
+                  : "Como medida de seguridad avanzada, las credenciales del servidor SMTP (User, Password, Host, Port) se han trasladado desde la base de datos directa hacia las variables de entorno de ejecución cifrada en el servidor. El frontend y los navegadores nunca tienen acceso a estas claves."}
+              </p>
+              <div className="pt-2 flex flex-wrap gap-2 text-[10px] font-mono font-bold text-fuchsia-700">
+                <span className="bg-fuchsia-100 px-2 py-1 rounded">SMTP_HOST</span>
+                <span className="bg-fuchsia-100 px-2 py-1 rounded">SMTP_PORT</span>
+                <span className="bg-fuchsia-100 px-2 py-1 rounded">SMTP_USER</span>
+                <span className="bg-fuchsia-100 px-2 py-1 rounded">SMTP_PASSWORD</span>
               </div>
             </div>
-
-            <div className="md:col-span-2 bg-fuchsia-50/40 border border-fuchsia-100 rounded-2xl p-4 flex gap-3 text-xs text-zinc-655 leading-relaxed">
-              <AlertCircle size={18} className="text-[#ff0090] shrink-0 mt-0.5" />
-              <div>
-                <p className="font-bold text-zinc-900">
-                  {language === 'ca' ? "Avís sobre seguretat del proveïdor" : "Aviso sobre seguridad del proveedor"}
-                </p>
-                <p className="mt-0.5 text-[11px] text-zinc-500">
-                  {language === 'ca'
-                    ? "Per a compreses o entitats que empren proveïdors com Gmail o Outlook, recordeu obtenir una Contrasenya d'Aplicació (App Password) des de les opcions de seguretat del vostre compte. Això manté la connexió encriptada i preveu bloquejos de trànsit."
-                    : "Para comisiones o entidades que usan proveedores como Gmail o Outlook, recordad obtener una Contraseña de Aplicación (App Password) desde las opciones de seguridad de vuestra cuenta. Esto mantiene la conexión encriptada y previene bloqueos de tráfico."}
-                </p>
-              </div>
-            </div>
-
-            <div className="md:col-span-2 flex justify-end gap-2 pt-2 border-t border-zinc-100">
-              <button
-                type="submit"
-                className="bg-zinc-900 hover:bg-black text-white font-bold text-xs px-5 py-3 rounded-2xl transition flex items-center gap-1.5 shadow-md cursor-pointer"
-              >
-                <Key size={14} className="text-[#ff0090]" />
-                {language === 'ca' ? "Desar credencials SMTP" : "Guardar credenciales SMTP"}
-              </button>
-            </div>
-          </form>
+          </div>
 
           {smtpSaveSuccess && (
             <div className="bg-emerald-50 border border-emerald-250 text-emerald-800 text-xs p-3.5 rounded-2xl flex items-center gap-2">

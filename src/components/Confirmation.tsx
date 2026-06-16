@@ -45,48 +45,6 @@ export default function Confirmation({ registration, onClear, onUpdate }: Confir
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&color=e6007e&data=${encodeURIComponent(registration.id)}`;
 
   const sendRealEmail = async () => {
-    let host = localStorage.getItem('tast_smtp_host');
-    let port = localStorage.getItem('tast_smtp_port');
-    let user = localStorage.getItem('tast_smtp_usuari');
-    let pass = localStorage.getItem('tast_smtp_contrasenya');
-
-    if (!host || !port || !user || !pass) {
-      // Hot-load live SMTP credentials from Supabase directly
-      try {
-        const { getSupabaseSetting, isSupabaseConfigured } = await import('../supabaseClient');
-        if (isSupabaseConfigured) {
-          const liveHost = await getSupabaseSetting<string>('tast_smtp_host', '');
-          const livePort = await getSupabaseSetting<string>('tast_smtp_port', '');
-          const liveUser = await getSupabaseSetting<string>('tast_smtp_usuari', '');
-          const livePass = await getSupabaseSetting<string>('tast_smtp_contrasenya', '');
-
-          if (liveHost) {
-            localStorage.setItem('tast_smtp_host', liveHost);
-            host = liveHost;
-          }
-          if (livePort) {
-            localStorage.setItem('tast_smtp_port', livePort);
-            port = livePort;
-          }
-          if (liveUser) {
-            localStorage.setItem('tast_smtp_usuari', liveUser);
-            user = liveUser;
-          }
-          if (livePass) {
-            localStorage.setItem('tast_smtp_contrasenya', livePass);
-            pass = livePass;
-          }
-        }
-      } catch (e) {
-        console.error("Error loading SMTP configurations from Supabase dynamically inside Confirmation:", e);
-      }
-    }
-
-    if (!host || !port || !user || !pass) {
-      setSmtpStatus('not_configured');
-      return;
-    }
-
     setSmtpStatus('sending');
     setSmtpError('');
 
@@ -247,7 +205,6 @@ export default function Confirmation({ registration, onClear, onUpdate }: Confir
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            smtpConfig: { host, port, user, pass, senderName: language === 'ca' ? "Inscripcions El Tast" : "Inscripciones El Tast" },
             emailData: {
               to: emailTo,
               subject: emailSubject,

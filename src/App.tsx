@@ -49,6 +49,7 @@ import MobileRemoteScanner from './components/MobileRemoteScanner';
 import PortadaPage, { PortadaConfig } from './components/PortadaPage';
 import { PORTADA_CONFIG_DEFAULTS } from './components/AdminPortada';
 import { 
+  supabase,
   isSupabaseConfigured, 
   getSupabaseSetting, 
   saveSupabaseSetting, 
@@ -220,20 +221,7 @@ export default function App() {
           setConfig(CONFIG_INICIAL);
         }
 
-        try {
-          // 2. Fetch Inscriptions
-          const dbInscripcions = await getSupabaseInscripciones();
-          if (dbInscripcions && dbInscripcions.length > 0) {
-            setInscripcions(dbInscripcions);
-            localStorage.setItem('tast_inscripcions_2026', JSON.stringify(dbInscripcions));
-          } else {
-            setInscripcions([]);
-            localStorage.setItem('tast_inscripcions_2026', JSON.stringify([]));
-          }
-        } catch (e) {
-          console.error("Error loading inscriptions from Supabase:", e);
-          setInscripcions([]);
-        }
+        // Sensitive inscription loading has been deferred and is handled dynamically only after admin logs in!
 
         try {
           // 3. Fetch social news / noticies
@@ -288,12 +276,7 @@ export default function App() {
           } else {
             setConfig(CONFIG_INICIAL);
           }
-          const savedInscripcions = localStorage.getItem('tast_inscripcions_2026');
-          if (savedInscripcions) {
-            setInscripcions(JSON.parse(savedInscripcions));
-          } else {
-            setInscripcions(INSCRIPCIONS_INICIALS);
-          }
+          setInscripcions([]); // Clear any public in-memory inscriptions on load
           const savedNoticies = localStorage.getItem('tast_noticies_2026');
           if (savedNoticies) {
             setNoticies(JSON.parse(savedNoticies));
@@ -303,23 +286,88 @@ export default function App() {
           }
         } catch (e) {
           console.error("LocalStorage fallback load failed:", e);
-          setInscripcions(INSCRIPCIONS_INICIALS);
+          setInscripcions([]);
         }
       }
-
-      // Check admin login
-      try {
-        const savedLogin = localStorage.getItem('tast_admin_session_2026') || sessionStorage.getItem('tast_admin_session_2026');
-        if (savedLogin === 'true') {
-          setIsAdminLoggedIn(true);
-        }
-      } catch (e) {}
 
       setIsLoading(false);
     }
 
     loadAllFromDatabase();
   }, []);
+
+  // Maintain session via Supabase Auth
+  useEffect(() => {
+    if (isSupabaseConfigured && supabase) {
+      // Check current session
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        setIsAdminLoggedIn(!!session);
+      });
+
+      // Listen to auth changes
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+        const loggedIn = !!session;
+        setIsAdminLoggedIn(loggedIn);
+        if (loggedIn) {
+          setView('admin-dashboard');
+        } else {
+          // Send to portada or public depending on the landing page status
+          setView(portadaConfig.activa === false ? 'public' : 'portada');
+        }
+      });
+
+      return () => {
+        subscription.unsubscribe();
+      };
+    }
+  }, [portadaConfig.activa]);
+
+  // Lazy-load inscriptions ONLY when logged in
+  useEffect(() => {
+    async function loadInscripcions() {
+      if (!isAdminLoggedIn) {
+        setInscripcions([]);
+        return;
+      }
+      
+      if (isSupabaseConfigured) {
+        try {
+          const dbInscripcions = await getSupabaseInscripciones();
+          if (dbInscripcions && dbInscripcions.length > 0) {
+            setInscripcions(dbInscripcions);
+            localStorage.setItem('tast_inscripcions_2026', JSON.stringify(dbInscripcions));
+          } else {
+            setInscripcions([]);
+            localStorage.setItem('tast_inscripcions_2026', JSON.stringify([]));
+          }
+        } catch (e) {
+          console.error("Error loading inscriptions dynamically for session:", e);
+          setInscripcions([]);
+        }
+      } else {
+        // Traditional LocalStorage loading fallback if logged in for custom layouts
+        try {
+          const savedInscripcions = localStorage.getItem('tast_inscripcions_2026');
+          if (savedInscripcions) {
+            setInscripcions(JSON.parse(savedInscripcions));
+          } else {
+            setInscripcions([]);
+          }
+        } catch (e) {
+          setInscripcions([]);
+        }
+      }
+    }
+
+    loadInscripcions();
+  }, [isAdminLoggedIn]);
+
+  // Route authenticated admins automatically
+  useEffect(() => {
+    if (isAdminLoggedIn && view === 'login') {
+      setView('admin-dashboard');
+    }
+  }, [isAdminLoggedIn, view]);
 
   // Quick logger function
   const addLog = (text: string) => {
@@ -488,17 +536,18 @@ export default function App() {
 
   const handleAdminLogin = (rememberMe: boolean = false) => {
     setIsAdminLoggedIn(true);
-    if (rememberMe) {
-      localStorage.setItem('tast_admin_session_2026', 'true');
-    } else {
-      sessionStorage.setItem('tast_admin_session_2026', 'true');
-      localStorage.setItem('tast_admin_session_2026', 'false');
-    }
     setView('admin-dashboard');
     addLog("Sessió d'administrador iniciada correctament.");
   };
 
-  const handleAdminLogout = () => {
+  const handleAdminLogout = async () => {
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.auth.signOut();
+      } catch (e) {
+        console.error("Sign out error:", e);
+      }
+    }
     setIsAdminLoggedIn(false);
     localStorage.setItem('tast_admin_session_2026', 'false');
     sessionStorage.setItem('tast_admin_session_2026', 'false');

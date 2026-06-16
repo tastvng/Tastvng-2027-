@@ -48,8 +48,8 @@ export default function AdminLogin({ onLoginSuccess, onBackToPublic }: AdminLogi
     e.preventDefault();
     if (!username.trim() || !password.trim()) {
       setErrorError(language === 'ca' 
-        ? "Si us plau, introduïu l'usuari i la contrasenya." 
-        : "Por favor, introduzca el usuario y la contraseña.");
+        ? "Si us plau, introduïu l'adreça de correu i la contrasenya." 
+        : "Por favor, introduzca el correo y la contraseña.");
       return;
     }
 
@@ -57,92 +57,27 @@ export default function AdminLogin({ onLoginSuccess, onBackToPublic }: AdminLogi
     setErrorError(null);
 
     try {
-      // Accepting 'admin'/'admin' or 'tast'/'tast' or 'tastvng@gmail.com'/'eltast2026' or 'tastvng@gmail.com'/'tast'
-      const isEmergencyUser = (username === 'admin' && password === 'admin') || 
-                              (username === 'tast' && password === 'tast') ||
-                              (username.toLowerCase() === 'tastvng@gmail.com' && (password === 'tast' || password === 'eltast2026')) ||
-                              (username === 'secretaria' && password === 'eltast2026');
-
-      let isValid = isEmergencyUser;
-
-      // Remedy 1 & 2: Direct lookup from manually added staff profiles in Supabase setting 'tast_staff_2026'
       if (isSupabaseConfigured && supabase) {
-        try {
-          const { data, error } = await supabase
-            .from('settings')
-            .select('value')
-            .eq('key', 'tast_staff_2026')
-            .maybeSingle();
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: username.trim(),
+          password: password,
+        });
 
-          if (!error && data) {
-            const rawVal = data.value;
-            let staffList: any[] = [];
-            if (rawVal) {
-              if (typeof rawVal === 'string') {
-                staffList = JSON.parse(rawVal);
-              } else {
-                staffList = rawVal;
-              }
-            }
-
-            if (Array.isArray(staffList) && staffList.length > 0) {
-              // Sincronizar en LocalStorage para redundancia local inmediata
-              localStorage.setItem('tast_staff_2026', JSON.stringify(staffList));
-              window.dispatchEvent(new Event('staffChanged'));
-
-              if (!isValid) {
-                const found = staffList.find((s: any) => 
-                  (s.usuari?.toLowerCase() === username.toLowerCase() || s.nom?.toLowerCase() === username.toLowerCase()) && 
-                  s.contrasenya === password && 
-                  s.actiu !== false
-                );
-                if (found) {
-                  isValid = true;
-                }
-              }
-            }
-          }
-        } catch (jwtErr) {
-          console.error("Live Supabase credentials fetch failed:", jwtErr);
+        if (error) {
+          setErrorError(language === 'ca'
+            ? `Error d'autenticació: ${error.message === 'Invalid login credentials' ? 'Credencials no vàlides' : error.message}`
+            : `Error de autenticación: ${error.message === 'Invalid login credentials' ? 'Credenciales no válidas' : error.message}`);
+          setIsVerifying(false);
+          return;
         }
-      }
 
-      // LocalStorage fallback if still not found
-      if (!isValid) {
-        try {
-          const savedStaff = localStorage.getItem('tast_staff_2026');
-          if (savedStaff) {
-            const staffList = JSON.parse(savedStaff);
-            const found = staffList.find((s: any) => 
-              (s.usuari?.toLowerCase() === username.toLowerCase() || s.nom?.toLowerCase() === username.toLowerCase()) && 
-              s.contrasenya === password && 
-              s.actiu !== false
-            );
-            if (found) {
-              isValid = true;
-            }
-          }
-        } catch (e) {
-          console.error("Error verifying dynamic staff credentials from LocalStorage backup:", e);
-        }
-      }
-
-      setIsVerifying(false);
-      if (isValid) {
-        if (rememberMe) {
-          localStorage.setItem('tast_remember_me_enabled', 'true');
-          localStorage.setItem('tast_saved_username', username);
-          localStorage.setItem('tast_saved_password', password);
-        } else {
-          localStorage.setItem('tast_remember_me_enabled', 'false');
-          localStorage.removeItem('tast_saved_username');
-          localStorage.removeItem('tast_saved_password');
-        }
+        setIsVerifying(false);
         onLoginSuccess(rememberMe);
       } else {
+        setIsVerifying(false);
         setErrorError(language === 'ca'
-          ? "L'usuari o la contrasenya no són correctes. Proveu amb credencials vàlides de secretaria."
-          : "El usuario o la contraseña no son correctos. Pruebe con credenciales válidas de secretaría.");
+          ? "Supabase no està configurat en aquest entorn."
+          : "Supabase no está configurado en este entorno.");
       }
     } catch (err: any) {
       setIsVerifying(false);
