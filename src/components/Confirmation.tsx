@@ -222,11 +222,14 @@ export default function Confirmation({ registration, onClear, onUpdate }: Confir
         const res = results[i];
         if (!res.ok) {
           const text = await res.text();
-          let errText = 'SMTP Connection Error';
+          let errText = '';
           try {
             const data = JSON.parse(text);
-            errText = data.error || errText;
+            errText = data.error || data.message || '';
           } catch {
+            // Not JSON
+          }
+          if (!errText) {
             errText = text.substring(0, 150) || `HTTP Error ${res.status}`;
           }
           errorsList.push(`${emailList[i]}: ${errText}`);

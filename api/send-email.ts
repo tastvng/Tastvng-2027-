@@ -21,15 +21,35 @@ export default async function handler(req: any, res: any) {
   try {
     const { smtpConfig, emailData } = req.body;
 
-    if (!smtpConfig || !emailData) {
-      return res.status(400).json({ error: "Falten paràmetres smtpConfig o emailData" });
+    if (!emailData) {
+      console.error("[Vercel Serverless Error] Missing 'emailData' in request body.");
+      return res.status(400).json({ error: "Faltat paràmetre emailData" });
     }
 
-    const { host, port, user, pass, senderName } = smtpConfig;
+    const host = smtpConfig?.host || process.env.SMTP_HOST;
+    const port = smtpConfig?.port || process.env.SMTP_PORT;
+    const user = smtpConfig?.user || process.env.SMTP_USER;
+    const pass = smtpConfig?.pass || process.env.SMTP_PASSWORD;
+    const senderName = smtpConfig?.senderName || process.env.SMTP_SENDER_NAME || "Inscripcions El Tast";
+
     const { to, subject, html, attachments } = emailData;
 
-    if (!host || !port || !user || !pass || !to || !subject || !html) {
-      return res.status(400).json({ error: "Falten camps obligatoris de la configuració SMTP o del correu" });
+    if (!host || !port || !user || !pass) {
+      const missingVars = [];
+      if (!host) missingVars.push("SMTP_HOST");
+      if (!port) missingVars.push("SMTP_PORT");
+      if (!user) missingVars.push("SMTP_USER");
+      if (!pass) missingVars.push("SMTP_PASSWORD");
+
+      console.error("[Vercel Serverless Error] Missing server SMTP environment variables or smtpConfig:", missingVars);
+      return res.status(500).json({ 
+        error: `Falten les següents variables d'entorn del servidor per a realitzar l'enviament SMTP: ${missingVars.join(", ")}` 
+      });
+    }
+
+    if (!to || !subject || !html) {
+      console.error("[Vercel Serverless Error] Missing required email fields (to, subject, or html) inside emailData.");
+      return res.status(400).json({ error: "Falten camps obligatoris del correu (to, subject o html)" });
     }
 
     const portNum = parseInt(port, 10);

@@ -27,6 +27,7 @@ async function startServer() {
     try {
       const { emailData } = req.body;
       if (!emailData) {
+        console.error("[Backend Error] Missing 'emailData' in request body.");
         return res.status(400).json({ error: "Faltat paràmetre emailData" });
       }
 
@@ -45,12 +46,14 @@ async function startServer() {
       if (!pass) missingVars.push("SMTP_PASSWORD");
 
       if (missingVars.length > 0) {
+        console.error("[Backend Error] Missing sever SMTP environment variables:", missingVars);
         return res.status(500).json({ 
           error: `Falten les següents variables d'entorn del servidor per a realitzar l'enviament SMTP: ${missingVars.join(", ")}` 
         });
       }
 
       if (!to || !subject || !html) {
+        console.error("[Backend Error] Missing required email fields (to, subject, or html) inside emailData.");
         return res.status(400).json({ error: "Falten camps obligatoris del correu (to, subject o html)" });
       }
 

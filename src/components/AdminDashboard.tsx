@@ -389,7 +389,17 @@ export default function AdminDashboard({
         const res = results[i];
         if (!res.ok) {
           const text = await res.text();
-          errorsList.push(text);
+          let errText = '';
+          try {
+            const data = JSON.parse(text);
+            errText = data.error || data.message || '';
+          } catch {
+            // Not JSON
+          }
+          if (!errText) {
+            errText = text.substring(0, 150) || `HTTP Error ${res.status}`;
+          }
+          errorsList.push(errText);
         }
       }
 
