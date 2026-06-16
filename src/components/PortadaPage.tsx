@@ -111,6 +111,33 @@ export default function PortadaPage({
   const { language, setLanguage } = useLanguage();
 
   const [customLogo, setCustomLogo] = React.useState(() => localStorage.getItem('tast_email_logo') || "");
+  const [liveEstatInscripcio, setLiveEstatInscripcio] = React.useState<'obertes' | 'espera' | 'tancades'>(globalEstatInscripcions);
+
+  // Sync with prop changes
+  React.useEffect(() => {
+    setLiveEstatInscripcio(globalEstatInscripcions);
+  }, [globalEstatInscripcions]);
+
+  // Query estat_inscripcio_global to sync frontpage status immediately from Supabase
+  React.useEffect(() => {
+    async function fetchLiveStatus() {
+      try {
+        const { getSupabaseSetting, isSupabaseConfigured } = await import('../supabaseClient');
+        if (isSupabaseConfigured) {
+          const globalStatus = await getSupabaseSetting<'abierta' | 'lista_espera'>('estat_inscripcio_global', 'abierta');
+          console.log("estat_inscripcio_global loaded on Portada Page:", globalStatus);
+          if (globalStatus === 'lista_espera') {
+            setLiveEstatInscripcio('espera');
+          } else if (globalStatus === 'abierta') {
+            setLiveEstatInscripcio('obertes');
+          }
+        }
+      } catch (err) {
+        console.error("Error loading live estat_inscripcio_global in PortadaPage:", err);
+      }
+    }
+    fetchLiveStatus();
+  }, []);
 
   const [hoverFooter1, setHoverFooter1] = React.useState(false);
   const [hoverFooter2, setHoverFooter2] = React.useState(false);
@@ -418,9 +445,9 @@ export default function PortadaPage({
           <div className="flex flex-wrap gap-3 items-center">
             {(() => {
               // Determine active badge text based on the registration state
-              const badgeText = globalEstatInscripcions === 'tancades'
+              const badgeText = liveEstatInscripcio === 'tancades'
                 ? (language === 'ca' ? 'Inscripcions Tancades' : 'Inscripciones Cerradas')
-                : globalEstatInscripcions === 'espera'
+                : liveEstatInscripcio === 'espera'
                   ? (language === 'ca' ? "Llista d'Espera 2026" : "Lista de Espera 2026")
                   : (language === 'ca' 
                       ? (config.badgeTextCA || 'Inscripcions Obertes 2026') 
@@ -470,7 +497,7 @@ export default function PortadaPage({
                   <div className="flex items-center gap-1 bg-black/60 border border-white/10 px-1.5 py-0.5 rounded-full shrink-0">
                     <div 
                       className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${
-                        globalEstatInscripcions === 'tancades'
+                        liveEstatInscripcio === 'tancades'
                           ? 'bg-red-500 shadow-[0_0_8px_#ef4444] animate-pulse scale-110'
                           : 'bg-red-950/60 opacity-30 shadow-none'
                       }`}
@@ -478,7 +505,7 @@ export default function PortadaPage({
                     />
                     <div 
                       className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${
-                        globalEstatInscripcions === 'espera'
+                        liveEstatInscripcio === 'espera'
                           ? 'bg-amber-500 shadow-[0_0_8px_#f59e0b] animate-pulse scale-110'
                           : 'bg-amber-950/60 opacity-30 shadow-none'
                       }`}
@@ -486,7 +513,7 @@ export default function PortadaPage({
                     />
                     <div 
                       className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${
-                        globalEstatInscripcions === 'obertes'
+                        liveEstatInscripcio === 'obertes'
                           ? 'bg-emerald-500 shadow-[0_0_8px_#10b981] animate-pulse scale-110'
                           : 'bg-emerald-950/60 opacity-30 shadow-none'
                       }`}
