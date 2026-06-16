@@ -132,6 +132,7 @@ export default function AdminDashboard({
   const [filterPagament, setFilterPagament] = useState<string>('ALL');
   const [filterDni, setFilterDni] = useState<string>('ALL');
   const [filterEntrega, setFilterEntrega] = useState<string>('ALL');
+  const [filterEstatInscripcio, setFilterEstatInscripcio] = useState<string>('ALL');
 
   // Bulk and complete deletion helpers
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -925,7 +926,13 @@ export default function AdminDashboard({
     // Entrega filter
     const matchesEntrega = filterEntrega === 'ALL' || item.entregaMaterial === filterEntrega;
 
-    return matchesSearch && matchesCategoria && matchesPagament && matchesDni && matchesEntrega;
+    // Estat inscripcio filter
+    const matchesEstatInscripcio = 
+      filterEstatInscripcio === 'ALL' || 
+      (filterEstatInscripcio === 'lista_espera' && (item.estat_inscripcio === 'lista_espera' || item.llistaEspera === true)) ||
+      (filterEstatInscripcio === 'abierta' && (item.estat_inscripcio === 'abierta' || (!item.estat_inscripcio && !item.llistaEspera)));
+
+    return matchesSearch && matchesCategoria && matchesPagament && matchesDni && matchesEntrega && matchesEstatInscripcio;
   });
 
   const isAllVisibleSelected = filteredInscripcions.length > 0 && filteredInscripcions.every(item => selectedIds.includes(item.id));
@@ -1733,6 +1740,21 @@ export default function AdminDashboard({
                   <option value={EstatInscripcio.PENDENT}>Pendent</option>
                 </select>
               </div>
+
+              {/* Estat Inscripció dropdown filter */}
+              <div className="flex items-center bg-white border border-zinc-200 px-3 py-2 rounded-xl">
+                <span className="text-zinc-500 mr-2 font-mono">Estat</span>
+                <select 
+                  value={filterEstatInscripcio} 
+                  onChange={(e) => setFilterEstatInscripcio(e.target.value)}
+                  className="bg-transparent font-bold text-zinc-900 border-none outline-none cursor-pointer"
+                  id="filter-estat-inscripcio"
+                >
+                  <option value="ALL">Tots</option>
+                  <option value="abierta">{language === 'ca' ? 'Placa Oberta' : 'Plaza Abierta'}</option>
+                  <option value="lista_espera">{language === 'ca' ? 'Llista d\'Espera' : 'Lista de Espera'}</option>
+                </select>
+              </div>
             </div>
           </div>
 
@@ -1796,9 +1818,13 @@ export default function AdminDashboard({
                       <td className="px-6 py-4.5">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="font-mono font-bold text-zinc-900 block">{item.codiSeguiment}</span>
-                          {item.llistaEspera && (
+                          {(item.estat_inscripcio === 'lista_espera' || item.llistaEspera === true) ? (
                             <span className="bg-amber-100 text-amber-800 text-[8px] font-black px-1.5 py-0.5 rounded uppercase font-mono tracking-wider shrink-0 bg-amber-500/10 border border-amber-300">
                               🟡 ESPERA
+                            </span>
+                          ) : (
+                            <span className="bg-emerald-100 text-emerald-800 text-[8px] font-black px-1.5 py-0.5 rounded uppercase font-mono tracking-wider shrink-0 bg-emerald-500/10 border border-emerald-300">
+                              🟢 OBERTA
                             </span>
                           )}
                         </div>
