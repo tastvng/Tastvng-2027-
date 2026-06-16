@@ -44,6 +44,7 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
   const [preuDomasBalco, setPreuDomasBalco] = useState(config.preuDomasBalco);
   const [preuMocadorExtra, setPreuMocadorExtra] = useState(config.preuMocadorExtra);
   const [estatInscripcions, setEstatInscripcions] = useState<'obertes' | 'espera' | 'tancades'>(config.estatInscripcions || 'obertes');
+  const [aforoMaximoAbiertas, setAforoMaximoAbiertas] = useState<number>(config.aforo_maximo_abiertas !== undefined ? config.aforo_maximo_abiertas : 100);
 
   // Supabase dynamic setup states
   const [dbUrlSetup, setDbUrlSetup] = useState(() => localStorage.getItem('VITE_SUPABASE_URL') || '');
@@ -433,7 +434,8 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
       estatInscripcions: estatInscripcions,
       googleSheetSyncUrl: googleSheetSyncUrl.trim(),
       googleSheetSyncActive: googleSheetSyncActive,
-      cuestionariActiu: cuestionariActiu
+      cuestionariActiu: cuestionariActiu,
+      aforo_maximo_abiertas: Number(aforoMaximoAbiertas) || 100
     };
 
     onSave(updated);
@@ -926,6 +928,24 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                   </button>
                 </div>
               </div>
+            </div>
+
+            {/* Aforo Máximo de Inscripciones Abiertas */}
+            <div className="space-y-1.5 pt-4 border-t border-zinc-100">
+              <label className="block text-[10px] text-zinc-500 uppercase font-mono font-bold">
+                Aforament Màxim Places Obertes / Confirmat ('aforo_maximo_abiertas')
+              </label>
+              <input 
+                type="number" 
+                value={aforoMaximoAbiertas} 
+                onChange={(e) => setAforoMaximoAbiertas(Math.max(1, Number(e.target.value)))}
+                className="w-full bg-zinc-50 border border-zinc-200 focus:border-fuchsia-500 focus:bg-white rounded-xl px-3 py-2 text-xs font-mono font-bold focus:outline-none"
+                id="input-config-aforo-maximo"
+                placeholder="Ex. 100"
+              />
+              <p className="text-[10px] text-zinc-400">
+                Determina el límit on les noves preinscripcions passen automàticament a estar en llista d'espera.
+              </p>
             </div>
 
             <div className="bg-zinc-50 p-4 rounded-2xl border border-zinc-100 flex gap-2 text-zinc-500 text-[10px] leading-relaxed">

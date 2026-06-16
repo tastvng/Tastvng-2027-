@@ -420,13 +420,25 @@ export default function App() {
   };
 
   const addRegistration = async (newReg: Inscripcio) => {
+    let countAbiertas = 0;
+    if (isSupabaseConfigured) {
+      try {
+        const { countAbiertasInscripciones } = await import('./supabaseClient');
+        countAbiertas = await countAbiertasInscripciones();
+      } catch (err) {
+        console.error("Error counting abiertas:", err);
+      }
+    }
+    const limit = config.aforo_maximo_abiertas || 100;
+    newReg.estat_inscripcio = countAbiertas < limit ? 'abierta' : 'lista_espera';
+
     const updated = [newReg, ...inscripcions];
     setInscripcions(updated);
     localStorage.setItem('tast_inscripcions_2026', JSON.stringify(updated));
     syncWithGoogle(updated);
     setActiveRegistration(newReg);
     setView('confirmacio');
-    addLog(`Preinscripció realitzada amb èxit per a: ${newReg.c1Nom} & ${newReg.c2Nom}. Codi: ${newReg.codiSeguiment}`);
+    addLog(`Preinscripció realitzada amb èxit per a: ${newReg.c1Nom} & ${newReg.c2Nom}. Codi: ${newReg.codiSeguiment} (${newReg.estat_inscripcio === 'abierta' ? 'Places obertes' : 'Llista espera'})`);
     addLog(language === 'ca'
       ? `📧 SMTP: Correu de confirmació oficial enviat automàticament des de secretaria@eltast.cat a ${newReg.c1Email} i ${newReg.c2Email}`
       : `📧 SMTP: Correo de confirmación oficial enviado automáticamente desde secretaria@eltast.cat a ${newReg.c1Email} y ${newReg.c2Email}`
@@ -442,11 +454,23 @@ export default function App() {
   };
 
   const addRegistrationManual = async (newReg: Inscripcio) => {
+    let countAbiertas = 0;
+    if (isSupabaseConfigured) {
+      try {
+        const { countAbiertasInscripciones } = await import('./supabaseClient');
+        countAbiertas = await countAbiertasInscripciones();
+      } catch (err) {
+        console.error("Error counting abiertas:", err);
+      }
+    }
+    const limit = config.aforo_maximo_abiertas || 100;
+    newReg.estat_inscripcio = countAbiertas < limit ? 'abierta' : 'lista_espera';
+
     const updated = [newReg, ...inscripcions];
     setInscripcions(updated);
     localStorage.setItem('tast_inscripcions_2026', JSON.stringify(updated));
     syncWithGoogle(updated);
-    addLog(`Parella afegida manualment des del taulell: ${newReg.c1Nom} & ${newReg.c2Nom}. Codi: ${newReg.codiSeguiment}`);
+    addLog(`Parella afegida manualment des del taulell: ${newReg.c1Nom} & ${newReg.c2Nom}. Codi: ${newReg.codiSeguiment} (${newReg.estat_inscripcio === 'abierta' ? 'Places obertes' : 'Llista espera'})`);
     if (isSupabaseConfigured) {
       try {
         await saveSupabaseInscripcion(newReg);

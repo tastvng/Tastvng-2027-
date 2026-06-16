@@ -202,6 +202,7 @@ function parseInscripcionesRows(rows: any[]): Inscripcio[] {
       metodePagament: r.metodePagament || r.metode_pagament || r.metodepagament || null,
       estatDni: r.estatDni || r.estat_dni || r.estatdni || 'PENDENT',
       entregaMaterial: r.entregaMaterial || r.entrega_material || r.entregamaterial || 'PENDENT',
+      estat_inscripcio: r.estat_inscripcio || r.estatInscripcio || undefined,
 
       creadoEn: r.creadoEn || r.creado_en || r.created_at || new Date().toISOString(),
       actualizadoEn: r.actualizadoEn || r.actualizado_en || r.updated_at || new Date().toISOString()
@@ -286,6 +287,7 @@ export async function saveSupabaseInscripcion(ins: Inscripcio): Promise<boolean>
         metodePagament: ins.metodePagament,
         estatDni: ins.estatDni,
         entregaMaterial: ins.entregaMaterial,
+        estat_inscripcio: ins.estat_inscripcio || null,
         creadoEn: ins.creadoEn,
         actualizadoEn: ins.actualizadoEn
       });
@@ -333,6 +335,7 @@ export async function saveSupabaseInscripcion(ins: Inscripcio): Promise<boolean>
         metode_pagament: ins.metodePagament,
         estat_dni: ins.estatDni,
         entrega_material: ins.entregaMaterial,
+        estat_inscripcio: ins.estat_inscripcio || null,
         creado_en: ins.creadoEn,
         actualizado_en: ins.actualizadoEn
       });
@@ -443,5 +446,35 @@ export async function clearAllSupabaseInscripciones(): Promise<boolean> {
   } catch(e) {
     console.error("Exception clearing inscriptions from Supabase:", e);
     return false;
+  }
+}
+
+/**
+ * Counts how many inscriptions have 'estat_inscripcio' = 'abierta'
+ */
+export async function countAbiertasInscripciones(): Promise<number> {
+  if (!supabase) return 0;
+  try {
+    const tableName = 'inscripciones';
+    const { count, error } = await supabase
+      .from(tableName)
+      .select('*', { count: 'exact', head: true })
+      .eq('estat_inscripcio', 'abierta');
+
+    if (error) {
+      const resFallback = await supabase
+        .from('inscripcions')
+        .select('*', { count: 'exact', head: true })
+        .eq('estat_inscripcio', 'abierta');
+      if (!resFallback.error) {
+        return resFallback.count || 0;
+      }
+      console.warn("Error counting 'abierta' inscriptions:", error.message);
+      return 0;
+    }
+    return count || 0;
+  } catch (err) {
+    console.error("Exception counting 'abierta' inscriptions:", err);
+    return 0;
   }
 }

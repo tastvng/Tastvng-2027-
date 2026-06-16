@@ -388,6 +388,19 @@ export default function Confirmation({ registration, onClear, onUpdate }: Confir
             <p className="text-[10px] text-zinc-400 font-mono text-center mt-3 uppercase tracking-wider">
               {language === 'ca' ? 'Presenteu aquest QR als revisors per fer el pagament' : 'Presenten este QR a los revisores para realizar el pago'}
             </p>
+            
+            {/* Estat de la Inscripció Badge */}
+            <div className="mt-4 flex flex-col items-center">
+              {registration.estat_inscripcio === 'lista_espera' ? (
+                <div className="bg-amber-50 border border-amber-200 text-amber-850 rounded-2xl px-5 py-2.5 text-xs font-sans font-extrabold flex items-center gap-2 text-center shadow-sm">
+                  <span>⏳ EN LISTA DE ESPERA - Serà notificado cuando se libere una plaça</span>
+                </div>
+              ) : (
+                <div className="bg-emerald-50 border border-emerald-200 text-emerald-850 rounded-2xl px-5 py-2.5 text-xs font-sans font-extrabold flex items-center gap-2 text-center shadow-sm">
+                  <span>✅ Inscripció CONFIRMADA - Plaça ABIERTA</span>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Couples detail blocks */}
@@ -398,6 +411,21 @@ export default function Confirmation({ registration, onClear, onUpdate }: Confir
               </span>
               <span className="font-semibold text-zinc-900 text-right">
                 {registration.c1Nom} &amp; {registration.c2Nom}
+              </span>
+            </div>
+
+            <div className="flex justify-between items-center text-xs">
+              <span className="text-zinc-500 font-bold uppercase tracking-wide">
+                {language === 'ca' ? 'Estat inscripció:' : 'Estado inscripción:'}
+              </span>
+              <span className={`font-bold px-2.5 py-0.5 rounded-lg text-[11px] font-mono ${
+                registration.estat_inscripcio === 'lista_espera'
+                  ? 'bg-amber-100 text-amber-800'
+                  : 'bg-emerald-100 text-emerald-800'
+              }`}>
+                {registration.estat_inscripcio === 'lista_espera' 
+                  ? 'LISTA DE ESPERA' 
+                  : 'PLAZA ABIERTA'}
               </span>
             </div>
 
