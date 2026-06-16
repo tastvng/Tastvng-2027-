@@ -72,13 +72,13 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
 
   // States for dynamic customizable tariffs/payment lines
   const [titolSeccioTarifes, setTitolSeccioTarifes] = useState(config.titolSeccioTarifes || 'Tarifes i Cànons 2026');
-  const [estatInscripcioGlobal, setEstatInscripcioGlobal] = useState<'abierta' | 'lista_espera'>('abierta');
+  const [estatInscripcioGlobal, setEstatInscripcioGlobal] = useState<'abierta' | 'lista_espera' | 'cerrada'>('abierta');
 
   useEffect(() => {
     async function loadGlobalStatus() {
       try {
-        const val = await getSupabaseSetting<'abierta' | 'lista_espera'>('estat_inscripcio_global', 'abierta');
-        if (val === 'abierta' || val === 'lista_espera') {
+        const val = await getSupabaseSetting<'abierta' | 'lista_espera' | 'cerrada'>('estat_inscripcio_global', 'abierta');
+        if (val === 'abierta' || val === 'lista_espera' || val === 'cerrada') {
           setEstatInscripcioGlobal(val);
         }
       } catch (err) {
@@ -453,7 +453,7 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
       liniisUniforme: liniisUniforme,
       textLegalAutoritzacioMenors: textLegalAutoritzacioMenors,
       textLegalAutoritzacioMenorsES: textLegalAutoritzacioMenorsES,
-      estatInscripcions: estatInscripcioGlobal === 'lista_espera' ? 'espera' : 'obertes',
+      estatInscripcions: estatInscripcioGlobal === 'lista_espera' ? 'espera' : estatInscripcioGlobal === 'cerrada' ? 'tancades' : 'obertes',
       googleSheetSyncUrl: googleSheetSyncUrl.trim(),
       googleSheetSyncActive: googleSheetSyncActive,
       cuestionariActiu: cuestionariActiu,
@@ -866,7 +866,7 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
               <span className="block text-[10px] text-zinc-500 uppercase font-mono font-bold tracking-wider">
                 {language === 'ca' ? "ESTAT D'INSCRIPCIÓ GLOBAL" : "ESTADO DE INSCRIPCIÓN GLOBAL"}
               </span>
-              <div className="flex items-center gap-3">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
                 <button
                   type="button"
                   onClick={async () => {
@@ -895,11 +895,25 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                 >
                   🟡 {language === 'ca' ? "LLISTA D'ESPERA" : "LISTA DE ESPERA"}
                 </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setEstatInscripcioGlobal('cerrada');
+                    await saveSupabaseSetting('estat_inscripcio_global', 'cerrada');
+                  }}
+                  className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold font-mono tracking-wider transition-all duration-200 border ${
+                    estatInscripcioGlobal === 'cerrada'
+                      ? 'bg-red-600 text-white border-red-500 shadow-md shadow-red-600/10'
+                      : 'bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-50'
+                  }`}
+                >
+                  🔴 {language === 'ca' ? "CERRADA (TANCADES)" : "CERRADA (CERRADAS)"}
+                </button>
               </div>
               <p className="text-[10px] text-zinc-400 font-sans tracking-tight">
                 {language === 'ca'
-                  ? "Controla si els nous registres entren com a Plaça Oberta Directa o passen automàticament a la Llista d'Espera."
-                  : "Controla si los nuevos registros entran como Plaza Abierta Directa o pasan automáticamente a la Lista de Espera."}
+                  ? "Controla si els nous registres entren com a Plaça Oberta, passen a la Llista d'Espera o es tanquen per complet les inscripcions."
+                  : "Controla si los nuevos registros entran como Plaza Abierta, pasan a la Lista de Espera o se cierran por completo las inscripciones."}
               </p>
             </div>
 

@@ -208,12 +208,12 @@ export default function App() {
         try {
           // 1. Fetch Global Config
           const dbConfig = await getSupabaseSetting<SistemaConfig | null>('tast_config_2026', null);
-          const globalStatus = await getSupabaseSetting<'abierta' | 'lista_espera'>('estat_inscripcio_global', 'abierta');
+          const globalStatus = await getSupabaseSetting<'abierta' | 'lista_espera' | 'cerrada'>('estat_inscripcio_global', 'abierta');
           
           let activeConfig = dbConfig || CONFIG_INICIAL;
           activeConfig = {
             ...activeConfig,
-            estatInscripcions: globalStatus === 'lista_espera' ? 'espera' : 'obertes'
+            estatInscripcions: globalStatus === 'lista_espera' ? 'espera' : globalStatus === 'cerrada' ? 'tancades' : 'obertes'
           };
 
           setConfig(activeConfig);
@@ -425,7 +425,11 @@ export default function App() {
     if (newReg.llistaEspera === true) {
       newReg.estat_inscripcio = 'lista_espera';
     } else {
-      newReg.estat_inscripcio = config.estatInscripcions === 'espera' ? 'lista_espera' : 'abierta';
+      newReg.estat_inscripcio = config.estatInscripcions === 'espera' 
+        ? 'lista_espera' 
+        : config.estatInscripcions === 'tancades' 
+          ? 'cerrada' 
+          : 'abierta';
     }
     
     // Sincronització absoluta:
@@ -456,7 +460,11 @@ export default function App() {
     if (newReg.llistaEspera === true) {
       newReg.estat_inscripcio = 'lista_espera';
     } else {
-      newReg.estat_inscripcio = config.estatInscripcions === 'espera' ? 'lista_espera' : 'abierta';
+      newReg.estat_inscripcio = config.estatInscripcions === 'espera' 
+        ? 'lista_espera' 
+        : config.estatInscripcions === 'tancades' 
+          ? 'cerrada' 
+          : 'abierta';
     }
     
     // Sincronització absoluta:

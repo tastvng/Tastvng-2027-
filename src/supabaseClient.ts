@@ -282,10 +282,10 @@ export async function saveSupabaseInscripcion(ins: Inscripcio): Promise<boolean>
 
     if (isNew) {
       // Read global enrollment status from settings, defaulting to 'abierta'
-      let globalStatus: 'abierta' | 'lista_espera' = 'abierta';
+      let globalStatus: 'abierta' | 'lista_espera' | 'cerrada' = 'abierta';
       try {
-        const val = await getSupabaseSetting<'abierta' | 'lista_espera'>('estat_inscripcio_global', 'abierta');
-        if (val === 'abierta' || val === 'lista_espera') {
+        const val = await getSupabaseSetting<'abierta' | 'lista_espera' | 'cerrada'>('estat_inscripcio_global', 'abierta');
+        if (val === 'abierta' || val === 'lista_espera' || val === 'cerrada') {
           globalStatus = val;
         }
       } catch (err) {

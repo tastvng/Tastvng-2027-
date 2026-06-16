@@ -89,7 +89,7 @@ export interface Inscripcio {
   entregaDomas?: boolean;
   entregaMocadors?: boolean;
   llistaEspera?: boolean;
-  estat_inscripcio?: 'abierta' | 'lista_espera';
+  estat_inscripcio?: 'abierta' | 'lista_espera' | 'cerrada';
   
   creadoEn: string;
   actualizadoEn: string;

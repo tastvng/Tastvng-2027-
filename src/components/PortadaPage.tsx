@@ -112,10 +112,12 @@ export default function PortadaPage({
 
   const [customLogo, setCustomLogo] = React.useState(() => localStorage.getItem('tast_email_logo') || "");
   const [liveEstatInscripcio, setLiveEstatInscripcio] = React.useState<'obertes' | 'espera' | 'tancades'>(globalEstatInscripcions);
+  const [estatInscripcioGlobalSetting, setEstatInscripcioGlobalSetting] = React.useState<'abierta' | 'lista_espera' | 'cerrada'>('abierta');
 
   // Sync with prop changes
   React.useEffect(() => {
     setLiveEstatInscripcio(globalEstatInscripcions);
+    setEstatInscripcioGlobalSetting(globalEstatInscripcions === 'espera' ? 'lista_espera' : globalEstatInscripcions === 'tancades' ? 'cerrada' : 'abierta');
   }, [globalEstatInscripcions]);
 
   // Query estat_inscripcio_global to sync frontpage status immediately from Supabase
@@ -124,12 +126,17 @@ export default function PortadaPage({
       try {
         const { getSupabaseSetting, isSupabaseConfigured } = await import('../supabaseClient');
         if (isSupabaseConfigured) {
-          const globalStatus = await getSupabaseSetting<'abierta' | 'lista_espera'>('estat_inscripcio_global', 'abierta');
+          const globalStatus = await getSupabaseSetting<'abierta' | 'lista_espera' | 'cerrada'>('estat_inscripcio_global', 'abierta');
           console.log("estat_inscripcio_global loaded on Portada Page:", globalStatus);
-          if (globalStatus === 'lista_espera') {
-            setLiveEstatInscripcio('espera');
-          } else if (globalStatus === 'abierta') {
-            setLiveEstatInscripcio('obertes');
+          if (globalStatus) {
+            setEstatInscripcioGlobalSetting(globalStatus);
+            if (globalStatus === 'lista_espera') {
+              setLiveEstatInscripcio('espera');
+            } else if (globalStatus === 'cerrada') {
+              setLiveEstatInscripcio('tancades');
+            } else if (globalStatus === 'abierta') {
+              setLiveEstatInscripcio('obertes');
+            }
           }
         }
       } catch (err) {
@@ -207,7 +214,12 @@ export default function PortadaPage({
     }
   };
 
-  const titol = (language === 'ca' ? config.titolCA : config.titolES) || (language === 'ca' ? config.titolES : config.titolCA) || '';
+  const titol = estatInscripcioGlobalSetting === 'abierta'
+    ? (language === 'ca' ? 'Inscripcions obertes 2027' : 'Inscripciones abiertas 2027')
+    : estatInscripcioGlobalSetting === 'lista_espera'
+      ? (language === 'ca' ? "Llista d'espera 2027" : "Lista de espera 2027")
+      : (language === 'ca' ? "Inscripcions tancades 2027" : "Inscripciones cerradas 2027");
+  console.log("Active Portada Page title rendered:", titol);
   const subtitol = (language === 'ca' ? config.subtitolCA : config.subtitolES) || (language === 'ca' ? config.subtitolES : config.subtitolCA) || '';
   const descripcio = (language === 'ca' ? config.descripcioCA : config.descripcioES) || (language === 'ca' ? config.descripcioES : config.descripcioCA) || '';
   const botoText = (language === 'ca' ? config.botoTextCA : config.botoTextES) || (language === 'ca' ? config.botoTextES : config.botoTextCA) || '';
