@@ -38,8 +38,16 @@ async function startServer() {
 
       const { to, subject, html, attachments } = emailData;
 
-      if (!host || !port || !user || !pass) {
-        return res.status(500).json({ error: "La configuració de correu SMTP del servidor no està llesta. Si us plau, configureu les variables d'entorn SMTP_HOST, SMTP_PORT, SMTP_USER i SMTP_PASSWORD al servidor." });
+      const missingVars: string[] = [];
+      if (!host) missingVars.push("SMTP_HOST");
+      if (!port) missingVars.push("SMTP_PORT");
+      if (!user) missingVars.push("SMTP_USER");
+      if (!pass) missingVars.push("SMTP_PASSWORD");
+
+      if (missingVars.length > 0) {
+        return res.status(500).json({ 
+          error: `Falten les següents variables d'entorn del servidor per a realitzar l'enviament SMTP: ${missingVars.join(", ")}` 
+        });
       }
 
       if (!to || !subject || !html) {
