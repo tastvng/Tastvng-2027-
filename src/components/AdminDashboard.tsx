@@ -1188,10 +1188,11 @@ export default function AdminDashboard({
       // V (Forma Pagament)
       let formaPag = "";
       if (i.metodePagament) {
-        if (i.metodePagament === 'EFECTIU' || i.metodePagament === 'METALIC' || String(i.metodePagament).toUpperCase() === 'EFECTIVO' || String(i.metodePagament).toUpperCase() === 'METALICO') {
+        const metStr = String(i.metodePagament).toUpperCase();
+        if (metStr === 'EFECTIU' || metStr === 'METALIC' || metStr === 'EFECTIVO' || metStr === 'METALICO') {
           formaPag = "METALICO";
         } else {
-          formaPag = String(i.metodePagament).toUpperCase();
+          formaPag = metStr;
         }
       }
 
@@ -1208,7 +1209,8 @@ export default function AdminDashboard({
       }
 
       // Y (Preparado)
-      const preparado = (i.entregaMaterial === 'PREPARAT' || i.entregaMaterial === 'ENTREGAT') ? 'SI' : '';
+      const matStr = String(i.entregaMaterial);
+      const preparado = (matStr === 'PREPARAT' || matStr === 'ENTREGAT' || i.entregaMaterial === 'ENTREGAT') ? 'SI' : '';
 
       // Z (Entregado)
       const entregado = i.entregaMaterial === 'ENTREGAT' || i.respostesCuestionari?.['entregado'] === true || String(i.respostesCuestionari?.['entregado']).toUpperCase() === 'SI' || i.respostesCuestionari?.['entrega'] === true;
@@ -1262,11 +1264,11 @@ export default function AdminDashboard({
       // Access row to apply styles cell-by-cell
       const addedRow = ws.getRow(rowNum);
       const borderObj = {
-        top: { style: 'thin', color: { argb: 'FFD3D3D3' } },
-        left: { style: 'thin', color: { argb: 'FFD3D3D3' } },
-        bottom: { style: 'thin', color: { argb: 'FFD3D3D3' } },
-        right: { style: 'thin', color: { argb: 'FFD3D3D3' } }
-      };
+        top: { style: 'thin' as any, color: { argb: 'FFD3D3D3' } },
+        left: { style: 'thin' as any, color: { argb: 'FFD3D3D3' } },
+        bottom: { style: 'thin' as any, color: { argb: 'FFD3D3D3' } },
+        right: { style: 'thin' as any, color: { argb: 'FFD3D3D3' } }
+      } as any;
 
       addedRow.eachCell({ includeEmpty: true }, (cell, colNum) => {
         // Set basic font
@@ -1276,14 +1278,14 @@ export default function AdminDashboard({
 
         // Set number formats
         if (colNum === 1) { // Marca temporal (A)
-          cell.numFormat = 'dd/mm/yyyy hh:mm:ss';
+          cell.numFmt = 'dd/mm/yyyy hh:mm:ss';
         }
         else if (colNum === 24) { // Fecha inscripcion (X)
-          cell.numFormat = 'dd/mm/yy';
+          cell.numFmt = 'dd/mm/yy';
           cell.alignment = { horizontal: 'center', vertical: 'middle' };
         }
         else if ([9, 11, 14, 16, 18, 19, 20, 21].includes(colNum)) { // Financial values
-          cell.numFormat = '#,##0.00" €"';
+          cell.numFmt = '#,##0.00" €"';
           cell.alignment = { horizontal: 'right', vertical: 'middle' };
         }
         else if ([3, 7, 10, 12, 13, 15, 17, 23, 25, 26, 27, 28, 29, 30].includes(colNum)) { // Boolean status and shorter inputs
@@ -1376,7 +1378,7 @@ export default function AdminDashboard({
 
     // Inmovilizar fila 1 y columnas hasta H (Freeze row 1 and columns A to H)
     ws.views = [
-      { state: 'frozen', xSplit: 8, ySplit: 1, activeCell: 'I2', style: 'none' }
+      { state: 'frozen', xSplit: 8, ySplit: 1, activeCell: 'I2', style: 'none' } as any
     ];
 
     // Elegant auto column width fitting adjusted to cell contents

@@ -154,6 +154,7 @@ export default function AdminFicha({ registration, config, onBack, onSave }: Adm
       entregaDomas,
       entregaMocadors,
       llistaEspera,
+      estat_inscripcio: llistaEspera ? 'lista_espera' : 'abierta',
       actualizadoEn: new Date().toISOString()
     };
 

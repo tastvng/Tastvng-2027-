@@ -430,7 +430,14 @@ export default function App() {
       }
     }
     const limit = config.aforo_maximo_abiertas || 100;
-    newReg.estat_inscripcio = countAbiertas < limit ? 'abierta' : 'lista_espera';
+    if (newReg.llistaEspera === true) {
+      newReg.estat_inscripcio = 'lista_espera';
+    } else {
+      newReg.estat_inscripcio = countAbiertas < limit ? 'abierta' : 'lista_espera';
+    }
+    
+    // Sincronització absoluta:
+    newReg.llistaEspera = (newReg.estat_inscripcio === 'lista_espera');
 
     const updated = [newReg, ...inscripcions];
     setInscripcions(updated);
@@ -464,7 +471,14 @@ export default function App() {
       }
     }
     const limit = config.aforo_maximo_abiertas || 100;
-    newReg.estat_inscripcio = countAbiertas < limit ? 'abierta' : 'lista_espera';
+    if (newReg.llistaEspera === true) {
+      newReg.estat_inscripcio = 'lista_espera';
+    } else {
+      newReg.estat_inscripcio = countAbiertas < limit ? 'abierta' : 'lista_espera';
+    }
+    
+    // Sincronització absoluta:
+    newReg.llistaEspera = (newReg.estat_inscripcio === 'lista_espera');
 
     const updated = [newReg, ...inscripcions];
     setInscripcions(updated);

@@ -203,6 +203,9 @@ function parseInscripcionesRows(rows: any[]): Inscripcio[] {
       estatDni: r.estatDni || r.estat_dni || r.estatdni || 'PENDENT',
       entregaMaterial: r.entregaMaterial || r.entrega_material || r.entregamaterial || 'PENDENT',
       estat_inscripcio: r.estat_inscripcio || r.estatInscripcio || undefined,
+      llistaEspera: r.llistaEspera !== undefined ? !!r.llistaEspera : 
+                    r.llista_espera !== undefined ? !!r.llista_espera : 
+                    (r.estat_inscripcio === 'lista_espera' || r.estatInscripcio === 'lista_espera'),
 
       creadoEn: r.creadoEn || r.creado_en || r.created_at || new Date().toISOString(),
       actualizadoEn: r.actualizadoEn || r.actualizado_en || r.updated_at || new Date().toISOString()
@@ -288,6 +291,7 @@ export async function saveSupabaseInscripcion(ins: Inscripcio): Promise<boolean>
         estatDni: ins.estatDni,
         entregaMaterial: ins.entregaMaterial,
         estat_inscripcio: ins.estat_inscripcio || null,
+        llistaEspera: ins.llistaEspera || false,
         creadoEn: ins.creadoEn,
         actualizadoEn: ins.actualizadoEn
       });
@@ -336,6 +340,7 @@ export async function saveSupabaseInscripcion(ins: Inscripcio): Promise<boolean>
         estat_dni: ins.estatDni,
         entrega_material: ins.entregaMaterial,
         estat_inscripcio: ins.estat_inscripcio || null,
+        llista_espera: ins.llistaEspera || false,
         creado_en: ins.creadoEn,
         actualizado_en: ins.actualizadoEn
       });
