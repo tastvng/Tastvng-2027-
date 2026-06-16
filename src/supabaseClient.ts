@@ -250,6 +250,92 @@ export async function saveSupabaseInscripcion(ins: Inscripcio): Promise<boolean>
   try {
     const tableName = 'inscripciones';
     
+    // Determine if this is a new signup or an existing one
+    let isNew = true;
+    if (ins.id) {
+      const { data: existing } = await supabase
+        .from('inscripciones')
+        .select('estat_inscripcio')
+        .eq('id', ins.id)
+        .maybeSingle();
+      if (existing) {
+        isNew = false;
+        // Keep existing or incoming state
+        if (!ins.estat_inscripcio) {
+          ins.estat_inscripcio = existing.estat_inscripcio;
+        }
+      } else {
+        // Fallback check to 'inscripcions'
+        const { data: existingFallback } = await supabase
+          .from('inscripcions')
+          .select('estat_inscripcio')
+          .eq('id', ins.id)
+          .maybeSingle();
+        if (existingFallback) {
+          isNew = false;
+          if (!ins.estat_inscripcio) {
+            ins.estat_inscripcio = existingFallback.estat_inscripcio;
+          }
+        }
+      }
+    }
+
+    if (isNew) {
+      // 1. SELECT COUNT(*) WHERE estat_inscripcio = 'abierta'
+      let countAbiertas = 0;
+      try {
+        const { count, error } = await supabase
+          .from('inscripciones')
+          .select('*', { count: 'exact', head: true })
+          .eq('estat_inscripcio', 'abierta');
+        if (error) {
+          const resFallback = await supabase
+            .from('inscripcions')
+            .select('*', { count: 'exact', head: true })
+            .eq('estat_inscripcio', 'abierta');
+          if (!resFallback.error) {
+            countAbiertas = resFallback.count || 0;
+          }
+        } else {
+          countAbiertas = count || 0;
+        }
+      } catch (err) {
+        console.warn("Error counting 'abierta' inscriptions:", err);
+      }
+
+      // 2. Obtain aforo_maximo_abiertas as a number from settings
+      let aforoMaximo = 100;
+      try {
+        const systemConfig = await getSupabaseSetting<any>('tast_config_2026', null);
+        if (systemConfig && systemConfig.aforo_maximo_abiertas !== undefined) {
+          aforoMaximo = Number(systemConfig.aforo_maximo_abiertas);
+        } else {
+          const directVal = await getSupabaseSetting<any>('aforo_maximo_abiertas', null);
+          if (directVal !== null && directVal !== undefined) {
+            if (typeof directVal === 'object' && directVal.aforo_maximo_abiertas !== undefined) {
+              aforoMaximo = Number(directVal.aforo_maximo_abiertas);
+            } else {
+              aforoMaximo = Number(directVal);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("Error reading aforo_maximo_abiertas from settings:", err);
+      }
+
+      // 3. Compare count against limit
+      if (countAbiertas >= aforoMaximo) {
+        ins.estat_inscripcio = 'lista_espera';
+        ins.llistaEspera = true;
+      } else {
+        ins.estat_inscripcio = 'abierta';
+        ins.llistaEspera = false;
+      }
+    } else {
+      // For existing registrations, ensure llistaEspera boolean resolves with estat_inscripcio
+      ins.llistaEspera = (ins.estat_inscripcio === 'lista_espera');
+    }
+
     // Attempt 1: insert/upsert with CamelCase properties
     let response = await supabase
       .from(tableName)
