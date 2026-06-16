@@ -208,14 +208,16 @@ export default function App() {
         try {
           // 1. Fetch Global Config
           const dbConfig = await getSupabaseSetting<SistemaConfig | null>('tast_config_2026', null);
-          if (dbConfig) {
-            setConfig(dbConfig);
-            localStorage.setItem('tast_config_2026', JSON.stringify(dbConfig));
-          } else {
-            console.log("No config found in Supabase settings table, uploading CONFIG_INICIAL...");
-            setConfig(CONFIG_INICIAL);
-            localStorage.setItem('tast_config_2026', JSON.stringify(CONFIG_INICIAL));
-          }
+          const globalStatus = await getSupabaseSetting<'abierta' | 'lista_espera'>('estat_inscripcio_global', 'abierta');
+          
+          let activeConfig = dbConfig || CONFIG_INICIAL;
+          activeConfig = {
+            ...activeConfig,
+            estatInscripcions: globalStatus === 'lista_espera' ? 'espera' : 'obertes'
+          };
+
+          setConfig(activeConfig);
+          localStorage.setItem('tast_config_2026', JSON.stringify(activeConfig));
         } catch (e) {
           console.error("Error loading config from Supabase:", e);
           setConfig(CONFIG_INICIAL);
@@ -420,20 +422,10 @@ export default function App() {
   };
 
   const addRegistration = async (newReg: Inscripcio) => {
-    let countAbiertas = 0;
-    if (isSupabaseConfigured) {
-      try {
-        const { countAbiertasInscripciones } = await import('./supabaseClient');
-        countAbiertas = await countAbiertasInscripciones();
-      } catch (err) {
-        console.error("Error counting abiertas:", err);
-      }
-    }
-    const limit = config.aforo_maximo_abiertas || 100;
     if (newReg.llistaEspera === true) {
       newReg.estat_inscripcio = 'lista_espera';
     } else {
-      newReg.estat_inscripcio = countAbiertas < limit ? 'abierta' : 'lista_espera';
+      newReg.estat_inscripcio = config.estatInscripcions === 'espera' ? 'lista_espera' : 'abierta';
     }
     
     // Sincronització absoluta:
@@ -461,20 +453,10 @@ export default function App() {
   };
 
   const addRegistrationManual = async (newReg: Inscripcio) => {
-    let countAbiertas = 0;
-    if (isSupabaseConfigured) {
-      try {
-        const { countAbiertasInscripciones } = await import('./supabaseClient');
-        countAbiertas = await countAbiertasInscripciones();
-      } catch (err) {
-        console.error("Error counting abiertas:", err);
-      }
-    }
-    const limit = config.aforo_maximo_abiertas || 100;
     if (newReg.llistaEspera === true) {
       newReg.estat_inscripcio = 'lista_espera';
     } else {
-      newReg.estat_inscripcio = countAbiertas < limit ? 'abierta' : 'lista_espera';
+      newReg.estat_inscripcio = config.estatInscripcions === 'espera' ? 'lista_espera' : 'abierta';
     }
     
     // Sincronització absoluta:

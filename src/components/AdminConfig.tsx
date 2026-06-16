@@ -25,6 +25,7 @@ import {
   Shirt
 } from 'lucide-react';
 import { SistemaConfig, PreguntaDinamica, NoticiaXarxes, TarifaConcept, LiniaUniforme } from '../types';
+import { getSupabaseSetting, saveSupabaseSetting } from '../supabaseClient';
 
 interface AdminConfigProps {
   config: SistemaConfig;
@@ -71,6 +72,21 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
 
   // States for dynamic customizable tariffs/payment lines
   const [titolSeccioTarifes, setTitolSeccioTarifes] = useState(config.titolSeccioTarifes || 'Tarifes i Cànons 2026');
+  const [estatInscripcioGlobal, setEstatInscripcioGlobal] = useState<'abierta' | 'lista_espera'>('abierta');
+
+  useEffect(() => {
+    async function loadGlobalStatus() {
+      try {
+        const val = await getSupabaseSetting<'abierta' | 'lista_espera'>('estat_inscripcio_global', 'abierta');
+        if (val === 'abierta' || val === 'lista_espera') {
+          setEstatInscripcioGlobal(val);
+        }
+      } catch (err) {
+        console.error("Error loading global inscription status:", err);
+      }
+    }
+    loadGlobalStatus();
+  }, []);
   const [tarifesDinamiques, setTarifesDinamiques] = useState<TarifaConcept[]>(
     config.tarifesDinamiques || [
       { id: 'adults', nom: 'Preu Parella Adulta (€)', valor: config.preuAdult, actiu: true, tipus: 'categoria_adult' },
@@ -402,12 +418,18 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
     setLiniisUniforme(liniisUniforme.map(l => l.id === id ? { ...l, ...updates } : l));
   };
 
-  const handleGuardarConfig = () => {
+  const handleGuardarConfig = async () => {
     // Find rates in the array or fall back to single inputs
     const adultsVal = tarifesDinamiques.find(t => t.id === 'adults')?.valor ?? Number(preuAdult);
     const juvenilsVal = tarifesDinamiques.find(t => t.id === 'juvenils')?.valor ?? Number(preuJuvenil);
     const domasVal = tarifesDinamiques.find(t => t.id === 'domas')?.valor ?? Number(preuDomasBalco);
     const mocadorVal = tarifesDinamiques.find(t => t.id === 'mocador')?.valor ?? Number(preuMocadorExtra);
+
+    try {
+      await saveSupabaseSetting('estat_inscripcio_global', estatInscripcioGlobal);
+    } catch (e) {
+      console.error("Error saving global inscription status:", e);
+    }
 
     const updated: SistemaConfig = {
       preuAdult: Number(adultsVal),
@@ -431,7 +453,7 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
       liniisUniforme: liniisUniforme,
       textLegalAutoritzacioMenors: textLegalAutoritzacioMenors,
       textLegalAutoritzacioMenorsES: textLegalAutoritzacioMenorsES,
-      estatInscripcions: estatInscripcions,
+      estatInscripcions: estatInscripcioGlobal === 'lista_espera' ? 'espera' : 'obertes',
       googleSheetSyncUrl: googleSheetSyncUrl.trim(),
       googleSheetSyncActive: googleSheetSyncActive,
       cuestionariActiu: cuestionariActiu,
@@ -837,6 +859,48 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                 id="input-config-titol-tarifes"
                 placeholder="Canvia el títol del canonical"
               />
+            </div>
+
+            {/* Estat d'Inscripció Global Setting */}
+            <div className="p-4 bg-fuchsia-50/50 border border-fuchsia-100 rounded-2xl space-y-3">
+              <span className="block text-[10px] text-zinc-500 uppercase font-mono font-bold tracking-wider">
+                {language === 'ca' ? "ESTAT D'INSCRIPCIÓ GLOBAL" : "ESTADO DE INSCRIPCIÓN GLOBAL"}
+              </span>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setEstatInscripcioGlobal('abierta');
+                    await saveSupabaseSetting('estat_inscripcio_global', 'abierta');
+                  }}
+                  className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold font-mono tracking-wider transition-all duration-200 border ${
+                    estatInscripcioGlobal === 'abierta'
+                      ? 'bg-emerald-600 text-white border-emerald-500 shadow-md shadow-emerald-600/10'
+                      : 'bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-50'
+                  }`}
+                >
+                  🟢 {language === 'ca' ? "ABIERTA (PLAÇA OBERTA)" : "ABIERTA (PLAZA ABIERTA)"}
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setEstatInscripcioGlobal('lista_espera');
+                    await saveSupabaseSetting('estat_inscripcio_global', 'lista_espera');
+                  }}
+                  className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold font-mono tracking-wider transition-all duration-200 border ${
+                    estatInscripcioGlobal === 'lista_espera'
+                      ? 'bg-amber-500 text-white border-amber-400 shadow-md shadow-amber-500/10'
+                      : 'bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-50'
+                  }`}
+                >
+                  🟡 {language === 'ca' ? "LLISTA D'ESPERA" : "LISTA DE ESPERA"}
+                </button>
+              </div>
+              <p className="text-[10px] text-zinc-400 font-sans tracking-tight">
+                {language === 'ca'
+                  ? "Controla si els nous registres entren com a Plaça Oberta Directa o passen automàticament a la Llista d'Espera."
+                  : "Controla si los nuevos registros entran como Plaza Abierta Directa o pasan automáticamente a la Lista de Espera."}
+              </p>
             </div>
 
             {/* List of Dynamic Rate Lines */}

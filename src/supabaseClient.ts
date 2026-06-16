@@ -281,56 +281,19 @@ export async function saveSupabaseInscripcion(ins: Inscripcio): Promise<boolean>
     }
 
     if (isNew) {
-      // 1. SELECT COUNT(*) WHERE estat_inscripcio = 'abierta'
-      let countAbiertas = 0;
+      // Read global enrollment status from settings, defaulting to 'abierta'
+      let globalStatus: 'abierta' | 'lista_espera' = 'abierta';
       try {
-        const { count, error } = await supabase
-          .from('inscripciones')
-          .select('*', { count: 'exact', head: true })
-          .eq('estat_inscripcio', 'abierta');
-        if (error) {
-          const resFallback = await supabase
-            .from('inscripcions')
-            .select('*', { count: 'exact', head: true })
-            .eq('estat_inscripcio', 'abierta');
-          if (!resFallback.error) {
-            countAbiertas = resFallback.count || 0;
-          }
-        } else {
-          countAbiertas = count || 0;
+        const val = await getSupabaseSetting<'abierta' | 'lista_espera'>('estat_inscripcio_global', 'abierta');
+        if (val === 'abierta' || val === 'lista_espera') {
+          globalStatus = val;
         }
       } catch (err) {
-        console.warn("Error counting 'abierta' inscriptions:", err);
+        console.warn("Error reading estat_inscripcio_global from settings:", err);
       }
-
-      // 2. Obtain aforo_maximo_abiertas as a number from settings
-      let aforoMaximo = 100;
-      try {
-        const systemConfig = await getSupabaseSetting<any>('tast_config_2026', null);
-        if (systemConfig && systemConfig.aforo_maximo_abiertas !== undefined) {
-          aforoMaximo = Number(systemConfig.aforo_maximo_abiertas);
-        } else {
-          const directVal = await getSupabaseSetting<any>('aforo_maximo_abiertas', null);
-          if (directVal !== null && directVal !== undefined) {
-            if (typeof directVal === 'object' && directVal.aforo_maximo_abiertas !== undefined) {
-              aforoMaximo = Number(directVal.aforo_maximo_abiertas);
-            } else {
-              aforoMaximo = Number(directVal);
-            }
-          }
-        }
-      } catch (err) {
-        console.warn("Error reading aforo_maximo_abiertas from settings:", err);
-      }
-
-      // 3. Compare count against limit
-      if (countAbiertas >= aforoMaximo) {
-        ins.estat_inscripcio = 'lista_espera';
-        ins.llistaEspera = true;
-      } else {
-        ins.estat_inscripcio = 'abierta';
-        ins.llistaEspera = false;
-      }
+      
+      ins.estat_inscripcio = globalStatus;
+      ins.llistaEspera = (globalStatus === 'lista_espera');
     } else {
       // For existing registrations, ensure llistaEspera boolean resolves with estat_inscripcio
       ins.llistaEspera = (ins.estat_inscripcio === 'lista_espera');
