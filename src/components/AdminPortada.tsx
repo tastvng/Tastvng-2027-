@@ -141,6 +141,73 @@ export default function AdminPortada({ language, onAddLog }: AdminPortadaProps) 
 
   const [activeLangTab, setActiveLangTab] = useState<'ca' | 'es'>('ca');
   const [saveSuccess, setSaveSuccess] = useState(false);
+  
+  const [savingSemafor, setSavingSemafor] = useState<boolean>(false);
+  const [semaforSaveError, setSemaforSaveError] = useState<string | null>(null);
+  const [semaforSaveSuccess, setSemaforSaveSuccess] = useState<boolean>(false);
+
+  const handleEstatInscripcionsChange = async (newState: 'obertes' | 'espera' | 'tancades') => {
+    setEstatInscripcions(newState);
+    setSavingSemafor(true);
+    setSemaforSaveError(null);
+    setSemaforSaveSuccess(false);
+
+    try {
+      // 1. Save to LocalStorage first
+      localStorage.setItem('estat_inscripcio_global', newState);
+      const scJson = localStorage.getItem('tast_config_2026');
+      if (scJson) {
+        try {
+          const sc = JSON.parse(scJson);
+          sc.estatInscripcions = newState;
+          localStorage.setItem('tast_config_2026', JSON.stringify(sc));
+        } catch {}
+      }
+
+      // Dispatch custom event to let App know configuration changed
+      window.dispatchEvent(new Event('portadaConfigChanged'));
+
+      // 2. Save to Supabase
+      if (isSupabaseConfigured) {
+        const { getSupabaseSetting, saveSupabaseSetting } = await import('../supabaseClient');
+        
+        // Save the direct setting key estat_inscripcio_global
+        const successGlobal = await saveSupabaseSetting('estat_inscripcio_global', newState);
+        if (!successGlobal) {
+          throw new Error("No s'ha pogut canviar la clau 'estat_inscripcio_global' a Supabase.");
+        }
+
+        // Also update the property inside the full system config 'tast_config_2026'
+        const sc = await getSupabaseSetting<any>('tast_config_2026', null);
+        if (sc) {
+          sc.estatInscripcions = newState;
+          const successConfig = await saveSupabaseSetting('tast_config_2026', sc);
+          if (!successConfig) {
+            throw new Error("No s'ha pogut actualitzar la clau 'tast_config_2026' a Supabase.");
+          }
+        }
+      }
+
+      setSemaforSaveSuccess(true);
+      setTimeout(() => setSemaforSaveSuccess(false), 3000);
+
+      if (onAddLog) {
+        onAddLog(language === 'ca' 
+          ? `S'ha canviat l'estat de les inscripcions a: ${newState.toUpperCase()} a Supabase.` 
+          : `Se ha cambiado el estado de las inscripciones a: ${newState.toUpperCase()} en Supabase.`
+        );
+      }
+    } catch (err: any) {
+      console.error("Error setting dynamic registration status:", err);
+      const errorMsg = err.message || JSON.stringify(err);
+      setSemaforSaveError(language === 'ca'
+        ? `Error en desar a Supabase: ${errorMsg}`
+        : `Error al guardar en Supabase: ${errorMsg}`
+      );
+    } finally {
+      setSavingSemafor(false);
+    }
+  };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -491,27 +558,55 @@ export default function AdminPortada({ language, onAddLog }: AdminPortadaProps) 
 
       {/* SEMÀFOR D'ESTAT DE LES INSCRIPCIONS (MOVED FROM ADMINCONFIG) */}
       <div className="bg-white rounded-3xl border border-zinc-200 p-6 shadow-sm space-y-5" id="config-semafor-card">
-        <div className="border-b border-zinc-100 pb-3">
-          <h3 className="font-sans font-black text-sm text-zinc-900 uppercase tracking-wider flex items-center gap-2">
-            <span className="text-xl">🚦</span> {language === 'ca' ? "Semàfor d'Estat de les Inscripcions" : "Semáforo de Estado de Inscripciones"}
-          </h3>
-          <p className="text-[10px] text-zinc-400 mt-1">
-            {language === 'ca' 
-              ? "Controla la fase de registre. Canvia els indicadors en temps real." 
-              : "Controla la fase de registro. Modifica los indicadores en tiempo real."}
-          </p>
+        <div className="border-b border-zinc-100 pb-3 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 className="font-sans font-black text-sm text-zinc-900 uppercase tracking-wider flex items-center gap-2">
+              <span className="text-xl">🚦</span> {language === 'ca' ? "Semàfor d'Estat de les Inscripcions" : "Semáforo de Estado de Inscripciones"}
+            </h3>
+            <p className="text-[10px] text-zinc-400 mt-1">
+              {language === 'ca' 
+                ? "Controla la fase de registre. Canvia els indicadors en temps real." 
+                : "Controla la fase de registro. Modifica los indicadores en tiempo real."}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            {savingSemafor && (
+              <span className="inline-flex items-center gap-1.5 text-xs text-zinc-500 font-medium">
+                <svg className="animate-spin h-3.5 w-3.5 text-[#ff0090]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                {language === 'ca' ? "Desant estat..." : "Guardando estado..."}
+              </span>
+            )}
+            {semaforSaveSuccess && (
+              <span className="text-xs text-emerald-600 font-bold bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full flex items-center gap-1">
+                ✓ {language === 'ca' ? "Sincronitzat amb Supabase" : "Sincronizado con Supabase"}
+              </span>
+            )}
+          </div>
         </div>
+
+        {semaforSaveError && (
+          <div className="bg-red-50 border-2 border-red-300 text-red-900 p-4 rounded-xl text-xs font-medium space-y-1">
+            <p className="font-bold flex items-center gap-1.5 text-red-700">
+              ⚠️ {language === 'ca' ? "Error en canviar l'estat a Supabase" : "Error al cambiar el estado en Supabase"}
+            </p>
+            <p className="font-mono bg-white/50 p-2 rounded border border-red-100 text-red-800 break-all">{semaforSaveError}</p>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {/* Opció 1: Obertes - VERD */}
           <button
             type="button"
-            onClick={() => setEstatInscripcions('obertes')}
+            disabled={savingSemafor}
+            onClick={() => handleEstatInscripcionsChange('obertes')}
             className={`w-full p-3 rounded-2xl border text-left transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
               estatInscripcions === 'obertes'
-                ? 'bg-emerald-50 border-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.15)]'
-                : 'bg-zinc-50 hover:bg-zinc-100 border-zinc-200'
-            }`}
+                ? 'bg-emerald-50 border-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.15)] font-black text-emerald-950'
+                : 'bg-zinc-50 hover:bg-zinc-100 border-zinc-200 opacity-60'
+            } disabled:cursor-not-allowed`}
             id="btn-semafor-obertes"
           >
             <div className={`w-6 h-6 mb-2 rounded-full bg-emerald-500 relative shrink-0 ${estatInscripcions === 'obertes' ? 'animate-ping' : ''}`}>
@@ -525,12 +620,13 @@ export default function AdminPortada({ language, onAddLog }: AdminPortadaProps) 
           {/* Opció 2: Espera - TARONJA */}
           <button
             type="button"
-            onClick={() => setEstatInscripcions('espera')}
+            disabled={savingSemafor}
+            onClick={() => handleEstatInscripcionsChange('espera')}
             className={`w-full p-3 rounded-2xl border text-left transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
               estatInscripcions === 'espera'
-                ? 'bg-amber-50 border-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.15)]'
-                : 'bg-zinc-50 hover:bg-zinc-100 border-zinc-200'
-            }`}
+                ? 'bg-amber-50 border-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.15)] font-black text-amber-950'
+                : 'bg-zinc-50 hover:bg-zinc-100 border-zinc-200 opacity-60'
+            } disabled:cursor-not-allowed`}
             id="btn-semafor-espera"
           >
             <div className={`w-6 h-6 mb-2 rounded-full bg-amber-500 relative shrink-0 ${estatInscripcions === 'espera' ? 'animate-ping' : ''}`}>
@@ -544,12 +640,13 @@ export default function AdminPortada({ language, onAddLog }: AdminPortadaProps) 
           {/* Opció 3: Tancades - VERMELL */}
           <button
             type="button"
-            onClick={() => setEstatInscripcions('tancades')}
+            disabled={savingSemafor}
+            onClick={() => handleEstatInscripcionsChange('tancades')}
             className={`w-full p-3 rounded-2xl border text-left transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
               estatInscripcions === 'tancades'
-                ? 'bg-rose-50 border-rose-400 shadow-[0_0_20px_rgba(239,68,68,0.25)]'
-                : 'bg-zinc-50 hover:bg-zinc-100 border-zinc-200'
-            }`}
+                ? 'bg-rose-50 border-rose-400 shadow-[0_0_20px_rgba(239,68,68,0.25)] font-black text-rose-950'
+                : 'bg-zinc-50 hover:bg-zinc-100 border-zinc-200 opacity-60'
+            } disabled:cursor-not-allowed`}
             id="btn-semafor-tancades"
           >
             <div className={`w-6 h-6 mb-2 rounded-full bg-red-600 relative shrink-0 ${estatInscripcions === 'tancades' ? 'animate-pulse' : ''}`}>
