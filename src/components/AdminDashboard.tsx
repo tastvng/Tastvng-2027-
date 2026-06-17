@@ -727,7 +727,9 @@ export default function AdminDashboard({
       return;
     }
 
-    const tracker = 'TAST-2026-' + Math.floor(1000 + Math.random() * 9000);
+    const countCategory = inscripcions.filter(ins => ins.categoria === newCategoria).length;
+    const prefix = newCategoria === CategoriaParella.ADULT ? 'A' : 'J';
+    const tracker = `${prefix}-${countCategory + 1}`;
 
     const novaInscripcio: Inscripcio = {
       id: 'ins-' + Math.random().toString(36).substr(2, 9),

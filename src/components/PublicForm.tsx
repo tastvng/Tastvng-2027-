@@ -573,9 +573,9 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
       setSubmitProgress(100);
 
       // Generate a dynamic tracking code
-      const sequencialCode = Math.floor(1000 + Math.random() * 9000);
-      const codiSeguiment = `TAST-2026-${sequencialCode}`;
+      const prefix = categoria === CategoriaParella.ADULT ? 'A' : 'J';
       const randomId = 'ins-' + Math.random().toString(36).substr(2, 9);
+      const codiSeguiment = `${prefix}-TEMP-${Math.floor(1000 + Math.random() * 9000)}`;
 
       const finalRespostes: Record<string, string> = {
         ...respostesCuestionari

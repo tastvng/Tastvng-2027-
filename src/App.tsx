@@ -473,6 +473,11 @@ export default function App() {
     }, 0);
     newReg.posicioGlobal = maxPos > 0 ? maxPos + 1 : (latestInscripcions.length + 1);
 
+    // Calculate sequential category code
+    const countCategory = latestInscripcions.filter(ins => ins.categoria === newReg.categoria).length;
+    const prefix = newReg.categoria === CategoriaParella.ADULT ? 'A' : 'J';
+    newReg.codiSeguiment = `${prefix}-${countCategory + 1}`;
+
     const updated = [newReg, ...inscripcions];
     setInscripcions(updated);
     localStorage.setItem('tast_inscripcions_2026', JSON.stringify(updated));
@@ -504,6 +509,11 @@ export default function App() {
       return ins.posicioGlobal && ins.posicioGlobal > max ? ins.posicioGlobal : max;
     }, 0);
     newReg.posicioGlobal = maxPos > 0 ? maxPos + 1 : (inscripcions.length + 1);
+
+    // Calculate sequential category code
+    const countCategory = inscripcions.filter(ins => ins.categoria === newReg.categoria).length;
+    const prefix = newReg.categoria === CategoriaParella.ADULT ? 'A' : 'J';
+    newReg.codiSeguiment = `${prefix}-${countCategory + 1}`;
 
     const updated = [newReg, ...inscripcions];
     setInscripcions(updated);
