@@ -89,7 +89,8 @@ export interface Inscripcio {
   entregaDomas?: boolean;
   entregaMocadors?: boolean;
   llistaEspera?: boolean;
-  estat_inscripcio?: 'abierta' | 'lista_espera' | 'cerrada';
+  estatInscripcio?: 'obertes' | 'llista_espera';
+  posicioGlobal?: number;
   
   creadoEn: string;
   actualizadoEn: string;
@@ -139,7 +140,6 @@ export interface SistemaConfig {
   googleSheetSyncUrl?: string;
   googleSheetSyncActive?: boolean;
   cuestionariActiu?: boolean;
-  aforo_maximo_abiertas?: number;
 }
 
 export interface NoticiaXarxes {

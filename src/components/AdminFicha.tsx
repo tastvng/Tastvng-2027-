@@ -154,7 +154,6 @@ export default function AdminFicha({ registration, config, onBack, onSave }: Adm
       entregaDomas,
       entregaMocadors,
       llistaEspera,
-      estat_inscripcio: llistaEspera ? 'lista_espera' : 'abierta',
       actualizadoEn: new Date().toISOString()
     };
 
@@ -700,6 +699,29 @@ export default function AdminFicha({ registration, config, onBack, onSave }: Adm
             <h3 className="font-sans font-black text-base text-fuchsia-400 pb-3 border-b border-zinc-900 tracking-tight flex items-center gap-2">
               <Sparkles size={16} /> {language === 'ca' ? "Controles i Semàfors de Mesa" : "Controles y Semáforos de Mesa"}
             </h3>
+
+            {/* Segment: Estat i Posició de la Inscripció */}
+            <div className="space-y-2 pb-4 border-b border-zinc-900">
+              <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider font-mono">
+                {language === 'ca' ? "Estat de la Inscripció" : "Estado de la Inscripción"}
+              </label>
+              <div className="flex items-center gap-3">
+                {(registration.estatInscripcio === 'llista_espera' || (!registration.estatInscripcio && registration.llistaEspera)) ? (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-500/10 border border-amber-500/30 text-amber-500 font-sans uppercase">
+                    🟡 {language === 'ca' ? "Llista d'Espera" : "Lista de Espera"}
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-sans uppercase">
+                    🟢 {language === 'ca' ? "Inscripció Oberta" : "Inscripción Abierta"}
+                  </span>
+                )}
+                {registration.posicioGlobal && (
+                  <span className="font-mono text-zinc-300 text-sm font-black bg-zinc-900 px-3 py-1.5 rounded-xl border border-zinc-800">
+                    Posició: #{registration.posicioGlobal}
+                  </span>
+                )}
+              </div>
+            </div>
 
             {/* Segment 1: Verified DNI */}
             <div className="space-y-2">

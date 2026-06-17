@@ -208,16 +208,14 @@ export default function App() {
         try {
           // 1. Fetch Global Config
           const dbConfig = await getSupabaseSetting<SistemaConfig | null>('tast_config_2026', null);
-          const globalStatus = await getSupabaseSetting<'abierta' | 'lista_espera' | 'cerrada'>('estat_inscripcio_global', 'abierta');
-          
-          let activeConfig = dbConfig || CONFIG_INICIAL;
-          activeConfig = {
-            ...activeConfig,
-            estatInscripcions: globalStatus === 'lista_espera' ? 'espera' : globalStatus === 'cerrada' ? 'tancades' : 'obertes'
-          };
-
-          setConfig(activeConfig);
-          localStorage.setItem('tast_config_2026', JSON.stringify(activeConfig));
+          if (dbConfig) {
+            setConfig(dbConfig);
+            localStorage.setItem('tast_config_2026', JSON.stringify(dbConfig));
+          } else {
+            console.log("No config found in Supabase settings table, uploading CONFIG_INICIAL...");
+            setConfig(CONFIG_INICIAL);
+            localStorage.setItem('tast_config_2026', JSON.stringify(CONFIG_INICIAL));
+          }
         } catch (e) {
           console.error("Error loading config from Supabase:", e);
           setConfig(CONFIG_INICIAL);
@@ -421,19 +419,47 @@ export default function App() {
     }, 500);
   };
 
-  const addRegistration = async (newReg: Inscripcio) => {
-    if (newReg.llistaEspera === true) {
-      newReg.estat_inscripcio = 'lista_espera';
-    } else {
-      newReg.estat_inscripcio = config.estatInscripcions === 'espera' 
-        ? 'lista_espera' 
-        : config.estatInscripcions === 'tancades' 
-          ? 'cerrada' 
-          : 'abierta';
-    }
+  const getEstatInscripcioForCategory = (categoria: CategoriaParella) => {
+    const matchingTarifa = config.tarifesDinamiques?.find(tf => {
+      if (categoria === CategoriaParella.ADULT) {
+        return tf.tipus === 'categoria_adult' || tf.id === 'adults';
+      } else {
+        return tf.tipus === 'categoria_juvenil' || tf.id === 'juvenils';
+      }
+    });
     
-    // Sincronització absoluta:
-    newReg.llistaEspera = (newReg.estat_inscripcio === 'lista_espera');
+    if (!matchingTarifa) return 'obertes';
+    return matchingTarifa.actiu ? 'obertes' : 'llista_espera';
+  };
+
+  const addRegistration = async (newReg: Inscripcio) => {
+    // 1. Determine local registration status
+    const categoryStatus = getEstatInscripcioForCategory(newReg.categoria);
+    newReg.estatInscripcio = categoryStatus;
+
+    // 2. Fetch all latest inscriptions to calculate global position sequentially
+    let latestInscripcions: Inscripcio[] = [];
+    if (isSupabaseConfigured) {
+      try {
+        latestInscripcions = await getSupabaseInscripciones();
+      } catch (err) {
+        console.error("Error fetching dynamic registrations from Supabase:", err);
+      }
+    } else {
+      try {
+        const savedInscripcions = localStorage.getItem('tast_inscripcions_2026');
+        if (savedInscripcions) {
+          latestInscripcions = JSON.parse(savedInscripcions);
+        }
+      } catch (e) {
+        console.error("Error loading inscriptions from localStorage:", e);
+      }
+    }
+
+    const maxPos = latestInscripcions.reduce((max, ins) => {
+      return ins.posicioGlobal && ins.posicioGlobal > max ? ins.posicioGlobal : max;
+    }, 0);
+    newReg.posicioGlobal = maxPos > 0 ? maxPos + 1 : (latestInscripcions.length + 1);
 
     const updated = [newReg, ...inscripcions];
     setInscripcions(updated);
@@ -441,7 +467,7 @@ export default function App() {
     syncWithGoogle(updated);
     setActiveRegistration(newReg);
     setView('confirmacio');
-    addLog(`Preinscripció realitzada amb èxit per a: ${newReg.c1Nom} & ${newReg.c2Nom}. Codi: ${newReg.codiSeguiment} (${newReg.estat_inscripcio === 'abierta' ? 'Places obertes' : 'Llista espera'})`);
+    addLog(`Preinscripció realitzada amb èxit per a: ${newReg.c1Nom} & ${newReg.c2Nom}. Codi: ${newReg.codiSeguiment}`);
     addLog(language === 'ca'
       ? `📧 SMTP: Correu de confirmació oficial enviat automàticament des de secretaria@eltast.cat a ${newReg.c1Email} i ${newReg.c2Email}`
       : `📧 SMTP: Correo de confirmación oficial enviado automáticamente desde secretaria@eltast.cat a ${newReg.c1Email} y ${newReg.c2Email}`
@@ -457,24 +483,21 @@ export default function App() {
   };
 
   const addRegistrationManual = async (newReg: Inscripcio) => {
-    if (newReg.llistaEspera === true) {
-      newReg.estat_inscripcio = 'lista_espera';
-    } else {
-      newReg.estat_inscripcio = config.estatInscripcions === 'espera' 
-        ? 'lista_espera' 
-        : config.estatInscripcions === 'tancades' 
-          ? 'cerrada' 
-          : 'abierta';
-    }
-    
-    // Sincronització absoluta:
-    newReg.llistaEspera = (newReg.estat_inscripcio === 'lista_espera');
+    // 1. Determine local registration status
+    const categoryStatus = getEstatInscripcioForCategory(newReg.categoria);
+    newReg.estatInscripcio = categoryStatus;
+
+    // 2. Determine global position (using in-memory list which is up to date for manual screen)
+    const maxPos = inscripcions.reduce((max, ins) => {
+      return ins.posicioGlobal && ins.posicioGlobal > max ? ins.posicioGlobal : max;
+    }, 0);
+    newReg.posicioGlobal = maxPos > 0 ? maxPos + 1 : (inscripcions.length + 1);
 
     const updated = [newReg, ...inscripcions];
     setInscripcions(updated);
     localStorage.setItem('tast_inscripcions_2026', JSON.stringify(updated));
     syncWithGoogle(updated);
-    addLog(`Parella afegida manualment des del taulell: ${newReg.c1Nom} & ${newReg.c2Nom}. Codi: ${newReg.codiSeguiment} (${newReg.estat_inscripcio === 'abierta' ? 'Places obertes' : 'Llista espera'})`);
+    addLog(`Parella afegida manualment des del taulell: ${newReg.c1Nom} & ${newReg.c2Nom}. Codi: ${newReg.codiSeguiment}`);
     if (isSupabaseConfigured) {
       try {
         await saveSupabaseInscripcion(newReg);

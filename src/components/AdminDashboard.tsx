@@ -132,7 +132,7 @@ export default function AdminDashboard({
   const [filterPagament, setFilterPagament] = useState<string>('ALL');
   const [filterDni, setFilterDni] = useState<string>('ALL');
   const [filterEntrega, setFilterEntrega] = useState<string>('ALL');
-  const [filterEstatInscripcio, setFilterEstatInscripcio] = useState<string>('ALL');
+  const [filterEstat, setFilterEstat] = useState<string>('ALL');
 
   // Bulk and complete deletion helpers
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -926,13 +926,12 @@ export default function AdminDashboard({
     // Entrega filter
     const matchesEntrega = filterEntrega === 'ALL' || item.entregaMaterial === filterEntrega;
 
-    // Estat inscripcio filter
-    const matchesEstatInscripcio = 
-      filterEstatInscripcio === 'ALL' || 
-      (filterEstatInscripcio === 'lista_espera' && (item.estat_inscripcio === 'lista_espera' || item.llistaEspera === true)) ||
-      (filterEstatInscripcio === 'abierta' && (item.estat_inscripcio === 'abierta' || (!item.estat_inscripcio && !item.llistaEspera)));
+    // Estat filter
+    const matchesEstat = filterEstat === 'ALL' || 
+      (filterEstat === 'OBERTA' && (item.estatInscripcio === 'obertes' || (!item.estatInscripcio && !item.llistaEspera))) ||
+      (filterEstat === 'ESPERA' && (item.estatInscripcio === 'llista_espera' || (!item.estatInscripcio && item.llistaEspera)));
 
-    return matchesSearch && matchesCategoria && matchesPagament && matchesDni && matchesEntrega && matchesEstatInscripcio;
+    return matchesSearch && matchesCategoria && matchesPagament && matchesDni && matchesEntrega && matchesEstat;
   });
 
   const isAllVisibleSelected = filteredInscripcions.length > 0 && filteredInscripcions.every(item => selectedIds.includes(item.id));
@@ -1188,11 +1187,10 @@ export default function AdminDashboard({
       // V (Forma Pagament)
       let formaPag = "";
       if (i.metodePagament) {
-        const metStr = String(i.metodePagament).toUpperCase();
-        if (metStr === 'EFECTIU' || metStr === 'METALIC' || metStr === 'EFECTIVO' || metStr === 'METALICO') {
+        if (i.metodePagament === 'EFECTIU' || i.metodePagament === 'METALIC' || String(i.metodePagament).toUpperCase() === 'EFECTIVO' || String(i.metodePagament).toUpperCase() === 'METALICO') {
           formaPag = "METALICO";
         } else {
-          formaPag = metStr;
+          formaPag = String(i.metodePagament).toUpperCase();
         }
       }
 
@@ -1209,8 +1207,7 @@ export default function AdminDashboard({
       }
 
       // Y (Preparado)
-      const matStr = String(i.entregaMaterial);
-      const preparado = (matStr === 'PREPARAT' || matStr === 'ENTREGAT' || i.entregaMaterial === 'ENTREGAT') ? 'SI' : '';
+      const preparado = (i.entregaMaterial === 'PREPARAT' || i.entregaMaterial === 'ENTREGAT') ? 'SI' : '';
 
       // Z (Entregado)
       const entregado = i.entregaMaterial === 'ENTREGAT' || i.respostesCuestionari?.['entregado'] === true || String(i.respostesCuestionari?.['entregado']).toUpperCase() === 'SI' || i.respostesCuestionari?.['entrega'] === true;
@@ -1264,11 +1261,11 @@ export default function AdminDashboard({
       // Access row to apply styles cell-by-cell
       const addedRow = ws.getRow(rowNum);
       const borderObj = {
-        top: { style: 'thin' as any, color: { argb: 'FFD3D3D3' } },
-        left: { style: 'thin' as any, color: { argb: 'FFD3D3D3' } },
-        bottom: { style: 'thin' as any, color: { argb: 'FFD3D3D3' } },
-        right: { style: 'thin' as any, color: { argb: 'FFD3D3D3' } }
-      } as any;
+        top: { style: 'thin', color: { argb: 'FFD3D3D3' } },
+        left: { style: 'thin', color: { argb: 'FFD3D3D3' } },
+        bottom: { style: 'thin', color: { argb: 'FFD3D3D3' } },
+        right: { style: 'thin', color: { argb: 'FFD3D3D3' } }
+      };
 
       addedRow.eachCell({ includeEmpty: true }, (cell, colNum) => {
         // Set basic font
@@ -1278,14 +1275,14 @@ export default function AdminDashboard({
 
         // Set number formats
         if (colNum === 1) { // Marca temporal (A)
-          cell.numFmt = 'dd/mm/yyyy hh:mm:ss';
+          cell.numFormat = 'dd/mm/yyyy hh:mm:ss';
         }
         else if (colNum === 24) { // Fecha inscripcion (X)
-          cell.numFmt = 'dd/mm/yy';
+          cell.numFormat = 'dd/mm/yy';
           cell.alignment = { horizontal: 'center', vertical: 'middle' };
         }
         else if ([9, 11, 14, 16, 18, 19, 20, 21].includes(colNum)) { // Financial values
-          cell.numFmt = '#,##0.00" €"';
+          cell.numFormat = '#,##0.00" €"';
           cell.alignment = { horizontal: 'right', vertical: 'middle' };
         }
         else if ([3, 7, 10, 12, 13, 15, 17, 23, 25, 26, 27, 28, 29, 30].includes(colNum)) { // Boolean status and shorter inputs
@@ -1378,7 +1375,7 @@ export default function AdminDashboard({
 
     // Inmovilizar fila 1 y columnas hasta H (Freeze row 1 and columns A to H)
     ws.views = [
-      { state: 'frozen', xSplit: 8, ySplit: 1, activeCell: 'I2', style: 'none' } as any
+      { state: 'frozen', xSplit: 8, ySplit: 1, activeCell: 'I2', style: 'none' }
     ];
 
     // Elegant auto column width fitting adjusted to cell contents
@@ -1743,18 +1740,18 @@ export default function AdminDashboard({
                 </select>
               </div>
 
-              {/* Estat Inscripció dropdown filter */}
+              {/* Inscription Status dropdown filter */}
               <div className="flex items-center bg-white border border-zinc-200 px-3 py-2 rounded-xl">
                 <span className="text-zinc-500 mr-2 font-mono">Estat</span>
                 <select 
-                  value={filterEstatInscripcio} 
-                  onChange={(e) => setFilterEstatInscripcio(e.target.value)}
+                  value={filterEstat} 
+                  onChange={(e) => setFilterEstat(e.target.value)}
                   className="bg-transparent font-bold text-zinc-900 border-none outline-none cursor-pointer"
-                  id="filter-estat-inscripcio"
+                  id="filter-status"
                 >
                   <option value="ALL">Tots</option>
-                  <option value="abierta">{language === 'ca' ? 'Placa Oberta' : 'Plaza Abierta'}</option>
-                  <option value="lista_espera">{language === 'ca' ? 'Llista d\'Espera' : 'Lista de Espera'}</option>
+                  <option value="OBERTA">{language === 'ca' ? 'Obertes' : 'Abiertas'}</option>
+                  <option value="ESPERA">{language === 'ca' ? "Llista d'espera" : 'Lista de espera'}</option>
                 </select>
               </div>
             </div>
@@ -1818,15 +1815,15 @@ export default function AdminDashboard({
                       </td>
                       {/* tracking code and creation date */}
                       <td className="px-6 py-4.5">
-                        <div className="flex items-center gap-1.5 flex-wrap">
+                        <div className="flex items-center gap-1.5 flex-wrap mb-1">
                           <span className="font-mono font-bold text-zinc-900 block">{item.codiSeguiment}</span>
-                          {(item.estat_inscripcio === 'lista_espera' || item.llistaEspera === true) ? (
-                            <span className="bg-amber-100 text-amber-800 text-[8px] font-black px-1.5 py-0.5 rounded uppercase font-mono tracking-wider shrink-0 bg-amber-500/10 border border-amber-300">
-                              🟡 ESPERA
+                          {(item.estatInscripcio === 'llista_espera' || (!item.estatInscripcio && item.llistaEspera)) ? (
+                            <span className="bg-amber-100 text-amber-800 text-[9px] font-black px-1.5 py-0.5 rounded uppercase font-sans tracking-wider shrink-0 bg-amber-500/10 border border-amber-300 flex items-center gap-1">
+                              🟡 ESPERA {item.posicioGlobal ? `#${item.posicioGlobal}` : ''}
                             </span>
                           ) : (
-                            <span className="bg-emerald-100 text-emerald-800 text-[8px] font-black px-1.5 py-0.5 rounded uppercase font-mono tracking-wider shrink-0 bg-emerald-500/10 border border-emerald-300">
-                              🟢 OBERTA
+                            <span className="bg-emerald-100 text-emerald-800 text-[9px] font-black px-1.5 py-0.5 rounded uppercase font-sans tracking-wider shrink-0 bg-emerald-500/10 border border-emerald-300 flex items-center gap-1">
+                              🟢 OBERTA {item.posicioGlobal ? `#${item.posicioGlobal}` : ''}
                             </span>
                           )}
                         </div>

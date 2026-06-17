@@ -202,10 +202,8 @@ function parseInscripcionesRows(rows: any[]): Inscripcio[] {
       metodePagament: r.metodePagament || r.metode_pagament || r.metodepagament || null,
       estatDni: r.estatDni || r.estat_dni || r.estatdni || 'PENDENT',
       entregaMaterial: r.entregaMaterial || r.entrega_material || r.entregamaterial || 'PENDENT',
-      estat_inscripcio: r.estat_inscripcio || r.estatInscripcio || undefined,
-      llistaEspera: r.llistaEspera !== undefined ? !!r.llistaEspera : 
-                    r.llista_espera !== undefined ? !!r.llista_espera : 
-                    (r.estat_inscripcio === 'lista_espera' || r.estatInscripcio === 'lista_espera'),
+      estatInscripcio: r.estatInscripcio || r.estat_inscripcio || r.estatinscripcio || 'obertes',
+      posicioGlobal: r.posicioGlobal !== undefined ? Number(r.posicioGlobal) : (r.posicio_global !== undefined ? Number(r.posicio_global) : undefined),
 
       creadoEn: r.creadoEn || r.creado_en || r.created_at || new Date().toISOString(),
       actualizadoEn: r.actualizadoEn || r.actualizado_en || r.updated_at || new Date().toISOString()
@@ -250,55 +248,6 @@ export async function saveSupabaseInscripcion(ins: Inscripcio): Promise<boolean>
   try {
     const tableName = 'inscripciones';
     
-    // Determine if this is a new signup or an existing one
-    let isNew = true;
-    if (ins.id) {
-      const { data: existing } = await supabase
-        .from('inscripciones')
-        .select('estat_inscripcio')
-        .eq('id', ins.id)
-        .maybeSingle();
-      if (existing) {
-        isNew = false;
-        // Keep existing or incoming state
-        if (!ins.estat_inscripcio) {
-          ins.estat_inscripcio = existing.estat_inscripcio;
-        }
-      } else {
-        // Fallback check to 'inscripcions'
-        const { data: existingFallback } = await supabase
-          .from('inscripcions')
-          .select('estat_inscripcio')
-          .eq('id', ins.id)
-          .maybeSingle();
-        if (existingFallback) {
-          isNew = false;
-          if (!ins.estat_inscripcio) {
-            ins.estat_inscripcio = existingFallback.estat_inscripcio;
-          }
-        }
-      }
-    }
-
-    if (isNew) {
-      // Read global enrollment status from settings, defaulting to 'abierta'
-      let globalStatus: 'abierta' | 'lista_espera' | 'cerrada' = 'abierta';
-      try {
-        const val = await getSupabaseSetting<'abierta' | 'lista_espera' | 'cerrada'>('estat_inscripcio_global', 'abierta');
-        if (val === 'abierta' || val === 'lista_espera' || val === 'cerrada') {
-          globalStatus = val;
-        }
-      } catch (err) {
-        console.warn("Error reading estat_inscripcio_global from settings:", err);
-      }
-      
-      ins.estat_inscripcio = globalStatus;
-      ins.llistaEspera = (globalStatus === 'lista_espera');
-    } else {
-      // For existing registrations, ensure llistaEspera boolean resolves with estat_inscripcio
-      ins.llistaEspera = (ins.estat_inscripcio === 'lista_espera');
-    }
-
     // Attempt 1: insert/upsert with CamelCase properties
     let response = await supabase
       .from(tableName)
@@ -339,8 +288,8 @@ export async function saveSupabaseInscripcion(ins: Inscripcio): Promise<boolean>
         metodePagament: ins.metodePagament,
         estatDni: ins.estatDni,
         entregaMaterial: ins.entregaMaterial,
-        estat_inscripcio: ins.estat_inscripcio || null,
-        llistaEspera: ins.llistaEspera || false,
+        estatInscripcio: ins.estatInscripcio || 'obertes',
+        posicioGlobal: ins.posicioGlobal || null,
         creadoEn: ins.creadoEn,
         actualizadoEn: ins.actualizadoEn
       });
@@ -388,8 +337,8 @@ export async function saveSupabaseInscripcion(ins: Inscripcio): Promise<boolean>
         metode_pagament: ins.metodePagament,
         estat_dni: ins.estatDni,
         entrega_material: ins.entregaMaterial,
-        estat_inscripcio: ins.estat_inscripcio || null,
-        llista_espera: ins.llistaEspera || false,
+        estat_inscripcio: ins.estatInscripcio || 'obertes',
+        posicio_global: ins.posicioGlobal || null,
         creado_en: ins.creadoEn,
         actualizado_en: ins.actualizadoEn
       });
@@ -500,35 +449,5 @@ export async function clearAllSupabaseInscripciones(): Promise<boolean> {
   } catch(e) {
     console.error("Exception clearing inscriptions from Supabase:", e);
     return false;
-  }
-}
-
-/**
- * Counts how many inscriptions have 'estat_inscripcio' = 'abierta'
- */
-export async function countAbiertasInscripciones(): Promise<number> {
-  if (!supabase) return 0;
-  try {
-    const tableName = 'inscripciones';
-    const { count, error } = await supabase
-      .from(tableName)
-      .select('*', { count: 'exact', head: true })
-      .eq('estat_inscripcio', 'abierta');
-
-    if (error) {
-      const resFallback = await supabase
-        .from('inscripcions')
-        .select('*', { count: 'exact', head: true })
-        .eq('estat_inscripcio', 'abierta');
-      if (!resFallback.error) {
-        return resFallback.count || 0;
-      }
-      console.warn("Error counting 'abierta' inscriptions:", error.message);
-      return 0;
-    }
-    return count || 0;
-  } catch (err) {
-    console.error("Exception counting 'abierta' inscriptions:", err);
-    return 0;
   }
 }

@@ -25,7 +25,6 @@ import {
   Shirt
 } from 'lucide-react';
 import { SistemaConfig, PreguntaDinamica, NoticiaXarxes, TarifaConcept, LiniaUniforme } from '../types';
-import { getSupabaseSetting, saveSupabaseSetting } from '../supabaseClient';
 
 interface AdminConfigProps {
   config: SistemaConfig;
@@ -45,7 +44,6 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
   const [preuDomasBalco, setPreuDomasBalco] = useState(config.preuDomasBalco);
   const [preuMocadorExtra, setPreuMocadorExtra] = useState(config.preuMocadorExtra);
   const [estatInscripcions, setEstatInscripcions] = useState<'obertes' | 'espera' | 'tancades'>(config.estatInscripcions || 'obertes');
-  const [aforoMaximoAbiertas, setAforoMaximoAbiertas] = useState<number>(config.aforo_maximo_abiertas !== undefined ? config.aforo_maximo_abiertas : 100);
 
   // Supabase dynamic setup states
   const [dbUrlSetup, setDbUrlSetup] = useState(() => localStorage.getItem('VITE_SUPABASE_URL') || '');
@@ -72,21 +70,6 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
 
   // States for dynamic customizable tariffs/payment lines
   const [titolSeccioTarifes, setTitolSeccioTarifes] = useState(config.titolSeccioTarifes || 'Tarifes i Cànons 2026');
-  const [estatInscripcioGlobal, setEstatInscripcioGlobal] = useState<'abierta' | 'lista_espera' | 'cerrada'>('abierta');
-
-  useEffect(() => {
-    async function loadGlobalStatus() {
-      try {
-        const val = await getSupabaseSetting<'abierta' | 'lista_espera' | 'cerrada'>('estat_inscripcio_global', 'abierta');
-        if (val === 'abierta' || val === 'lista_espera' || val === 'cerrada') {
-          setEstatInscripcioGlobal(val);
-        }
-      } catch (err) {
-        console.error("Error loading global inscription status:", err);
-      }
-    }
-    loadGlobalStatus();
-  }, []);
   const [tarifesDinamiques, setTarifesDinamiques] = useState<TarifaConcept[]>(
     config.tarifesDinamiques || [
       { id: 'adults', nom: 'Preu Parella Adulta (€)', valor: config.preuAdult, actiu: true, tipus: 'categoria_adult' },
@@ -418,18 +401,12 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
     setLiniisUniforme(liniisUniforme.map(l => l.id === id ? { ...l, ...updates } : l));
   };
 
-  const handleGuardarConfig = async () => {
+  const handleGuardarConfig = () => {
     // Find rates in the array or fall back to single inputs
     const adultsVal = tarifesDinamiques.find(t => t.id === 'adults')?.valor ?? Number(preuAdult);
     const juvenilsVal = tarifesDinamiques.find(t => t.id === 'juvenils')?.valor ?? Number(preuJuvenil);
     const domasVal = tarifesDinamiques.find(t => t.id === 'domas')?.valor ?? Number(preuDomasBalco);
     const mocadorVal = tarifesDinamiques.find(t => t.id === 'mocador')?.valor ?? Number(preuMocadorExtra);
-
-    try {
-      await saveSupabaseSetting('estat_inscripcio_global', estatInscripcioGlobal);
-    } catch (e) {
-      console.error("Error saving global inscription status:", e);
-    }
 
     const updated: SistemaConfig = {
       preuAdult: Number(adultsVal),
@@ -453,11 +430,10 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
       liniisUniforme: liniisUniforme,
       textLegalAutoritzacioMenors: textLegalAutoritzacioMenors,
       textLegalAutoritzacioMenorsES: textLegalAutoritzacioMenorsES,
-      estatInscripcions: estatInscripcioGlobal === 'lista_espera' ? 'espera' : estatInscripcioGlobal === 'cerrada' ? 'tancades' : 'obertes',
+      estatInscripcions: estatInscripcions,
       googleSheetSyncUrl: googleSheetSyncUrl.trim(),
       googleSheetSyncActive: googleSheetSyncActive,
-      cuestionariActiu: cuestionariActiu,
-      aforo_maximo_abiertas: Number(aforoMaximoAbiertas) || 100
+      cuestionariActiu: cuestionariActiu
     };
 
     onSave(updated);
@@ -861,62 +837,6 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
               />
             </div>
 
-            {/* Estat d'Inscripció Global Setting */}
-            <div className="p-4 bg-fuchsia-50/50 border border-fuchsia-100 rounded-2xl space-y-3">
-              <span className="block text-[10px] text-zinc-500 uppercase font-mono font-bold tracking-wider">
-                {language === 'ca' ? "ESTAT D'INSCRIPCIÓ GLOBAL" : "ESTADO DE INSCRIPCIÓN GLOBAL"}
-              </span>
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-                <button
-                  type="button"
-                  onClick={async () => {
-                    setEstatInscripcioGlobal('abierta');
-                    await saveSupabaseSetting('estat_inscripcio_global', 'abierta');
-                  }}
-                  className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold font-mono tracking-wider transition-all duration-200 border ${
-                    estatInscripcioGlobal === 'abierta'
-                      ? 'bg-emerald-600 text-white border-emerald-500 shadow-md shadow-emerald-600/10'
-                      : 'bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-50'
-                  }`}
-                >
-                  🟢 {language === 'ca' ? "ABIERTA (PLAÇA OBERTA)" : "ABIERTA (PLAZA ABIERTA)"}
-                </button>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    setEstatInscripcioGlobal('lista_espera');
-                    await saveSupabaseSetting('estat_inscripcio_global', 'lista_espera');
-                  }}
-                  className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold font-mono tracking-wider transition-all duration-200 border ${
-                    estatInscripcioGlobal === 'lista_espera'
-                      ? 'bg-amber-500 text-white border-amber-400 shadow-md shadow-amber-500/10'
-                      : 'bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-50'
-                  }`}
-                >
-                  🟡 {language === 'ca' ? "LLISTA D'ESPERA" : "LISTA DE ESPERA"}
-                </button>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    setEstatInscripcioGlobal('cerrada');
-                    await saveSupabaseSetting('estat_inscripcio_global', 'cerrada');
-                  }}
-                  className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold font-mono tracking-wider transition-all duration-200 border ${
-                    estatInscripcioGlobal === 'cerrada'
-                      ? 'bg-red-600 text-white border-red-500 shadow-md shadow-red-600/10'
-                      : 'bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-50'
-                  }`}
-                >
-                  🔴 {language === 'ca' ? "CERRADA (TANCADES)" : "CERRADA (CERRADAS)"}
-                </button>
-              </div>
-              <p className="text-[10px] text-zinc-400 font-sans tracking-tight">
-                {language === 'ca'
-                  ? "Controla si els nous registres entren com a Plaça Oberta, passen a la Llista d'Espera o es tanquen per complet les inscripcions."
-                  : "Controla si los nuevos registros entran como Plaza Abierta, pasan a la Lista de Espera o se cierran por completo las inscripciones."}
-              </p>
-            </div>
-
             {/* List of Dynamic Rate Lines */}
             <div className="space-y-4">
               <span className="block text-[10px] text-zinc-400 uppercase font-mono tracking-wider font-bold">Línies de Tarifes i Preus</span>
@@ -1006,24 +926,6 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                   </button>
                 </div>
               </div>
-            </div>
-
-            {/* Aforo Máximo de Inscripciones Abiertas */}
-            <div className="space-y-1.5 pt-4 border-t border-zinc-100">
-              <label className="block text-[10px] text-zinc-500 uppercase font-mono font-bold">
-                Aforament Màxim Places Obertes / Confirmat ('aforo_maximo_abiertas')
-              </label>
-              <input 
-                type="number" 
-                value={aforoMaximoAbiertas} 
-                onChange={(e) => setAforoMaximoAbiertas(Math.max(1, Number(e.target.value)))}
-                className="w-full bg-zinc-50 border border-zinc-200 focus:border-fuchsia-500 focus:bg-white rounded-xl px-3 py-2 text-xs font-mono font-bold focus:outline-none"
-                id="input-config-aforo-maximo"
-                placeholder="Ex. 100"
-              />
-              <p className="text-[10px] text-zinc-400">
-                Determina el límit on les noves preinscripcions passen automàticament a estar en llista d'espera.
-              </p>
             </div>
 
             <div className="bg-zinc-50 p-4 rounded-2xl border border-zinc-100 flex gap-2 text-zinc-500 text-[10px] leading-relaxed">

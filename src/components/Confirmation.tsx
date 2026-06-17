@@ -144,6 +144,27 @@ export default function Confirmation({ registration, onClear, onUpdate }: Confir
                     : (language === 'ca' ? 'PARELLA JUVENIL' : 'PAREJA JUVENIL')}
                 </td>
               </tr>
+              <tr>
+                <td style="padding: 8px 0; color: #666670; font-weight: bold; text-transform: uppercase; font-size: 11px;">
+                  ${language === 'ca' ? 'Inscripció:' : 'Inscripción:'}
+                </td>
+                <td style="padding: 8px 0; text-align: right; font-weight: bold;">
+                  ${(registration.estatInscripcio === 'llista_espera' || (!registration.estatInscripcio && registration.llistaEspera))
+                    ? `<span style="color: #b45309; background-color: #fef3c7; border: 1px solid #f59e0b; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-family: sans-serif; font-weight: bold; display: inline-block;">${language === 'ca' ? "LLISTA D'ESPERA" : "LISTA DE ESPERA"}</span>`
+                    : `<span style="color: #047857; background-color: #d1fae5; border: 1px solid #10b981; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-family: sans-serif; font-weight: bold; display: inline-block;">${language === 'ca' ? "OBERTA" : "ABIERTA"}</span>`
+                  }
+                </td>
+              </tr>
+              ${registration.posicioGlobal ? `
+              <tr>
+                <td style="padding: 8px 0; color: #666670; font-weight: bold; text-transform: uppercase; font-size: 11px;">
+                  ${language === 'ca' ? 'Posició:' : 'Posición:'}
+                </td>
+                <td style="padding: 8px 0; text-align: right; font-weight: bold; color: #111115; font-family: monospace; font-size: 14px;">
+                  #${registration.posicioGlobal}
+                </td>
+              </tr>
+              ` : ''}
               ${extrasHtml ? `
               <tr>
                 <td style="padding: 8px 0; color: #666670; font-weight: bold; text-transform: uppercase; font-size: 11px; vertical-align: top;">
@@ -388,19 +409,6 @@ export default function Confirmation({ registration, onClear, onUpdate }: Confir
             <p className="text-[10px] text-zinc-400 font-mono text-center mt-3 uppercase tracking-wider">
               {language === 'ca' ? 'Presenteu aquest QR als revisors per fer el pagament' : 'Presenten este QR a los revisores para realizar el pago'}
             </p>
-            
-            {/* Estat de la Inscripció Badge */}
-            <div className="mt-4 flex flex-col items-center">
-              {registration.estat_inscripcio === 'lista_espera' ? (
-                <div className="bg-amber-50 border border-amber-200 text-amber-850 rounded-2xl px-5 py-2.5 text-xs font-sans font-extrabold flex items-center gap-2 text-center shadow-sm">
-                  <span>⏳ EN LISTA DE ESPERA - Serà notificado cuando se libere una plaça</span>
-                </div>
-              ) : (
-                <div className="bg-emerald-50 border border-emerald-200 text-emerald-850 rounded-2xl px-5 py-2.5 text-xs font-sans font-extrabold flex items-center gap-2 text-center shadow-sm">
-                  <span>✅ Inscripció CONFIRMADA - Plaça ABIERTA</span>
-                </div>
-              )}
-            </div>
           </div>
 
           {/* Couples detail blocks */}
@@ -416,21 +424,6 @@ export default function Confirmation({ registration, onClear, onUpdate }: Confir
 
             <div className="flex justify-between items-center text-xs">
               <span className="text-zinc-500 font-bold uppercase tracking-wide">
-                {language === 'ca' ? 'Estat inscripció:' : 'Estado inscripción:'}
-              </span>
-              <span className={`font-bold px-2.5 py-0.5 rounded-lg text-[11px] font-mono ${
-                registration.estat_inscripcio === 'lista_espera'
-                  ? 'bg-amber-100 text-amber-800'
-                  : 'bg-emerald-100 text-emerald-800'
-              }`}>
-                {registration.estat_inscripcio === 'lista_espera' 
-                  ? 'LISTA DE ESPERA' 
-                  : 'PLAZA ABIERTA'}
-              </span>
-            </div>
-
-            <div className="flex justify-between items-center text-xs">
-              <span className="text-zinc-500 font-bold uppercase tracking-wide">
                 {language === 'ca' ? 'Categoria:' : 'Categoría:'}
               </span>
               <span className="bg-fuchsia-50 text-fuchsia-800 font-bold px-2.5 py-0.5 rounded-lg text-[11px] font-mono">
@@ -439,6 +432,32 @@ export default function Confirmation({ registration, onClear, onUpdate }: Confir
                   : (language === 'ca' ? 'PARELLA JUVENIL' : 'PAREJA JUVENIL')}
               </span>
             </div>
+
+            <div className="flex justify-between items-center text-xs">
+              <span className="text-zinc-500 font-bold uppercase tracking-wide">
+                {language === 'ca' ? 'Inscripció:' : 'Inscripción:'}
+              </span>
+              {(registration.estatInscripcio === 'llista_espera' || (!registration.estatInscripcio && registration.llistaEspera)) ? (
+                <span className="bg-amber-100 text-amber-800 font-black px-2.5 py-0.5 rounded-lg text-[11px] font-mono uppercase tracking-wider border border-amber-300">
+                  {language === 'ca' ? "Llista d'Espera" : "Lista de Espera"}
+                </span>
+              ) : (
+                <span className="bg-emerald-100 text-emerald-800 font-black px-2.5 py-0.5 rounded-lg text-[11px] font-mono uppercase tracking-wider border border-emerald-300">
+                  {language === 'ca' ? "Oberta" : "Abierta"}
+                </span>
+              )}
+            </div>
+
+            {registration.posicioGlobal && (
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-zinc-500 font-bold uppercase tracking-wide">
+                  {language === 'ca' ? 'Posició:' : 'Posición:'}
+                </span>
+                <span className="text-[#ff0090] font-mono font-black text-xs bg-fuchsia-50 px-2 py-0.5 rounded-lg">
+                  #{registration.posicioGlobal}
+                </span>
+              </div>
+            )}
 
             {registration.teDomasBalco || registration.teMocadorsExtra > 0 ? (
               <div className="flex justify-between items-start text-xs">
