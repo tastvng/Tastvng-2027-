@@ -248,7 +248,7 @@ export async function saveSupabaseInscripcion(ins: Inscripcio): Promise<boolean>
   try {
     const tableName = 'inscripciones';
     
-    // Attempt 1: insert/upsert with CamelCase properties
+    // Attempt 1: Best match using exact verified columns (CamelCase standard, snake_case for status & position)
     let response = await supabase
       .from(tableName)
       .upsert({
@@ -288,8 +288,8 @@ export async function saveSupabaseInscripcion(ins: Inscripcio): Promise<boolean>
         metodePagament: ins.metodePagament,
         estatDni: ins.estatDni,
         entregaMaterial: ins.entregaMaterial,
-        estatInscripcio: ins.estatInscripcio || 'obertes',
-        posicioGlobal: ins.posicioGlobal || null,
+        estat_inscripcio: ins.estatInscripcio || 'obertes',
+        posicio_global: ins.posicioGlobal || null,
         creadoEn: ins.creadoEn,
         actualizadoEn: ins.actualizadoEn
       });
@@ -297,7 +297,7 @@ export async function saveSupabaseInscripcion(ins: Inscripcio): Promise<boolean>
     if (!response.error) return true;
     let lastError = response.error;
     
-    // Attempt 2: snake_case columns
+    // Attempt 2: Full SnakeCase fallback columns
     response = await supabase
       .from(tableName)
       .upsert({
@@ -346,24 +346,7 @@ export async function saveSupabaseInscripcion(ins: Inscripcio): Promise<boolean>
     if (!response.error) return true;
     lastError = response.error;
 
-    // Attempt 3: Single JSON value column (payload or data)
-    response = await supabase
-      .from(tableName)
-      .upsert({ id: ins.id, data: ins });
-    if (!response.error) return true;
-
-    response = await supabase
-      .from(tableName)
-      .upsert({ id: ins.id, value: ins });
-    if (!response.error) return true;
-
-    // Attempt 4: Fallback Catalan named table using JSON column
-    response = await supabase
-      .from('inscripcions')
-      .upsert({ id: ins.id, data: ins });
-    if (!response.error) return true;
-
-    console.error("All adaptive column structure attempts for 'inscripciones' table failed:", response.error);
+    console.error("All adaptive column structure attempts for 'inscripciones' table failed:", lastError);
     return false;
   } catch (err) {
     console.error("Exception saving inscription to Supabase:", err);
