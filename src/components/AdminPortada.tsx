@@ -147,6 +147,7 @@ export default function AdminPortada({ language, onAddLog }: AdminPortadaProps) 
     
     // Save to localStorage as a fast local copy fallback
     localStorage.setItem('tast_portada_config_2026', JSON.stringify(config));
+    localStorage.setItem('estat_inscripcio_global', estatInscripcions);
     
     const scJson = localStorage.getItem('tast_config_2026');
     if (scJson) {
@@ -168,6 +169,7 @@ export default function AdminPortada({ language, onAddLog }: AdminPortadaProps) 
         sc.estatInscripcions = estatInscripcions;
         await saveSupabaseSetting('tast_config_2026', sc);
       }
+      await saveSupabaseSetting('estat_inscripcio_global', estatInscripcions);
     }
     
     // Dispatch custom event to let App know configuration changed

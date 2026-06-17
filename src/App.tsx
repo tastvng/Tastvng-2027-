@@ -388,11 +388,17 @@ export default function App() {
   const saveConfig = async (newConfig: SistemaConfig) => {
     setConfig(newConfig);
     localStorage.setItem('tast_config_2026', JSON.stringify(newConfig));
+    if (newConfig.estatInscripcions) {
+      localStorage.setItem('estat_inscripcio_global', newConfig.estatInscripcions);
+    }
     addLog("S'han modificat les tarifes i config.");
     syncWithGoogle(inscripcions, newConfig);
     if (isSupabaseConfigured) {
       try {
         await saveSupabaseSetting('tast_config_2026', newConfig);
+        if (newConfig.estatInscripcions) {
+          await saveSupabaseSetting('estat_inscripcio_global', newConfig.estatInscripcions);
+        }
         addLog("✓ Configuració desada globalment a la base de dades d'settings.");
       } catch (err) {
         console.error("Error saving config to Supabase:", err);
@@ -419,22 +425,28 @@ export default function App() {
     }, 500);
   };
 
-  const getEstatInscripcioForCategory = (categoria: CategoriaParella) => {
-    const matchingTarifa = config.tarifesDinamiques?.find(tf => {
-      if (categoria === CategoriaParella.ADULT) {
-        return tf.tipus === 'categoria_adult' || tf.id === 'adults';
-      } else {
-        return tf.tipus === 'categoria_juvenil' || tf.id === 'juvenils';
+  const getEstatInscripcioGlobalFromDatabase = async (): Promise<'obertes' | 'llista_espera'> => {
+    let globalStatus = 'obertes';
+    if (isSupabaseConfigured) {
+      try {
+        globalStatus = await getSupabaseSetting<string>('estat_inscripcio_global', config.estatInscripcions || 'obertes');
+      } catch (e) {
+        console.error("Error reading global status from Supabase:", e);
       }
-    });
+    } else {
+      globalStatus = localStorage.getItem('estat_inscripcio_global') || config.estatInscripcions || 'obertes';
+    }
     
-    if (!matchingTarifa) return 'obertes';
-    return matchingTarifa.actiu ? 'obertes' : 'llista_espera';
+    // Map 'espera', 'llista_espera', or 'tancades' to 'llista_espera', and 'obertes' to 'obertes'
+    if (globalStatus === 'espera' || globalStatus === 'llista_espera' || globalStatus === 'tancades') {
+      return 'llista_espera';
+    }
+    return 'obertes';
   };
 
   const addRegistration = async (newReg: Inscripcio) => {
-    // 1. Determine local registration status
-    const categoryStatus = getEstatInscripcioForCategory(newReg.categoria);
+    // 1. Determine local registration status directly from global setting
+    const categoryStatus = await getEstatInscripcioGlobalFromDatabase();
     newReg.estatInscripcio = categoryStatus;
 
     // 2. Fetch all latest inscriptions to calculate global position sequentially
@@ -483,8 +495,8 @@ export default function App() {
   };
 
   const addRegistrationManual = async (newReg: Inscripcio) => {
-    // 1. Determine local registration status
-    const categoryStatus = getEstatInscripcioForCategory(newReg.categoria);
+    // 1. Determine local registration status directly from global setting
+    const categoryStatus = await getEstatInscripcioGlobalFromDatabase();
     newReg.estatInscripcio = categoryStatus;
 
     // 2. Determine global position (using in-memory list which is up to date for manual screen)
