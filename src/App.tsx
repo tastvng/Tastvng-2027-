@@ -782,7 +782,9 @@ export default function App() {
       </header>
 
       {/* Main Container Layout */}
-      <main className="flex-1 max-w-7xl mx-auto w-full p-4 md:p-8 relative">
+      <main className={`flex-1 mx-auto w-full p-4 md:p-8 relative transition-all duration-300 ${
+        view === 'admin-dashboard' ? 'max-w-[95%] xl:max-w-[98%]' : 'max-w-7xl'
+      }`}>
         <AnimatePresence mode="wait">
           <motion.div
             key={view}

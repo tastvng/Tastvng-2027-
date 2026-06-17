@@ -1821,7 +1821,7 @@ export default function AdminDashboard({
               <table className="w-full text-left border-collapse table-auto">
                 <thead>
                   <tr className="bg-zinc-100 text-[10px] font-bold text-zinc-500 uppercase tracking-widest border-b border-zinc-200">
-                    <th className="px-4 py-4 text-center w-12">
+                    <th className="px-2 py-4 text-center w-10">
                       <input 
                         type="checkbox"
                         checked={isAllVisibleSelected}
@@ -1830,16 +1830,16 @@ export default function AdminDashboard({
                         id="checkbox-select-all"
                       />
                     </th>
-                    <th className="px-6 py-4">CODI / DATA</th>
-                    <th className="px-6 py-4">PRIMER COMPARSER</th>
-                    <th className="px-6 py-4">SEGON COMPARSER</th>
-                    <th className="px-6 py-4 text-center">CATEGORIA</th>
-                    <th className="px-6 py-4 text-center">BANDERA</th>
-                    <th className="px-6 py-4 text-center">PAGAMENT</th>
-                    <th className="px-6 py-4 text-center">DNI STATUS</th>
-                    <th className="px-6 py-4 text-center">LLIURAMENT</th>
-                    <th className="px-6 py-4 text-center">CORREU ENVIAT</th>
-                    <th className="px-6 py-4 text-center">ACCIONS</th>
+                    <th className="px-2 md:px-3 py-4 whitespace-nowrap">CODI / DATA</th>
+                    <th className="px-2 md:px-3 py-4 whitespace-nowrap">PRIMER COMPARSER</th>
+                    <th className="px-2 md:px-3 py-4 whitespace-nowrap">SEGON COMPARSER</th>
+                    <th className="px-2 md:px-3 py-4 text-center whitespace-nowrap">CATEGORIA</th>
+                    <th className="px-2 md:px-3 py-4 text-center whitespace-nowrap">BANDERA</th>
+                    <th className="px-2 md:px-3 py-4 text-center whitespace-nowrap">PAGAMENT</th>
+                    <th className="px-2 md:px-3 py-4 text-center whitespace-nowrap">DNI STATUS</th>
+                    <th className="px-2 md:px-3 py-4 text-center whitespace-nowrap">LLIURAMENT</th>
+                    <th className="px-2 md:px-3 py-4 text-center whitespace-nowrap">CORREU ENVIAT</th>
+                    <th className="px-2 md:px-3 py-4 text-center whitespace-nowrap">ACCIONS</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-100 text-xs text-zinc-700 font-sans">
@@ -1852,7 +1852,7 @@ export default function AdminDashboard({
                       }`}
                       id={`row-registration-${item.id}`}
                     >
-                      <td className="px-4 py-4.5 text-center" onClick={(e) => e.stopPropagation()}>
+                      <td className="px-2 py-3 text-center" onClick={(e) => e.stopPropagation()}>
                         <input 
                           type="checkbox"
                           checked={selectedIds.includes(item.id)}
@@ -1867,8 +1867,8 @@ export default function AdminDashboard({
                         />
                       </td>
                       {/* tracking code and creation date */}
-                      <td className="px-6 py-4.5">
-                        <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                      <td className="px-2 md:px-3 py-3 whitespace-nowrap">
+                        <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
                           <span className="font-mono font-bold text-zinc-900 block">{item.codiSeguiment}</span>
                           {(item.estatInscripcio === 'llista_espera' || (!item.estatInscripcio && item.llistaEspera)) ? (
                             <span className="bg-amber-100 text-amber-800 text-[9px] font-black px-1.5 py-0.5 rounded uppercase font-sans tracking-wider shrink-0 bg-amber-500/10 border border-amber-300 flex items-center gap-1">
@@ -1884,7 +1884,7 @@ export default function AdminDashboard({
                       </td>
 
                       {/* Participant 1 info */}
-                      <td className="px-6 py-4.5">
+                      <td className="px-2 md:px-3 py-3 whitespace-nowrap">
                         <p className="font-bold text-zinc-900 flex items-center gap-1.5 flex-wrap">
                           {item.c1Nom} {item.c1Cognoms}
                           {item.c1EsMenor && (
@@ -1899,7 +1899,7 @@ export default function AdminDashboard({
                       </td>
 
                       {/* Participant 2 info */}
-                      <td className="px-6 py-4.5">
+                      <td className="px-2 md:px-3 py-3 whitespace-nowrap">
                         <p className="font-bold text-zinc-900 flex items-center gap-1.5 flex-wrap">
                           {item.c2Nom} {item.c2Cognoms}
                           {item.c2EsMenor && (
@@ -1914,7 +1914,7 @@ export default function AdminDashboard({
                       </td>
 
                       {/* Category display */}
-                      <td className="px-6 py-4.5 text-center">
+                      <td className="px-2 md:px-3 py-3 text-center whitespace-nowrap">
                         <span className={`inline-flex px-2 py-1 rounded text-[10px] font-bold font-mono ${
                           item.categoria === CategoriaParella.ADULT 
                             ? 'bg-zinc-900 text-white' 
@@ -1925,7 +1925,7 @@ export default function AdminDashboard({
                       </td>
 
                       {/* Bandera column with quick selector */}
-                      <td className="px-6 py-4.5 text-center" onClick={(e) => e.stopPropagation()}>
+                      <td className="px-2 md:px-3 py-3 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                         <select
                           value={item.bandera || 0}
                           onChange={(e) => {
@@ -1956,7 +1956,7 @@ export default function AdminDashboard({
                       </td>
 
                       {/* Payment status badge */}
-                      <td className="px-6 py-4.5 text-center">
+                      <td className="px-2 md:px-3 py-3 text-center whitespace-nowrap">
                         {item.estatPagament === EstatPagament.PAGAT ? (
                           <div className="inline-flex flex-col items-center">
                             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-green-100 text-green-800">
@@ -1972,7 +1972,7 @@ export default function AdminDashboard({
                       </td>
 
                       {/* DNI status badge */}
-                      <td className="px-6 py-4.5 text-center">
+                      <td className="px-2 md:px-3 py-3 text-center whitespace-nowrap">
                         {item.estatDni === EstatVerificacio.VALIDAT && (
                           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-green-100 text-green-800">
                             Validat
@@ -1991,7 +1991,7 @@ export default function AdminDashboard({
                       </td>
 
                       {/* Delivery material status */}
-                      <td className="px-6 py-4.5 text-center">
+                      <td className="px-2 md:px-3 py-3 text-center whitespace-nowrap">
                         {item.entregaMaterial === EstatInscripcio.ENTREGAT ? (
                           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-zinc-900 text-white">
                             Lliurat
@@ -2004,7 +2004,7 @@ export default function AdminDashboard({
                       </td>
 
                       {/* Correu / Notificació status and manual trigger */}
-                      <td className="px-6 py-4.5 text-center" onClick={(e) => e.stopPropagation()}>
+                      <td className="px-2 md:px-3 py-3 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                         {(() => {
                           const currentStatus = rowSmtpSending[item.id] || item.respostesCuestionari?.estatCorreu || 'enviat';
                           
@@ -2054,7 +2054,7 @@ export default function AdminDashboard({
                       </td>
 
                       {/* Quick navigation action triggers */}
-                      <td className="px-6 py-4.5 text-center">
+                      <td className="px-2 md:px-3 py-3 text-center whitespace-nowrap">
                         <div className="flex items-center justify-center gap-1.5" onClick={(e) => e.stopPropagation()}>
                           <button 
                             onClick={() => onSelectInscripcio(item.id)}
