@@ -28,8 +28,9 @@
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
-    "@types/node": "^22.14.0",
+    "@types/node": "^22.19.21",
     "@types/nodemailer": "^8.0.0",
+    "@vercel/node": "^5.8.17",
     "autoprefixer": "^10.4.21",
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",

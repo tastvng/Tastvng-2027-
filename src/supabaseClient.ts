@@ -204,6 +204,7 @@ function parseInscripcionesRows(rows: any[]): Inscripcio[] {
       entregaMaterial: r.entregaMaterial || r.entrega_material || r.entregamaterial || 'PENDENT',
       estatInscripcio: r.estatInscripcio || r.estat_inscripcio || r.estatinscripcio || 'obertes',
       posicioGlobal: r.posicioGlobal !== undefined ? Number(r.posicioGlobal) : (r.posicio_global !== undefined ? Number(r.posicio_global) : undefined),
+      bandera: r.bandera !== undefined ? Number(r.bandera) : (r.bandera !== undefined ? Number(r.bandera) : 0),
 
       creadoEn: r.creadoEn || r.creado_en || r.created_at || new Date().toISOString(),
       actualizadoEn: r.actualizadoEn || r.actualizado_en || r.updated_at || new Date().toISOString()
@@ -290,6 +291,7 @@ export async function saveSupabaseInscripcion(ins: Inscripcio): Promise<boolean>
         entregaMaterial: ins.entregaMaterial,
         estat_inscripcio: ins.estatInscripcio || 'obertes',
         posicio_global: ins.posicioGlobal || null,
+        bandera: ins.bandera !== undefined ? ins.bandera : 0,
         creadoEn: ins.creadoEn,
         actualizadoEn: ins.actualizadoEn
       });
@@ -339,6 +341,7 @@ export async function saveSupabaseInscripcion(ins: Inscripcio): Promise<boolean>
         entrega_material: ins.entregaMaterial,
         estat_inscripcio: ins.estatInscripcio || 'obertes',
         posicio_global: ins.posicioGlobal || null,
+        bandera: ins.bandera !== undefined ? ins.bandera : 0,
         creado_en: ins.creadoEn,
         actualizado_en: ins.actualizadoEn
       });

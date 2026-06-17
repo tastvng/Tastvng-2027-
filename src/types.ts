@@ -91,6 +91,7 @@ export interface Inscripcio {
   llistaEspera?: boolean;
   estatInscripcio?: 'obertes' | 'llista_espera';
   posicioGlobal?: number;
+  bandera?: number; // 0 = No assignat, 1 = Bandera BOSS, 2 = Bandera No ni na, 3 = Bandera juvenil
   
   creadoEn: string;
   actualizadoEn: string;

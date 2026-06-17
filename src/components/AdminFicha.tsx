@@ -56,6 +56,7 @@ export default function AdminFicha({ registration, config, onBack, onSave }: Adm
     return registration.entregaMaterial === EstatInscripcio.ENTREGAT;
   });
   const [llistaEspera, setLlistaEspera] = useState<boolean>(!!registration.llistaEspera);
+  const [bandera, setBandera] = useState<number>(registration.bandera || 0);
 
   // Participant Editable configurations
   const [c1Nom, setC1Nom] = useState(registration.c1Nom);
@@ -154,6 +155,7 @@ export default function AdminFicha({ registration, config, onBack, onSave }: Adm
       entregaDomas,
       entregaMocadors,
       llistaEspera,
+      bandera,
       actualizadoEn: new Date().toISOString()
     };
 
@@ -720,6 +722,34 @@ export default function AdminFicha({ registration, config, onBack, onSave }: Adm
                     Posició: #{registration.posicioGlobal}
                   </span>
                 )}
+              </div>
+            </div>
+
+            {/* Segment: Bandera (Flag) Assignada */}
+            <div className="space-y-2 pb-4 border-b border-zinc-900" id="segment-ficha-bandera">
+              <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider font-mono">
+                {language === 'ca' ? "Bandera de la Parella" : "Bandera de la Pareja"}
+              </label>
+              <div className="relative">
+                <select
+                  value={bandera}
+                  onChange={(e) => setBandera(Number(e.target.value))}
+                  className={`w-full font-sans font-extrabold text-xs uppercase px-3.5 py-2.5 rounded-xl border border-zinc-800 outline-none cursor-pointer tracking-wider ${
+                    bandera === 1
+                      ? 'bg-fuchsia-950 text-fuchsia-300 border-fuchsia-700'
+                      : bandera === 2
+                      ? 'bg-yellow-950 text-yellow-300 border-yellow-700'
+                      : bandera === 3
+                      ? 'bg-blue-950 text-blue-300 border-blue-700'
+                      : 'bg-zinc-900 text-zinc-350 border-zinc-800 hover:bg-zinc-850'
+                  }`}
+                  id="select-ficha-bandera"
+                >
+                  <option value="0">{language === 'ca' ? 'No assignat (0)' : 'No asignado (0)'}</option>
+                  <option value="1">Bandera BOSS (1)</option>
+                  <option value="2">Bandera No ni na (2)</option>
+                  <option value="3">Bandera juvenil (3)</option>
+                </select>
               </div>
             </div>
 

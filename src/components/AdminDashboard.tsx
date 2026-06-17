@@ -133,6 +133,7 @@ export default function AdminDashboard({
   const [filterDni, setFilterDni] = useState<string>('ALL');
   const [filterEntrega, setFilterEntrega] = useState<string>('ALL');
   const [filterEstat, setFilterEstat] = useState<string>('ALL');
+  const [filterBandera, setFilterBandera] = useState<string>('ALL');
 
   // Bulk and complete deletion helpers
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -931,7 +932,14 @@ export default function AdminDashboard({
       (filterEstat === 'OBERTA' && (item.estatInscripcio === 'obertes' || (!item.estatInscripcio && !item.llistaEspera))) ||
       (filterEstat === 'ESPERA' && (item.estatInscripcio === 'llista_espera' || (!item.estatInscripcio && item.llistaEspera)));
 
-    return matchesSearch && matchesCategoria && matchesPagament && matchesDni && matchesEntrega && matchesEstat;
+    // Bandera filter
+    const matchesBandera = filterBandera === 'ALL' ||
+      (filterBandera === '0' && (!item.bandera || item.bandera === 0)) ||
+      (filterBandera === '1' && item.bandera === 1) ||
+      (filterBandera === '2' && item.bandera === 2) ||
+      (filterBandera === '3' && item.bandera === 3);
+
+    return matchesSearch && matchesCategoria && matchesPagament && matchesDni && matchesEntrega && matchesEstat && matchesBandera;
   });
 
   const isAllVisibleSelected = filteredInscripcions.length > 0 && filteredInscripcions.every(item => selectedIds.includes(item.id));
@@ -1012,7 +1020,8 @@ export default function AdminDashboard({
       'ENVI O WHATS',
       'FIN INSCPCION',
       'PULSERA',
-      'ENVIADO MAIL CONF. PREENS'
+      'ENVIADO MAIL CONF. PREENS',
+      'Bandera assignada'
     ];
 
     // Add header row
@@ -1048,7 +1057,7 @@ export default function AdminDashboard({
     // Enable filters on all columns
     ws.autoFilter = {
       from: { row: 1, column: 1 },
-      to: { row: 1, column: 30 }
+      to: { row: 1, column: 31 }
     };
 
     // Helper for dynamic concept values
@@ -1187,10 +1196,11 @@ export default function AdminDashboard({
       // V (Forma Pagament)
       let formaPag = "";
       if (i.metodePagament) {
-        if (i.metodePagament === 'EFECTIU' || i.metodePagament === 'METALIC' || String(i.metodePagament).toUpperCase() === 'EFECTIVO' || String(i.metodePagament).toUpperCase() === 'METALICO') {
+        const mStr = String(i.metodePagament).toUpperCase();
+        if (mStr === 'EFECTIU' || mStr === 'METALIC' || mStr === 'EFECTIVO' || mStr === 'METALICO') {
           formaPag = "METALICO";
         } else {
-          formaPag = String(i.metodePagament).toUpperCase();
+          formaPag = mStr;
         }
       }
 
@@ -1207,10 +1217,10 @@ export default function AdminDashboard({
       }
 
       // Y (Preparado)
-      const preparado = (i.entregaMaterial === 'PREPARAT' || i.entregaMaterial === 'ENTREGAT') ? 'SI' : '';
+      const preparado = (String(i.entregaMaterial) === 'PREPARAT' || String(i.entregaMaterial) === 'ENTREGAT') ? 'SI' : '';
 
       // Z (Entregado)
-      const entregado = i.entregaMaterial === 'ENTREGAT' || i.respostesCuestionari?.['entregado'] === true || String(i.respostesCuestionari?.['entregado']).toUpperCase() === 'SI' || i.respostesCuestionari?.['entrega'] === true;
+      const entregado = String(i.entregaMaterial) === 'ENTREGAT' || i.respostesCuestionari?.['entregado'] === true || String(i.respostesCuestionari?.['entregado']).toUpperCase() === 'SI' || i.respostesCuestionari?.['entrega'] === true;
 
       // AA (Envio whats)
       const envioWhats = i.respostesCuestionari?.['envi_whats'] === true || i.respostesCuestionari?.['whats'] === true || String(i.respostesCuestionari?.['envi_whats']).toUpperCase() === 'SI' || i.respostesCuestionari?.['envio_whats'] === true;
@@ -1223,6 +1233,12 @@ export default function AdminDashboard({
 
       // AD (Enviado mail conf)
       const mailEnviat = (i.respostesCuestionari?.estatCorreu !== 'fallat' && i.respostesCuestionari?.estatCorreu !== 'error');
+
+      // AE (Bandera assignada)
+      let banderaAsignadaStr = "No assignat";
+      if (i.bandera === 1) banderaAsignadaStr = "Bandera BOSS";
+      else if (i.bandera === 2) banderaAsignadaStr = "Bandera No ni na";
+      else if (i.bandera === 3) banderaAsignadaStr = "Bandera juvenil";
 
       // Add row to worksheet
       ws.addRow([
@@ -1255,16 +1271,17 @@ export default function AdminDashboard({
         envioWhats,         // AA  (Checkbox boolean)
         finInscripcio,      // AB
         pulsera,            // AC  (Checkbox boolean)
-        mailEnviat          // AD  (Checkbox boolean)
+        mailEnviat,         // AD  (Checkbox boolean)
+        banderaAsignadaStr  // AE (Categoría asignada como Bandera descriptiva real)
       ]);
 
       // Access row to apply styles cell-by-cell
       const addedRow = ws.getRow(rowNum);
       const borderObj = {
-        top: { style: 'thin', color: { argb: 'FFD3D3D3' } },
-        left: { style: 'thin', color: { argb: 'FFD3D3D3' } },
-        bottom: { style: 'thin', color: { argb: 'FFD3D3D3' } },
-        right: { style: 'thin', color: { argb: 'FFD3D3D3' } }
+        top: { style: 'thin' as const, color: { argb: 'FFD3D3D3' } },
+        left: { style: 'thin' as const, color: { argb: 'FFD3D3D3' } },
+        bottom: { style: 'thin' as const, color: { argb: 'FFD3D3D3' } },
+        right: { style: 'thin' as const, color: { argb: 'FFD3D3D3' } }
       };
 
       addedRow.eachCell({ includeEmpty: true }, (cell, colNum) => {
@@ -1275,17 +1292,17 @@ export default function AdminDashboard({
 
         // Set number formats
         if (colNum === 1) { // Marca temporal (A)
-          cell.numFormat = 'dd/mm/yyyy hh:mm:ss';
+          cell.numFmt = 'dd/mm/yyyy hh:mm:ss';
         }
         else if (colNum === 24) { // Fecha inscripcion (X)
-          cell.numFormat = 'dd/mm/yy';
+          cell.numFmt = 'dd/mm/yy';
           cell.alignment = { horizontal: 'center', vertical: 'middle' };
         }
         else if ([9, 11, 14, 16, 18, 19, 20, 21].includes(colNum)) { // Financial values
-          cell.numFormat = '#,##0.00" €"';
+          cell.numFmt = '#,##0.00" €"';
           cell.alignment = { horizontal: 'right', vertical: 'middle' };
         }
-        else if ([3, 7, 10, 12, 13, 15, 17, 23, 25, 26, 27, 28, 29, 30].includes(colNum)) { // Boolean status and shorter inputs
+        else if ([3, 7, 10, 12, 13, 15, 17, 23, 25, 26, 27, 28, 29, 30, 31].includes(colNum)) { // Boolean status and shorter inputs
           cell.alignment = { horizontal: 'center', vertical: 'middle' };
         }
 
@@ -1308,6 +1325,22 @@ export default function AdminDashboard({
             pattern: 'solid',
             fgColor: { argb: 'FF00FFFF' }
           };
+        } else if (colNum === 31) { // BANDERA ASIGNADA (0 = white, 1 = Pink/Fuchsia, 2 = Yellow, 3 = Blue)
+          let bHexColor = 'FFFFFFFF'; // default white
+          const currentBVal = i.bandera || 0;
+          if (currentBVal === 1) {
+            bHexColor = 'FFFFC2EB'; // Beautiful Light pink/fuchsia
+          } else if (currentBVal === 2) {
+            bHexColor = 'FFFFF2B2'; // Beautiful Soft Yellow
+          } else if (currentBVal === 3) {
+            bHexColor = 'FFC2E0FF'; // Beautiful Soft Blue
+          }
+          cell.fill = {
+            type: 'pattern',
+            pattern: 'solid',
+            fgColor: { argb: bHexColor }
+          };
+          cell.font = { name: 'Arial', size: 9, bold: currentBVal > 0 };
         } else {
           // default white background
           cell.fill = {
@@ -1375,7 +1408,7 @@ export default function AdminDashboard({
 
     // Inmovilizar fila 1 y columnas hasta H (Freeze row 1 and columns A to H)
     ws.views = [
-      { state: 'frozen', xSplit: 8, ySplit: 1, activeCell: 'I2', style: 'none' }
+      { state: 'frozen', xSplit: 8, ySplit: 1, activeCell: 'I2' }
     ];
 
     // Elegant auto column width fitting adjusted to cell contents
@@ -1754,6 +1787,23 @@ export default function AdminDashboard({
                   <option value="ESPERA">{language === 'ca' ? "Llista d'espera" : 'Lista de espera'}</option>
                 </select>
               </div>
+
+              {/* Bandera filter dropdown */}
+              <div className="flex items-center bg-white border border-zinc-200 px-3 py-2 rounded-xl">
+                <span className="text-zinc-500 mr-2 font-mono">Bandera</span>
+                <select 
+                  value={filterBandera} 
+                  onChange={(e) => setFilterBandera(e.target.value)}
+                  className="bg-transparent font-bold text-zinc-900 border-none outline-none cursor-pointer"
+                  id="filter-bandera"
+                >
+                  <option value="ALL">Tots</option>
+                  <option value="0">{language === 'ca' ? 'No assignat' : 'No asignado'}</option>
+                  <option value="1">Bandera BOSS</option>
+                  <option value="2">Bandera No ni na</option>
+                  <option value="3">Bandera juvenil</option>
+                </select>
+              </div>
             </div>
           </div>
 
@@ -1782,6 +1832,7 @@ export default function AdminDashboard({
                     <th className="px-6 py-4">PRIMER COMPARSER</th>
                     <th className="px-6 py-4">SEGON COMPARSER</th>
                     <th className="px-6 py-4 text-center">CATEGORIA</th>
+                    <th className="px-6 py-4 text-center">BANDERA</th>
                     <th className="px-6 py-4 text-center">PAGAMENT</th>
                     <th className="px-6 py-4 text-center">DNI STATUS</th>
                     <th className="px-6 py-4 text-center">LLIURAMENT</th>
@@ -1869,6 +1920,37 @@ export default function AdminDashboard({
                         }`}>
                           {item.categoria}
                         </span>
+                      </td>
+
+                      {/* Bandera column with quick selector */}
+                      <td className="px-6 py-4.5 text-center" onClick={(e) => e.stopPropagation()}>
+                        <select
+                          value={item.bandera || 0}
+                          onChange={(e) => {
+                            const val = Number(e.target.value);
+                            if (onSaveInscripcio) {
+                              onSaveInscripcio({
+                                ...item,
+                                bandera: val
+                              });
+                            }
+                          }}
+                          className={`font-sans font-extrabold text-[10px] uppercase px-2 py-1.5 rounded-xl border outline-none cursor-pointer text-center tracking-tight transition-colors ${
+                            (item.bandera || 0) === 1
+                              ? 'bg-fuchsia-100 text-fuchsia-900 border-fuchsia-300 hover:bg-fuchsia-200'
+                              : (item.bandera || 0) === 2
+                              ? 'bg-yellow-105 text-yellow-900 border-yellow-300 hover:bg-yellow-200'
+                              : (item.bandera || 0) === 3
+                              ? 'bg-blue-100 text-blue-900 border-blue-300 hover:bg-blue-200'
+                              : 'bg-zinc-100 text-zinc-650 border-zinc-200 hover:bg-zinc-150'
+                          }`}
+                          id={`select-bandera-col-${item.id}`}
+                        >
+                          <option value="0">{language === 'ca' ? 'No assignat' : 'No asignado'}</option>
+                          <option value="1">BOSS</option>
+                          <option value="2">No ni na</option>
+                          <option value="3">Juvenil</option>
+                        </select>
                       </td>
 
                       {/* Payment status badge */}
