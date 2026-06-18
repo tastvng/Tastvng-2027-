@@ -21,29 +21,34 @@ export default function Confirmation({ registration, onClear, onUpdate }: Confir
   const [smtpStatus, setSmtpStatus] = useState<'idle' | 'sending' | 'success' | 'error' | 'not_configured'>('idle');
   const [smtpError, setSmtpError] = useState('');
 
-  const [subSubjectCa, setSubSubjectCa] = useState(() => localStorage.getItem('tast_email_subject_ca') || "🎟️ El Tast Comparses 2026 - Confirmació d'Inscripció");
-  const [subSubjectEs, setSubSubjectEs] = useState(() => localStorage.getItem('tast_email_subject_es') || "🎟️ El Tast Comparses 2026 - Confirmación de Inscripción");
-  const [subBodyCa, setSubBodyCa] = useState(() => localStorage.getItem('tast_email_body_ca') || "S'ha generat correctament el vostre comprovant per a les comparses 2026.");
-  const [subBodyEs, setSubBodyEs] = useState(() => localStorage.getItem('tast_email_body_es') || "Se ha generado correctamente vuestro comprobante para las comparsas 2026.");
+  const [nomEsdeveniment, setNomEsdeveniment] = useState(() => localStorage.getItem('tast_nom_esdeveniment') || 'Carnaval 2027');
+  const [direccioEsdeveniment, setDireccioEsdeveniment] = useState(() => localStorage.getItem('tast_direccio_esdeveniment') || 'Plaça Soler i Carbonell, 28, Vilanova i la Geltrú');
+
+  const [subSubjectCa, setSubSubjectCa] = useState(() => localStorage.getItem('tast_email_subject_ca') || `🎟️ El Tast ${nomEsdeveniment} - Confirmació d'Inscripció`);
+  const [subSubjectEs, setSubSubjectEs] = useState(() => localStorage.getItem('tast_email_subject_es') || `🎟️ El Tast ${nomEsdeveniment} - Confirmación de Inscripción`);
+  const [subBodyCa, setSubBodyCa] = useState(() => localStorage.getItem('tast_email_body_ca') || `S'ha generat correctament el vostre comprovant per a ${nomEsdeveniment}.`);
+  const [subBodyEs, setSubBodyEs] = useState(() => localStorage.getItem('tast_email_body_es') || `Se ha generado correctamente vuestro comprobante para ${nomEsdeveniment}.`);
   const [subLogo, setSubLogo] = useState(() => localStorage.getItem('tast_email_logo') || "");
 
   const [hoursConfigCa, setHoursConfigCa] = useState(() => localStorage.getItem('tast_secretaria_hours_ca') || "Dimecres i divendres, de 18:00h a 21:30h.");
   const [hoursConfigEs, setHoursConfigEs] = useState(() => localStorage.getItem('tast_secretaria_hours_es') || "Miércoles y viernes, de 18:00h a 21:30h.");
-  const [nomEsdeveniment, setNomEsdeveniment] = useState(() => localStorage.getItem('tast_nom_esdeveniment') || 'Carnaval 2027');
-  const [direccioEsdeveniment, setDireccioEsdeveniment] = useState(() => localStorage.getItem('tast_direccio_esdeveniment') || 'Plaça Soler i Carbonell, 28, Vilanova i la Geltrú');
 
   useEffect(() => {
     const loadCustomTemplates = () => {
-      setSubSubjectCa(localStorage.getItem('tast_email_subject_ca') || "🎟️ El Tast Comparses 2026 - Confirmació d'Inscripció");
-      setSubSubjectEs(localStorage.getItem('tast_email_subject_es') || "🎟️ El Tast Comparses 2026 - Confirmación de Inscripción");
-      setSubBodyCa(localStorage.getItem('tast_email_body_ca') || "S'ha generat correctament el vostre comprovant per a les comparses 2026.");
-      setSubBodyEs(localStorage.getItem('tast_email_body_es') || "Se ha generado correctamente vuestro comprobante para las comparsas 2026.");
+      const activeEvName = localStorage.getItem('tast_nom_esdeveniment') || 'Carnaval 2027';
+      const activeEvDir = localStorage.getItem('tast_direccio_esdeveniment') || 'Plaça Soler i Carbonell, 28, Vilanova i la Geltrú';
+      
+      setNomEsdeveniment(activeEvName);
+      setDireccioEsdeveniment(activeEvDir);
+
+      setSubSubjectCa(localStorage.getItem('tast_email_subject_ca') || `🎟️ El Tast ${activeEvName} - Confirmació d'Inscripció`);
+      setSubSubjectEs(localStorage.getItem('tast_email_subject_es') || `🎟️ El Tast ${activeEvName} - Confirmación de Inscripción`);
+      setSubBodyCa(localStorage.getItem('tast_email_body_ca') || `S'ha generat correctament el vostre comprovant per a ${activeEvName}.`);
+      setSubBodyEs(localStorage.getItem('tast_email_body_es') || `Se ha generado correctamente vuestro comprobante para ${activeEvName}.`);
       setSubLogo(localStorage.getItem('tast_email_logo') || "");
 
       setHoursConfigCa(localStorage.getItem('tast_secretaria_hours_ca') || "Dimecres i divendres, de 18:00h a 21:30h.");
       setHoursConfigEs(localStorage.getItem('tast_secretaria_hours_es') || "Miércoles y viernes, de 18:00h a 21:30h.");
-      setNomEsdeveniment(localStorage.getItem('tast_nom_esdeveniment') || 'Carnaval 2027');
-      setDireccioEsdeveniment(localStorage.getItem('tast_direccio_esdeveniment') || 'Plaça Soler i Carbonell, 28, Vilanova i la Geltrú');
     };
     loadCustomTemplates();
     window.addEventListener('localStorage', loadCustomTemplates);

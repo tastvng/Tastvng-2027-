@@ -188,6 +188,16 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
 
   const t = (key: string, replacements?: Record<string, string | number>): string => {
     let text = translations[language]?.[key] || translations['ca']?.[key] || key;
+    
+    // Automatically replace "El Tast 2026" or "Comparses 2026" or edit references with the single source of truth
+    const evName = localStorage.getItem('tast_nom_esdeveniment') || '';
+    if (evName) {
+      text = text.replace(/El Tast 2026/g, evName);
+      text = text.replace(/Comparses 2026/g, evName);
+      text = text.replace(/l'edició 2026/g, evName);
+      text = text.replace(/la edición 2026/g, evName);
+    }
+
     if (replacements) {
       Object.entries(replacements).forEach(([k, val]) => {
         text = text.replace(`{${k}}`, String(val));

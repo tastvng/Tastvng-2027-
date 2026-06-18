@@ -225,13 +225,19 @@ export default function AdminDashboard({
         return;
       }
 
-      const emailSubjectCa = localStorage.getItem('tast_email_subject_ca') || "🎟️ El Tast Comparses 2026 - Confirmació d'Inscripció";
-      const emailSubjectEs = localStorage.getItem('tast_email_subject_es') || "🎟️ El Tast Comparses 2026 - Confirmación de Inscripción";
+      const evName = localStorage.getItem('tast_nom_esdeveniment') || 'Carnaval 2027';
+      const evAddr = localStorage.getItem('tast_direccio_esdeveniment') || 'Plaça Soler i Carbonell, 28, Vilanova i la Geltrú';
+      const evHoursCa = localStorage.getItem('tast_secretaria_hours_ca') || "Dimecres i divendres, de 18:00h a 21:30h.";
+      const evHoursEs = localStorage.getItem('tast_secretaria_hours_es') || "Miércoles y viernes, de 18:00h a 21:30h.";
+      const smtpUsuariVal = localStorage.getItem('tast_smtp_usuari') || "tastvng@gmail.com";
+
+      const emailSubjectCa = localStorage.getItem('tast_email_subject_ca') || `🎟️ El Tast ${evName} - Confirmació d'Inscripció`;
+      const emailSubjectEs = localStorage.getItem('tast_email_subject_es') || `🎟️ El Tast ${evName} - Confirmación de Inscripción`;
       const emailSubject = `${language === 'ca' ? emailSubjectCa : emailSubjectEs} ${item.codiSeguiment}`;
 
       const emailBodyText = language === 'ca' 
-        ? (localStorage.getItem('tast_email_body_ca') || "S'ha generat correctament el vostre comprovant per a les comparses 2026.")
-        : (localStorage.getItem('tast_email_body_es') || "Se ha generado correctamente vuestro comprobante para las comparsas 2026.");
+        ? (localStorage.getItem('tast_email_body_ca') || `S'ha generat correctament el vostre comprovant per a ${evName}.`)
+        : (localStorage.getItem('tast_email_body_es') || `Se ha generado correctamente vuestro comprobante para ${evName}.`);
 
       const subLogo = localStorage.getItem('tast_email_logo') || "";
       let logoHtml = '';
@@ -352,9 +358,7 @@ export default function AdminDashboard({
               </p>
               <p style="margin: 0;">
                 <strong>2. ${language === 'ca' ? 'Dies de lliurament i caixa' : 'Días de entrega y cobro'}:</strong><br/>
-                ${language === 'ca'
-                  ? "Dimecres i divendres previs als dards de comparses, de 18:00h a 21:30h."
-                  : "Miércoles y viernes previos a los días de comparsas, de 18:00h a 21:30h."}
+                ${language === 'ca' ? evHoursCa : evHoursEs}
               </p>
             </div>
           </div>
@@ -362,7 +366,7 @@ export default function AdminDashboard({
           <div style="border-top: 1px solid #eaeaea; padding-top: 20px; text-align: center;">
             <p style="font-size: 11px; color: #99999f; margin: 0; line-height: 1.5;">
               <strong>Associació Cultural El Tast de Vilanova i la Geltrú</strong><br/>
-              Carrer de l'Aigua, 12, Vilanova i la Geltrú &bull; <a href="mailto:secretaria@eltast.cat" style="color: #ff0090; text-decoration: none;">secretaria@eltast.cat</a>
+              ${evAddr} &bull; <a href="mailto:${smtpUsuariVal}" style="color: #ff0090; text-decoration: none;">${smtpUsuariVal}</a>
             </p>
           </div>
         </div>
