@@ -2661,48 +2661,7 @@ export default function AdminDashboard({
         </div>
       )}
 
-      {/* Interactive visual helper: Simulated Queue Panel to scan QR codes inside client! */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 shadow-xl text-white">
-        <div className="flex items-center gap-3.5 mb-4 pb-3 border-b border-zinc-800">
-          <Smartphone className="text-fuchsia-500" size={24} />
-          <div>
-            <h3 className="font-sans font-bold text-base text-white tracking-tight">Simulador de Cua i Escaneig de QR (Eina de Desenvolupament)</h3>
-            <p className="text-xs text-zinc-400">Perfecte per provar el lliurament immediat a l'iframe selectant parelles en directe.</p>
-          </div>
-        </div>
 
-        <div className="p-4 bg-zinc-950 rounded-2xl border border-zinc-800/80 mb-4 text-xs leading-relaxed space-y-1">
-          <p className="font-sans">
-            Com que us trobeu dins de l'entorn de test de l'AI Studio, no cal que apropis un codi QR imprès a la webcam. Hem construït aquest <strong className="text-fuchsia-400">simulador de cua</strong>!
-          </p>
-          <p className="text-zinc-500 font-mono">
-            En pitjar el botó d'escaneig a sota, el sistema descodificarà el QR virtual i invocarà síncronament la ficha de la parella al PC de secretaria.
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-          {inscripcions.map((item) => (
-            <div 
-              key={item.id}
-              onClick={() => {
-                if (onAddLog) onAddLog(`Simulant lectura des d'escaneig mòbil per a: ${item.c1Nom}`);
-                onSelectInscripcio(item.id);
-              }}
-              className="bg-zinc-900 border border-zinc-800 hover:border-fuchsia-500/60 p-3 rounded-xl transition-all cursor-pointer flex justify-between items-center group relative overflow-hidden"
-              id={`simulation-pill-${item.id}`}
-            >
-              <div className="space-y-0.5">
-                <p className="font-bold font-sans text-xs group-hover:text-fuchsia-400 truncate max-w-[130px]">{item.c1Nom} &amp; {item.c2Nom}</p>
-                <p className="text-[10px] text-zinc-500 font-mono tracking-tight">{item.codiSeguiment}</p>
-              </div>
-              
-              <div className="p-1 px-2.5 bg-fuchsia-950/40 text-fuchsia-400 font-mono text-[10px] font-bold rounded-lg group-hover:bg-fuchsia-500 group-hover:text-white transition-colors flex items-center gap-1">
-                <QrCode size={11} /> Escanejar
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
 
       {/* Manual Registration Modal Overlay */}
       {showAddModal && (
