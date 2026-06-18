@@ -56,6 +56,7 @@ export default function AdminFicha({ registration, config, onBack, onSave }: Adm
     return registration.entregaMaterial === EstatInscripcio.ENTREGAT;
   });
   const [llistaEspera, setLlistaEspera] = useState<boolean>(!!registration.llistaEspera);
+  const [estatInscripcio, setEstatInscripcio] = useState<'obertes' | 'llista_espera' | undefined>(registration.estatInscripcio);
   const [bandera, setBandera] = useState<number>(registration.bandera || 0);
 
   // Participant Editable configurations
@@ -93,6 +94,8 @@ export default function AdminFicha({ registration, config, onBack, onSave }: Adm
   // Error notifications
   const [validationError, setValidationError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
+
+  const isWaitlist = estatInscripcio === 'llista_espera' || (!estatInscripcio && llistaEspera);
 
   const rotateImage1 = () => {
     setRotacio1((prev) => (prev + 90) % 360);
@@ -155,6 +158,7 @@ export default function AdminFicha({ registration, config, onBack, onSave }: Adm
       entregaDomas,
       entregaMocadors,
       llistaEspera,
+      estatInscripcio,
       bandera,
       actualizadoEn: new Date().toISOString()
     };
@@ -708,7 +712,7 @@ export default function AdminFicha({ registration, config, onBack, onSave }: Adm
                 {language === 'ca' ? "Estat de la Inscripció" : "Estado de la Inscripción"}
               </label>
               <div className="flex items-center gap-3">
-                {(registration.estatInscripcio === 'llista_espera' || (!registration.estatInscripcio && registration.llistaEspera)) ? (
+                {isWaitlist ? (
                   <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-500/10 border border-amber-500/30 text-amber-500 font-sans uppercase">
                     🟡 {language === 'ca' ? "Llista d'Espera" : "Lista de Espera"}
                   </span>
@@ -1027,9 +1031,12 @@ export default function AdminFicha({ registration, config, onBack, onSave }: Adm
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
-                  onClick={() => setLlistaEspera(false)}
+                  onClick={() => {
+                    setLlistaEspera(false);
+                    setEstatInscripcio('obertes');
+                  }}
                   className={`py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                    !llistaEspera 
+                    !isWaitlist 
                       ? 'bg-zinc-850 text-white border border-zinc-700' 
                       : 'bg-zinc-900 text-zinc-500 hover:bg-zinc-850'
                   }`}
@@ -1038,9 +1045,12 @@ export default function AdminFicha({ registration, config, onBack, onSave }: Adm
                 </button>
                 <button
                   type="button"
-                  onClick={() => setLlistaEspera(true)}
+                  onClick={() => {
+                    setLlistaEspera(true);
+                    setEstatInscripcio('llista_espera');
+                  }}
                   className={`py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                    llistaEspera 
+                    isWaitlist 
                       ? 'bg-amber-500 text-white shadow shadow-amber-500/10' 
                       : 'bg-zinc-900 text-zinc-500 hover:bg-zinc-850'
                   }`}
