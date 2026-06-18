@@ -827,8 +827,12 @@ export default function App() {
                 
                 {/* Right side activity social bar */}
                 <div className="lg:col-span-1 space-y-6">
-                  <NotificationFeed onAddLog={addLog} noticies={noticies} />
-                  
+                  {/* Realtime social activity feeds */}
+                  <NotificationFeed 
+                    onAddLog={addLog}
+                    noticies={noticies}
+                  />
+
                   {/* Practical guidance card */}
                   <div className="bg-dark-card rounded-3xl p-6 border border-white/10 shadow-lg space-y-4">
                     <h4 className="font-sans font-bold text-xs text-zinc-400 uppercase tracking-widest flex items-center gap-1">

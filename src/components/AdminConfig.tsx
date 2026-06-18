@@ -368,7 +368,11 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
       videoUrl: newPostTipus === 'video' ? newPostVideoUrl.trim() : undefined,
       ressaltat: newPostRessaltat
     };
-    setNewsList([...newsList, nova]);
+    const updatedNews = [nova, ...newsList];
+    setNewsList(updatedNews);
+    if (onSaveNoticies) {
+      onSaveNoticies(updatedNews);
+    }
     setNewPostText('');
     setNewPostImatge('');
     setNewPostLikes(0);
@@ -379,7 +383,11 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
   };
 
   const handleRemoveNewsPost = (id: string) => {
-    setNewsList(newsList.filter(p => p.id !== id));
+    const updatedNews = newsList.filter(p => p.id !== id);
+    setNewsList(updatedNews);
+    if (onSaveNoticies) {
+      onSaveNoticies(updatedNews);
+    }
   };
 
   const handleAddLiniaUniforme = () => {
@@ -1549,7 +1557,7 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
           {/* Gestor d'Avisos i Xarxes Card - Enhanced Multi-resource Communicator */}
           <div className="bg-white rounded-3xl border border-zinc-200 p-6 shadow-sm space-y-6">
             <div className="border-b border-zinc-100 pb-3 flex justify-between items-center flex-wrap gap-2">
-              <h3 className="font-sans font-black text-sm text-zinc-900 uppercase tracking-wider flex items-center gap-2">
+              <h3 className="font-sans font-black text-sm text-zinc-900 uppercase tracking-wider flex items-center gap-2 mb-0">
                 <Megaphone size={16} className="text-[#ff0090]" /> Gestor de Comunicacions, Vídeos i Notes Oficials
               </h3>
               <span className="text-[10px] bg-[#ff0090]/10 text-[#ff0090] border border-[#ff0090]/20 rounded-full px-2 py-0.5 font-bold uppercase font-mono">
@@ -1580,14 +1588,14 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                         </span>
                       )}
                     </div>
-                    {post.titol && <p className="font-sans font-bold text-xs text-zinc-800 uppercase tracking-tight">{post.titol}</p>}
-                    <p className="text-zinc-600 text-xs truncate max-w-lg">{post.text}</p>
-                    {post.videoUrl && <p className="text-[9px] text-[#ff0090] font-mono truncate">🎥 {post.videoUrl}</p>}
+                    {post.titol && <p className="font-sans font-bold text-xs text-zinc-800 uppercase tracking-tight mb-0.5 mt-1">{post.titol}</p>}
+                    <p className="text-zinc-650 text-xs truncate max-w-lg mb-0 leading-normal">{post.text}</p>
+                    {post.videoUrl && <p className="text-[9px] text-[#ff0090] font-mono truncate mb-0 mt-0.5">🎥 {post.videoUrl}</p>}
                   </div>
                   <button
                     type="button"
                     onClick={() => handleRemoveNewsPost(post.id)}
-                    className="p-1.5 bg-zinc-200/60 hover:bg-zinc-200 text-zinc-700 hover:text-red-600 rounded-lg transition shrink-0 self-center"
+                    className="p-1.5 bg-zinc-200/60 hover:bg-zinc-250 text-zinc-700 hover:text-red-600 rounded-lg transition shrink-0 self-center cursor-pointer"
                     title="Eliminar publicació"
                   >
                     <Trash2 size={13} />
@@ -1595,7 +1603,7 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                 </div>
               ))}
               {newsList.length === 0 && (
-                <p className="text-zinc-400 text-xs italic text-center py-4">No hi ha publicacions ni avisos públics editats.</p>
+                <p className="text-zinc-400 text-xs italic text-center py-4 mb-0">No hi ha publicacions ni avisos públics editats.</p>
               )}
             </div>
 
@@ -1683,15 +1691,15 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                 {/* 6. Video Integration URL - Conditional */}
                 {newPostTipus === 'video' && (
                   <div className="sm:col-span-3 bg-zinc-950 p-4 rounded-xl border border-zinc-850 space-y-2">
-                    <label className="block text-[10px] text-amber-400 uppercase font-mono font-bold tracking-wider">Enllaç de Vídeo (YouTube, Vimeo, o MP4 complet)</label>
+                    <label className="block text-[10px] text-amber-400 uppercase font-mono font-bold tracking-wider mb-1">Enllaç de Vídeo (YouTube, Vimeo, o MP4 complet)</label>
                     <input
                       type="text"
                       value={newPostVideoUrl}
                       onChange={(e) => setNewPostVideoUrl(e.target.value)}
                       placeholder="Ex: https://www.youtube.com/watch?v=dQw4w9WgXcQ o https://meuservidor.com/video.mp4"
-                      className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500 placeholder-zinc-600"
+                      className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500 placeholder-zinc-650"
                     />
-                    <p className="text-[10px] text-zinc-500 font-sans italic">La plataforma transformarà enllaços estàndard de YouTube en reproductors dinàmics integrats automàticament.</p>
+                    <p className="text-[10px] text-zinc-500 font-sans italic mb-0">La plataforma transformarà enllaços de YouTube en reproductors dinàmics integrats automàticament.</p>
                   </div>
                 )}
 
@@ -1717,7 +1725,7 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                     onChange={(e) => setNewPostText(e.target.value)}
                     placeholder="Escriu les directrius, explicacions de les notes o canvis que veurà l'usuari..."
                     rows={3}
-                    className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-[#ff0090] text-white placeholder-zinc-600"
+                    className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-[#ff0090] text-white placeholder-zinc-600 font-sans"
                   />
                 </div>
 
@@ -1729,7 +1737,7 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                     value={newPostEnllacUrl}
                     onChange={(e) => setNewPostEnllacUrl(e.target.value)}
                     placeholder="https://web-entitat.com/normativa-comparses-pdf"
-                    className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-[#ff0090] text-white placeholder-zinc-700"
+                    className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-[#ff0090] text-white placeholder-zinc-750"
                   />
                 </div>
 
@@ -1752,7 +1760,7 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                 <button
                   type="button"
                   onClick={handleAddNewsPost}
-                  className="bg-[#ff0090] hover:bg-[#ff0090]/90 text-black font-extrabold text-xs px-5 py-2.5 rounded-xl transition shadow-lg shadow-[#ff0090]/25 uppercase tracking-wide"
+                  className="bg-[#ff0090] hover:bg-[#ff0090]/90 text-black font-extrabold text-xs px-5 py-2.5 rounded-xl transition shadow-lg shadow-[#ff0090]/25 uppercase tracking-wide cursor-pointer"
                 >
                   Publicar Avis a la Web
                 </button>

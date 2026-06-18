@@ -1618,7 +1618,7 @@ export default function AdminDashboard({
           }`}
         >
           <Share2 size={14} />
-          {language === 'ca' ? "Connexió Xarxes Socials" : "Conexión Redes Sociales"}
+          {language === 'ca' ? "Sincro Socials / Avisos" : "Sincro Socials / Avisos"}
         </button>
 
         <button
