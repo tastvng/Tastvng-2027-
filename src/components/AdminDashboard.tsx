@@ -1462,8 +1462,8 @@ export default function AdminDashboard({
             </div>
             <p className="text-zinc-500 text-xs">
               {language === 'ca' 
-                ? "Gestió i validació d'inscripcions Comparses 2026" 
-                : "Gestión y validación de inscripciones Comparsas 2026"}
+                ? `Gestió i validació d'inscripcions - ${localStorage.getItem('tast_nom_esdeveniment') || 'Carnaval 2027'}` 
+                : `Gestión y validación de inscripciones - ${localStorage.getItem('tast_nom_esdeveniment') || 'Carnaval 2027'}`}
             </p>
           </div>
         </div>

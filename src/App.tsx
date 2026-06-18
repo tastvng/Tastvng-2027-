@@ -250,6 +250,9 @@ export default function App() {
           const lg = await getSupabaseSetting('tast_email_logo', '');
           const hrCa = await getSupabaseSetting('tast_secretaria_hours_ca', '');
           const hrEs = await getSupabaseSetting('tast_secretaria_hours_es', '');
+          const evName = await getSupabaseSetting('tast_nom_esdeveniment', '');
+          const evAddr = await getSupabaseSetting('tast_direccio_esdeveniment', '');
+          const smpUsr = await getSupabaseSetting('tast_smtp_usuari', '');
 
           if (lg) {
             localStorage.setItem('tast_email_logo', lg);
@@ -257,6 +260,9 @@ export default function App() {
           }
           if (hrCa) localStorage.setItem('tast_secretaria_hours_ca', hrCa);
           if (hrEs) localStorage.setItem('tast_secretaria_hours_es', hrEs);
+          if (evName) localStorage.setItem('tast_nom_esdeveniment', evName);
+          if (evAddr) localStorage.setItem('tast_direccio_esdeveniment', evAddr);
+          if (smpUsr) localStorage.setItem('tast_smtp_usuari', smpUsr);
 
           if (hrCa || hrEs) {
             setHoursConfig({

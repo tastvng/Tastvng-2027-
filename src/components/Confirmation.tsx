@@ -27,6 +27,11 @@ export default function Confirmation({ registration, onClear, onUpdate }: Confir
   const [subBodyEs, setSubBodyEs] = useState(() => localStorage.getItem('tast_email_body_es') || "Se ha generado correctamente vuestro comprobante para las comparsas 2026.");
   const [subLogo, setSubLogo] = useState(() => localStorage.getItem('tast_email_logo') || "");
 
+  const [hoursConfigCa, setHoursConfigCa] = useState(() => localStorage.getItem('tast_secretaria_hours_ca') || "Dimecres i divendres, de 18:00h a 21:30h.");
+  const [hoursConfigEs, setHoursConfigEs] = useState(() => localStorage.getItem('tast_secretaria_hours_es') || "Miércoles y viernes, de 18:00h a 21:30h.");
+  const [nomEsdeveniment, setNomEsdeveniment] = useState(() => localStorage.getItem('tast_nom_esdeveniment') || 'Carnaval 2027');
+  const [direccioEsdeveniment, setDireccioEsdeveniment] = useState(() => localStorage.getItem('tast_direccio_esdeveniment') || 'Plaça Soler i Carbonell, 28, Vilanova i la Geltrú');
+
   useEffect(() => {
     const loadCustomTemplates = () => {
       setSubSubjectCa(localStorage.getItem('tast_email_subject_ca') || "🎟️ El Tast Comparses 2026 - Confirmació d'Inscripció");
@@ -34,11 +39,20 @@ export default function Confirmation({ registration, onClear, onUpdate }: Confir
       setSubBodyCa(localStorage.getItem('tast_email_body_ca') || "S'ha generat correctament el vostre comprovant per a les comparses 2026.");
       setSubBodyEs(localStorage.getItem('tast_email_body_es') || "Se ha generado correctamente vuestro comprobante para las comparsas 2026.");
       setSubLogo(localStorage.getItem('tast_email_logo') || "");
+
+      setHoursConfigCa(localStorage.getItem('tast_secretaria_hours_ca') || "Dimecres i divendres, de 18:00h a 21:30h.");
+      setHoursConfigEs(localStorage.getItem('tast_secretaria_hours_es') || "Miércoles y viernes, de 18:00h a 21:30h.");
+      setNomEsdeveniment(localStorage.getItem('tast_nom_esdeveniment') || 'Carnaval 2027');
+      setDireccioEsdeveniment(localStorage.getItem('tast_direccio_esdeveniment') || 'Plaça Soler i Carbonell, 28, Vilanova i la Geltrú');
     };
     loadCustomTemplates();
     window.addEventListener('localStorage', loadCustomTemplates);
+    window.addEventListener('hoursConfigChanged', loadCustomTemplates);
+    window.addEventListener('eventDataChanged', loadCustomTemplates);
     return () => {
       window.removeEventListener('localStorage', loadCustomTemplates);
+      window.removeEventListener('hoursConfigChanged', loadCustomTemplates);
+      window.removeEventListener('eventDataChanged', loadCustomTemplates);
     };
   }, []);
 
@@ -330,9 +344,9 @@ export default function Confirmation({ registration, onClear, onUpdate }: Confir
         </h1>
         <p className="text-zinc-500 text-sm max-w-sm mx-auto font-sans leading-relaxed">
           {language === 'ca' ? (
-            <>Ben fet! Hem registrat la vostra parella per a les comparses 2026 de l'entitat <strong className="text-fuchsia-600">El Tast</strong>.</>
+            <>Ben fet! Hem registrat la vostra parella per a l'esdeveniment {nomEsdeveniment} de l'entitat <strong className="text-fuchsia-600">El Tast</strong>.</>
           ) : (
-            <>¡Buen trabajo! Hemos registrado a vuestra pareja para las comparsas 2026 de la entidad <strong className="text-fuchsia-600">El Tast</strong>.</>
+            <>¡Buen trabajo! Hemos registrado a vuestra pareja para el evento {nomEsdeveniment} de la entidad <strong className="text-fuchsia-600">El Tast</strong>.</>
           )}
         </p>
       </div>
@@ -385,8 +399,8 @@ export default function Confirmation({ registration, onClear, onUpdate }: Confir
           <span className="font-mono text-[9px] text-fuchsia-400 font-bold tracking-widest uppercase block">
             {language === 'ca' ? 'COMPROVANT OFICIAL DE REGISTRE' : 'COMPROBANTE OFICIAL DE REGISTRO'}
           </span>
-          <h2 className="font-sans font-black text-xl text-white tracking-tight flex items-center justify-center gap-1.5">
-            <span className="text-fuchsia-500">EL TAST</span> COMPARSES 2026
+          <h2 className="font-sans font-black text-xl text-white tracking-tight flex items-center justify-center gap-1.5 uppercase">
+            <span className="text-fuchsia-500">EL TAST</span> {nomEsdeveniment}
           </h2>
           <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 bg-fuchsia-600 text-white font-mono font-bold text-xs px-4 py-1.5 rounded-full shadow-md">
             {registration.codiSeguiment}
@@ -535,9 +549,7 @@ export default function Confirmation({ registration, onClear, onUpdate }: Confir
                   {language === 'ca' ? 'Dies de lliurament i caixa' : 'Días de entrega y cobro'}
                 </p>
                 <p className="text-zinc-500 leading-relaxed">
-                  {language === 'ca'
-                    ? "Dimecres i divendres previs als dards de comparses, de 18:00h a 21:30h."
-                    : "Miércoles y viernes previos a los días de comparsas, de 18:00h a 21:30h."}
+                  {language === 'ca' ? hoursConfigCa : hoursConfigEs}
                 </p>
               </div>
             </div>
@@ -614,7 +626,7 @@ export default function Confirmation({ registration, onClear, onUpdate }: Confir
 
         {/* Real-time micro details */}
         <div className="mt-3 space-y-1 font-mono text-[10px] text-zinc-400">
-          <p><span className="text-zinc-600 font-bold">DE:</span> <span className="text-fuchsia-400 font-bold">{localStorage.getItem('tast_smtp_usuari') || 'secretaria@eltast.cat'}</span> <span className="text-[8px] bg-white/5 border border-white/10 px-1 py-0.5 rounded text-zinc-300 uppercase ml-1 uppercase">Live Connection</span></p>
+          <p><span className="text-zinc-600 font-bold">DE:</span> <span className="text-fuchsia-400 font-bold">{localStorage.getItem('tast_smtp_usuari') || 'tastvng@gmail.com'}</span> <span className="text-[8px] bg-white/5 border border-white/10 px-1 py-0.5 rounded text-zinc-300 uppercase ml-1 uppercase">Live Connection</span></p>
           <p><span className="text-zinc-600 font-bold">A:</span> <span className="text-zinc-200 font-bold">{registration.c1Email}</span>, <span className="text-zinc-200 font-bold">{registration.c2Email}</span></p>
           <p><span className="text-zinc-600 font-bold">ASSUMPTE / ASUNTO:</span> <span className="text-zinc-200 font-sans">{language === 'ca' ? `${subSubjectCa} ${registration.codiSeguiment}` : `${subSubjectEs} ${registration.codiSeguiment}`}</span></p>
           
@@ -682,7 +694,7 @@ export default function Confirmation({ registration, onClear, onUpdate }: Confir
                     </>
                   )}
                   <span className="text-[8px] font-mono font-bold tracking-wider text-zinc-400 uppercase">
-                    {language === 'ca' ? "SESSió INFORMATIVA 2026" : "SESIÓN INFORMATIVA 2026"}
+                    {nomEsdeveniment}
                   </span>
                 </div>
 
@@ -730,8 +742,8 @@ export default function Confirmation({ registration, onClear, onUpdate }: Confir
                 {/* Email Footer disclaimer */}
                 <div className="text-center text-[8px] text-zinc-400 pt-3 border-t border-zinc-100 leading-normal space-y-0.5">
                   <p className="font-bold">Secretaria General d'Associació Cultural El Tast de Vilanova</p>
-                  <p>Carrer de l'Aigua, 12, Vilanova i la Geltrú</p>
-                  <p className="font-bold text-fuchsia-650">secretaria@eltast.cat</p>
+                  <p>{direccioEsdeveniment}</p>
+                  <p className="font-bold text-fuchsia-650">{localStorage.getItem('tast_smtp_usuari') || 'tastvng@gmail.com'}</p>
                 </div>
               </div>
             </div>

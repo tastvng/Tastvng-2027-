@@ -42,6 +42,10 @@ export default function AdminPersonalitzacio({ language, onAddLog }: AdminPerson
   const [hoursCa, setHoursCa] = useState(() => localStorage.getItem('tast_secretaria_hours_ca') || "Dimecres i divendres, de 18:00h a 21:30h directament a la seu social de l'Associació Cultural El Tast.");
   const [hoursEs, setHoursEs] = useState(() => localStorage.getItem('tast_secretaria_hours_es') || "Miércoles y viernes, de 18:00h a 21:30h directamente en la sede social de la Asociación Cultural El Tast.");
 
+  // Event Name & Address States (Unique source of truth)
+  const [nomEsdeveniment, setNomEsdeveniment] = useState(() => localStorage.getItem('tast_nom_esdeveniment') || "Carnaval 2027");
+  const [direccioEsdeveniment, setDireccioEsdeveniment] = useState(() => localStorage.getItem('tast_direccio_esdeveniment') || "Plaça Soler i Carbonell, 28, Vilanova i la Geltrú");
+
   const [activeLangTab, setActiveLangTab] = useState<'ca' | 'es'>('ca');
   const [saveSuccess, setSaveSuccess] = useState(false);
 
@@ -59,6 +63,8 @@ export default function AdminPersonalitzacio({ language, onAddLog }: AdminPerson
         const lg = await getSupabaseSetting('tast_email_logo', '');
         const hrCa = await getSupabaseSetting('tast_secretaria_hours_ca', '');
         const hrEs = await getSupabaseSetting('tast_secretaria_hours_es', '');
+        const evName = await getSupabaseSetting('tast_nom_esdeveniment', 'Carnaval 2027');
+        const evAddr = await getSupabaseSetting('tast_direccio_esdeveniment', 'Plaça Soler i Carbonell, 28, Vilanova i la Geltrú');
 
         if (subCa) setEmailSubjectCa(subCa);
         if (subEs) setEmailSubjectEs(subEs);
@@ -67,6 +73,8 @@ export default function AdminPersonalitzacio({ language, onAddLog }: AdminPerson
         if (lg) setEmailLogo(lg);
         if (hrCa) setHoursCa(hrCa);
         if (hrEs) setHoursEs(hrEs);
+        if (evName) setNomEsdeveniment(evName);
+        if (evAddr) setDireccioEsdeveniment(evAddr);
       } catch (err) {
         console.error("Failed to load personalization from Supabase:", err);
       }
@@ -191,6 +199,8 @@ export default function AdminPersonalitzacio({ language, onAddLog }: AdminPerson
     localStorage.setItem('tast_email_logo', emailLogo);
     localStorage.setItem('tast_secretaria_hours_ca', hoursCa);
     localStorage.setItem('tast_secretaria_hours_es', hoursEs);
+    localStorage.setItem('tast_nom_esdeveniment', nomEsdeveniment);
+    localStorage.setItem('tast_direccio_esdeveniment', direccioEsdeveniment);
 
     try {
       const { isSupabaseConfigured, saveSupabaseSetting } = await import('../supabaseClient');
@@ -202,11 +212,14 @@ export default function AdminPersonalitzacio({ language, onAddLog }: AdminPerson
         await saveSupabaseSetting('tast_email_logo', emailLogo);
         await saveSupabaseSetting('tast_secretaria_hours_ca', hoursCa);
         await saveSupabaseSetting('tast_secretaria_hours_es', hoursEs);
+        await saveSupabaseSetting('tast_nom_esdeveniment', nomEsdeveniment);
+        await saveSupabaseSetting('tast_direccio_esdeveniment', direccioEsdeveniment);
       }
     } catch (err) {}
 
     // Dispatch events to let Confirmation & App components refresh state in real-time
     window.dispatchEvent(new Event('hoursConfigChanged'));
+    window.dispatchEvent(new Event('eventDataChanged'));
     window.dispatchEvent(new Event('localStorage'));
 
     setSaveSuccess(true);
@@ -230,6 +243,8 @@ export default function AdminPersonalitzacio({ language, onAddLog }: AdminPerson
       const defBodyEs = "Se ha generado correctamente vuestro comprobante para las comparsas 2026.";
       const defHoursCa = "Dimecres i divendres, de 18:00h a 21:30h directament a la seu social de l'Associació Cultural El Tast.";
       const defHoursEs = "Miércoles y viernes, de 18:00h a 21:30h directamente en la sede social de la Asociación Cultural El Tast.";
+      const defNomEsdeveniment = "Carnaval 2027";
+      const defDireccioEsdeveniment = "Plaça Soler i Carbonell, 28, Vilanova i la Geltrú";
 
       setEmailSubjectCa(defSubjectCa);
       setEmailSubjectEs(defSubjectEs);
@@ -238,6 +253,8 @@ export default function AdminPersonalitzacio({ language, onAddLog }: AdminPerson
       setEmailLogo("");
       setHoursCa(defHoursCa);
       setHoursEs(defHoursEs);
+      setNomEsdeveniment(defNomEsdeveniment);
+      setDireccioEsdeveniment(defDireccioEsdeveniment);
 
       localStorage.setItem('tast_email_subject_ca', defSubjectCa);
       localStorage.setItem('tast_email_subject_es', defSubjectEs);
@@ -246,6 +263,8 @@ export default function AdminPersonalitzacio({ language, onAddLog }: AdminPerson
       localStorage.setItem('tast_email_logo', "");
       localStorage.setItem('tast_secretaria_hours_ca', defHoursCa);
       localStorage.setItem('tast_secretaria_hours_es', defHoursEs);
+      localStorage.setItem('tast_nom_esdeveniment', defNomEsdeveniment);
+      localStorage.setItem('tast_direccio_esdeveniment', defDireccioEsdeveniment);
 
       try {
         const { isSupabaseConfigured, saveSupabaseSetting } = await import('../supabaseClient');
@@ -257,10 +276,13 @@ export default function AdminPersonalitzacio({ language, onAddLog }: AdminPerson
           await saveSupabaseSetting('tast_email_logo', "");
           await saveSupabaseSetting('tast_secretaria_hours_ca', defHoursCa);
           await saveSupabaseSetting('tast_secretaria_hours_es', defHoursEs);
+          await saveSupabaseSetting('tast_nom_esdeveniment', defNomEsdeveniment);
+          await saveSupabaseSetting('tast_direccio_esdeveniment', defDireccioEsdeveniment);
         }
       } catch (err) {}
 
       window.dispatchEvent(new Event('hoursConfigChanged'));
+      window.dispatchEvent(new Event('eventDataChanged'));
       window.dispatchEvent(new Event('localStorage'));
 
       if (onAddLog) onAddLog("Valors per defecte restaurats en disc i núvol.");
@@ -623,6 +645,46 @@ export default function AdminPersonalitzacio({ language, onAddLog }: AdminPerson
 
           <form onSubmit={handleSaveCorreuIHorari} className="grid grid-cols-1 lg:grid-cols-12 gap-8 text-left">
             <div className="lg:col-span-6 space-y-5">
+              {/* Event Name Input */}
+              <div>
+                <label className="block text-[10px] text-zinc-500 uppercase font-mono mb-1.5 font-bold flex items-center justify-between">
+                  <span>{language === 'ca' ? "Nom de l'Esdeveniment (Font Única de Veritat):" : "Nombre del Evento (Fuente Única de Verdad):"}</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={nomEsdeveniment}
+                  onChange={(e) => setNomEsdeveniment(e.target.value)}
+                  className="w-full bg-white text-zinc-900 border border-zinc-300 focus:border-[#ff0090] rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all"
+                  placeholder="Ex: Carnaval 2027 o Comparses 2026"
+                />
+                <span className="text-[10px] text-zinc-400 mt-1 block">
+                  {language === 'ca' 
+                    ? "Controla el nom de l'esdeveniment i l'any de forma global a tot l'aplicatiu." 
+                    : "Controla el nombre del evento y el año de forma global en toda la aplicación."}
+                </span>
+              </div>
+
+              {/* Event/Secretariat Address Input */}
+              <div>
+                <label className="block text-[10px] text-zinc-500 uppercase font-mono mb-1.5 font-bold flex items-center justify-between">
+                  <span>{language === 'ca' ? "Adreça Oficial de Secretaria" : "Dirección Oficial de Secretaría"}</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={direccioEsdeveniment}
+                  onChange={(e) => setDireccioEsdeveniment(e.target.value)}
+                  className="w-full bg-white text-zinc-900 border border-zinc-300 focus:border-[#ff0090] rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all"
+                  placeholder="Ex: Plaça Soler i Carbonell, 28, Vilanova i la Geltrú"
+                />
+                <span className="text-[10px] text-zinc-400 mt-1 block">
+                  {language === 'ca' 
+                    ? "S'inclourà al peu del rebut de confirmació i al correu electrònic." 
+                    : "Se incluirá en el pie del recibo de confirmación y en el correo electrónico."}
+                </span>
+              </div>
+
               <div>
                 <label className="block text-[10px] text-zinc-500 uppercase font-mono mb-1.5 font-bold flex items-center justify-between">
                   <span>{language === 'ca' ? "Horaris d'Atenció de Secretaria *" : "Horario de Atención de Secretaría *"}</span>
