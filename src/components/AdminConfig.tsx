@@ -278,6 +278,9 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
   const [showSyncInstructions, setShowSyncInstructions] = useState(false);
   const [isTestingSync, setIsTestingSync] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [showSyncTestModal, setShowSyncTestModal] = useState(false);
+  const [syncTestModalMessage, setSyncTestModalMessage] = useState('');
+  const [syncTestModalSuccess, setSyncTestModalSuccess] = useState(true);
 
   const testSyncConnection = async () => {
     if (!googleSheetSyncUrl) {
@@ -315,25 +318,39 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
       const { syncToGoogleSheet } = await import('../googleSync');
       const ok = await syncToGoogleSheet(testInscripcio, googleSheetSyncUrl, true, { ...config, tarifesDinamiques });
       if (ok) {
+        const warningMessage = language === 'ca'
+          ? "Petició enviada a Google Sheets. Si us plau, comproveu el vostre full de càlcul per confirmar que la fila de prova ha arribat correctament, ja que per les restriccions de seguretat del navegador no podem confirmar automàticament si Google l'ha acceptat o rebutjat."
+          : "Petición enviada a Google Sheets. Por favor, comprueba tu hoja de cálculo para confirmar que la fila de prueba ha llegado correctamente, ya que por las restricciones de seguridad del navegador no podemos confirmar automáticamente si Google la ha aceptado o rechazado.";
+
         setTestResult({
           success: true,
-          message: language === 'ca' 
-            ? "Sincronització de prova enviada! Verifiqueu el vostre full de Google Sheets per comprovar que apareix una fila amb 'TEST-CONN'."
-            : "¡Sincronización de prueba enviada! Verifica tu hoja de Google Sheets para comprobar que aparece una fila con 'TEST-CONN'."
+          message: warningMessage
         });
+        setSyncTestModalSuccess(true);
+        setSyncTestModalMessage(warningMessage);
+        setShowSyncTestModal(true);
       } else {
+        const failureMessage = language === 'ca'
+          ? "No s'ha pogut completar. Reviseu que la deployed Apps Script URL tingui permisos totals per a tothom ('Anyone')."
+          : "No se pudo completar. Revisa que la URL de Apps Script desplegada tenga permisos de acceso para todos ('Anyone').";
+
         setTestResult({
           success: false,
-          message: language === 'ca'
-            ? "No s'ha pogut completar. Reviseu que la deployed Apps Script URL tingui permisos totals per a tothom ('Anyone')."
-            : "No se pudo completar. Revisa que la URL de Apps Script desplegada tenga permisos de acceso para todos ('Anyone')."
+          message: failureMessage
         });
+        setSyncTestModalSuccess(false);
+        setSyncTestModalMessage(failureMessage);
+        setShowSyncTestModal(true);
       }
     } catch(e: any) {
+      const errMsg = e.message || "Error";
       setTestResult({
         success: false,
-        message: e.message || "Error"
+        message: errMsg
       });
+      setSyncTestModalSuccess(false);
+      setSyncTestModalMessage(errMsg);
+      setShowSyncTestModal(true);
     } finally {
       setIsTestingSync(false);
     }
@@ -1761,6 +1778,37 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                 className="flex-1 py-2.5 px-4 bg-red-600 text-white hover:bg-red-700 font-bold text-xs rounded-xl transition shadow cursor-pointer"
               >
                 {language === 'ca' ? "Sí, restablir-ho tot" : "Sí, restablecer todo"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showSyncTestModal && (
+        <div className="fixed inset-0 bg-black/85 z-50 flex items-center justify-center p-4 backdrop-blur-md font-sans">
+          <div className="bg-white rounded-3xl border border-zinc-200 shadow-2xl max-w-md w-full p-6 space-y-6 text-zinc-900 animate-in fade-in zoom-in-95 duration-200">
+            <div className="text-center space-y-3">
+              <div className={`w-12 h-12 rounded-full flex items-center justify-center mx-auto text-xl ${
+                syncTestModalSuccess ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'
+              }`}>
+                {syncTestModalSuccess ? '⚡' : '⚠️'}
+              </div>
+              <h3 className="font-sans font-black text-base text-zinc-900 uppercase tracking-wide">
+                {language === 'ca' 
+                  ? (syncTestModalSuccess ? "Petició enviada" : "Error de Connexió")
+                  : (syncTestModalSuccess ? "Petición enviada" : "Error de Conexión")}
+              </h3>
+              <p className="text-xs text-zinc-600 leading-relaxed font-semibold text-left bg-zinc-50 border border-zinc-150 p-4 rounded-2xl whitespace-pre-wrap">
+                {syncTestModalMessage}
+              </p>
+            </div>
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => setShowSyncTestModal(false)}
+                className="w-full py-2.5 px-4 bg-zinc-900 hover:bg-zinc-800 text-white font-bold text-xs rounded-xl transition cursor-pointer text-center"
+              >
+                {language === 'ca' ? "Entès, ho comprovaré" : "Entendido, lo comprobaré"}
               </button>
             </div>
           </div>
