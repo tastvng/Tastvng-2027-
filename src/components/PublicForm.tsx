@@ -1837,7 +1837,82 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
           return null;
         })()}
 
-        {/* Dinamic Custom Questionnaire Sections Disabled */}
+        {/* Dynamic Custom Questionnaire Sections */}
+        {config.cuestionariActiu !== false && config.preguntesFormulari && config.preguntesFormulari.filter(q => q.activa).length > 0 && (
+          <div className="bg-white rounded-3xl p-6 border border-zinc-200 shadow-md space-y-6">
+            <div className="border-b border-zinc-100 pb-4">
+              <h3 className="font-sans font-black text-zinc-900 text-lg tracking-tight uppercase">
+                <TranslatedText text={config.titolFormulariDinamic || (language === 'ca' ? 'Preguntes Addicionals' : 'Preguntas Adicionales')} />
+              </h3>
+              <p className="text-xs text-zinc-400 mt-1">
+                {language === 'ca' ? 'Si us plau, responeu a les següents preguntes requerides per l\'entitat.' : 'Por favor, responda a las siguientes preguntas requeridas por la entidad.'}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 text-left">
+              {config.preguntesFormulari.filter(q => q.activa).map((q) => {
+                const isRequired = q.requerit;
+                const errorMsg = errors[`question_${q.id}`];
+
+                return (
+                  <div key={q.id} className={`space-y-1.5 ${q.tipus === 'text' ? 'col-span-1 md:col-span-2' : ''}`}>
+                    <label className="block text-xs font-bold text-zinc-700 tracking-tight">
+                      <TranslatedText text={q.titol} /> {isRequired && <span className="text-red-500">*</span>}
+                    </label>
+
+                    {q.tipus === 'text' && (
+                      <input
+                        type="text"
+                        value={String(respostesCuestionari[q.id] || '')}
+                        onChange={(e) => setRespostesCuestionari(prev => ({ ...prev, [q.id]: e.target.value }))}
+                        className={`w-full bg-zinc-50 border ${errorMsg ? 'border-red-400 focus:border-red-500 bg-red-50/5' : 'border-zinc-200 focus:border-fuchsia-500'} focus:bg-white rounded-xl px-4 py-3 text-sm focus:outline-none transition-all`}
+                        placeholder={language === 'ca' ? "La teva resposta..." : "Tu respuesta..."}
+                      />
+                    )}
+
+                    {q.tipus === 'select' && (
+                      <select
+                        value={String(respostesCuestionari[q.id] || '')}
+                        onChange={(e) => setRespostesCuestionari(prev => ({ ...prev, [q.id]: e.target.value }))}
+                        className={`w-full bg-zinc-50 border ${errorMsg ? 'border-red-400 focus:border-red-500 bg-red-50/5' : 'border-zinc-200 focus:border-fuchsia-500'} focus:bg-white rounded-xl px-4 py-3 text-sm focus:outline-none transition-all`}
+                      >
+                        <option value="">
+                          {language === 'ca' ? '-- Seleccioneu una opció --' : '-- Seleccione una opción --'}
+                        </option>
+                        {(q.opcions || []).map((opt) => (
+                          <option key={opt} value={opt}>
+                            {opt}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+
+                    {q.tipus === 'boolean' && (
+                      <div className="flex items-center gap-3 p-3 bg-zinc-50/50 border border-zinc-150 rounded-xl hover:bg-zinc-50 transition-all">
+                        <input
+                          type="checkbox"
+                          checked={!!respostesCuestionari[q.id]}
+                          onChange={(e) => setRespostesCuestionari(prev => ({ ...prev, [q.id]: e.target.checked }))}
+                          className="w-4 h-4 rounded text-fuchsia-500 outline-none accent-fuchsia-500 cursor-pointer shrink-0"
+                          id={`check-${q.id}`}
+                        />
+                        <label htmlFor={`check-${q.id}`} className="text-xs text-zinc-650 font-semibold cursor-pointer select-none">
+                          {language === 'ca' ? 'Confirmar / Sí' : 'Confirmar / Sí'}
+                        </label>
+                      </div>
+                    )}
+
+                    {errorMsg && (
+                      <p className="text-[10px] text-red-500 font-mono flex items-center gap-1 animate-pulse">
+                        ⚠️ {errorMsg}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Legal RGPD and Payment policy */}
         <div className="bg-white rounded-3xl p-6 border border-zinc-200 shadow-sm space-y-4">

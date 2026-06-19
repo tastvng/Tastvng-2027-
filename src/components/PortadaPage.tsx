@@ -495,7 +495,7 @@ export default function PortadaPage({
                   </div>
                   
                   <span className="leading-none mt-0.5 sm:mt-0">
-                    <TranslatedText text={badgeText} />
+                    {badgeText}
                   </span>
                 </motion.div>
               );
@@ -510,7 +510,7 @@ export default function PortadaPage({
               className="text-xs md:text-sm font-semibold tracking-widest uppercase font-mono"
               style={{ color: subtitolColor }}
             >
-              <TranslatedText text={subtitol} />
+              {subtitol}
             </motion.p>
           )}
 
@@ -521,7 +521,7 @@ export default function PortadaPage({
             className="font-sans font-black text-3xl md:text-5xl lg:text-6xl tracking-tight leading-tight"
             style={{ color: titolColor }}
           >
-            <TranslatedText text={titol} />
+            {titol}
           </motion.h2>
 
           <motion.p
@@ -531,7 +531,7 @@ export default function PortadaPage({
             className="font-sans text-xs md:text-sm leading-relaxed max-w-2xl whitespace-pre-wrap"
             style={{ color: descripcioColor }}
           >
-            <TranslatedText text={descripcio} />
+            {descripcio}
           </motion.p>
 
           <motion.div
@@ -546,7 +546,7 @@ export default function PortadaPage({
               style={botoStyle}
               id="btn-portada-jump-to-form"
             >
-              <TranslatedText text={botoText} />
+              {botoText}
               <ChevronRight size={16} className="group-hover:translate-x-1.5 transition-transform" />
             </button>
             <button
@@ -624,7 +624,7 @@ export default function PortadaPage({
         }}
         id="portada-landing-footer"
       >
-        <span style={footerTextStyle}><TranslatedText text={footerText} /></span>
+        <span style={footerTextStyle}>{footerText}</span>
         <div className="flex gap-4">
           <a 
             href={footerLink1Url}
@@ -639,7 +639,7 @@ export default function PortadaPage({
             }}
           >
             <FileText size={10} />
-            <span><TranslatedText text={footerLink1Label} /></span>
+            <span>{footerLink1Label}</span>
           </a>
           <span style={{ color: `${footerTextColor}80`, ...footerTextStyle }}>•</span>
           <a 
@@ -655,7 +655,7 @@ export default function PortadaPage({
             }}
           >
             <Mail size={10} />
-            <span><TranslatedText text={footerLink2Label} /></span>
+            <span>{footerLink2Label}</span>
           </a>
         </div>
       </div>

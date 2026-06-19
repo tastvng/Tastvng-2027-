@@ -16,26 +16,36 @@ export default function TranslatedText({
   const { language } = useLanguage();
   const [displayedText, setDisplayedText] = useState(text);
   const [loading, setLoading] = useState(false);
+  const [visible, setVisible] = useState(true);
 
   useEffect(() => {
     if (!text || !text.trim()) {
       setDisplayedText('');
+      setVisible(false);
       return;
     }
 
     let isMounted = true;
     
     async function performTranslation() {
+      // Step 1: Trigger transition and fade out
+      setVisible(false);
       setLoading(true);
+      
+      // Give a tiny moment for fade-out transition to take visual effect
+      await new Promise(resolve => setTimeout(resolve, 150));
+      
       try {
         const translated = await translateText(text, 'auto', language);
         if (isMounted) {
           setDisplayedText(translated);
+          setVisible(true);
         }
       } catch (err) {
         console.error("Failed to translate:", err);
         if (isMounted) {
           setDisplayedText(text); // Fallback to original
+          setVisible(true);
         }
       } finally {
         if (isMounted) {
@@ -55,9 +65,13 @@ export default function TranslatedText({
 
   return (
     <Component 
-      className={`${className} transition-opacity duration-200 ${loading ? 'opacity-70' : 'opacity-100'}`}
+      className={`${className} transition-all duration-300 ease-out ${
+        visible 
+          ? 'opacity-100 translate-y-0 filter-none' 
+          : 'opacity-0 -translate-y-1 blur-[3px]'
+      } ${loading ? 'text-zinc-400 select-none' : ''}`}
     >
-      {displayedText}
+      {displayedText || text}
     </Component>
   );
 }

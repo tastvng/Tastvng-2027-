@@ -34,6 +34,7 @@ export default function Confirmation({ registration, onClear, onUpdate }: Confir
   const [hoursConfigEs, setHoursConfigEs] = useState(() => localStorage.getItem('tast_secretaria_hours_es') || "Miércoles y viernes, de 18:00h a 21:30h.");
 
   useEffect(() => {
+    // 1. Initial load from local cache if pre-existing
     const loadCustomTemplates = () => {
       const activeEvName = localStorage.getItem('tast_nom_esdeveniment') || 'Carnaval 2027';
       const activeEvDir = localStorage.getItem('tast_direccio_esdeveniment') || 'Plaça Soler i Carbonell, 28, Vilanova i la Geltrú';
@@ -51,6 +52,81 @@ export default function Confirmation({ registration, onClear, onUpdate }: Confir
       setHoursConfigEs(localStorage.getItem('tast_secretaria_hours_es') || "Miércoles y viernes, de 18:00h a 21:30h.");
     };
     loadCustomTemplates();
+
+    // 2. Real-time fetch directly from Supabase to prevent empty/outdated cache mismatch
+    async function loadLiveSupabaseTemplates() {
+      try {
+        const { getSupabaseSetting, isSupabaseConfigured } = await import('../supabaseClient');
+        if (isSupabaseConfigured) {
+          const liveEvName = await getSupabaseSetting<string>('tast_nom_esdeveniment', 'Carnaval 2027');
+          const liveEvDir = await getSupabaseSetting<string>('tast_direccio_esdeveniment', 'Plaça Soler i Carbonell, 28, Vilanova i la Geltrú');
+          
+          if (liveEvName) {
+            setNomEsdeveniment(liveEvName);
+            localStorage.setItem('tast_nom_esdeveniment', liveEvName);
+          }
+          if (liveEvDir) {
+            setDireccioEsdeveniment(liveEvDir);
+            localStorage.setItem('tast_direccio_esdeveniment', liveEvDir);
+          }
+
+          const liveSubjectCa = await getSupabaseSetting<string>('tast_email_subject_ca', '');
+          const liveSubjectEs = await getSupabaseSetting<string>('tast_email_subject_es', '');
+          const liveBodyCa = await getSupabaseSetting<string>('tast_email_body_ca', '');
+          const liveBodyEs = await getSupabaseSetting<string>('tast_email_body_es', '');
+          const liveLogo = await getSupabaseSetting<string>('tast_email_logo', '');
+          const liveHoursCa = await getSupabaseSetting<string>('tast_secretaria_hours_ca', '');
+          const liveHoursEs = await getSupabaseSetting<string>('tast_secretaria_hours_es', '');
+
+          const activeName = liveEvName || 'Carnaval 2027';
+
+          if (liveSubjectCa) {
+            setSubSubjectCa(liveSubjectCa);
+            localStorage.setItem('tast_email_subject_ca', liveSubjectCa);
+          } else if (liveEvName) {
+            setSubSubjectCa(`🎟️ El Tast ${activeName} - Confirmació d'Inscripció`);
+          }
+
+          if (liveSubjectEs) {
+            setSubSubjectEs(liveSubjectEs);
+            localStorage.setItem('tast_email_subject_es', liveSubjectEs);
+          } else if (liveEvName) {
+            setSubSubjectEs(`🎟️ El Tast ${activeName} - Confirmación de Inscripción`);
+          }
+
+          if (liveBodyCa) {
+            setSubBodyCa(liveBodyCa);
+            localStorage.setItem('tast_email_body_ca', liveBodyCa);
+          } else if (liveEvName) {
+            setSubBodyCa(`S'ha generat correctament el vostre comprovant per a ${activeName}.`);
+          }
+
+          if (liveBodyEs) {
+            setSubBodyEs(liveBodyEs);
+            localStorage.setItem('tast_email_body_es', liveBodyEs);
+          } else if (liveEvName) {
+            setSubBodyEs(`Se ha generado correctamente vuestro comprobante para ${activeName}.`);
+          }
+
+          if (liveLogo) {
+            setSubLogo(liveLogo);
+            localStorage.setItem('tast_email_logo', liveLogo);
+          }
+          if (liveHoursCa) {
+            setHoursConfigCa(liveHoursCa);
+            localStorage.setItem('tast_secretaria_hours_ca', liveHoursCa);
+          }
+          if (liveHoursEs) {
+            setHoursConfigEs(liveHoursEs);
+            localStorage.setItem('tast_secretaria_hours_es', liveHoursEs);
+          }
+        }
+      } catch (err) {
+        console.error("Error loading live Supabase templates inside Confirmation.tsx:", err);
+      }
+    }
+    loadLiveSupabaseTemplates();
+
     window.addEventListener('localStorage', loadCustomTemplates);
     window.addEventListener('hoursConfigChanged', loadCustomTemplates);
     window.addEventListener('eventDataChanged', loadCustomTemplates);
