@@ -1,4 +1,4 @@
-import { Inscripcio } from './types';
+import { Inscripcio, SistemaConfig } from './types';
 import { calculateDailySummaries } from './dailySummary';
 
 /**
@@ -9,7 +9,8 @@ import { calculateDailySummaries } from './dailySummary';
 export async function syncToGoogleSheet(
   inscripcions: Inscripcio[],
   googleSheetSyncUrl?: string,
-  googleSheetSyncActive?: boolean
+  googleSheetSyncActive?: boolean,
+  config?: SistemaConfig
 ): Promise<boolean> {
   if (!googleSheetSyncActive || !googleSheetSyncUrl) {
     return false;

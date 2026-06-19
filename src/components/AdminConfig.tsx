@@ -78,6 +78,107 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
       { id: 'mocador', nom: 'Cànon Mocador Extra (€)', valor: config.preuMocadorExtra, actiu: true, tipus: 'extra_mocador' }
     ]
   );
+
+  // Generate Apps Script dynamically based on the active state of the dynamic rates
+  const domasTarifaFromList = tarifesDinamiques.find(t => t.id === 'domas' || t.tipus === 'extra_domas');
+  const isDomasActiveInConfig = domasTarifaFromList ? domasTarifaFromList.actiu : false;
+  const domasNameInConfig = domasTarifaFromList?.nom 
+    ? domasTarifaFromList.nom.replace(/\s*\(€\)\s*/g, '').replace('Cànon ', '') 
+    : "Domàs de Balcó";
+
+  const mocadorTarifaFromList = tarifesDinamiques.find(t => t.id === 'mocador' || t.tipus === 'extra_mocador');
+  const isMocadorActiveInConfig = mocadorTarifaFromList ? mocadorTarifaFromList.actiu : false;
+  const mocadorNameInConfig = mocadorTarifaFromList?.nom 
+    ? mocadorTarifaFromList.nom.replace(/\s*\(€\)\s*/g, '').replace('Cànon ', '') 
+    : "Mocadors Extra";
+
+  const appsScriptCode = `function doPost(e) {
+  try {
+    var jsonString = e.postData.contents;
+    var payload = JSON.parse(jsonString);
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+
+    // 1. RAW INSCRIPICTIONS TAB
+    var sheetInsc = ss.getSheetByName("Inscripcions") || ss.insertSheet("Inscripcions");
+    sheetInsc.clear();
+    
+    var headers = [
+      "Codis Seguiment", "Categoria", "C1 Nom", "C1 Cognoms", "C1 Email", "C1 Telèfon", "C1 Talla", "C1 Tipus Uniforme", "C1 Menor", "C1 Nom Tutor", "C1 Cognoms Tutor", "C1 DNI Tutor", "C1 Telèfon Tutor",
+      "C2 Nom", "C2 Cognoms", "C2 Email", "C2 Telèfon", "C2 Talla", "C2 Tipus Uniforme", "C2 Menor", "C2 Nom Tutor", "C2 Cognoms Tutor", "C2 DNI Tutor", "C2 Telèfon Tutor",
+      "Preu Total (€)"
+    ];
+    ${isDomasActiveInConfig ? `headers.push(${JSON.stringify(domasNameInConfig)});` : ''}
+    ${isMocadorActiveInConfig ? `headers.push(${JSON.stringify(mocadorNameInConfig)});` : ''}
+    headers.push("Estat Pagament", "Mètode Pagament", "Validació DNI", "Entrega Material", "Llista Espera", "Data Creació");
+
+    sheetInsc.appendRow(headers);
+    sheetInsc.getRange(1, 1, 1, headers.length).setFontWeight("bold").setBackground("#f4f4f5");
+
+    if (payload.data && payload.data.length > 0) {
+      var rowsToWrite = [];
+      for (var i = 0; i < payload.data.length; i++) {
+        var r = payload.data[i];
+        var row = [
+          r.codiSeguiment, r.categoria, r.c1Nom, r.c1Cognoms, r.c1Email, r.c1Telefon, r.c1Talla, r.c1UniformeTipus, r.c1EsMenor, r.c1TutorNom, r.c1TutorCognoms, r.c1TutorDni, r.c1TutorTelefon,
+          r.c2Nom, r.c2Cognoms, r.c2Email, r.c2Telefon, r.c2Talla, r.c2UniformeTipus, r.c2EsMenor, r.c2TutorNom, r.c2TutorCognoms, r.c2TutorDni, r.c2TutorTelefon,
+          r.preuTotal
+        ];
+        ${isDomasActiveInConfig ? `row.push(r.domasBalco);` : ''}
+        ${isMocadorActiveInConfig ? `row.push(r.mocadorsExtra);` : ''}
+        row.push(r.estatPagament, r.metodePagament, r.validacioDni, r.entregaMaterial, r.llistaEspera, r.dataCreacio);
+        rowsToWrite.push(row);
+      }
+      sheetInsc.getRange(2, 1, rowsToWrite.length, headers.length).setValues(rowsToWrite);
+    }
+    for (var col = 1; col <= headers.length; col++) {
+      sheetInsc.autoResizeColumn(col);
+    }
+
+    // 2. DAILY CLOSURE TAB ("Cierre del Dia")
+    var sheetSumm = ss.getSheetByName("Cierre del Dia") || ss.insertSheet("Cierre del Dia");
+    sheetSumm.clear();
+    
+    var sumHeaders = [
+      "Data Inscripció", "Parelles Registrades", "A la Llista d'Espera", "Recaudació Total (€)", "Efectiu (€)", "Bizum (€)", "Inscripcions Adults", "Inscripcions Juvenils", "Total Menors d'Edat"
+    ];
+    ${isDomasActiveInConfig ? `sumHeaders.push(${JSON.stringify(domasNameInConfig + 's')});` : ''}
+    ${isMocadorActiveInConfig ? `sumHeaders.push(${JSON.stringify(mocadorNameInConfig + 's')});` : ''}
+
+    sheetSumm.appendRow(sumHeaders);
+    sheetSumm.getRange(1, 1, 1, sumHeaders.length).setFontWeight("bold").setBackground("#dcfce7");
+
+    if (payload.summaries && payload.summaries.length > 0) {
+      var sumRows = [];
+      for (var j = 0; j < payload.summaries.length; j++) {
+        var s = payload.summaries[j];
+        var sRow = [
+          s.dateStr,
+          s.totalRegistrations,
+          s.waitingListCount,
+          s.totalRevenue,
+          s.cashRevenue,
+          s.bizumRevenue,
+          s.adultsCount,
+          s.juvenilsCount,
+          s.minorsCount
+        ];
+        ${isDomasActiveInConfig ? `sRow.push(s.domasCount);` : ''}
+        ${isMocadorActiveInConfig ? `sRow.push(s.extraMocadorsCount);` : ''}
+        sumRows.push(sRow);
+      }
+      sheetSumm.getRange(2, 1, sumRows.length, sumHeaders.length).setValues(sumRows);
+    }
+    for (var colS = 1; colS <= sumHeaders.length; colS++) {
+      sheetSumm.autoResizeColumn(colS);
+    }
+
+    return ContentService.createTextOutput(JSON.stringify({ success: true }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (error) {
+    return ContentService.createTextOutput(JSON.stringify({ success: false, error: error.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}`;
   const [newTarifaNom, setNewTarifaNom] = useState('');
   const [newTarifaValor, setNewTarifaValor] = useState<number>(0);
 
@@ -212,7 +313,7 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
       }] as any[];
 
       const { syncToGoogleSheet } = await import('../googleSync');
-      const ok = await syncToGoogleSheet(testInscripcio, googleSheetSyncUrl, true);
+      const ok = await syncToGoogleSheet(testInscripcio, googleSheetSyncUrl, true, { ...config, tarifesDinamiques });
       if (ok) {
         setTestResult({
           success: true,
@@ -635,157 +736,12 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                     {/* Code copy block */}
                     <div className="relative">
                       <pre className="p-3 bg-zinc-950 text-emerald-400 rounded-xl overflow-x-auto text-[9px] font-mono leading-normal max-h-48 shadow-inner select-all">
-{`function doPost(e) {
-  try {
-    var jsonString = e.postData.contents;
-    var payload = JSON.parse(jsonString);
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
-
-    // 1. RAW INSCRIPICTIONS TAB
-    var sheetInsc = ss.getSheetByName("Inscripcions") || ss.insertSheet("Inscripcions");
-    sheetInsc.clear();
-    var headers = [
-      "Codis Seguiment", "Categoria", "C1 Nom", "C1 Cognoms", "C1 Email", "C1 Telèfon", "C1 Talla", "C1 Tipus Uniforme", "C1 Menor", "C1 Nom Tutor", "C1 Cognoms Tutor", "C1 DNI Tutor", "C1 Telèfon Tutor",
-      "C2 Nom", "C2 Cognoms", "C2 Email", "C2 Telèfon", "C2 Talla", "C2 Tipus Uniforme", "C2 Menor", "C2 Nom Tutor", "C2 Cognoms Tutor", "C2 DNI Tutor", "C2 Telèfon Tutor",
-      "Preu Total (€)", "Domàs Balcó", "Mocadors Extra", "Estat Pagament", "Mètode Pagament", "Validació DNI", "Entrega Material", "Llista Espera", "Data Creació"
-    ];
-    sheetInsc.appendRow(headers);
-    sheetInsc.getRange(1, 1, 1, headers.length).setFontWeight("bold").setBackground("#f4f4f5");
-
-    if (payload.data && payload.data.length > 0) {
-      var rowsToWrite = [];
-      for (var i = 0; i < payload.data.length; i++) {
-        var r = payload.data[i];
-        rowsToWrite.push([
-          r.codiSeguiment, r.categoria, r.c1Nom, r.c1Cognoms, r.c1Email, r.c1Telefon, r.c1Talla, r.c1UniformeTipus, r.c1EsMenor, r.c1TutorNom, r.c1TutorCognoms, r.c1TutorDni, r.c1TutorTelefon,
-          r.c2Nom, r.c2Cognoms, r.c2Email, r.c2Telefon, r.c2Talla, r.c2UniformeTipus, r.c2EsMenor, r.c2TutorNom, r.c2TutorCognoms, r.c2TutorDni, r.c2TutorTelefon,
-          r.preuTotal, r.domasBalco, r.mocadorsExtra, r.estatPagament, r.metodePagament, r.validacioDni, r.entregaMaterial, r.llistaEspera, r.dataCreacio
-        ]);
-      }
-      sheetInsc.getRange(2, 1, rowsToWrite.length, headers.length).setValues(rowsToWrite);
-    }
-    for (var col = 1; col <= headers.length; col++) {
-      sheetInsc.autoResizeColumn(col);
-    }
-
-    // 2. DAILY CLOSURE TAB ("Cierre del Dia")
-    var sheetSumm = ss.getSheetByName("Cierre del Dia") || ss.insertSheet("Cierre del Dia");
-    sheetSumm.clear();
-    var sumHeaders = [
-      "Data Inscripció", "Parelles Registrades", "A la Llista d'Espera", "Recaudació Total (€)", "Efectiu (€)", "Bizum (€)", "Inscripcions Adults", "Inscripcions Juvenils", "Total Menors d'Edat", "Domassos Balcó", "Mocadors Extres"
-    ];
-    sheetSumm.appendRow(sumHeaders);
-    sheetSumm.getRange(1, 1, 1, sumHeaders.length).setFontWeight("bold").setBackground("#dcfce7");
-
-    if (payload.summaries && payload.summaries.length > 0) {
-      var sumRows = [];
-      for (var j = 0; j < payload.summaries.length; j++) {
-        var s = payload.summaries[j];
-        sumRows.push([
-          s.dateStr,
-          s.totalRegistrations,
-          s.waitingListCount,
-          s.totalRevenue,
-          s.cashRevenue,
-          s.bizumRevenue,
-          s.adultsCount,
-          s.juvenilsCount,
-          s.minorsCount,
-          s.domasCount,
-          s.extraMocadorsCount
-        ]);
-      }
-      sheetSumm.getRange(2, 1, sumRows.length, sumHeaders.length).setValues(sumRows);
-    }
-    for (var colS = 1; colS <= sumHeaders.length; colS++) {
-      sheetSumm.autoResizeColumn(colS);
-    }
-
-    return ContentService.createTextOutput(JSON.stringify({ success: true }))
-      .setMimeType(ContentService.MimeType.JSON);
-  } catch (error) {
-    return ContentService.createTextOutput(JSON.stringify({ success: false, error: error.toString() }))
-      .setMimeType(ContentService.MimeType.JSON);
-  }
-}`}
+{appsScriptCode}
                       </pre>
                       <button
                         type="button"
                         onClick={() => {
-                          const code = `function doPost(e) {
-  try {
-    var jsonString = e.postData.contents;
-    var payload = JSON.parse(jsonString);
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
-
-    // 1. RAW INSCRIPICTIONS TAB
-    var sheetInsc = ss.getSheetByName("Inscripcions") || ss.insertSheet("Inscripcions");
-    sheetInsc.clear();
-    var headers = [
-      "Codis Seguiment", "Categoria", "C1 Nom", "C1 Cognoms", "C1 Email", "C1 Telèfon", "C1 Talla", "C1 Tipus Uniforme", "C1 Menor", "C1 Nom Tutor", "C1 Cognoms Tutor", "C1 DNI Tutor", "C1 Telèfon Tutor",
-      "C2 Nom", "C2 Cognoms", "C2 Email", "C2 Telèfon", "C2 Talla", "C2 Tipus Uniforme", "C2 Menor", "C2 Nom Tutor", "C2 Cognoms Tutor", "C2 DNI Tutor", "C2 Telèfon Tutor",
-      "Preu Total (€)", "Domàs Balcó", "Mocadors Extra", "Estat Pagament", "Mètode Pagament", "Validació DNI", "Entrega Material", "Llista Espera", "Data Creació"
-    ];
-    sheetInsc.appendRow(headers);
-    sheetInsc.getRange(1, 1, 1, headers.length).setFontWeight("bold").setBackground("#f4f4f5");
-
-    if (payload.data && payload.data.length > 0) {
-      var rowsToWrite = [];
-      for (var i = 0; i < payload.data.length; i++) {
-        var r = payload.data[i];
-        rowsToWrite.push([
-          r.codiSeguiment, r.categoria, r.c1Nom, r.c1Cognoms, r.c1Email, r.c1Telefon, r.c1Talla, r.c1UniformeTipus, r.c1EsMenor, r.c1TutorNom, r.c1TutorCognoms, r.c1TutorDni, r.c1TutorTelefon,
-          r.c2Nom, r.c2Cognoms, r.c2Email, r.c2Telefon, r.c2Talla, r.c2UniformeTipus, r.c2EsMenor, r.c2TutorNom, r.c2TutorCognoms, r.c2TutorDni, r.c2TutorTelefon,
-          r.preuTotal, r.domasBalco, r.mocadorsExtra, r.estatPagament, r.metodePagament, r.validacioDni, r.entregaMaterial, r.llistaEspera, r.dataCreacio
-        ]);
-      }
-      sheetInsc.getRange(2, 1, rowsToWrite.length, headers.length).setValues(rowsToWrite);
-    }
-    for (var col = 1; col <= headers.length; col++) {
-      sheetInsc.autoResizeColumn(col);
-    }
-
-    // 2. DAILY CLOSURE TAB ("Cierre del Dia")
-    var sheetSumm = ss.getSheetByName("Cierre del Dia") || ss.insertSheet("Cierre del Dia");
-    sheetSumm.clear();
-    var sumHeaders = [
-      "Data Inscripció", "Parelles Registrades", "A la Llista d'Espera", "Recaudació Total (€)", "Efectiu (€)", "Bizum (€)", "Inscripcions Adults", "Inscripcions Juvenils", "Total Menors d'Edat", "Domassos Balcó", "Mocadors Extres"
-    ];
-    sheetSumm.appendRow(sumHeaders);
-    sheetSumm.getRange(1, 1, 1, sumHeaders.length).setFontWeight("bold").setBackground("#dcfce7");
-
-    if (payload.summaries && payload.summaries.length > 0) {
-      var sumRows = [];
-      for (var j = 0; j < payload.summaries.length; j++) {
-        var s = payload.summaries[j];
-        sumRows.push([
-          s.dateStr,
-          s.totalRegistrations,
-          s.waitingListCount,
-          s.totalRevenue,
-          s.cashRevenue,
-          s.bizumRevenue,
-          s.adultsCount,
-          s.juvenilsCount,
-          s.minorsCount,
-          s.domasCount,
-          s.extraMocadorsCount
-        ]);
-      }
-      sheetSumm.getRange(2, 1, sumRows.length, sumHeaders.length).setValues(sumRows);
-    }
-    for (var colS = 1; colS <= sumHeaders.length; colS++) {
-      sheetSumm.autoResizeColumn(colS);
-    }
-
-    return ContentService.createTextOutput(JSON.stringify({ success: true }))
-      .setMimeType(ContentService.MimeType.JSON);
-  } catch (error) {
-    return ContentService.createTextOutput(JSON.stringify({ success: false, error: error.toString() }))
-      .setMimeType(ContentService.MimeType.JSON);
-  }
-}`;
-                          navigator.clipboard.writeText(code);
+                          navigator.clipboard.writeText(appsScriptCode);
                           alert(language === 'ca' ? "Codi d'Apps Script copiat!" : "¡Código de Apps Script copiado!");
                         }}
                         className="absolute right-2.5 top-2.5 bg-white/15 hover:bg-white/20 active:scale-95 text-white py-1 px-2 rounded-lg text-[9px] uppercase font-sans font-black transition cursor-pointer select-none"

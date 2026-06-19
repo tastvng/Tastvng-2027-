@@ -385,7 +385,7 @@ export default function App() {
   const syncWithGoogle = (latestInscripcions: Inscripcio[], activeConfig: SistemaConfig = config) => {
     if (activeConfig.googleSheetSyncActive && activeConfig.googleSheetSyncUrl) {
       import('./googleSync').then(({ syncToGoogleSheet }) => {
-        syncToGoogleSheet(latestInscripcions, activeConfig.googleSheetSyncUrl, activeConfig.googleSheetSyncActive);
+        syncToGoogleSheet(latestInscripcions, activeConfig.googleSheetSyncUrl, activeConfig.googleSheetSyncActive, activeConfig);
       });
     }
   };

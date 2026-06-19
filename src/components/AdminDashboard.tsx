@@ -2534,7 +2534,7 @@ export default function AdminDashboard({
               onClick={() => {
                 if (config.googleSheetSyncUrl) {
                   import('../googleSync').then(({ syncToGoogleSheet }) => {
-                    syncToGoogleSheet(inscripcions, config.googleSheetSyncUrl, config.googleSheetSyncActive || true).then((ok) => {
+                    syncToGoogleSheet(inscripcions, config.googleSheetSyncUrl, config.googleSheetSyncActive || true, config).then((ok) => {
                       if (ok) {
                         alert(language === 'ca' ? "S'ha forçat la sincronia amb èxit!" : "¡Sincronización forzada con éxito!");
                       } else {
@@ -2586,64 +2586,82 @@ export default function AdminDashboard({
             </div>
 
             {/* Table */}
-            <div className="border border-zinc-250/80 rounded-2xl overflow-hidden shadow-sm">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse font-sans text-xs">
-                  <thead>
-                    <tr className="bg-zinc-50 border-b border-zinc-200 text-zinc-500 font-mono text-[9px] uppercase tracking-wider">
-                      <th className="p-3.5 font-bold">{language === 'ca' ? "Data" : "Fecha"}</th>
-                      <th className="p-3.5 font-bold text-center">{language === 'ca' ? "Parelles" : "Parejas"}</th>
-                      <th className="p-3.5 font-bold text-center">{language === 'ca' ? "En Espera" : "En Espera"}</th>
-                      <th className="p-3.5 font-bold text-right">{language === 'ca' ? "Total Tarifa" : "Total Tarifa"}</th>
-                      <th className="p-3.5 font-bold text-right">{language === 'ca' ? "Efectiu" : "Efectivo"}</th>
-                      <th className="p-3.5 font-bold text-right">{language === 'ca' ? "Bizum" : "Bizum"}</th>
-                      <th className="p-3.5 font-bold text-center">{language === 'ca' ? "Adults / Juv" : "Adults / Juv"}</th>
-                      <th className="p-3.5 font-bold text-center">{language === 'ca' ? "Menors" : "Menores"}</th>
-                      <th className="p-3.5 font-bold text-center">{language === 'ca' ? "Domassos" : "Covers"}</th>
-                      <th className="p-3.5 font-bold text-center">{language === 'ca' ? "Mocadors" : "Pañuelos"}</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-zinc-150 bg-white">
-                    {calculateDailySummaries(inscripcions).length === 0 ? (
-                      <tr>
-                        <td colSpan={10} className="p-8 text-center text-zinc-400">
-                          {language === 'ca' ? "No hi ha inscripcions amb dates vàlides registrades." : "No hay inscripciones con fechas válidas registradas."}
-                        </td>
-                      </tr>
-                    ) : (
-                      calculateDailySummaries(inscripcions).map((row) => (
-                        <tr key={row.dateStr} className="hover:bg-zinc-50/50 transition">
-                          <td className="p-3.5 font-mono font-bold text-zinc-950">{row.dateStr}</td>
-                          <td className="p-3.5 text-center font-bold text-zinc-800">{row.totalRegistrations}</td>
-                          <td className="p-3.5 text-center">
-                            {row.waitingListCount > 0 ? (
-                              <span className="px-1.5 py-0.5 bg-amber-100 text-amber-800 rounded-md font-bold text-[10px]">
-                                {row.waitingListCount}
-                              </span>
-                            ) : '-'}
-                          </td>
-                          <td className="p-3.5 text-right font-black text-zinc-900">{row.totalRevenue.toFixed(2)}€</td>
-                          <td className="p-3.5 text-right text-zinc-600">{row.cashRevenue.toFixed(2)}€</td>
-                          <td className="p-3.5 text-right text-zinc-600">{row.bizumRevenue.toFixed(2)}€</td>
-                          <td className="p-3.5 text-center font-mono text-[10px] text-zinc-500">
-                            {row.adultsCount}A / {row.juvenilsCount}J
-                          </td>
-                          <td className="p-3.5 text-center">
-                            {row.minorsCount > 0 ? (
-                              <span className="px-1.5 py-0.5 bg-zinc-100 text-zinc-700 rounded-md font-bold text-[10px]">
-                                {row.minorsCount}
-                              </span>
-                            ) : '-'}
-                          </td>
-                          <td className="p-3.5 text-center text-zinc-600">{row.domasCount || '-'}</td>
-                          <td className="p-3.5 text-center text-zinc-600">{row.extraMocadorsCount || '-'}</td>
+            {(() => {
+              const domasTarifaSummary = config?.tarifesDinamiques?.find(t => t.id === 'domas' || t.tipus === 'extra_domas');
+              const isDomasActiveSummary = domasTarifaSummary ? domasTarifaSummary.actiu : false;
+              const domasNameSummary = domasTarifaSummary?.nom 
+                ? domasTarifaSummary.nom.replace(/\s*\(€\)\s*/g, '').replace('Cànon ', '') 
+                : (language === 'ca' ? "Domassos" : "Covers");
+
+              const mocadorTarifaSummary = config?.tarifesDinamiques?.find(t => t.id === 'mocador' || t.tipus === 'extra_mocador');
+              const isMocadorActiveSummary = mocadorTarifaSummary ? mocadorTarifaSummary.actiu : false;
+              const mocadorNameSummary = mocadorTarifaSummary?.nom 
+                ? mocadorTarifaSummary.nom.replace(/\s*\(€\)\s*/g, '').replace('Cànon ', '') 
+                : (language === 'ca' ? "Mocadors" : "Pañuelos");
+
+              const totalSummaryCols = 8 + (isDomasActiveSummary ? 1 : 0) + (isMocadorActiveSummary ? 1 : 0);
+
+              return (
+                <div className="border border-zinc-250/80 rounded-2xl overflow-hidden shadow-sm">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse font-sans text-xs">
+                      <thead>
+                        <tr className="bg-zinc-50 border-b border-zinc-200 text-zinc-500 font-mono text-[9px] uppercase tracking-wider">
+                          <th className="p-3.5 font-bold">{language === 'ca' ? "Data" : "Fecha"}</th>
+                          <th className="p-3.5 font-bold text-center">{language === 'ca' ? "Parelles" : "Parejas"}</th>
+                          <th className="p-3.5 font-bold text-center">{language === 'ca' ? "En Espera" : "En Espera"}</th>
+                          <th className="p-3.5 font-bold text-right">{language === 'ca' ? "Total Tarifa" : "Total Tarifa"}</th>
+                          <th className="p-3.5 font-bold text-right">{language === 'ca' ? "Efectiu" : "Efectivo"}</th>
+                          <th className="p-3.5 font-bold text-right">{language === 'ca' ? "Bizum" : "Bizum"}</th>
+                          <th className="p-3.5 font-bold text-center">{language === 'ca' ? "Adults / Juv" : "Adults / Juv"}</th>
+                          <th className="p-3.5 font-bold text-center">{language === 'ca' ? "Menors" : "Menores"}</th>
+                          {isDomasActiveSummary && <th className="p-3.5 font-bold text-center">{domasNameSummary}</th>}
+                          {isMocadorActiveSummary && <th className="p-3.5 font-bold text-center">{mocadorNameSummary}</th>}
                         </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+                      </thead>
+                      <tbody className="divide-y divide-zinc-150 bg-white">
+                        {calculateDailySummaries(inscripcions).length === 0 ? (
+                          <tr>
+                            <td colSpan={totalSummaryCols} className="p-8 text-center text-zinc-400">
+                              {language === 'ca' ? "No hi ha inscripcions amb dates vàlides registrades." : "No hay inscripciones con fechas válidas registradas."}
+                            </td>
+                          </tr>
+                        ) : (
+                          calculateDailySummaries(inscripcions).map((row) => (
+                            <tr key={row.dateStr} className="hover:bg-zinc-50/50 transition">
+                              <td className="p-3.5 font-mono font-bold text-zinc-950">{row.dateStr}</td>
+                              <td className="p-3.5 text-center font-bold text-zinc-800">{row.totalRegistrations}</td>
+                              <td className="p-3.5 text-center">
+                                {row.waitingListCount > 0 ? (
+                                  <span className="px-1.5 py-0.5 bg-amber-100 text-amber-800 rounded-md font-bold text-[10px]">
+                                    {row.waitingListCount}
+                                  </span>
+                                ) : '-'}
+                              </td>
+                              <td className="p-3.5 text-right font-black text-zinc-900">{row.totalRevenue.toFixed(2)}€</td>
+                              <td className="p-3.5 text-right text-zinc-600">{row.cashRevenue.toFixed(2)}€</td>
+                              <td className="p-3.5 text-right text-zinc-600">{row.bizumRevenue.toFixed(2)}€</td>
+                              <td className="p-3.5 text-center font-mono text-[10px] text-zinc-500">
+                                {row.adultsCount}A / {row.juvenilsCount}J
+                              </td>
+                              <td className="p-3.5 text-center">
+                                {row.minorsCount > 0 ? (
+                                  <span className="px-1.5 py-0.5 bg-zinc-100 text-zinc-700 rounded-md font-bold text-[10px]">
+                                    {row.minorsCount}
+                                  </span>
+                                ) : '-'}
+                              </td>
+                              {isDomasActiveSummary && <td className="p-3.5 text-center text-zinc-600">{row.domasCount || '-'}</td>}
+                              {isMocadorActiveSummary && <td className="p-3.5 text-center text-zinc-600">{row.extraMocadorsCount || '-'}</td>}
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Note indicator block */}
             <div className="p-4 bg-zinc-50 rounded-2xl border border-zinc-200 flex items-start gap-2.5 text-zinc-500 text-[11px] leading-relaxed">

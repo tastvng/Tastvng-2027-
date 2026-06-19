@@ -536,27 +536,54 @@ export default function AdminFicha({ registration, config, onBack, onSave }: Adm
                 {language === 'ca' ? "Complements o Marxandatge afegit" : "Complementos o Merchandising añadido"}
               </span>
               <div className="flex flex-wrap gap-2">
-                {registration.teDomasBalco ? (
-                  <span className="bg-fuchsia-100 text-fuchsia-800 text-xs font-bold px-3 py-1.5 rounded-xl border border-fuchsia-200 flex items-center gap-1">
-                    💝 {language === 'ca' ? "Domàs oficial inclòs" : "Cubrebalcón oficial incluido"}
-                  </span>
-                ) : (
-                  <span className="bg-zinc-50 text-zinc-400 text-xs px-3 py-1.5 rounded-xl border border-zinc-200/50">
-                    {language === 'ca' ? "Sense domàs de balcó" : "Sin cubrebalcón de balcón"}
-                  </span>
-                )}
+                {(() => {
+                  const domasTarifa = config?.tarifesDinamiques?.find(t => t.id === 'domas' || t.tipus === 'extra_domas');
+                  const isDomasActive = domasTarifa ? domasTarifa.actiu : false;
+                  const domasName = domasTarifa?.nom 
+                    ? domasTarifa.nom.replace(/\s*\(€\)\s*/g, '').replace('Cànon ', '') 
+                    : (language === 'ca' ? "Domàs de Balcó" : "Cubrebalcón de balcón");
 
-                {registration.teMocadorsExtra > 0 ? (
-                  <span className="bg-zinc-900 text-white text-xs font-bold px-3 py-1.5 rounded-xl flex items-center gap-1">
-                    🧣 {language === 'ca' 
-                      ? `${registration.teMocadorsExtra} mocador(s) extres ordenats (${registration.teMocadorsExtra * 6}€)`
-                      : `${registration.teMocadorsExtra} pañuelo(s) extras pedidos (${registration.teMocadorsExtra * 6}€)`}
-                  </span>
-                ) : (
-                  <span className="bg-zinc-50 text-zinc-400 text-xs px-3 py-1.5 rounded-xl border border-zinc-200/50">
-                    {language === 'ca' ? "Sense mocadors extres" : "Sin pañuelos extras"}
-                  </span>
-                )}
+                  if (registration.teDomasBalco) {
+                    return (
+                      <span className="bg-fuchsia-100 text-fuchsia-800 text-xs font-bold px-3 py-1.5 rounded-xl border border-fuchsia-200 flex items-center gap-1">
+                        💝 {language === 'ca' ? `${domasName} inclòs` : `${domasName} incluido`}
+                      </span>
+                    );
+                  } else if (isDomasActive) {
+                    return (
+                      <span className="bg-zinc-50 text-zinc-400 text-xs px-3 py-1.5 rounded-xl border border-zinc-200/50">
+                        {language === 'ca' ? `Sense ${domasName.toLowerCase()}` : `Sin ${domasName.toLowerCase()}`}
+                      </span>
+                    );
+                  }
+                  return null;
+                })()}
+
+                {(() => {
+                  const mocadorTarifa = config?.tarifesDinamiques?.find(t => t.id === 'mocador' || t.tipus === 'extra_mocador');
+                  const isMocadorActive = mocadorTarifa ? mocadorTarifa.actiu : false;
+                  const mocadorPreu = mocadorTarifa?.valor ?? 6;
+                  const mocadorName = mocadorTarifa?.nom 
+                    ? mocadorTarifa.nom.replace(/\s*\(€\)\s*/g, '').replace('Cànon ', '') 
+                    : (language === 'ca' ? "Mocador oficial extra" : "Pañuelo oficial extra");
+
+                  if (registration.teMocadorsExtra > 0) {
+                    return (
+                      <span className="bg-zinc-900 text-white text-xs font-bold px-3 py-1.5 rounded-xl flex items-center gap-1">
+                        🧣 {language === 'ca'
+                          ? `${registration.teMocadorsExtra} ${mocadorName.toLowerCase()}(s) extres ordenats (${registration.teMocadorsExtra * mocadorPreu}€)`
+                          : `${registration.teMocadorsExtra} ${mocadorName.toLowerCase()}(s) extras pedidos (${registration.teMocadorsExtra * mocadorPreu}€)`}
+                      </span>
+                    );
+                  } else if (isMocadorActive) {
+                    return (
+                      <span className="bg-zinc-50 text-zinc-400 text-xs px-3 py-1.5 rounded-xl border border-zinc-200/50">
+                        {language === 'ca' ? `Sense ${mocadorName.toLowerCase()}s extres` : `Sin ${mocadorName.toLowerCase()}s extras`}
+                      </span>
+                    );
+                  }
+                  return null;
+                })()}
               </div>
             </div>
 
