@@ -1663,7 +1663,7 @@ export default function AdminDashboard({
                   type="text" 
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Cerca per nom, cognom, telèfon, email o codi..."
+                  placeholder={language === 'ca' ? "Cerca per nom, cognom, telèfon, email o codi..." : "Buscar por nombre, apellido, teléfono, email o código..."}
                   className="w-full bg-white border border-zinc-200 focus:border-fuchsia-500 rounded-2xl pl-10 pr-4 py-3 text-sm focus:outline-none transition-all placeholder-zinc-400 font-sans text-zinc-900"
                   id="input-search-query"
                 />
@@ -1676,7 +1676,7 @@ export default function AdminDashboard({
                   className="bg-zinc-900 hover:bg-black text-white font-bold text-xs px-4 py-3 rounded-2xl transition-all shadow flex items-center gap-1.5 cursor-pointer"
                   id="btn-add-couple-manual"
                 >
-                  <Plus size={15} className="text-[#ff0090]" /> Afegir Parella Manual
+                  <Plus size={15} className="text-[#ff0090]" /> {language === 'ca' ? "Afegir Parella Manual" : "Añadir Pareja Manual"}
                 </button>
 
                 <button 
@@ -1684,7 +1684,7 @@ export default function AdminDashboard({
                   className="bg-green-600 hover:bg-green-700 text-white font-bold text-xs px-4 py-3 rounded-2xl transition-all shadow flex items-center gap-1.5 cursor-pointer"
                   id="btn-export-excel"
                 >
-                  <FileSpreadsheet size={15} /> Exportar Excel
+                  <FileSpreadsheet size={15} /> {language === 'ca' ? "Exportar Excel" : "Exportar Excel"}
                 </button>
 
                 {selectedIds.length > 0 && (
@@ -1694,7 +1694,7 @@ export default function AdminDashboard({
                     className="bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 font-bold text-xs px-4 py-3 rounded-2xl transition-all shadow-sm flex items-center gap-1.5 cursor-pointer"
                     id="btn-delete-selected"
                   >
-                    <Trash2 size={15} /> Esborrar seleccionats ({selectedIds.length})
+                    <Trash2 size={15} /> {language === 'ca' ? "Esborrar seleccionats" : "Borrar seleccionados"} ({selectedIds.length})
                   </button>
                 )}
 
@@ -1707,7 +1707,7 @@ export default function AdminDashboard({
                   className="bg-red-600 hover:bg-red-700 text-white font-bold text-xs px-4 py-3 rounded-2xl transition-all shadow flex items-center gap-1.5 cursor-pointer"
                   id="btn-clear-all"
                 >
-                  <Trash2 size={15} /> Buidar Base de Dades
+                  <Trash2 size={15} /> {language === 'ca' ? "Buidar Base de Dades" : "Vaciar Base de Datos"}
                 </button>
               </div>
             </div>
@@ -1715,36 +1715,36 @@ export default function AdminDashboard({
             {/* Core matrix dropdown filters */}
             <div className="flex flex-wrap items-center gap-3 text-xs">
               <div className="flex items-center gap-1 text-zinc-500 font-bold uppercase tracking-wider mr-2">
-                <Filter size={12} /> Filtres:
+                <Filter size={12} /> {language === 'ca' ? "Filtres:" : "Filtros:"}
               </div>
 
               {/* Category dropdown filter */}
               <div className="flex items-center bg-white border border-zinc-200 px-3 py-2 rounded-xl">
-                <span className="text-zinc-500 mr-2 font-mono">Categoria</span>
+                <span className="text-zinc-500 mr-2 font-mono">{language === 'ca' ? "Categoria" : "Categoría"}</span>
                 <select 
                   value={filterCategoria} 
                   onChange={(e) => setFilterCategoria(e.target.value)}
                   className="bg-transparent font-bold text-zinc-900 border-none outline-none cursor-pointer"
                   id="filter-category"
                 >
-                  <option value="ALL">Tots</option>
-                  <option value={CategoriaParella.ADULT}>Adults</option>
-                  <option value={CategoriaParella.JUVENIL}>Juvenils</option>
+                  <option value="ALL">{language === 'ca' ? "Tots" : "Todos"}</option>
+                  <option value={CategoriaParella.ADULT}>{language === 'ca' ? "Adults" : "Adultos"}</option>
+                  <option value={CategoriaParella.JUVENIL}>{language === 'ca' ? "Juvenils" : "Juveniles"}</option>
                 </select>
               </div>
 
               {/* Payment dropdown filter */}
               <div className="flex items-center bg-white border border-zinc-200 px-3 py-2 rounded-xl">
-                <span className="text-zinc-500 mr-2 font-mono">Pagat</span>
+                <span className="text-zinc-500 mr-2 font-mono">{language === 'ca' ? "Pagat" : "Pagado"}</span>
                 <select 
                   value={filterPagament} 
                   onChange={(e) => setFilterPagament(e.target.value)}
                   className="bg-transparent font-bold text-zinc-900 border-none outline-none cursor-pointer"
                   id="filter-payment"
                 >
-                  <option value="ALL">Tots</option>
-                  <option value={EstatPagament.PAGAT}>Sí</option>
-                  <option value={EstatPagament.PENDENT}>Pendent</option>
+                  <option value="ALL">{language === 'ca' ? "Tots" : "Todos"}</option>
+                  <option value={EstatPagament.PAGAT}>{language === 'ca' ? "Sí" : "Sí"}</option>
+                  <option value={EstatPagament.PENDENT}>{language === 'ca' ? "Pendent" : "Pendiente"}</option>
                 </select>
               </div>
 
@@ -1757,38 +1757,38 @@ export default function AdminDashboard({
                   className="bg-transparent font-bold text-zinc-900 border-none outline-none cursor-pointer"
                   id="filter-dni"
                 >
-                  <option value="ALL">Tots</option>
-                  <option value={EstatVerificacio.VALIDAT}>Validat</option>
-                  <option value={EstatVerificacio.PENDENT}>Pendent</option>
-                  <option value={EstatVerificacio.REBUTJAT}>Rebutjat</option>
+                  <option value="ALL">{language === 'ca' ? "Tots" : "Todos"}</option>
+                  <option value={EstatVerificacio.VALIDAT}>{language === 'ca' ? "Validat" : "Validado"}</option>
+                  <option value={EstatVerificacio.PENDENT}>{language === 'ca' ? "Pendent" : "Pendiente"}</option>
+                  <option value={EstatVerificacio.REBUTJAT}>{language === 'ca' ? "Rebutjat" : "Rechazado"}</option>
                 </select>
               </div>
 
               {/* Material Delivery dropdown filter */}
               <div className="flex items-center bg-white border border-zinc-200 px-3 py-2 rounded-xl">
-                <span className="text-zinc-500 mr-2 font-mono">Material</span>
+                <span className="text-zinc-500 mr-2 font-mono">{language === 'ca' ? "Material" : "Material"}</span>
                 <select 
                   value={filterEntrega} 
                   onChange={(e) => setFilterEntrega(e.target.value)}
                   className="bg-transparent font-bold text-zinc-900 border-none outline-none cursor-pointer"
                   id="filter-delivery"
                 >
-                  <option value="ALL">Tots</option>
-                  <option value={EstatInscripcio.ENTREGAT}>Entregat</option>
-                  <option value={EstatInscripcio.PENDENT}>Pendent</option>
+                  <option value="ALL">{language === 'ca' ? "Tots" : "Todos"}</option>
+                  <option value={EstatInscripcio.ENTREGAT}>{language === 'ca' ? "Entregat" : "Entregado"}</option>
+                  <option value={EstatInscripcio.PENDENT}>{language === 'ca' ? "Pendent" : "Pendiente"}</option>
                 </select>
               </div>
 
               {/* Inscription Status dropdown filter */}
               <div className="flex items-center bg-white border border-zinc-200 px-3 py-2 rounded-xl">
-                <span className="text-zinc-500 mr-2 font-mono">Estat</span>
+                <span className="text-zinc-500 mr-2 font-mono">{language === 'ca' ? "Estat" : "Estado"}</span>
                 <select 
                   value={filterEstat} 
                   onChange={(e) => setFilterEstat(e.target.value)}
                   className="bg-transparent font-bold text-zinc-900 border-none outline-none cursor-pointer"
                   id="filter-status"
                 >
-                  <option value="ALL">Tots</option>
+                  <option value="ALL">{language === 'ca' ? "Tots" : "Todos"}</option>
                   <option value="OBERTA">{language === 'ca' ? 'Obertes' : 'Abiertas'}</option>
                   <option value="ESPERA">{language === 'ca' ? "Llista d'espera" : 'Lista de espera'}</option>
                 </select>
@@ -1796,18 +1796,18 @@ export default function AdminDashboard({
 
               {/* Bandera filter dropdown */}
               <div className="flex items-center bg-white border border-zinc-200 px-3 py-2 rounded-xl">
-                <span className="text-zinc-500 mr-2 font-mono">Bandera</span>
+                <span className="text-zinc-500 mr-2 font-mono">{language === 'ca' ? "Bandera" : "Bandera"}</span>
                 <select 
                   value={filterBandera} 
                   onChange={(e) => setFilterBandera(e.target.value)}
                   className="bg-transparent font-bold text-zinc-900 border-none outline-none cursor-pointer"
                   id="filter-bandera"
                 >
-                  <option value="ALL">Tots</option>
+                  <option value="ALL">{language === 'ca' ? "Tots" : "Todos"}</option>
                   <option value="0">{language === 'ca' ? 'No assignat' : 'No asignado'}</option>
-                  <option value="1">Bandera BOSS</option>
-                  <option value="2">Bandera No ni na</option>
-                  <option value="3">Bandera juvenil</option>
+                  <option value="1">{language === 'ca' ? 'Bandera BOSS' : 'Bandera BOSS'}</option>
+                  <option value="2">{language === 'ca' ? 'Bandera No ni na' : 'Bandera No ni na'}</option>
+                  <option value="3">{language === 'ca' ? 'Bandera juvenil' : 'Bandera juvenil'}</option>
                 </select>
               </div>
             </div>
@@ -1818,8 +1818,8 @@ export default function AdminDashboard({
             {filteredInscripcions.length === 0 ? (
               <div className="p-12 text-center text-zinc-400">
                 <Users className="mx-auto text-zinc-300 mb-3" size={48} />
-                <p className="font-sans font-bold text-lg text-zinc-700">No s'ha trobat cap parella registrada</p>
-                <p className="text-sm text-zinc-400 mt-1 max-w-sm mx-auto">Comproveu els criteris de cerca o els filtres seleccionats actualment.</p>
+                <p className="font-sans font-bold text-lg text-zinc-700">{language === 'ca' ? "No s'ha trobat cap parella registrada" : "No se ha encontrado ninguna pareja registrada"}</p>
+                <p className="text-sm text-zinc-400 mt-1 max-w-sm mx-auto">{language === 'ca' ? "Comproveu els criteris de cerca o els filtres seleccionats actualment." : "Compruebe los criterios de búsqueda o los filtros seleccionados actualmente."}</p>
               </div>
             ) : (
               <table className="w-full text-left border-collapse table-auto">
@@ -1834,16 +1834,16 @@ export default function AdminDashboard({
                         id="checkbox-select-all"
                       />
                     </th>
-                    <th className="px-2 md:px-3 py-4 whitespace-nowrap">CODI / DATA</th>
-                    <th className="px-2 md:px-3 py-4 whitespace-nowrap">PRIMER COMPARSER</th>
-                    <th className="px-2 md:px-3 py-4 whitespace-nowrap">SEGON COMPARSER</th>
-                    <th className="px-2 md:px-3 py-4 text-center whitespace-nowrap">CATEGORIA</th>
-                    <th className="px-2 md:px-3 py-4 text-center whitespace-nowrap">BANDERA</th>
-                    <th className="px-2 md:px-3 py-4 text-center whitespace-nowrap">PAGAMENT</th>
-                    <th className="px-2 md:px-3 py-4 text-center whitespace-nowrap">DNI STATUS</th>
-                    <th className="px-2 md:px-3 py-4 text-center whitespace-nowrap">LLIURAMENT</th>
-                    <th className="px-2 md:px-3 py-4 text-center whitespace-nowrap">CORREU ENVIAT</th>
-                    <th className="px-2 md:px-3 py-4 text-center whitespace-nowrap">ACCIONS</th>
+                    <th className="px-2 md:px-3 py-4 whitespace-nowrap">{language === 'ca' ? "CODI / DATA" : "CÓDIGO / FECHA"}</th>
+                    <th className="px-2 md:px-3 py-4 whitespace-nowrap">{language === 'ca' ? "PRIMER COMPARSER" : "PRIMER COMPARSER"}</th>
+                    <th className="px-2 md:px-3 py-4 whitespace-nowrap">{language === 'ca' ? "SEGON COMPARSER" : "SEGUNDO COMPARSER"}</th>
+                    <th className="px-2 md:px-3 py-4 text-center whitespace-nowrap">{language === 'ca' ? "CATEGORIA" : "CATEGORÍA"}</th>
+                    <th className="px-2 md:px-3 py-4 text-center whitespace-nowrap">{language === 'ca' ? "BANDERA" : "BANDERA"}</th>
+                    <th className="px-2 md:px-3 py-4 text-center whitespace-nowrap">{language === 'ca' ? "PAGAMENT" : "PAGO"}</th>
+                    <th className="px-2 md:px-3 py-4 text-center whitespace-nowrap">{language === 'ca' ? "DNI STATUS" : "ESTADO DNI"}</th>
+                    <th className="px-2 md:px-3 py-4 text-center whitespace-nowrap">{language === 'ca' ? "LLIURAMENT" : "ENTREGA"}</th>
+                    <th className="px-2 md:px-3 py-4 text-center whitespace-nowrap">{language === 'ca' ? "CORREU ENVIAT" : "CORREO ENVIADO"}</th>
+                    <th className="px-2 md:px-3 py-4 text-center whitespace-nowrap">{language === 'ca' ? "ACCIONS" : "ACCIONES"}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-zinc-100 text-xs text-zinc-700 font-sans">
@@ -1892,7 +1892,7 @@ export default function AdminDashboard({
                         <p className="font-bold text-zinc-900 flex items-center gap-1.5 flex-wrap">
                           {item.c1Nom} {item.c1Cognoms}
                           {item.c1EsMenor && (
-                            <span className="bg-amber-100 text-amber-800 text-[8px] font-extrabold px-1.5 py-0.5 rounded uppercase font-mono tracking-wider shrink-0" title="És menor d'edat">
+                            <span className="bg-amber-100 text-amber-800 text-[8px] font-extrabold px-1.5 py-0.5 rounded uppercase font-mono tracking-wider shrink-0" title={language === 'ca' ? "És menor d'edat" : "Es menor de edad"}>
                               MENOR
                             </span>
                           )}
@@ -1907,7 +1907,7 @@ export default function AdminDashboard({
                         <p className="font-bold text-zinc-900 flex items-center gap-1.5 flex-wrap">
                           {item.c2Nom} {item.c2Cognoms}
                           {item.c2EsMenor && (
-                            <span className="bg-amber-100 text-amber-800 text-[8px] font-extrabold px-1.5 py-0.5 rounded uppercase font-mono tracking-wider shrink-0" title="És menor d'edat">
+                            <span className="bg-amber-100 text-amber-800 text-[8px] font-extrabold px-1.5 py-0.5 rounded uppercase font-mono tracking-wider shrink-0" title={language === 'ca' ? "És menor d'edat" : "Es menor de edad"}>
                               MENOR
                             </span>
                           )}
@@ -1970,7 +1970,7 @@ export default function AdminDashboard({
                           </div>
                         ) : (
                           <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">
-                            <Clock size={10} /> <strong>{item.preuCalculat}€ Pendent</strong>
+                            <Clock size={10} /> <strong>{item.preuCalculat}€ {language === 'ca' ? "Pendent" : "Pendiente"}</strong>
                           </span>
                         )}
                       </td>
@@ -1979,17 +1979,17 @@ export default function AdminDashboard({
                       <td className="px-2 md:px-3 py-3 text-center whitespace-nowrap">
                         {item.estatDni === EstatVerificacio.VALIDAT && (
                           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-green-100 text-green-800">
-                            Validat
+                            {language === 'ca' ? "Validat" : "Validado"}
                           </span>
                         )}
                         {item.estatDni === EstatVerificacio.PENDENT && (
                           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">
-                            Pendent
+                            {language === 'ca' ? "Pendent" : "Pendiente"}
                           </span>
                         )}
                         {item.estatDni === EstatVerificacio.REBUTJAT && (
                           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-800 animate-pulse">
-                            Rebutjat
+                            {language === 'ca' ? "Rebutjat" : "Rechazado"}
                           </span>
                         )}
                       </td>
@@ -1998,11 +1998,11 @@ export default function AdminDashboard({
                       <td className="px-2 md:px-3 py-3 text-center whitespace-nowrap">
                         {item.entregaMaterial === EstatInscripcio.ENTREGAT ? (
                           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-zinc-900 text-white">
-                            Lliurat
+                            {language === 'ca' ? "Lliurat" : "Entregado"}
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-zinc-100 text-zinc-500">
-                            No lliurat
+                            {language === 'ca' ? "No lliurat" : "No entregado"}
                           </span>
                         )}
                       </td>
@@ -2271,7 +2271,7 @@ export default function AdminDashboard({
                     onClick={() => handleDisconnectSocial('instagram')}
                     className="w-full bg-zinc-100 hover:bg-zinc-200 text-zinc-650 text-[10px] font-bold py-2.5 px-3 rounded-xl transition uppercase tracking-wider cursor-pointer"
                   >
-                    Desvincular
+                    {language === 'ca' ? "Desvincular" : "Desvincular"}
                   </button>
                 ) : (
                   <button 
@@ -2279,7 +2279,7 @@ export default function AdminDashboard({
                     onClick={() => handleOpenConnect('instagram')}
                     className="w-full bg-gradient-to-tr from-yellow-500 via-[#e1306c] to-fuchsia-600 hover:opacity-90 text-white text-[10px] font-bold py-2.5 px-3 rounded-xl transition uppercase tracking-wider cursor-pointer"
                   >
-                    Vincular Compte
+                    {language === 'ca' ? "Vincular Compte" : "Vincular Cuenta"}
                   </button>
                 )}
               </div>
@@ -2312,7 +2312,7 @@ export default function AdminDashboard({
                     onClick={() => handleDisconnectSocial('facebook')}
                     className="w-full bg-zinc-100 hover:bg-zinc-200 text-zinc-650 text-[10px] font-bold py-2.5 px-3 rounded-xl transition uppercase tracking-wider cursor-pointer"
                   >
-                    Desvincular
+                    {language === 'ca' ? "Desvincular" : "Desvincular"}
                   </button>
                 ) : (
                   <button 
@@ -2320,7 +2320,7 @@ export default function AdminDashboard({
                     onClick={() => handleOpenConnect('facebook')}
                     className="w-full bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold py-2.5 px-3 rounded-xl transition uppercase tracking-wider cursor-pointer"
                   >
-                    Vincular Compte
+                    {language === 'ca' ? "Vincular Compte" : "Vincular Cuenta"}
                   </button>
                 )}
               </div>
@@ -2353,7 +2353,7 @@ export default function AdminDashboard({
                     onClick={() => handleDisconnectSocial('tiktok')}
                     className="w-full bg-zinc-100 hover:bg-zinc-200 text-zinc-650 text-[10px] font-bold py-2.5 px-3 rounded-xl transition uppercase tracking-wider cursor-pointer"
                   >
-                    Desvincular
+                    {language === 'ca' ? "Desvincular" : "Desvincular"}
                   </button>
                 ) : (
                   <button 
@@ -2361,7 +2361,7 @@ export default function AdminDashboard({
                     onClick={() => handleOpenConnect('tiktok')}
                     className="w-full bg-[#010101] hover:bg-black text-white text-[10px] font-bold py-2.5 px-3 rounded-xl transition uppercase tracking-wider cursor-pointer"
                   >
-                    Vincular Compte
+                    {language === 'ca' ? "Vincular Compte" : "Vincular Cuenta"}
                   </button>
                 )}
               </div>
@@ -2390,30 +2390,30 @@ export default function AdminDashboard({
                 
                 {/* Platform select */}
                 <div className="space-y-1">
-                  <label className="block text-[10px] font-bold text-zinc-400 uppercase font-mono">Xarxa d'Origen de la Publicació</label>
+                  <label className="block text-[10px] font-bold text-zinc-400 uppercase font-mono">{language === 'ca' ? "Xarxa d'Origen de la Publicació" : "Red de Origen de la Publicación"}</label>
                   <select
                     value={socialPostPlatform}
                     onChange={(e) => setSocialPostPlatform(e.target.value as any)}
                     className="w-full bg-white border border-zinc-200 focus:border-fuchsia-500 rounded-2xl px-3.5 py-2.5 text-xs text-zinc-800 focus:outline-none transition cursor-pointer"
                   >
-                    <option value="instagram">Instagram {scInstagramConnected ? " (✓ Connectat)" : " (⚠️ Requerix Connexió)"}</option>
-                    <option value="facebook">Facebook {scFacebookConnected ? " (✓ Connectat)" : " (⚠️ Requerix Connexió)"}</option>
-                    <option value="tiktok">TikTok {scTikTokConnected ? " (✓ Connectat)" : " (⚠️ Requerix Connexió)"}</option>
+                    <option value="instagram">Instagram {scInstagramConnected ? " (✓ Connectat)" : (language === 'ca' ? " (⚠️ Requerix Connexió)" : " (⚠️ Requiere Conexión)")}</option>
+                    <option value="facebook">Facebook {scFacebookConnected ? " (✓ Connectat)" : (language === 'ca' ? " (⚠️ Requerix Connexió)" : " (⚠️ Requiere Conexión)")}</option>
+                    <option value="tiktok">TikTok {scTikTokConnected ? " (✓ Connectat)" : (language === 'ca' ? " (⚠️ Requerix Connexió)" : " (⚠️ Requiere Conexión)")}</option>
                   </select>
                 </div>
 
                 {/* Preset image selector */}
                 <div className="space-y-1">
-                  <label className="block text-[10px] font-bold text-zinc-400 uppercase font-mono">Imatge temática adjunta</label>
+                  <label className="block text-[10px] font-bold text-zinc-400 uppercase font-mono">{language === 'ca' ? "Imatge temàtica adjunta" : "Imagen temática adjunta"}</label>
                   <select
                     value={socialPostMediaPreset}
                     onChange={(e) => setSocialPostMediaPreset(e.target.value)}
                     className="w-full bg-white border border-zinc-200 focus:border-fuchsia-500 rounded-2xl px-3.5 py-2.5 text-xs text-zinc-850 focus:outline-none transition cursor-pointer"
                   >
-                    <option value="caramels">🍬 Caramels i dolços de Vilanova</option>
-                    <option value="armilles">🎀 Armilles de Comparsa 2026</option>
-                    <option value="placa">💃 Salt de Comparsa a la Plaça</option>
-                    <option value="platja">⛱️ Platja de Ribes Roges</option>
+                    <option value="caramels">{language === 'ca' ? "🍬 Caramels i dolços de Vilanova" : "🍬 Caramelos y dulces de Vilanova"}</option>
+                    <option value="armilles">{language === 'ca' ? "🎀 Armilles de Comparsa 2026" : "🎀 Chalecos de Comparsa 2026"}</option>
+                    <option value="placa">{language === 'ca' ? "💃 Salt de Comparsa a la Plaça" : "💃 Salto de Comparsa en la Plaza"}</option>
+                    <option value="platja">{language === 'ca' ? "⛱️ Platja de Ribes Roges" : "⛱️ Playa de Ribes Roges"}</option>
                   </select>
                 </div>
 
@@ -2421,7 +2421,7 @@ export default function AdminDashboard({
 
               {/* Text Area post */}
               <div className="space-y-1">
-                <label className="block text-[10px] font-bold text-zinc-400 uppercase font-mono">Contingut / Text del Post</label>
+                <label className="block text-[10px] font-bold text-zinc-400 uppercase font-mono">{language === 'ca' ? "Contingut / Text del Post" : "Contenido / Texto del Post"}</label>
                 <textarea
                   rows={3}
                   value={socialPostText}
@@ -2434,7 +2434,7 @@ export default function AdminDashboard({
               {/* Action row */}
               <div className="flex justify-between items-center flex-wrap gap-2 pt-2 border-t border-zinc-150">
                 <div className="flex gap-2 items-center">
-                  <span className="text-[10px] text-zinc-450 font-mono">Simular Likes: </span>
+                  <span className="text-[10px] text-zinc-450 font-mono">{language === 'ca' ? "Simular Likes: " : "Simular Likes: "}</span>
                   <input
                     type="number"
                     value={socialPostLikes}
@@ -2475,7 +2475,7 @@ export default function AdminDashboard({
             </h4>
 
             {noticies.length === 0 ? (
-              <p className="text-zinc-400 text-xs text-center py-6">No hi ha contingut sincronitzat de moment.</p>
+              <p className="text-zinc-400 text-xs text-center py-6">{language === 'ca' ? "No hi ha contingut sincronitzat de moment." : "No hay contenido sincronizado por el momento."}</p>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {noticies.map((post) => (
@@ -2512,7 +2512,7 @@ export default function AdminDashboard({
       )}
 
       {activePanelTab === 'personalitzacio' && (
-        <AdminPersonalitzacio language={language} onAddLog={onAddLog} />
+        <AdminPersonalitzacio onAddLog={onAddLog} />
       )}
 
       {activePanelTab === 'cierre' && (

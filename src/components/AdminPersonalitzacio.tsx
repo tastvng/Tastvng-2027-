@@ -22,13 +22,15 @@ import {
   Trash2
 } from 'lucide-react';
 import AdminPortada from './AdminPortada';
+import { useLanguage } from '../LanguageContext';
 
 interface AdminPersonalitzacioProps {
-  language: 'ca' | 'es';
+  language?: 'ca' | 'es';
   onAddLog?: (txt: string) => void;
 }
 
-export default function AdminPersonalitzacio({ language, onAddLog }: AdminPersonalitzacioProps) {
+export default function AdminPersonalitzacio({ onAddLog }: AdminPersonalitzacioProps) {
+  const { language } = useLanguage();
   const [activeSubTab, setActiveSubTab] = useState<'correu' | 'horari' | 'portada'>('correu');
 
   // Correu states
@@ -767,7 +769,7 @@ export default function AdminPersonalitzacio({ language, onAddLog }: AdminPerson
       )}
 
       {activeSubTab === 'portada' && (
-        <AdminPortada language={language} onAddLog={onAddLog} />
+        <AdminPortada onAddLog={onAddLog} />
       )}
     </div>
   );

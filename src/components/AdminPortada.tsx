@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Compass, Sparkles, CheckCircle2, RotateCcw, Image, Video, Palette, Play, Eye, FileText, LayoutTemplate, Sliders, Upload, Trash2 } from 'lucide-react';
 import { PortadaConfig } from './PortadaPage';
 import { saveSupabaseSettings, getSupabaseSettings, isSupabaseConfigured } from '../supabaseClient';
+import { useLanguage } from '../LanguageContext';
 
 export const PORTADA_CONFIG_DEFAULTS: PortadaConfig = {
   activa: true,
@@ -89,11 +90,12 @@ export const PORTADA_CONFIG_DEFAULTS: PortadaConfig = {
 };
 
 interface AdminPortadaProps {
-  language: 'ca' | 'es';
+  language?: 'ca' | 'es';
   onAddLog?: (txt: string) => void;
 }
 
-export default function AdminPortada({ language, onAddLog }: AdminPortadaProps) {
+export default function AdminPortada({ onAddLog }: AdminPortadaProps) {
+  const { language } = useLanguage();
   const [config, setConfig] = useState<PortadaConfig>(() => {
     try {
       const saved = localStorage.getItem('tast_portada_config_2026');
