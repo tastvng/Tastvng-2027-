@@ -807,20 +807,24 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
 
             {/* Editable Card Title */}
             <div className="space-y-1">
-              <label className="block text-[10px] text-zinc-500 uppercase font-mono font-bold">Títol de la Secció / Targeta</label>
+              <label className="block text-[10px] text-zinc-500 uppercase font-mono font-bold">
+                {language === 'ca' ? "Títol de la Secció / Targeta" : "Título de la Sección / Tarjeta"}
+              </label>
               <input 
                 type="text" 
                 value={titolSeccioTarifes} 
                 onChange={(e) => setTitolSeccioTarifes(e.target.value)}
                 className="w-full bg-zinc-50 border border-zinc-200 focus:border-fuchsia-500 focus:bg-white rounded-xl px-3 py-2 text-xs font-bold focus:outline-none"
                 id="input-config-titol-tarifes"
-                placeholder="Canvia el títol del canonical"
+                placeholder={language === 'ca' ? "Canvia el títol del canonical" : "Cambia el título del canónico"}
               />
             </div>
 
             {/* List of Dynamic Rate Lines */}
             <div className="space-y-4">
-              <span className="block text-[10px] text-zinc-400 uppercase font-mono tracking-wider font-bold">Línies de Tarifes i Preus</span>
+              <span className="block text-[10px] text-zinc-400 uppercase font-mono tracking-wider font-bold">
+                {language === 'ca' ? "Línies de Tarifes i Preus" : "Líneas de Tarifas y Precios"}
+              </span>
               {tarifesDinamiques.map((tf) => (
                 <div key={tf.id} className="p-3 bg-zinc-50 border border-zinc-200 rounded-2xl space-y-2">
                   <div className="flex justify-between items-center gap-2">
@@ -830,15 +834,15 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                       value={tf.nom} 
                       onChange={(e) => updateTarifaConcept(tf.id, { nom: e.target.value })}
                       className="bg-transparent border-0 hover:bg-zinc-100/50 focus:bg-white focus:border-fuchsia-400 rounded px-2 py-0.5 text-xs font-bold text-zinc-850 focus:outline-none flex-1 truncate"
-                      placeholder="Nom de l'element"
-                      title="Fes clic per canviar el nom de la línia"
+                      placeholder={language === 'ca' ? "Nom de l'element" : "Nombre del elemento"}
+                      title={language === 'ca' ? "Fes clic per canviar el nom de la línia" : "Haz clic para cambiar el nombre de la línea"}
                     />
 
                     <button
                       type="button"
                       onClick={() => handleRemoveTarifa(tf.id)}
                       className="p-1 text-zinc-400 hover:text-red-500 rounded transition shrink-0"
-                      title="Eliminar línia"
+                      title={language === 'ca' ? "Eliminar línia" : "Eliminar línea"}
                     >
                       <Trash2 size={12} />
                     </button>
@@ -865,7 +869,9 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                           : 'bg-zinc-200/50 border-transparent text-zinc-400'
                       }`}
                     >
-                      {tf.actiu ? 'Activa' : 'Inactiva'}
+                      {tf.actiu 
+                        ? (language === 'ca' ? 'Activa' : 'Activa') 
+                        : (language === 'ca' ? 'Inactiva' : 'Inactiva')}
                     </button>
                   </div>
                 </div>
@@ -875,7 +881,7 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
             {/* Add Dynamic Rate Line */}
             <div className="p-3.5 bg-zinc-950 text-white rounded-2xl space-y-3">
               <span className="block text-[10px] text-fuchsia-400 uppercase font-mono font-bold flex items-center gap-1">
-                <Plus size={12} /> Afegir Nova Línia
+                <Plus size={12} /> {language === 'ca' ? "Afegir Nova Línia" : "Añadir Nueva Línea"}
               </span>
               <div className="space-y-2 text-xs">
                 <div>
@@ -883,7 +889,7 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                     type="text" 
                     value={newTarifaNom}
                     onChange={(e) => setNewTarifaNom(e.target.value)}
-                    placeholder="Nom de la línia (Ex: Sopar Oficial)"
+                    placeholder={language === 'ca' ? "Nom de la línia (Ex: Sopar Oficial)" : "Nombre de la línea (Ej: Cena Oficial)"}
                     className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white"
                   />
                 </div>
@@ -893,7 +899,7 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                       type="number" 
                       value={newTarifaValor || ''}
                       onChange={(e) => setNewTarifaValor(Number(e.target.value))}
-                      placeholder="Import (€)"
+                      placeholder={language === 'ca' ? "Import (€)" : "Importe (€)"}
                       className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white"
                     />
                     <span className="absolute inset-y-0 right-3 flex items-center text-[10px] text-zinc-400">EUR</span>
@@ -903,7 +909,7 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                     onClick={handleAddTarifa}
                     className="px-4 bg-fuchsia-600 hover:bg-fuchsia-500 text-white text-xs font-bold rounded-xl transition"
                   >
-                    Afegir
+                    {language === 'ca' ? "Afegir" : "Añadir"}
                   </button>
                 </div>
               </div>
@@ -912,7 +918,9 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
             <div className="bg-zinc-50 p-4 rounded-2xl border border-zinc-100 flex gap-2 text-zinc-500 text-[10px] leading-relaxed">
               <TrendingUp size={16} className="text-zinc-400 shrink-0 mt-0.5" />
               <span>
-                Les modificacions en els preus s'aplicaran en temps real sobre la tarjeta de liquidació de la zona pública. Els registres previs mantindran el preu calculat històric.
+                {language === 'ca' 
+                  ? "Les modificacions en els preus s'aplicaran en temps real sobre la tarjeta de liquidació de la zona pública. Els registres previs mantindran el preu calculat històric." 
+                  : "Las modificaciones en los precios se aplicarán en tiempo real sobre la tarjeta de liquidación de la zona pública. Los registros previos mantendrán el precio calculado histórico."}
               </span>
             </div>
           </div>
@@ -920,12 +928,14 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
           {/* Custom brand identity customization card */}
           <div className="bg-white rounded-3xl border border-zinc-200 p-6 shadow-sm space-y-6">
             <h3 className="font-sans font-black text-sm text-zinc-900 pb-3 border-b border-zinc-100 uppercase tracking-wider flex items-center gap-2">
-              <Palette size={16} className="text-[#ff0090]" /> Personalització Visual i Identitat
+              <Palette size={16} className="text-[#ff0090]" /> {language === 'ca' ? "Personalització Visual i Identitat" : "Personalización Visual e Identidad"}
             </h3>
 
             {/* Micro demo preview of the header branding */}
             <div className="p-4 bg-zinc-950 border border-white/5 rounded-2xl space-y-2">
-              <span className="block text-[8px] font-mono font-bold text-zinc-500 uppercase tracking-wider">Vista Prèvia en Temps Real</span>
+              <span className="block text-[8px] font-mono font-bold text-zinc-500 uppercase tracking-wider">
+                {language === 'ca' ? "Vista Prèvia en Temps Real" : "Vista Previa en Tiempo Real"}
+              </span>
               <div className="flex items-center gap-2.5 bg-black/40 p-2 rounded-xl">
                 {logoUseImage && logoImgUrl ? (
                   <img 
@@ -954,7 +964,9 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
             <div className="space-y-4 text-xs font-sans text-zinc-700">
               {/* Type of Logo selector */}
               <div>
-                <label className="block font-bold tracking-tight mb-2">Tipus de Logotip Corporatiu</label>
+                <label className="block font-bold tracking-tight mb-2">
+                  {language === 'ca' ? "Tipus de Logotip Corporatiu" : "Tipo de Logotipo Corporativo"}
+                </label>
                 <div className="grid grid-cols-2 gap-2 bg-zinc-100 p-1 rounded-xl">
                   <button
                     type="button"
@@ -965,7 +977,7 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                         : 'text-zinc-500 hover:text-zinc-800'
                     }`}
                   >
-                    Símbol de Text
+                    {language === 'ca' ? "Símbol de Text" : "Símbolo de Texto"}
                   </button>
                   <button
                     type="button"
@@ -976,7 +988,7 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                         : 'text-zinc-500 hover:text-zinc-800'
                     }`}
                   >
-                    Imatge / GIF
+                    {language === 'ca' ? "Imatge / GIF" : "Imagen / GIF"}
                   </button>
                 </div>
               </div>
@@ -984,21 +996,25 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
               {!logoUseImage ? (
                 /* Logo symbol text */
                 <div>
-                  <label className="block font-bold tracking-tight mb-1">Símbol del Logotip (1-3 caràcters) *</label>
+                  <label className="block font-bold tracking-tight mb-1">
+                    {language === 'ca' ? "Símbol del Logotip (1-3 caràcters) *" : "Símbolo del Logotipo (1-3 caracteres) *"}
+                  </label>
                   <input 
                     type="text" 
                     maxLength={3}
                     value={logoText} 
                     onChange={(e) => setLogoText(e.target.value)}
                     className="w-full bg-zinc-50 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-4 py-2.5 focus:outline-none transition-all font-mono uppercase"
-                    placeholder="Ex: T"
+                    placeholder={language === 'ca' ? "Ex: T" : "Ej: T"}
                     id="input-config-logo-text"
                   />
                 </div>
               ) : (
                 /* Custom uploader and preset selector */
                 <div className="space-y-3">
-                  <label className="block font-bold tracking-tight">Imatge o GIF animat del Logotip</label>
+                  <label className="block font-bold tracking-tight">
+                    {language === 'ca' ? "Imatge o GIF animat del Logotip" : "Imagen o GIF animado del Logotipo"}
+                  </label>
                   
                   {/* File Upload Area supporting Drag-and-Drop and Click */}
                   <div
@@ -1028,7 +1044,9 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                           alt="Logo cargado" 
                           className="h-14 max-w-[120px] object-contain rounded-lg shadow-sm border border-zinc-200 bg-white p-1"
                         />
-                        <span className="text-[10px] text-zinc-400 font-mono truncate max-w-full">Arxiu carregat correctament</span>
+                        <span className="text-[10px] text-zinc-400 font-mono truncate max-w-full">
+                          {language === 'ca' ? "Arxiu carregat correctament" : "Archivo cargado correctamente"}
+                        </span>
                         <button
                           type="button"
                           onClick={(e) => {
@@ -1037,20 +1055,26 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                           }}
                           className="px-2 py-1 bg-red-50 hover:bg-red-100 text-red-600 rounded text-[10px] font-bold transition mt-1"
                         >
-                          Eliminar Imatge
+                          {language === 'ca' ? "Eliminar Imatge" : "Eliminar Imagen"}
                         </button>
                       </div>
                     ) : (
                       <div className="space-y-1 py-1">
-                        <span className="block text-xs font-bold text-zinc-600">Arrossega o selecciona un arxiu</span>
-                        <span className="block text-[10px] text-zinc-400">Suporta png, jpg, svg o gif animat (enllaç o base64)</span>
+                        <span className="block text-xs font-bold text-zinc-600">
+                          {language === 'ca' ? "Arrossega o selecciona un arxiu" : "Arrastra o selecciona un archivo"}
+                        </span>
+                        <span className="block text-[10px] text-zinc-400">
+                          {language === 'ca' ? "Suporta png, jpg, svg o gif animat (enllaç o base64)" : "Soporta png, jpg, svg o gif animado (enlace o base64)"}
+                        </span>
                       </div>
                     )}
                   </div>
 
                   {/* Direct Input Field */}
                   <div>
-                    <label className="block text-[10px] text-zinc-500 uppercase font-mono tracking-wider font-bold mb-1">O enganxa un enllaç de l'imatge / GIF extern</label>
+                    <label className="block text-[10px] text-zinc-500 uppercase font-mono tracking-wider font-bold mb-1">
+                      {language === 'ca' ? "O enganxa un enllaç de l'imatge / GIF extern" : "O pega un enlace de la imagen / GIF externo"}
+                    </label>
                     <input 
                       type="text" 
                       value={logoImgUrl} 
@@ -1063,16 +1087,18 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
 
                   {/* Quick-select Carnaval GIF Presets */}
                   <div className="space-y-1.5 pt-1">
-                    <span className="block text-[9px] text-zinc-400 uppercase font-mono tracking-wider font-bold">Idees i presets de Carnaval (GIFs de festa!)</span>
+                    <span className="block text-[9px] text-zinc-400 uppercase font-mono tracking-wider font-bold">
+                      {language === 'ca' ? "Idees i presets de Carnaval (GIFs de festa!)" : "Ideas y presets de Carnaval (¡GIFs de fiesta!)"}
+                    </span>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                       {[
-                        { name: '🎉 Confetti', url: 'https://media.giphy.com/media/26tOZ42cXxdb76XyE/giphy.gif' },
-                        { name: '✨ Dansa Samba', url: 'https://media.giphy.com/media/l2Jhtx8S50VatYFsY/giphy.gif' },
-                        { name: '🎭 Antifaç', url: 'https://media.giphy.com/media/26AHG5K7upgLaI9Xy/giphy.gif' },
-                        { name: '🎷 Festa', url: 'https://media.giphy.com/media/l3q2zVr6cu95nF6O4/giphy.gif' }
+                        { name: language === 'ca' ? '🎉 Confetti' : '🎉 Confeti', url: 'https://media.giphy.com/media/26tOZ42cXxdb76XyE/giphy.gif' },
+                        { name: language === 'ca' ? '✨ Dansa Samba' : '✨ Danza Samba', url: 'https://media.giphy.com/media/l2Jhtx8S50VatYFsY/giphy.gif' },
+                        { name: language === 'ca' ? '🎭 Antifaç' : '🎭 Antifaz', url: 'https://media.giphy.com/media/26AHG5K7upgLaI9Xy/giphy.gif' },
+                        { name: language === 'ca' ? '🎷 Festa' : '🎷 Fiesta', url: 'https://media.giphy.com/media/l3q2zVr6cu95nF6O4/giphy.gif' }
                       ].map((preset) => (
                         <button
-                          key={preset.name}
+                          key={preset.url}
                           type="button"
                           onClick={() => {
                             setLogoImgUrl(preset.url);
@@ -1097,53 +1123,61 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
 
               {/* Title 1 */}
               <div>
-                <label className="block font-bold tracking-tight mb-1">Títol Principal canònic (Text Blanc) *</label>
+                <label className="block font-bold tracking-tight mb-1">
+                  {language === 'ca' ? "Títol Principal canònic (Text Blanc) *" : "Título Principal canónico (Texto Blanco) *"}
+                </label>
                 <input 
                   type="text" 
                   value={titolPrincipal} 
                   onChange={(e) => setTitolPrincipal(e.target.value)}
                   className="w-full bg-zinc-50 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-4 py-2.5 focus:outline-none transition-all"
-                  placeholder="Ex: EL TAST"
+                  placeholder={language === 'ca' ? "Ex: EL TAST" : "Ej: EL TAST"}
                   id="input-config-title-principal"
                 />
               </div>
 
               {/* Title 2 */}
               <div>
-                <label className="block font-bold tracking-tight mb-1">Títol Secundari (Color Corporatiu) *</label>
+                <label className="block font-bold tracking-tight mb-1">
+                  {language === 'ca' ? "Títol Secundari (Color Corporatiu) *" : "Título Secundario (Color Corporativo) *"}
+                </label>
                 <input 
                   type="text" 
                   value={titolSecundari} 
                   onChange={(e) => setTitolSecundari(e.target.value)}
                   className="w-full bg-zinc-50 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-4 py-2.5 focus:outline-none transition-all"
-                  placeholder="Ex: VILANOVA"
+                  placeholder={language === 'ca' ? "Ex: VILANOVA" : "Ej: VILANOVA"}
                   id="input-config-title-secundari"
                 />
               </div>
 
               {/* Subtitle / Phrase */}
               <div>
-                <label className="block font-bold tracking-tight mb-1">Lema / Subtítol inferior *</label>
+                <label className="block font-bold tracking-tight mb-1">
+                  {language === 'ca' ? "Lema / Subtítol inferior *" : "Lema / Subtítulo inferior *"}
+                </label>
                 <input 
                   type="text" 
                   value={subtitol} 
                   onChange={(e) => setSubtitol(e.target.value)}
                   className="w-full bg-zinc-50 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-4 py-2.5 focus:outline-none transition-all"
-                  placeholder="Ex: Vilanova i la Geltrú 2026"
+                  placeholder={language === 'ca' ? "Ex: Vilanova i la Geltrú 2026" : "Ej: Vilanova i la Geltrú 2026"}
                   id="input-config-title-subtitle"
                 />
               </div>
 
               {/* Corporation Accent color */}
               <div>
-                <label className="block font-bold tracking-tight mb-1">Color Corporatiu (Hexadecimal o Selector) *</label>
+                <label className="block font-bold tracking-tight mb-1">
+                  {language === 'ca' ? "Color Corporatiu (Hexadecimal o Selector) *" : "Color Corporativo (Hexadecimal o Selector) *"}
+                </label>
                 <div className="flex gap-2">
                   <input 
                     type="color" 
                     value={logoColor}
                     onChange={(e) => setLogoColor(e.target.value)}
                     className="w-10 h-10 bg-transparent border-0 rounded cursor-pointer shrink-0"
-                    title="Tria color corporatiu"
+                    title={language === 'ca' ? "Tria color corporatiu" : "Elige color corporativo"}
                     id="input-config-logo-color-picker"
                   />
                   <input 
@@ -1160,7 +1194,9 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
               {/* Minor legal texts customization */}
               <div className="pt-4 border-t border-zinc-100 space-y-3">
                 <div className="flex justify-between items-center">
-                  <span className="block text-[9px] text-zinc-400 uppercase font-mono tracking-wider font-bold">Autorització de Menors</span>
+                  <span className="block text-[9px] text-zinc-400 uppercase font-mono tracking-wider font-bold">
+                    {language === 'ca' ? "Autorització de Menors" : "Autorización de Menores"}
+                  </span>
                   <label className="flex items-center gap-1 cursor-pointer text-[9px] text-zinc-400 select-none">
                     <input 
                       type="checkbox"
@@ -1227,14 +1263,16 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
 
             {/* Editable Card Title */}
             <div className="space-y-1">
-              <label className="block text-[10px] text-zinc-500 uppercase font-mono font-bold">Títol de la Secció de Preguntes</label>
+              <label className="block text-[10px] text-zinc-500 uppercase font-mono font-bold">
+                {language === 'ca' ? "Títol de la Secció de Preguntes" : "Título de la Sección de Preguntas"}
+              </label>
               <input 
                 type="text" 
                 value={titolFormulariDinamic} 
                 onChange={(e) => setTitolFormulariDinamic(e.target.value)}
                 className="w-full bg-zinc-50 border border-zinc-200 focus:border-fuchsia-500 focus:bg-white rounded-xl px-3 py-2 text-xs font-bold focus:outline-none"
                 id="input-config-titol-formulari-dinamic"
-                placeholder="Ex: Preguntes del Qüestionari d'El Tast"
+                placeholder={language === 'ca' ? "Ex: Preguntes del Qüestionari d'El Tast" : "Ej: Preguntas del Cuestionario de El Tast"}
               />
             </div>
 
@@ -1248,12 +1286,12 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                       value={preg.titol} 
                       onChange={(e) => updatePreguntaTitol(preg.id, e.target.value)}
                       className="bg-transparent border-b border-transparent hover:border-zinc-300 focus:border-fuchsia-400 focus:bg-white rounded px-1.5 py-1 text-xs font-bold text-zinc-900 focus:outline-none w-full"
-                      placeholder="Títol de la pregunta / línia..."
-                      title="Fes clic per canviar el nom de la pregunta"
+                      placeholder={language === 'ca' ? "Títol de la pregunta / línia..." : "Título de la pregunta / línea..."}
+                      title={language === 'ca' ? "Fes clic per canviar el nom de la pregunta" : "Haz clic para cambiar el nombre de la pregunta"}
                     />
                     <div className="flex gap-2 items-center text-[10px] text-zinc-400 font-mono uppercase pl-1.5">
-                      <span>Tipus: {preg.tipus}</span>
-                      {preg.opcions && <span>• Opcs: {preg.opcions.join(', ')}</span>}
+                      <span>{language === 'ca' ? "Tipus" : "Tipo"}: {preg.tipus}</span>
+                      {preg.opcions && <span>• {language === 'ca' ? "Opcs" : "Opciones"}: {preg.opcions.join(', ')}</span>}
                     </div>
                   </div>
 
@@ -1269,7 +1307,9 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                       }`}
                       id={`btn-config-toggle-active-${preg.id}`}
                     >
-                      {preg.activa ? "Activa" : "Inactiva"}
+                      {preg.activa 
+                        ? (language === 'ca' ? "Activa" : "Activa") 
+                        : (language === 'ca' ? "Inactiva" : "Inactiva")}
                     </button>
 
                     {/* Requerida toggle check */}
@@ -1283,7 +1323,9 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                       }`}
                       id={`btn-config-toggle-req-${preg.id}`}
                     >
-                      {preg.requerit ? "Requerida" : "Opcional"}
+                      {preg.requerit 
+                        ? (language === 'ca' ? "Requerida" : "Requerida") 
+                        : (language === 'ca' ? "Opcional" : "Opcional")}
                     </button>
 
                     {/* Delete question */}
@@ -1291,7 +1333,7 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                       type="button"
                       onClick={() => handleRemovePregunta(preg.id)}
                       className="p-1.5 bg-zinc-150 hover:bg-zinc-200 text-zinc-600 rounded-lg transition"
-                      title="Eliminar pregunta"
+                      title={language === 'ca' ? "Eliminar pregunta" : "Eliminar pregunta"}
                       id={`btn-config-delete-${preg.id}`}
                     >
                       <Trash2 size={13} className="text-zinc-500" />
@@ -1304,44 +1346,50 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
             {/* Build new custom question drawer item */}
             <div className="p-5 bg-zinc-900 text-white rounded-2xl border border-zinc-800 space-y-4">
               <span className="block font-sans font-bold text-xs text-fuchsia-400 uppercase tracking-wider flex items-center gap-1">
-                <Plus size={14} /> Afegir nova pregunta dinàmica
+                <Plus size={14} /> {language === 'ca' ? "Afegir nova pregunta dinàmica" : "Añadir nueva pregunta dinámica"}
               </span>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="md:col-span-2">
-                  <label className="block text-[10px] text-zinc-400 uppercase font-mono mb-1">Enunciat de la pregunta *</label>
+                  <label className="block text-[10px] text-zinc-400 uppercase font-mono mb-1">
+                    {language === 'ca' ? "Enunciat de la pregunta *" : "Enunciado de la pregunta *"}
+                  </label>
                   <input 
                     type="text"
                     value={newTitol}
                     onChange={(e) => setNewTitol(e.target.value)}
-                    placeholder="Ex. Digueu la colla de castells a la qual pertanyeu:"
+                    placeholder={language === 'ca' ? "Ex. Digueu la colla de castells a la qual pertanyeu:" : "Ej. Indique el grupo de castells al que pertenece:"}
                     className="w-full bg-zinc-950 border border-zinc-850 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-fuchsia-500 text-white placeholder-zinc-600"
                     id="input-config-new-question-title"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[10px] text-zinc-400 uppercase font-mono mb-1">Tipus de resposta *</label>
+                  <label className="block text-[10px] text-zinc-400 uppercase font-mono mb-1">
+                    {language === 'ca' ? "Tipus de resposta *" : "Tipo de respuesta *"}
+                  </label>
                   <select
                     value={newTipus}
                     onChange={(e) => setNewTipus(e.target.value as any)}
                     className="w-full bg-zinc-950 border border-zinc-850 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none cursor-pointer"
                     id="select-config-new-question-type"
                   >
-                    <option value="text">Camp de Text sencer</option>
-                    <option value="boolean">Binaris (Sí / No)</option>
-                    <option value="select">Opcions Múltiples (Dropdown)</option>
+                    <option value="text">{language === 'ca' ? "Camp de Text sencer" : "Campo de Texto completo"}</option>
+                    <option value="boolean">{language === 'ca' ? "Binaris (Sí / No)" : "Binarios (Sí / No)"}</option>
+                    <option value="select">{language === 'ca' ? "Opcions Múltiples (Dropdown)" : "Opciones Múltiples (Dropdown)"}</option>
                   </select>
                 </div>
 
                 {newTipus === 'select' && (
                   <div>
-                    <label className="block text-[10px] text-zinc-400 uppercase font-mono mb-1">Opcions (Separades per comes) *</label>
+                    <label className="block text-[10px] text-zinc-400 uppercase font-mono mb-1">
+                      {language === 'ca' ? "Opcions (Separades per comes) *" : "Opciones (Separadas por comas) *"}
+                    </label>
                     <input 
                       type="text"
                       value={newOpcionsCsv}
                       onChange={(e) => setNewOpcionsCsv(e.target.value)}
-                      placeholder="Opció 1, Opció 2, Opció 3"
+                      placeholder={language === 'ca' ? "Opció 1, Opció 2, Opció 3" : "Opción 1, Opción 2, Opción 3"}
                       className="w-full bg-zinc-950 border border-zinc-850 rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:border-fuchsia-500 text-white placeholder-zinc-600"
                       id="input-config-new-question-options"
                     />
@@ -1356,7 +1404,7 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                   className="bg-fuchsia-600 hover:bg-fuchsia-500 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition"
                   id="btn-config-add-question-submit"
                 >
-                  Afegir Pregunta
+                  {language === 'ca' ? "Afegir Pregunta" : "Añadir Pregunta"}
                 </button>
               </div>
             </div>
@@ -1531,10 +1579,10 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
           <div className="bg-white rounded-3xl border border-zinc-200 p-6 shadow-sm space-y-6">
             <div className="border-b border-zinc-100 pb-3 flex justify-between items-center flex-wrap gap-2">
               <h3 className="font-sans font-black text-sm text-zinc-900 uppercase tracking-wider flex items-center gap-2 mb-0">
-                <Megaphone size={16} className="text-[#ff0090]" /> Gestor de Comunicacions, Vídeos i Notes Oficials
+                <Megaphone size={16} className="text-[#ff0090]" /> {language === 'ca' ? "Gestor de Comunicacions, Vídeos i Notes Oficials" : "Gestor de Comunicaciones, Vídeos y Notas Oficiales"}
               </h3>
               <span className="text-[10px] bg-[#ff0090]/10 text-[#ff0090] border border-[#ff0090]/20 rounded-full px-2 py-0.5 font-bold uppercase font-mono">
-                Multidifusió Activa
+                {language === 'ca' ? "Multidifusió Activa" : "Multidifusión Activa"}
               </span>
             </div>
 
@@ -1557,7 +1605,7 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                       </span>
                       {(post.ressaltat || post.tipus === 'alerta') && (
                         <span className="text-[8px] font-mono bg-red-600 text-white font-extrabold px-1.5 rounded animate-pulse">
-                          ALT RESSALTAT
+                          {language === 'ca' ? "ALT RESSALTAT" : "ALTO DESTACADO"}
                         </span>
                       )}
                     </div>
@@ -1569,34 +1617,38 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                     type="button"
                     onClick={() => handleRemoveNewsPost(post.id)}
                     className="p-1.5 bg-zinc-200/60 hover:bg-zinc-250 text-zinc-700 hover:text-red-600 rounded-lg transition shrink-0 self-center cursor-pointer"
-                    title="Eliminar publicació"
+                    title={language === 'ca' ? "Eliminar publicació" : "Eliminar publicación"}
                   >
                     <Trash2 size={13} />
                   </button>
                 </div>
               ))}
               {newsList.length === 0 && (
-                <p className="text-zinc-400 text-xs italic text-center py-4 mb-0">No hi ha publicacions ni avisos públics editats.</p>
+                <p className="text-zinc-400 text-xs italic text-center py-4 mb-0">
+                  {language === 'ca' ? "No hi ha publicacions ni avisos públics editats." : "No hay publicaciones ni avisos públicos editados."}
+                </p>
               )}
             </div>
 
             {/* Add new post form */}
             <div className="p-5 bg-zinc-900 text-white rounded-2xl border border-zinc-800 space-y-4">
               <span className="block font-sans font-black text-xs text-[#ff0090] uppercase tracking-wider flex items-center gap-1.5 pb-2 border-b border-zinc-800">
-                <Plus size={14} /> Redactar nou Recurs, Comunicat o Vídeo
+                <Plus size={14} /> {language === 'ca' ? "Redactar nou Recurs, Comunicat o Vídeo" : "Redactar nuevo Recurso, Comunicado o Vídeo"}
               </span>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-xs font-sans">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-xs font-sans text-black">
                 {/* 1. Origin / Channel type */}
                 <div>
-                  <label className="block text-[10px] text-zinc-400 uppercase font-mono font-bold tracking-wider mb-1">Canal o Signatura</label>
+                  <label className="block text-[10px] text-zinc-400 uppercase font-mono font-bold tracking-wider mb-1">
+                    {language === 'ca' ? "Canal o Signatura" : "Canal o Firma"}
+                  </label>
                   <select
                     value={newPostXarxa}
                     onChange={(e) => {
                       const val = e.target.value as 'instagram' | 'facebook' | 'entitat';
                       setNewPostXarxa(val);
                       if (val === 'entitat') {
-                        setNewPostUsuari('Associació Cultural El Tast');
+                        setNewPostUsuari(language === 'ca' ? 'Associació Cultural El Tast' : 'Asociación Cultural El Tast');
                       } else if (val === 'instagram') {
                         setNewPostUsuari('@eltastvng');
                       } else {
@@ -1605,7 +1657,7 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                     }}
                     className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none cursor-pointer focus:border-[#ff0090]"
                   >
-                    <option value="entitat">📢 Comunicat Oficial de l'Entitat</option>
+                    <option value="entitat">{language === 'ca' ? "📢 Comunicat Ofic. d'Entitat" : "📢 Comunicado Ofic. de Entidad"}</option>
                     <option value="instagram">📸 Instagram Post</option>
                     <option value="facebook">👥 Facebook Post</option>
                   </select>
@@ -1613,46 +1665,54 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
 
                 {/* 2. Sender name */}
                 <div>
-                  <label className="block text-[10px] text-zinc-400 uppercase font-mono font-bold tracking-wider mb-1">Signatura de l'Emissor</label>
+                  <label className="block text-[10px] text-zinc-400 uppercase font-mono font-bold tracking-wider mb-1">
+                    {language === 'ca' ? "Signatura de l'Emissor" : "Firma del Emisor"}
+                  </label>
                   <input
                     type="text"
                     value={newPostUsuari}
                     onChange={(e) => setNewPostUsuari(e.target.value)}
-                    placeholder="Ex: Junta Directiva El Tast"
+                    placeholder={language === 'ca' ? "Ex: Junta Directiva El Tast" : "Ej: Junta Directiva El Tast"}
                     className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-[#ff0090] text-white"
                   />
                 </div>
 
                 {/* 3. Resource Type */}
                 <div>
-                  <label className="block text-[10px] text-zinc-400 uppercase font-mono font-bold tracking-wider mb-1">Tipus de Contingut / Mitjà</label>
+                  <label className="block text-[10px] text-zinc-400 uppercase font-mono font-bold tracking-wider mb-1">
+                    {language === 'ca' ? "Tipus de Contingut / Mitjà" : "Tipo de Contenido / Medio"}
+                  </label>
                   <select
                     value={newPostTipus}
                     onChange={(e) => setNewPostTipus(e.target.value as 'normal' | 'video' | 'nota' | 'alerta')}
                     className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none cursor-pointer focus:border-[#ff0090]"
                   >
-                    <option value="normal">Publicació Estàndard (Imatge/Text)</option>
-                    <option value="video">🎬 Vídeo Interactiu (YouTube / Directe MP4)</option>
-                    <option value="nota">📝 Nota Informativa o Recurs útil</option>
-                    <option value="alerta">🚨 Advertència Crítica / Alerta Urgent</option>
+                    <option value="normal">{language === 'ca' ? "Publicació Estàndard (Imatge)" : "Publicación Estándar (Imagen)"}</option>
+                    <option value="video">{language === 'ca' ? "🎬 Vídeo Interactiu" : "🎬 Vídeo Interactivo"}</option>
+                    <option value="nota">{language === 'ca' ? "📝 Nota Informativa / Recurs" : "📝 Nota Informativa / Recurso"}</option>
+                    <option value="alerta">{language === 'ca' ? "🚨 Advertència / Alerta Urgent" : "🚨 Advertencia / Alerta Urgente"}</option>
                   </select>
                 </div>
 
                 {/* 4. Title / Subject of notice */}
-                <div className="sm:col-span-2">
-                  <label className="block text-[10px] text-zinc-400 uppercase font-mono font-bold tracking-wider mb-1">Títol o Assumpte destacat (Opcional)</label>
+                <div className="sm:col-span-2 text-black">
+                  <label className="block text-[10px] text-zinc-400 uppercase font-mono font-bold tracking-wider mb-1">
+                    {language === 'ca' ? "Títol o Assumpte destacat (Opcional)" : "Título o Asunto destacado (Opcional)"}
+                  </label>
                   <input
                     type="text"
                     value={newPostTitol}
                     onChange={(e) => setNewPostTitol(e.target.value)}
-                    placeholder="Ex: INFORMACIÓ IMPORTANT RECOLLIDA D'ARMILLES"
+                    placeholder={language === 'ca' ? "Ex: RECOLLIDA DE MATERIAL" : "Ej: RECOGIDA DE MATERIAL"}
                     className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-[#ff0090] text-white"
                   />
                 </div>
 
                 {/* 5. Sim Likes */}
                 <div>
-                  <label className="block text-[10px] text-zinc-400 uppercase font-mono font-bold tracking-wider mb-1">Reaccions Simulades (Likes)</label>
+                  <label className="block text-[10px] text-zinc-400 uppercase font-mono font-bold tracking-wider mb-1">
+                    {language === 'ca' ? "Reaccions Simulades (Likes)" : "Reacciones Simuladas (Likes)"}
+                  </label>
                   <input
                     type="number"
                     value={newPostLikes}
@@ -1664,39 +1724,47 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                 {/* 6. Video Integration URL - Conditional */}
                 {newPostTipus === 'video' && (
                   <div className="sm:col-span-3 bg-zinc-950 p-4 rounded-xl border border-zinc-850 space-y-2">
-                    <label className="block text-[10px] text-amber-400 uppercase font-mono font-bold tracking-wider mb-1">Enllaç de Vídeo (YouTube, Vimeo, o MP4 complet)</label>
+                    <label className="block text-[10px] text-amber-400 uppercase font-mono font-bold tracking-wider mb-1">
+                      {language === 'ca' ? "Enllaç de Vídeo (YouTube, Vimeo, o MP4 complet)" : "Enlace de Vídeo (YouTube, Vimeo, o MP4 completo)"}
+                    </label>
                     <input
                       type="text"
                       value={newPostVideoUrl}
                       onChange={(e) => setNewPostVideoUrl(e.target.value)}
-                      placeholder="Ex: https://www.youtube.com/watch?v=dQw4w9WgXcQ o https://meuservidor.com/video.mp4"
+                      placeholder={language === 'ca' ? "Ex: https://www.youtube.com/watch?v=dQw4w9WgXcQ" : "Ej: https://www.youtube.com/watch?v=dQw4w9WgXcQ"}
                       className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500 placeholder-zinc-650"
                     />
-                    <p className="text-[10px] text-zinc-500 font-sans italic mb-0">La plataforma transformarà enllaços de YouTube en reproductors dinàmics integrats automàticament.</p>
+                    <p className="text-[10px] text-zinc-500 font-sans italic mb-0">
+                      {language === 'ca' ? "La plataforma transformarà enllaços de YouTube en reproductors dinàmics integrats." : "La plataforma transformará enlaces de YouTube en reproductores dinámicos integrados."}
+                    </p>
                   </div>
                 )}
 
                 {/* 7. Image attachment URL - Conditional for non-video */}
                 {newPostTipus !== 'video' && (
                   <div className="sm:col-span-3">
-                    <label className="block text-[10px] text-zinc-400 uppercase font-mono font-bold tracking-wider mb-1">URL de la foto o infografia adjunta (Opcional)</label>
+                    <label className="block text-[10px] text-zinc-400 uppercase font-mono font-bold tracking-wider mb-1">
+                      {language === 'ca' ? "URL de la foto o infografia adjunta (Opcional)" : "URL de la foto o infografía adjunta (Opcional)"}
+                    </label>
                     <input
                       type="text"
                       value={newPostImatge}
                       onChange={(e) => setNewPostImatge(e.target.value)}
                       placeholder="https://images.unsplash.com/photo-..."
-                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-[#ff0090] text-white placeholder-zinc-700"
+                      className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-[#ff0090] text-white placeholder-zinc-750"
                     />
                   </div>
                 )}
 
                 {/* 8. Text content body */}
                 <div className="sm:col-span-3">
-                  <label className="block text-[10px] text-zinc-400 uppercase font-mono font-bold tracking-wider mb-1">Cos del Text del Comunicat *</label>
+                  <label className="block text-[10px] text-zinc-400 uppercase font-mono font-bold tracking-wider mb-1">
+                    {language === 'ca' ? "Cos del Text del Comunicat *" : "Cuerpo del Texto del Comunicado *"}
+                  </label>
                   <textarea
                     value={newPostText}
                     onChange={(e) => setNewPostText(e.target.value)}
-                    placeholder="Escriu les directrius, explicacions de les notes o canvis que veurà l'usuari..."
+                    placeholder={language === 'ca' ? "Escriu les directrius, explicacions de les notes o canvis que veurà l'usuari..." : "Escribe las directrices, explicaciones de las notas o cambios que verá el usuario..."}
                     rows={3}
                     className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-[#ff0090] text-white placeholder-zinc-600 font-sans"
                   />
@@ -1704,12 +1772,14 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
 
                 {/* 9. Action action extern link url */}
                 <div className="sm:col-span-2">
-                  <label className="block text-[10px] text-zinc-400 uppercase font-mono font-bold tracking-wider mb-1">Enllaç d'Acció Extern (Opcional, enllaçar documents, PDFs o webs)</label>
+                  <label className="block text-[10px] text-zinc-400 uppercase font-mono font-bold tracking-wider mb-1">
+                    {language === 'ca' ? "Enllaç d'Acció Extern (Opcional, documents, PDFs o webs)" : "Enlace de Acción Externo (Opcional, documentos, PDFs o webs)"}
+                  </label>
                   <input
                     type="text"
                     value={newPostEnllacUrl}
                     onChange={(e) => setNewPostEnllacUrl(e.target.value)}
-                    placeholder="https://web-entitat.com/normativa-comparses-pdf"
+                    placeholder="https://web-entitat.com/normativa-pdf"
                     className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs focus:outline-none focus:border-[#ff0090] text-white placeholder-zinc-750"
                   />
                 </div>
@@ -1717,8 +1787,12 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                 {/* 10. Eye-catching Urgent Highlight Blinker Switch! */}
                 <div className="flex items-center justify-between p-3.5 bg-zinc-950/60 rounded-xl border border-zinc-800 sm:col-span-1 self-end">
                   <div className="space-y-0.5">
-                    <span className="block text-[9px] text-fuchsia-450 uppercase font-mono font-black tracking-widest">CRIDAR L'ATENCIÓ?</span>
-                    <span className="block text-[8px] text-zinc-500 font-sans leading-none">Ressaltat amb ràfega de colors i efectes</span>
+                    <span className="block text-[9px] text-fuchsia-450 uppercase font-mono font-black tracking-widest">
+                      {language === 'ca' ? "CRIDAR L'ATENCIÓ?" : "¿LLAMAR LA ATENCIÓN?"}
+                    </span>
+                    <span className="block text-[8px] text-zinc-500 font-sans leading-none">
+                      {language === 'ca' ? "Ressaltat amb ràfega de colors" : "Destacado con ráfaga de colores"}
+                    </span>
                   </div>
                   <input
                     type="checkbox"
@@ -1735,7 +1809,7 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                   onClick={handleAddNewsPost}
                   className="bg-[#ff0090] hover:bg-[#ff0090]/90 text-black font-extrabold text-xs px-5 py-2.5 rounded-xl transition shadow-lg shadow-[#ff0090]/25 uppercase tracking-wide cursor-pointer"
                 >
-                  Publicar Avis a la Web
+                  {language === 'ca' ? "Publicar Avis a la Web" : "Publicar Aviso en la Web"}
                 </button>
               </div>
             </div>
