@@ -1880,9 +1880,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
                           {language === 'ca' ? '-- Seleccioneu una opció --' : '-- Seleccione una opción --'}
                         </option>
                         {(q.opcions || []).map((opt) => (
-                          <option key={opt} value={opt}>
-                            {opt}
-                          </option>
+                          <TranslatedOption key={opt} value={opt} />
                         ))}
                       </select>
                     )}

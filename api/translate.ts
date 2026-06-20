@@ -34,6 +34,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const prompt = `Translate the following text from ${source} to ${target}.
 Only return the raw translated text, without formatting, without quotes, without introductory text. 
 Maintain the same capitalization and tone. If it contains placeholders like {{}} or HTML tags, leave them intact.
+CRITICAL MANDATE: Never translate the word "Tast" or "El Tast". Keep the proper name "Tast" or "El Tast" exactly as is in the output text, without converting it to any other word.
 
 Text:
 ${text}`;
