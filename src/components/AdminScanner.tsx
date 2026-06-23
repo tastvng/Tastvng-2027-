@@ -98,6 +98,39 @@ export default function AdminScanner({
   const [showPairingModal, setShowPairingModal] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
 
+  // Lazy-load complete details including heavy DNI blobs when a record is scanned/selected inside AdminScanner
+  useEffect(() => {
+    if (!tempRecord || !tempRecord.id) return;
+    const hasMissingDni = (!tempRecord.c1DniUrl || tempRecord.c1DniUrl.length < 50 || !tempRecord.c2DniUrl || tempRecord.c2DniUrl.length < 50);
+    // Only check if we are connected to Supabase
+    const isSupabaseConfigured = localStorage.getItem('tast_supabase_url') && localStorage.getItem('tast_supabase_anon_key');
+    if (hasMissingDni && isSupabaseConfigured) {
+      let active = true;
+      async function loadFull() {
+        try {
+          const { getSupabaseInscripcionById } = await import('../supabaseClient');
+          const full = await getSupabaseInscripcionById(tempRecord!.id);
+          if (full && active) {
+            setTempRecord(prev => {
+              if (!prev || prev.id !== full.id) return prev;
+              return {
+                ...prev,
+                c1DniUrl: full.c1DniUrl || prev.c1DniUrl,
+                c2DniUrl: full.c2DniUrl || prev.c2DniUrl
+              };
+            });
+          }
+        } catch (err) {
+          console.warn("Could not lazy-load detailed DNI for scanned record:", err);
+        }
+      }
+      loadFull();
+      return () => {
+        active = false;
+      };
+    }
+  }, [tempRecord?.id]);
+
   // Fallback and manual search states
   const [manualSearchText, setManualSearchText] = useState('');
   const [searchFeedback, setSearchFeedback] = useState<string | null>(null);

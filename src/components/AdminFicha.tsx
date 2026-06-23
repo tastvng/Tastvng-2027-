@@ -59,6 +59,29 @@ export default function AdminFicha({ registration, config, onBack, onSave }: Adm
   const [estatInscripcio, setEstatInscripcio] = useState<'obertes' | 'llista_espera' | undefined>(registration.estatInscripcio);
   const [bandera, setBandera] = useState<number>(registration.bandera || 0);
 
+  // Lazy-load complete details including heavy DNI blobs only when viewing the individual card
+  const [c1DniUrl, setC1DniUrl] = useState<string>(registration.c1DniUrl || '');
+  const [c2DniUrl, setC2DniUrl] = useState<string>(registration.c2DniUrl || '');
+
+  React.useEffect(() => {
+    async function loadFullDni() {
+      try {
+        const { getSupabaseInscripcionById } = await import('../supabaseClient');
+        const full = await getSupabaseInscripcionById(registration.id);
+        if (full) {
+          if (full.c1DniUrl) setC1DniUrl(full.c1DniUrl);
+          if (full.c2DniUrl) setC2DniUrl(full.c2DniUrl);
+        }
+      } catch (err) {
+        console.warn("Could not lazy-load DNI images from Supabase:", err);
+      }
+    }
+    
+    if (!registration.c1DniUrl || !registration.c2DniUrl || registration.c1DniUrl.length < 50) {
+      loadFullDni();
+    }
+  }, [registration.id]);
+
   // Participant Editable configurations
   const [c1Nom, setC1Nom] = useState(registration.c1Nom);
   const [c1Cognoms, setC1Cognoms] = useState(registration.c1Cognoms);
@@ -662,7 +685,7 @@ export default function AdminFicha({ registration, config, onBack, onSave }: Adm
                       <RotateCw size={12} /> {language === 'ca' ? "Rotar" : "Rotar"}
                     </button>
                     <button 
-                      onClick={() => setActiveZoomUrl(registration.c1DniUrl)}
+                      onClick={() => setActiveZoomUrl(c1DniUrl)}
                       className="p-1 px-1.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-600 rounded-md text-[10px] inline-flex items-center gap-1 transition"
                       title={language === 'ca' ? "Ampliar imatge" : "Ampliar imagen"}
                     >
@@ -673,10 +696,10 @@ export default function AdminFicha({ registration, config, onBack, onSave }: Adm
 
                 <div 
                   className="aspect-[1.58] bg-zinc-150 rounded-2xl overflow-hidden border border-zinc-200 relative cursor-zoom-in flex items-center justify-center bg-zinc-900"
-                  onClick={() => setActiveZoomUrl(registration.c1DniUrl)}
+                  onClick={() => setActiveZoomUrl(c1DniUrl)}
                 >
                   <img 
-                    src={registration.c1DniUrl} 
+                    src={c1DniUrl} 
                     alt="DNI Comparser 1" 
                     style={{ transform: `rotate(${rotacio1}deg)` }}
                     className="object-contain w-full h-full transition-transform duration-300"
@@ -699,7 +722,7 @@ export default function AdminFicha({ registration, config, onBack, onSave }: Adm
                       <RotateCw size={12} /> {language === 'ca' ? "Rotar" : "Rotar"}
                     </button>
                     <button 
-                      onClick={() => setActiveZoomUrl(registration.c2DniUrl)}
+                      onClick={() => setActiveZoomUrl(c2DniUrl)}
                       className="p-1 px-1.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-605 rounded-md text-[10px] inline-flex items-center gap-1 transition"
                       title={language === 'ca' ? "Ampliar imatge" : "Ampliar imagen"}
                     >
@@ -710,10 +733,10 @@ export default function AdminFicha({ registration, config, onBack, onSave }: Adm
 
                 <div 
                   className="aspect-[1.58] bg-zinc-150 rounded-2xl overflow-hidden border border-zinc-200 relative cursor-zoom-in flex items-center justify-center bg-zinc-900"
-                  onClick={() => setActiveZoomUrl(registration.c2DniUrl)}
+                  onClick={() => setActiveZoomUrl(c2DniUrl)}
                 >
                   <img 
-                    src={registration.c2DniUrl} 
+                    src={c2DniUrl} 
                     alt="DNI Comparser 2" 
                     style={{ transform: `rotate(${rotacio2}deg)` }}
                     className="object-contain w-full h-full transition-transform duration-300"

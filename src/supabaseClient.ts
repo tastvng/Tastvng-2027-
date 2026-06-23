@@ -25,6 +25,9 @@ if (isSupabaseConfigured) {
   console.log("Supabase is not yet fully configured in your environment. Falling back gracefully to LocalStorage for interface settings.");
 }
 
+// In-memory cache to prevent duplicate settings queries during application lifecycle
+const settingCache = new Map<string, any>();
+
 /**
  * Generic getter function for any setting in Supabase.
  * Supports adaptive schema formats where columns are named 'id' or 'key' 
@@ -34,35 +37,54 @@ export async function getSupabaseSetting<T>(key: string, defaultValue: T): Promi
   if (!supabase) {
     return defaultValue;
   }
+
+  // Check memory cache first to completely eliminate redundant fetches
+  if (settingCache.has(key)) {
+    return settingCache.get(key) as T;
+  }
   
   try {
-    const { data, error } = await supabase
+    // Targeted query for key/id row matching - prevents fetching of unrelated setting blobs
+    let { data, error } = await supabase
       .from('settings')
-      .select('*');
+      .select('*')
+      .eq('key', key)
+      .maybeSingle();
       
-    if (error) {
-      console.warn(`Warning reading settings table from Supabase for key [${key}]:`, error.message || error);
-      return defaultValue;
-    }
-    
-    if (data && data.length > 0) {
-      const row = data.find(r => r.key === key || r.id === key);
-      if (row) {
-        let configPayload = row.value !== undefined ? row.value 
-                        : row.config !== undefined ? row.config 
-                        : row.settings !== undefined ? row.settings 
-                        : row;
+    if (error || !data) {
+      // Fallback query matching on 'id' instead of 'key'
+      const { data: fallbackData, error: fallbackError } = await supabase
+        .from('settings')
+        .select('*')
+        .eq('id', key)
+        .maybeSingle();
         
-        if (typeof configPayload === 'string') {
-          try {
-            configPayload = JSON.parse(configPayload);
-          } catch(e) {
-            // Not double-serialized
-          }
-        }
-        return configPayload !== undefined ? (configPayload as T) : defaultValue;
+      if (!fallbackError && fallbackData) {
+        data = fallbackData;
       }
     }
+    
+    if (data) {
+      let configPayload = data.value !== undefined ? data.value 
+                      : data.config !== undefined ? data.config 
+                      : data.settings !== undefined ? data.settings 
+                      : data;
+      
+      if (typeof configPayload === 'string') {
+        try {
+          configPayload = JSON.parse(configPayload);
+        } catch(e) {
+          // Not double-serialized
+        }
+      }
+      
+      const parsedValue = configPayload !== undefined ? configPayload : defaultValue;
+      settingCache.set(key, parsedValue);
+      return parsedValue as T;
+    }
+    
+    // Cache the default value if the key does not exist yet to prevent repeated DB misses
+    settingCache.set(key, defaultValue);
     return defaultValue;
   } catch (err) {
     console.warn(`Exception fetching settings from Supabase/Settings for key [${key}]:`, err);
@@ -80,6 +102,9 @@ export async function saveSupabaseSetting(key: string, value: any): Promise<bool
   }
 
   try {
+    // Update/invalidate memory cache first so all consecutive reads see the fresh value
+    settingCache.set(key, value);
+
     // Remedy 3: Formatter guard - serialize object/array, keep string plain
     const normalizedValue = typeof value === 'object' && value !== null
       ? JSON.stringify(value)
@@ -212,31 +237,107 @@ function parseInscripcionesRows(rows: any[]): Inscripcio[] {
   });
 }
 
+const CAMEL_COLUMNS = "id, codiSeguiment, categoria, c1Nom, c1Cognoms, c1Email, c1Telefon, c1Talla, c1EsMenor, c1TutorNom, c1TutorCognoms, c1TutorDni, c1TutorTelefon, c1UniformeTipus, c2Nom, c2Cognoms, c2Email, c2Telefon, c2Talla, c2EsMenor, c2TutorNom, c2TutorCognoms, c2TutorDni, c2TutorTelefon, c2UniformeTipus, respostesCuestionari, seleccionsUniforme, preuCalculat, teDomasBalco, teMocadorsExtra, estatPagament, metodePagament, estatDni, entregaMaterial, estatInscripcio, posicioGlobal, bandera, creadoEn, actualizadoEn";
+
+const SNAKE_COLUMNS = "id, codi_seguiment, categoria, c1_nom, c1_cognoms, c1_email, c1_telefon, c1_talla, c1_es_menor, c1_tutor_nom, c1_tutor_cognoms, c1_tutor_dni, c1_tutor_telefon, c1_uniforme_tipus, c2_nom, c2_cognoms, c2_email, c2_telefon, c2_talla, c2_es_menor, c2_tutor_nom, c2_tutor_cognoms, c2_tutor_dni, c2_tutor_telefon, c2_uniforme_tipus, respostes_cuestionari, seleccions_uniforme, preu_calculat, te_domas_balco, te_mocadors_extra, estat_pagament, metode_pagament, estat_dni, entrega_material, estat_inscripcio, posicio_global, bandera, creado_en, actualizado_en";
+
 /**
- * Downloads all inscriptions directly from the 'inscripciones' table in Supabase.
+ * Downloads lightweight metadata of inscriptions from Supabase (excluding highly heavy Base64 DNI blobs).
  */
 export async function getSupabaseInscripciones(): Promise<Inscripcio[]> {
   if (!supabase) return [];
   try {
-    const { data, error } = await supabase
+    // Attempt 1: Fetch using camelCase column list (excluding heavy DNI files) with safety limit of 2000
+    let { data, error } = await supabase
       .from('inscripciones')
-      .select('*');
+      .select(CAMEL_COLUMNS)
+      .limit(2000);
       
     if (error) {
-      console.warn("Error loading 'inscripciones' table from Supabase, trying fallback table name 'inscripcions':", error.message || error);
-      // Fallback
-      const resFallback = await supabase.from('inscripcions').select('*');
-      if (resFallback.error) {
-        console.error("Both 'inscripciones' and 'inscripcions' tables could not be read:", resFallback.error.message);
-        return [];
+      console.warn("CamelCase columns failed, trying Snake_Case fallback column selection...");
+      // Attempt 2: Fetch using snake_case column list for 'inscripciones' table
+      const resSnake = await supabase
+        .from('inscripciones')
+        .select(SNAKE_COLUMNS)
+        .limit(2000);
+        
+      if (!resSnake.error) {
+        return parseInscripcionesRows(resSnake.data || []);
       }
-      return parseInscripcionesRows(resFallback.data || []);
+      
+      console.warn("Snake_Case check failed, checking fallback table name 'inscripcions' with CamelCase...");
+      // Attempt 3: Try fallback table 'inscripcions' with camelCase columns
+      const resFallbackCamel = await supabase
+        .from('inscripcions')
+        .select(CAMEL_COLUMNS)
+        .limit(2000);
+        
+      if (!resFallbackCamel.error) {
+        return parseInscripcionesRows(resFallbackCamel.data || []);
+      }
+
+      console.warn("Attempting fallback table 'inscripcions' with Snake_Case...");
+      // Attempt 4: Try fallback table 'inscripcions' with snake_case columns
+      const resFallbackSnake = await supabase
+        .from('inscripcions')
+        .select(SNAKE_COLUMNS)
+        .limit(2000);
+        
+      if (!resFallbackSnake.error) {
+        return parseInscripcionesRows(resFallbackSnake.data || []);
+      }
+
+      // Safe Fallback: Select '*' limited to 100 entries only, to protect bandwith and egress
+      console.warn("Detailed column selection failed, falling back to restricted select('*') with a limit of 100 rows:", resFallbackSnake.error?.message);
+      const resStar = await supabase
+        .from('inscripciones')
+        .select('*')
+        .limit(100);
+      if (resStar.error) {
+        const resStarFallback = await supabase
+          .from('inscripcions')
+          .select('*')
+          .limit(100);
+        return parseInscripcionesRows(resStarFallback.data || []);
+      }
+      return parseInscripcionesRows(resStar.data || []);
     }
     
     return parseInscripcionesRows(data || []);
   } catch (err) {
     console.error("Exception fetching inscriptions from Supabase:", err);
     return [];
+  }
+}
+
+/**
+ * Downloads a single inscription by ID with all details (including heavy binary DNI attachments).
+ */
+export async function getSupabaseInscripcionById(id: string): Promise<Inscripcio | null> {
+  if (!supabase) return null;
+  try {
+    const { data, error } = await supabase
+      .from('inscripciones')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+      
+    if (error || !data) {
+      // try fallback table name
+      const resFallback = await supabase
+        .from('inscripcions')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle();
+      if (resFallback.error || !resFallback.data) {
+        return null;
+      }
+      return parseInscripcionesRows([resFallback.data])[0] || null;
+    }
+    return parseInscripcionesRows([data])[0] || null;
+  } catch (err) {
+    console.error("Exception fetching single inscription details by ID:", err);
+    return null;
   }
 }
 
