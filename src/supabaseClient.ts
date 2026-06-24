@@ -170,7 +170,8 @@ function parseJSON(val: any): any {
 }
 
 function parseInscripcionesRows(rows: any[]): Inscripcio[] {
-  return rows.map(r => {
+  if (!rows) return [];
+  return rows.filter(Boolean).map(r => {
     // Fallback if the whole object was saved inside a single JSON field
     if (r.value && typeof r.value === 'object') return r.value;
     if (r.data && typeof r.data === 'object') return r.data;

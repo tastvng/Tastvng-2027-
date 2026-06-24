@@ -64,11 +64,13 @@ export default function AdminFicha({ registration, config, onBack, onSave }: Adm
   const [c2DniUrl, setC2DniUrl] = useState<string>(registration.c2DniUrl || '');
 
   React.useEffect(() => {
+    let active = true;
+    const recordId = registration.id;
     async function loadFullDni() {
       try {
         const { getSupabaseInscripcionById } = await import('../supabaseClient');
-        const full = await getSupabaseInscripcionById(registration.id);
-        if (full) {
+        const full = await getSupabaseInscripcionById(recordId);
+        if (full && active) {
           if (full.c1DniUrl) setC1DniUrl(full.c1DniUrl);
           if (full.c2DniUrl) setC2DniUrl(full.c2DniUrl);
         }
@@ -80,6 +82,9 @@ export default function AdminFicha({ registration, config, onBack, onSave }: Adm
     if (!registration.c1DniUrl || !registration.c2DniUrl || registration.c1DniUrl.length < 50) {
       loadFullDni();
     }
+    return () => {
+      active = false;
+    };
   }, [registration.id]);
 
   // Participant Editable configurations

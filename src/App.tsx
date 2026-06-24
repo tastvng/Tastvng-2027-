@@ -891,7 +891,7 @@ export default function App() {
             )}
 
             {/* 5. Detail Auditor sheet views */}
-            {view === 'admin-ficha' && editId && (
+            {view === 'admin-ficha' && editId && inscripcions.find(i => i.id === editId) && (
               <AdminFicha 
                 registration={inscripcions.find(i => i.id === editId)!}
                 config={config}

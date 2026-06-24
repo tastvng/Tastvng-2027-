@@ -101,6 +101,7 @@ export default function AdminScanner({
   // Lazy-load complete details including heavy DNI blobs when a record is scanned/selected inside AdminScanner
   useEffect(() => {
     if (!tempRecord || !tempRecord.id) return;
+    const recordId = tempRecord.id;
     const hasMissingDni = (!tempRecord.c1DniUrl || tempRecord.c1DniUrl.length < 50 || !tempRecord.c2DniUrl || tempRecord.c2DniUrl.length < 50);
     // Only check if we are connected to Supabase
     const isSupabaseConfigured = localStorage.getItem('tast_supabase_url') && localStorage.getItem('tast_supabase_anon_key');
@@ -109,10 +110,10 @@ export default function AdminScanner({
       async function loadFull() {
         try {
           const { getSupabaseInscripcionById } = await import('../supabaseClient');
-          const full = await getSupabaseInscripcionById(tempRecord!.id);
+          const full = await getSupabaseInscripcionById(recordId);
           if (full && active) {
             setTempRecord(prev => {
-              if (!prev || prev.id !== full.id) return prev;
+              if (!prev || prev.id !== recordId) return prev;
               return {
                 ...prev,
                 c1DniUrl: full.c1DniUrl || prev.c1DniUrl,
