@@ -27,6 +27,7 @@ if (isSupabaseConfigured) {
 
 // In-memory cache to prevent duplicate settings queries during application lifecycle
 const settingCache = new Map<string, any>();
+let isSettingCacheInitialized = false;
 
 /**
  * Generic getter function for any setting in Supabase.
@@ -42,45 +43,50 @@ export async function getSupabaseSetting<T>(key: string, defaultValue: T): Promi
   if (settingCache.has(key)) {
     return settingCache.get(key) as T;
   }
+
+  if (isSettingCacheInitialized) {
+    // Cache has been initialized and the key was not found. Cache and return default.
+    settingCache.set(key, defaultValue);
+    return defaultValue;
+  }
   
   try {
-    // Targeted query for key/id row matching - prevents fetching of unrelated setting blobs
-    let { data, error } = await supabase
+    // Safe multi-column schema-agnostic fetch: Query all rows once, then index by either key or id in memory.
+    // This avoids throwing a 400 error in Supabase if we queried .eq('key') but the column is 'id', or vice versa.
+    const { data, error } = await supabase
       .from('settings')
-      .select('*')
-      .eq('key', key)
-      .maybeSingle();
+      .select('*');
       
-    if (error || !data) {
-      // Fallback query matching on 'id' instead of 'key'
-      const { data: fallbackData, error: fallbackError } = await supabase
-        .from('settings')
-        .select('*')
-        .eq('id', key)
-        .maybeSingle();
-        
-      if (!fallbackError && fallbackData) {
-        data = fallbackData;
-      }
+    if (error) {
+      console.warn(`Warning reading settings table from Supabase:`, error.message || error);
+      return defaultValue;
     }
     
-    if (data) {
-      let configPayload = data.value !== undefined ? data.value 
-                      : data.config !== undefined ? data.config 
-                      : data.settings !== undefined ? data.settings 
-                      : data;
-      
-      if (typeof configPayload === 'string') {
-        try {
-          configPayload = JSON.parse(configPayload);
-        } catch(e) {
-          // Not double-serialized
+    if (data && data.length > 0) {
+      for (const row of data) {
+        const rowKey = row.key !== undefined ? row.key : row.id;
+        if (rowKey !== undefined && rowKey !== null) {
+          let configPayload = row.value !== undefined ? row.value 
+                          : row.config !== undefined ? row.config 
+                          : row.settings !== undefined ? row.settings 
+                          : row;
+          
+          if (typeof configPayload === 'string') {
+            try {
+              configPayload = JSON.parse(configPayload);
+            } catch(e) {
+              // Not double-serialized
+            }
+          }
+          settingCache.set(String(rowKey), configPayload);
         }
       }
-      
-      const parsedValue = configPayload !== undefined ? configPayload : defaultValue;
-      settingCache.set(key, parsedValue);
-      return parsedValue as T;
+    }
+
+    isSettingCacheInitialized = true;
+
+    if (settingCache.has(key)) {
+      return settingCache.get(key) as T;
     }
     
     // Cache the default value if the key does not exist yet to prevent repeated DB misses
@@ -110,38 +116,46 @@ export async function saveSupabaseSetting(key: string, value: any): Promise<bool
       ? JSON.stringify(value)
       : value;
 
-    // Main Operation: Direct upsert by key with conflict resolution on key
+    // Try multi-column robust upsert (supporting both table structures)
     const { error: upsertError } = await supabase
       .from('settings')
-      .upsert({ key: key, value: normalizedValue }, { onConflict: 'key' });
+      .upsert({ key: key, id: key, value: normalizedValue });
 
     if (!upsertError) {
       return true;
     }
 
-    console.warn(`Direct upsert on Conflict 'key' failed, executing defensive select/update/insert rollback flow:`, upsertError.message);
+    console.warn(`Direct multi-column upsert failed, executing defensive select/update/insert fallback flow:`, upsertError.message);
 
-    // Defensive fallback: Check existence and perform separate UPDATE/INSERT query
-    const { data: existingRow, error: selectError } = await supabase
+    // Update fallback by 'key'
+    const { error: updateKeyError } = await supabase
       .from('settings')
-      .select('id')
-      .eq('key', key)
-      .maybeSingle();
+      .update({ value: normalizedValue })
+      .eq('key', key);
 
-    if (!selectError && existingRow) {
-      // Record exists, do a targeted UPDATE
-      const { error: updateError } = await supabase
-        .from('settings')
-        .update({ value: normalizedValue })
-        .eq('key', key);
-      return !updateError;
-    } else {
-      // Record does not exist, do a targeted INSERT
-      const { error: insertError } = await supabase
-        .from('settings')
-        .insert({ key: key, value: normalizedValue });
-      return !insertError;
-    }
+    if (!updateKeyError) return true;
+
+    // Update fallback by 'id'
+    const { error: updateIdError } = await supabase
+      .from('settings')
+      .update({ value: normalizedValue })
+      .eq('id', key);
+
+    if (!updateIdError) return true;
+
+    // Insert fallback by 'key'
+    const { error: insertKeyError } = await supabase
+      .from('settings')
+      .insert({ key: key, value: normalizedValue });
+
+    if (!insertKeyError) return true;
+
+    // Insert fallback by 'id'
+    const { error: insertIdError } = await supabase
+      .from('settings')
+      .insert({ id: key, value: normalizedValue });
+
+    return !insertIdError;
   } catch (err) {
     console.error(`Exception saving setting to Supabase for key [${key}]:`, err);
     return false;
