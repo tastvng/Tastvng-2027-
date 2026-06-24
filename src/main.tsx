@@ -4,6 +4,14 @@ import App from './App.tsx';
 import { LanguageProvider } from './LanguageContext';
 import './index.css';
 
+// Capture and expose real error traces that might otherwise trigger generic "Script error." in iframe environments
+window.onerror = (msg, src, line, col, err) => {
+  console.error('CAPTURED ERROR:', msg, src, line, col, err);
+};
+window.onunhandledrejection = (e) => {
+  console.error('UNHANDLED PROMISE:', e ? e.reason : 'Unknown reason');
+};
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <LanguageProvider>
@@ -11,3 +19,4 @@ createRoot(document.getElementById('root')!).render(
     </LanguageProvider>
   </StrictMode>,
 );
+
