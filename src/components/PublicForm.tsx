@@ -706,7 +706,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8 pb-4 border-b border-zinc-200">
         <div>
           <span className="text-[10px] bg-fuchsia-100 text-fuchsia-800 font-bold px-2.5 py-1 rounded-full uppercase tracking-wider font-mono">
-            {language === 'ca' ? 'Formulari de preinscripció 2026' : 'Formulario de preinscripción 2026'}
+            {language === 'ca' ? 'Formulari de preinscripció 2027' : 'Formulario de preinscripción 2027'}
           </span>
           <h1 id="public-form-title" className="font-sans font-bold text-3xl md:text-4xl text-zinc-900 tracking-tight mt-1.5">
             {t('form_title')}
@@ -740,8 +740,8 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
             </h2>
             <p className="text-zinc-500 text-sm max-w-md mx-auto leading-relaxed">
               {language === 'ca'
-                ? "El període de preinscripció online per a les Comparses de El Tast 2026 ha finalitzat oficialment. Agraïm moltíssim el vostre interès."
-                : "El periodo de preinscripción online para las Comparsas de El Tast 2026 ha finalizado oficialmente. Agradecemos muchísimo vuestro interés."}
+                ? "El període de preinscripció online per a les Comparses de El Tast 2027 ha finalitzat oficialment. Agraïm moltíssim el vostre interès."
+                : "El periodo de preinscripción online para las Comparsas de El Tast 2027 ha finalizado oficialmente. Agradecemos muchísimo vuestro interés."}
             </p>
           </div>
 
