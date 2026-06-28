@@ -1279,13 +1279,17 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                     onBlur={async (e) => {
                       if (!autoTranslate) return;
                       const val = e.target.value;
-                      const { syncDetectAndTranslate } = await import('../translateService');
-                      syncDetectAndTranslate(
-                        val,
-                        (translated) => setTextLegalAutoritzacioMenors(translated),
-                        (translated) => setTextLegalAutoritzacioMenorsES(translated),
-                        (loading) => setTranslatingFields(prev => ({ ...prev, minorLegal: loading }))
-                      );
+                      try {
+                        const { syncDetectAndTranslate } = await import('../translateService');
+                        await syncDetectAndTranslate(
+                          val,
+                          (translated) => setTextLegalAutoritzacioMenors(translated),
+                          (translated) => setTextLegalAutoritzacioMenorsES(translated),
+                          (loading) => setTranslatingFields(prev => ({ ...prev, minorLegal: loading }))
+                        );
+                      } catch (err) {
+                        console.error("Error in onBlur translation:", err);
+                      }
                     }}
                     rows={4}
                     className="w-full bg-zinc-50 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-4 py-2 text-xs focus:outline-none transition-all font-sans leading-relaxed shadow-inner"
