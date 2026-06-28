@@ -2540,7 +2540,13 @@ export default function AdminDashboard({
                       } else {
                         alert(language === 'ca' ? "No s'ha pogut forçar la sincronia." : "No se pudo forzar la sincronización.");
                       }
+                    }).catch(err => {
+                      console.error("Error running forced syncToGoogleSheet:", err);
+                      alert(language === 'ca' ? "S'ha produït un error durant la sincronia." : "Se produjo un error durante la sincronización.");
                     });
+                  }).catch(err => {
+                    console.error("Error dynamic importing googleSync for manual button:", err);
+                    alert(language === 'ca' ? "No s'ha pogut carregar el mòdul de sincronització." : "No se pudo cargar el módulo de sincronización.");
                   });
                 } else {
                   alert(language === 'ca' ? "Activeu primer la Sincronització de Full de Google al menú Preus i Camps." : "Active primero la Sincronización de Hoja de Google en el menú Precios y Campos.");

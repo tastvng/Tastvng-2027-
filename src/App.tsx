@@ -308,6 +308,9 @@ export default function App() {
       // Check current session
       supabase.auth.getSession().then(({ data: { session } }) => {
         setIsAdminLoggedIn(!!session);
+      }).catch(err => {
+        console.warn("Failed to get Supabase session:", err);
+        setIsAdminLoggedIn(false);
       });
 
       // Listen to auth changes
@@ -385,7 +388,10 @@ export default function App() {
   const syncWithGoogle = (latestInscripcions: Inscripcio[], activeConfig: SistemaConfig = config) => {
     if (activeConfig.googleSheetSyncActive && activeConfig.googleSheetSyncUrl) {
       import('./googleSync').then(({ syncToGoogleSheet }) => {
-        syncToGoogleSheet(latestInscripcions, activeConfig.googleSheetSyncUrl, activeConfig.googleSheetSyncActive, activeConfig);
+        syncToGoogleSheet(latestInscripcions, activeConfig.googleSheetSyncUrl, activeConfig.googleSheetSyncActive, activeConfig)
+          .catch(err => console.error("Error inside syncToGoogleSheet call:", err));
+      }).catch(err => {
+        console.error("Error dynamic importing googleSync:", err);
       });
     }
   };
