@@ -25,6 +25,7 @@ import {
   Shirt
 } from 'lucide-react';
 import { SistemaConfig, PreguntaDinamica, NoticiaXarxes, TarifaConcept, LiniaUniforme } from '../types';
+import { cargarPreguntes, guardarPreguntes, eliminarPregunta } from '../api/questionnaireApi';
 
 interface AdminConfigProps {
   config: SistemaConfig;
@@ -372,6 +373,20 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
     };
   }, []);
 
+  useEffect(() => {
+    async function loadQuestionsFromSupabase() {
+      try {
+        const dbPreguntes = await cargarPreguntes();
+        if (dbPreguntes && dbPreguntes.length > 0) {
+          setPreguntes(dbPreguntes);
+        }
+      } catch (err) {
+        console.warn("Could not fetch questions from Supabase (this is normal if table 'preguntes' doesn't exist yet):", err);
+      }
+    }
+    loadQuestionsFromSupabase();
+  }, []);
+
   const handleBlurTranslate = async (
     textToTranslate: string,
     setTargetValue: (val: string) => void,
@@ -458,8 +473,32 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
     setNewOpcionsCsv('');
   };
 
-  const handleRemovePregunta = (id: string) => {
+  const handleRemovePregunta = async (id: string) => {
+    const confirmMessage = language === 'ca'
+      ? 'Esteu segurs que voleu eliminar aquesta pregunta?'
+      : '¿Está seguro de que desea eliminar esta pregunta?';
+
+    if (!window.confirm(confirmMessage)) return;
+
+    // Guardar el estado original para posible rollback
+    const originalPreguntes = [...preguntes];
+    // Actualización optimista de la interfaz
     setPreguntes(preguntes.filter(p => p.id !== id));
+
+    try {
+      const success = await eliminarPregunta(id);
+      if (!success) {
+        throw new Error('Database deletion failed or returned false');
+      }
+    } catch (err) {
+      console.error("Failed to delete question from Supabase, performing rollback:", err);
+      setPreguntes(originalPreguntes);
+
+      const errorMessage = language === 'ca'
+        ? "No s'ha pogut esborrar la pregunta de la base de dades. S'ha restablert."
+        : "No se pudo borrar la pregunta de la base de datos. Se ha restablecido.";
+      alert(errorMessage);
+    }
   };
 
   const togglePreguntaActiva = (id: string) => {
@@ -527,7 +566,7 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
     setLiniisUniforme(liniisUniforme.map(l => l.id === id ? { ...l, ...updates } : l));
   };
 
-  const handleGuardarConfig = () => {
+  const handleGuardarConfig = async () => {
     // Find rates in the array or fall back to single inputs
     const adultsVal = tarifesDinamiques.find(t => t.id === 'adults')?.valor ?? Number(preuAdult);
     const juvenilsVal = tarifesDinamiques.find(t => t.id === 'juvenils')?.valor ?? Number(preuJuvenil);
@@ -561,6 +600,13 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
       googleSheetSyncActive: googleSheetSyncActive,
       cuestionariActiu: cuestionariActiu
     };
+
+    // Persist questions inside the dedicated 'preguntes' table in Supabase
+    try {
+      await guardarPreguntes(preguntes);
+    } catch (err) {
+      console.error("Error saving questions to Supabase table:", err);
+    }
 
     onSave(updated);
     if (onSaveNoticies) {
