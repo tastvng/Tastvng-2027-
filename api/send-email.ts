@@ -1,10 +1,4 @@
 import { Resend } from "resend";
-import dotenv from "dotenv";
-import path from "path";
-
-// Load environment variables for local testing
-dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
-dotenv.config({ path: path.resolve(process.cwd(), ".env") });
 
 export default async function handler(req: any, res: any) {
   // CORS configuration
