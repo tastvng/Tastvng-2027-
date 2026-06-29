@@ -91,6 +91,7 @@ export default function AdminDashboard({
   const [smtpPort, setSmtpPort] = useState(() => localStorage.getItem('tast_smtp_port') || '587');
   const [smtpUsuari, setSmtpUsuari] = useState(() => localStorage.getItem('tast_smtp_usuari') || 'tastvng@gmail.com');
   const [smtpContrasenya, setSmtpContrasenya] = useState(() => localStorage.getItem('tast_smtp_contrasenya') || '');
+  const [smtpFrom, setSmtpFrom] = useState(() => localStorage.getItem('tast_smtp_from') || 'tastvng@gmail.com');
   const [showSmtpPassword, setShowSmtpPassword] = useState(false);
   const [smtpTestDestinatari, setSmtpTestDestinatari] = useState('Tastvng@gmail.com');
   const [smtpTestStatus, setSmtpTestStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
@@ -181,11 +182,13 @@ export default function AdminDashboard({
         const port = await getSupabaseSetting('tast_smtp_port', '');
         const user = await getSupabaseSetting('tast_smtp_usuari', '');
         const pass = await getSupabaseSetting('tast_smtp_contrasenya', '');
+        const fromEmail = await getSupabaseSetting('tast_smtp_from', '');
 
         if (host) setSmtpHost(host);
         if (port) setSmtpPort(port);
         if (user) setSmtpUsuari(user);
         if (pass) setSmtpContrasenya(pass);
+        if (fromEmail) setSmtpFrom(fromEmail);
 
         const instConn = await getSupabaseSetting('tast_sc_instagram_connected', '');
         const instHnd = await getSupabaseSetting('tast_sc_instagram_handle', '');
@@ -484,6 +487,7 @@ export default function AdminDashboard({
     localStorage.setItem('tast_smtp_port', smtpPort);
     localStorage.setItem('tast_smtp_usuari', smtpUsuari);
     localStorage.setItem('tast_smtp_contrasenya', smtpContrasenya);
+    localStorage.setItem('tast_smtp_from', smtpFrom);
 
     try {
       const { isSupabaseConfigured, saveSupabaseSetting } = await import('../supabaseClient');
@@ -492,14 +496,15 @@ export default function AdminDashboard({
         await saveSupabaseSetting('tast_smtp_port', smtpPort);
         await saveSupabaseSetting('tast_smtp_usuari', smtpUsuari);
         await saveSupabaseSetting('tast_smtp_contrasenya', smtpContrasenya);
+        await saveSupabaseSetting('tast_smtp_from', smtpFrom);
       }
     } catch (err) {}
 
     setSmtpSaveSuccess(true);
     if (onAddLog) {
       onAddLog(language === 'ca'
-        ? `⚙️ Servidor SMTP configurat: ${smtpUsuari} (${smtpHost}:${smtpPort})`
-        : `⚙️ Servidor SMTP configurado: ${smtpUsuari} (${smtpHost}:${smtpPort})`
+        ? `⚙️ Servidor SMTP configurat: ${smtpUsuari} (${smtpHost}:${smtpPort}) - Remitent: ${smtpFrom}`
+        : `⚙️ Servidor SMTP configurado: ${smtpUsuari} (${smtpHost}:${smtpPort}) - Remitente: ${smtpFrom}`
       );
     }
     setTimeout(() => setSmtpSaveSuccess(false), 4000);
@@ -2129,17 +2134,110 @@ export default function AdminDashboard({
               </p>
               <p className="mt-0.5 text-[11px] text-zinc-500">
                 {language === 'ca'
-                  ? "Com a mesura de seguretat avançada, les credencials del servidor SMTP (User, Password, Host, Port) s'han traslladat des de la base de dades directa cap a variables d'entorn d'execució xifrada del servidor. El frontend i el navegador mai tenen accés a aquestes claus."
-                  : "Como medida de seguridad avanzada, las credenciales del servidor SMTP (User, Password, Host, Port) se han trasladado desde la base de datos directa hacia las variables de entorno de ejecución cifrada en el servidor. El frontend y los navegadores nunca tienen acceso a estas claves."}
+                  ? "Configura les credencials del servidor SMTP (com Gmail) per enviar correus automàtics i PDF/QR de confirmació als teus usuaris. Es guarden de manera xifrada."
+                  : "Configura las credenciales del servidor SMTP (como Gmail) para enviar correos automáticos y PDF/QR de confirmación a tus usuarios. Se guardan de forma cifrada."}
               </p>
-              <div className="pt-2 flex flex-wrap gap-2 text-[10px] font-mono font-bold text-fuchsia-700">
-                <span className="bg-fuchsia-100 px-2 py-1 rounded">SMTP_HOST</span>
-                <span className="bg-fuchsia-100 px-2 py-1 rounded">SMTP_PORT</span>
-                <span className="bg-fuchsia-100 px-2 py-1 rounded">SMTP_USER</span>
-                <span className="bg-fuchsia-100 px-2 py-1 rounded">SMTP_PASSWORD</span>
-              </div>
             </div>
           </div>
+
+          {/* Interactive SMTP Form */}
+          <form onSubmit={handleSaveSmtp} className="border border-zinc-200 rounded-3xl p-6 bg-zinc-50 space-y-4">
+            <h4 className="font-sans font-black text-xs text-zinc-900 uppercase tracking-widest flex items-center gap-1.5 text-zinc-700">
+              <Mail size={14} className="text-fuchsia-500" />
+              {language === 'ca' ? "CONFIGURACIÓ DEL SERVIDOR SMTP" : "CONFIGURACIÓN DEL SERVIDOR SMTP"}
+            </h4>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-bold text-zinc-700 mb-1">
+                  {language === 'ca' ? "Host SMTP" : "Host SMTP"}
+                </label>
+                <input
+                  type="text"
+                  value={smtpHost}
+                  onChange={(e) => setSmtpHost(e.target.value)}
+                  placeholder="smtp.gmail.com"
+                  className="w-full bg-white border border-zinc-200 focus:border-fuchsia-500 rounded-2xl px-4 py-2.5 text-xs focus:outline-none transition-all font-sans text-zinc-800"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-zinc-700 mb-1">
+                  {language === 'ca' ? "Port SMTP" : "Puerto SMTP"}
+                </label>
+                <input
+                  type="text"
+                  value={smtpPort}
+                  onChange={(e) => setSmtpPort(e.target.value)}
+                  placeholder="587"
+                  className="w-full bg-white border border-zinc-200 focus:border-fuchsia-500 rounded-2xl px-4 py-2.5 text-xs focus:outline-none transition-all font-sans text-zinc-800"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-zinc-700 mb-1">
+                  {language === 'ca' ? "Usuari SMTP (Email)" : "Usuario SMTP (Email)"}
+                </label>
+                <input
+                  type="email"
+                  value={smtpUsuari}
+                  onChange={(e) => setSmtpUsuari(e.target.value)}
+                  placeholder="tastvng@gmail.com"
+                  className="w-full bg-white border border-zinc-200 focus:border-fuchsia-500 rounded-2xl px-4 py-2.5 text-xs focus:outline-none transition-all font-sans text-zinc-800"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-zinc-700 mb-1">
+                  {language === 'ca' ? "Correu Remitent (From Email)" : "Correo Remitente (From Email)"}
+                </label>
+                <input
+                  type="email"
+                  value={smtpFrom}
+                  onChange={(e) => setSmtpFrom(e.target.value)}
+                  placeholder="tastvng@gmail.com"
+                  className="w-full bg-white border border-zinc-200 focus:border-fuchsia-500 rounded-2xl px-4 py-2.5 text-xs focus:outline-none transition-all font-sans text-zinc-800"
+                  required
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="block text-xs font-bold text-zinc-700 mb-1">
+                  {language === 'ca' ? "Contrasenya d'Aplicació (Password)" : "Contraseña de Aplicación (Password)"}
+                </label>
+                <div className="relative">
+                  <input
+                    type={showSmtpPassword ? "text" : "password"}
+                    value={smtpContrasenya}
+                    onChange={(e) => setSmtpContrasenya(e.target.value)}
+                    placeholder="••••••••••••••••"
+                    className="w-full bg-white border border-zinc-200 focus:border-fuchsia-500 rounded-2xl pl-4 pr-10 py-2.5 text-xs focus:outline-none transition-all font-sans text-zinc-800"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowSmtpPassword(!showSmtpPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600 focus:outline-none"
+                  >
+                    {showSmtpPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-2">
+              <button
+                type="submit"
+                className="bg-fuchsia-600 hover:bg-fuchsia-500 font-bold text-xs px-5 py-3 rounded-2xl text-white transition flex items-center justify-center gap-1.5 shadow cursor-pointer"
+              >
+                <CheckCircle size={14} />
+                {language === 'ca' ? "Desar Configuració SMTP" : "Guardar Configuración SMTP"}
+              </button>
+            </div>
+          </form>
 
           {smtpSaveSuccess && (
             <div className="bg-emerald-50 border border-emerald-250 text-emerald-800 text-xs p-3.5 rounded-2xl flex items-center gap-2">

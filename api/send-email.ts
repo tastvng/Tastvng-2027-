@@ -1,14 +1,7 @@
-import { Resend } from "resend";
+import { createClient } from "@supabase/supabase-js";
+import nodemailer from "nodemailer";
 
 export default async function handler(req: any, res: any) {
-  // DEBUG: Verificar variables de entorno disponibles
-  console.log('=== DEBUG: Verificando RESEND_API_KEY ===');
-  console.log('RESEND_API_KEY existe:', !!process.env.RESEND_API_KEY);
-  console.log('RESEND_API_KEY valor (primeros 10 chars):', process.env.RESEND_API_KEY?.substring(0, 10) + '...');
-  console.log('Todas las variables ENV (keys):', Object.keys(process.env).filter(k => k.includes('RESEND') || k.includes('API')));
-  console.log('NODE_ENV:', process.env.NODE_ENV);
-  console.log('=== FIN DEBUG ===');
-
   // CORS configuration
   res.setHeader("Access-Control-Allow-Credentials", "true");
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -28,14 +21,57 @@ export default async function handler(req: any, res: any) {
 
   try {
     const body = req.body || {};
-    const apiKey = process.env.RESEND_API_KEY;
 
-    if (!apiKey) {
-      console.error("[Vercel Serverless Error] RESEND_API_KEY environment variable is not defined.");
-      return res.status(500).json({ error: "La clau de l'API de Resend (RESEND_API_KEY) no està configurada al servidor." });
+    // Initialize Supabase client
+    const supabaseUrl = process.env.VITE_SUPABASE_URL || '';
+    const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || '';
+    const supabase = (supabaseUrl && supabaseAnonKey) ? createClient(supabaseUrl, supabaseAnonKey) : null;
+
+    // Helper to read setting from Supabase with fallback to process.env or defaults
+    const getSupabaseSetting = async (key: string, defaultValue: string): Promise<string> => {
+      if (!supabase) return defaultValue;
+      try {
+        const { data, error } = await supabase
+          .from('settings')
+          .select('*');
+        if (error || !data) return defaultValue;
+
+        const row = data.find((r: any) => (r.key === key || r.id === key));
+        if (row) {
+          let val = row.value !== undefined ? row.value : row.config !== undefined ? row.config : row.settings !== undefined ? row.settings : row;
+          if (typeof val === 'string') {
+            try {
+              val = JSON.parse(val);
+            } catch (e) {}
+          }
+          return String(val);
+        }
+      } catch (err) {
+        console.error(`Error reading setting ${key} from Supabase:`, err);
+      }
+      return defaultValue;
+    };
+
+    // Load SMTP credentials from Supabase settings (with fallback to env/defaults)
+    const smtpHost = await getSupabaseSetting('tast_smtp_host', process.env.SMTP_HOST || 'smtp.gmail.com');
+    const smtpPort = await getSupabaseSetting('tast_smtp_port', process.env.SMTP_PORT || '587');
+    const smtpUser = await getSupabaseSetting('tast_smtp_usuari', process.env.SMTP_USER || 'tastvng@gmail.com');
+    const smtpPassword = await getSupabaseSetting('tast_smtp_contrasenya', process.env.SMTP_PASSWORD || '');
+    const smtpFrom = await getSupabaseSetting('tast_smtp_from', process.env.SMTP_USER || 'tastvng@gmail.com');
+
+    // DEBUG: Verify SMTP variables
+    console.log('=== DEBUG: Nodemailer SMTP Config ===');
+    console.log('Host:', smtpHost);
+    console.log('Port:', smtpPort);
+    console.log('User:', smtpUser);
+    console.log('From:', smtpFrom);
+    console.log('Password set:', !!smtpPassword);
+    console.log('=== FIN DEBUG ===');
+
+    if (!smtpPassword) {
+      console.error("[Nodemailer Error] SMTP password is empty or not defined.");
+      return res.status(500).json({ error: "La contrasenya de l'SMTP no està configurada al servidor." });
     }
-
-    const resend = new Resend(apiKey);
 
     // Extract values based on payload format
     let to = "";
@@ -69,14 +105,14 @@ export default async function handler(req: any, res: any) {
     }
 
     if (!to || !html) {
-      console.error("[Vercel Serverless Error] Missing required fields (to, html).");
+      console.error("[Nodemailer Error] Missing required fields (to, html).");
       return res.status(400).json({ error: "Falten camps obligatoris (destinatari o contingut HTML)" });
     }
 
-    // Process attachments for Resend
-    let resendAttachments: any[] = [];
+    // Process attachments for Nodemailer
+    let mailAttachments: any[] = [];
     if (attachments && Array.isArray(attachments)) {
-      resendAttachments = attachments.map((att: any) => {
+      mailAttachments = attachments.map((att: any) => {
         if (att.content && typeof att.content === 'string' && att.content.startsWith('data:')) {
           const matches = att.content.match(/^data:(.+);base64,(.+)$/);
           if (matches) {
@@ -84,39 +120,54 @@ export default async function handler(req: any, res: any) {
             return {
               filename: att.filename || "image.png",
               content: Buffer.from(base64Data, 'base64'),
-              content_id: att.cid || undefined
+              cid: att.cid || undefined
             };
           }
         }
-        return att;
+        return {
+          filename: att.filename,
+          content: att.content,
+          path: att.path,
+          cid: att.cid || att.content_id || undefined
+        };
       });
     }
 
-    // Send email using Resend
-    const response = await resend.emails.send({
-      from: 'noreply@tastvng.cat',
-      to: [to],
-      subject,
-      html,
-      attachments: resendAttachments.length > 0 ? resendAttachments : undefined,
+    // Create Nodemailer Transporter
+    const transporter = nodemailer.createTransport({
+      host: smtpHost,
+      port: parseInt(smtpPort, 10),
+      secure: smtpPort === '465', // true for 465, false for 587 or other ports
+      auth: {
+        user: smtpUser,
+        pass: smtpPassword,
+      },
+      tls: {
+        rejectUnauthorized: false
+      }
     });
 
-    if (response.error) {
-      console.error("[Vercel Serverless Error] Resend API error:", response.error);
-      return res.status(400).json({ error: response.error.message });
-    }
+    const mailOptions = {
+      from: `"${process.env.SMTP_SENDER_NAME || 'Inscripcions El Tast'}" <${smtpFrom}>`,
+      to,
+      subject,
+      html,
+      attachments: mailAttachments.length > 0 ? mailAttachments : undefined,
+    };
 
-    console.log("Email sent successfully through Resend:", response.data?.id);
+    // Send email using Nodemailer
+    const info = await transporter.sendMail(mailOptions);
+    console.log("Email sent successfully through Nodemailer SMTP:", info.messageId);
 
     return res.status(200).json({
       success: true,
-      id: response.data?.id,
-      messageId: response.data?.id
+      id: info.messageId,
+      messageId: info.messageId
     });
   } catch (error: any) {
-    console.error("Error sending email via Resend:", error);
+    console.error("Error sending email via Nodemailer SMTP:", error);
     return res.status(500).json({
-      error: error.message || "Error al enviar el correo a través de Resend."
+      error: error.message || "Error al enviar el correo a través de SMTP."
     });
   }
 }
