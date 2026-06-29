@@ -1,6 +1,14 @@
 import { Resend } from "resend";
 
 export async function POST(request: Request) {
+  // DEBUG: Verificar variables de entorno disponibles
+  console.log('=== DEBUG: Verificando RESEND_API_KEY ===');
+  console.log('RESEND_API_KEY existe:', !!process.env.RESEND_API_KEY);
+  console.log('RESEND_API_KEY valor (primeros 10 chars):', process.env.RESEND_API_KEY?.substring(0, 10) + '...');
+  console.log('Todas las variables ENV (keys):', Object.keys(process.env).filter(k => k.includes('RESEND') || k.includes('API')));
+  console.log('NODE_ENV:', process.env.NODE_ENV);
+  console.log('=== FIN DEBUG ===');
+
   try {
     const body = await request.json();
     const apiKey = process.env.RESEND_API_KEY;
