@@ -252,7 +252,7 @@ function parseInscripcionesRows(rows: any[]): Inscripcio[] {
   });
 }
 
-const CAMEL_COLUMNS = "id, codiSeguiment, categoria, c1Nom, c1Cognoms, c1Email, c1Telefon, c1Talla, c1EsMenor, c1TutorNom, c1TutorCognoms, c1TutorDni, c1TutorTelefon, c1UniformeTipus, c2Nom, c2Cognoms, c2Email, c2Telefon, c2Talla, c2EsMenor, c2TutorNom, c2TutorCognoms, c2TutorDni, c2TutorTelefon, c2UniformeTipus, respostesCuestionari, seleccionsUniforme, preuCalculat, teDomasBalco, teMocadorsExtra, estatPagament, metodePagament, estatDni, entregaMaterial, estatInscripcio, posicioGlobal, bandera, creadoEn, actualizadoEn";
+const CAMEL_COLUMNS = "id, codiSeguiment, categoria, c1Nom, c1Cognoms, c1Email, c1Telefon, c1Talla, c1EsMenor, c1TutorNom, c1TutorCognoms, c1TutorDni, c1TutorTelefon, c1UniformeTipus, c2Nom, c2Cognoms, c2Email, c2Telefon, c2Talla, c2EsMenor, c2TutorNom, c2TutorCognoms, c2TutorDni, c2TutorTelefon, c2UniformeTipus, respostesCuestionari, seleccionsUniforme, preuCalculat, teDomasBalco, teMocadorsExtra, estatPagament, metodePagament, estatDni, entregaMaterial, estat_inscripcio, posicio_global, bandera, creadoEn, actualizadoEn";
 
 const SNAKE_COLUMNS = "id, codi_seguiment, categoria, c1_nom, c1_cognoms, c1_email, c1_telefon, c1_talla, c1_es_menor, c1_tutor_nom, c1_tutor_cognoms, c1_tutor_dni, c1_tutor_telefon, c1_uniforme_tipus, c2_nom, c2_cognoms, c2_email, c2_telefon, c2_talla, c2_es_menor, c2_tutor_nom, c2_tutor_cognoms, c2_tutor_dni, c2_tutor_telefon, c2_uniforme_tipus, respostes_cuestionari, seleccions_uniforme, preu_calculat, te_domas_balco, te_mocadors_extra, estat_pagament, metode_pagament, estat_dni, entrega_material, estat_inscripcio, posicio_global, bandera, creado_en, actualizado_en";
 
@@ -263,62 +263,76 @@ export async function getSupabaseInscripciones(): Promise<Inscripcio[]> {
   if (!supabase) return [];
   try {
     // Attempt 1: Fetch using camelCase column list (excluding heavy DNI files) with safety limit of 2000
-    let { data, error } = await supabase
+    const { data, error } = await supabase
       .from('inscripciones')
       .select(CAMEL_COLUMNS)
       .limit(2000);
       
-    if (error) {
-      console.warn("CamelCase columns failed, trying Snake_Case fallback column selection...");
-      // Attempt 2: Fetch using snake_case column list for 'inscripciones' table
-      const resSnake = await supabase
-        .from('inscripciones')
-        .select(SNAKE_COLUMNS)
-        .limit(2000);
-        
-      if (!resSnake.error) {
-        return parseInscripcionesRows(resSnake.data || []);
-      }
-      
-      console.warn("Snake_Case check failed, checking fallback table name 'inscripcions' with CamelCase...");
-      // Attempt 3: Try fallback table 'inscripcions' with camelCase columns
-      const resFallbackCamel = await supabase
-        .from('inscripcions')
-        .select(CAMEL_COLUMNS)
-        .limit(2000);
-        
-      if (!resFallbackCamel.error) {
-        return parseInscripcionesRows(resFallbackCamel.data || []);
-      }
-
-      console.warn("Attempting fallback table 'inscripcions' with Snake_Case...");
-      // Attempt 4: Try fallback table 'inscripcions' with snake_case columns
-      const resFallbackSnake = await supabase
-        .from('inscripcions')
-        .select(SNAKE_COLUMNS)
-        .limit(2000);
-        
-      if (!resFallbackSnake.error) {
-        return parseInscripcionesRows(resFallbackSnake.data || []);
-      }
-
-      // Safe Fallback: Select '*' limited to 100 entries only, to protect bandwith and egress
-      console.warn("Detailed column selection failed, falling back to restricted select('*') with a limit of 100 rows:", resFallbackSnake.error?.message);
-      const resStar = await supabase
-        .from('inscripciones')
-        .select('*')
-        .limit(100);
-      if (resStar.error) {
-        const resStarFallback = await supabase
-          .from('inscripcions')
-          .select('*')
-          .limit(100);
-        return parseInscripcionesRows(resStarFallback.data || []);
-      }
-      return parseInscripcionesRows(resStar.data || []);
+    if (!error && data) {
+      return parseInscripcionesRows(data);
     }
     
-    return parseInscripcionesRows(data || []);
+    // Attempt 2: Fetch using snake_case column list for 'inscripciones' table silently
+    const resSnake = await supabase
+      .from('inscripciones')
+      .select(SNAKE_COLUMNS)
+      .limit(2000);
+      
+    if (!resSnake.error && resSnake.data) {
+      return parseInscripcionesRows(resSnake.data);
+    }
+    
+    // Attempt 3: Try fallback table 'inscripcions' with camelCase columns silently
+    const resFallbackCamel = await supabase
+      .from('inscripcions')
+      .select(CAMEL_COLUMNS)
+      .limit(2000);
+      
+    if (!resFallbackCamel.error && resFallbackCamel.data) {
+      return parseInscripcionesRows(resFallbackCamel.data);
+    }
+
+    // Attempt 4: Try fallback table 'inscripcions' with snake_case columns silently
+    const resFallbackSnake = await supabase
+      .from('inscripcions')
+      .select(SNAKE_COLUMNS)
+      .limit(2000);
+      
+    if (!resFallbackSnake.error && resFallbackSnake.data) {
+      return parseInscripcionesRows(resFallbackSnake.data);
+    }
+
+    // Safe Fallback 1: Select '*' limited to 100 entries only from 'inscripciones'
+    const resStar = await supabase
+      .from('inscripciones')
+      .select('*')
+      .limit(100);
+      
+    if (!resStar.error && resStar.data) {
+      return parseInscripcionesRows(resStar.data);
+    }
+
+    // Safe Fallback 2: Select '*' from fallback table 'inscripcions'
+    const resStarFallback = await supabase
+      .from('inscripcions')
+      .select('*')
+      .limit(100);
+      
+    if (!resStarFallback.error && resStarFallback.data) {
+      return parseInscripcionesRows(resStarFallback.data);
+    }
+
+    // If ALL attempts failed, log a single warning with details
+    console.warn("All column-specific and table fallback attempts for loading inscriptions from Supabase failed.", {
+      attempt1Error: error?.message || error,
+      attempt2Error: resSnake.error?.message || resSnake.error,
+      attempt3Error: resFallbackCamel.error?.message || resFallbackCamel.error,
+      attempt4Error: resFallbackSnake.error?.message || resFallbackSnake.error,
+      starError: resStar.error?.message || resStar.error,
+      starFallbackError: resStarFallback.error?.message || resStarFallback.error
+    });
+
+    return [];
   } catch (err) {
     console.error("Exception fetching inscriptions from Supabase:", err);
     return [];
