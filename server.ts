@@ -3,6 +3,11 @@ import path from "path";
 import nodemailer from "nodemailer";
 import { Resend } from "resend";
 import fs from "fs";
+import dotenv from "dotenv";
+
+// Load local development environment variables first, then default .env
+dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
+dotenv.config({ path: path.resolve(process.cwd(), ".env") });
 
 async function startServer() {
   const app = express();
