@@ -1519,7 +1519,7 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                         setTranslatingFields(prev => ({ ...prev, [targetKey]: true }));
                         try {
                           const { syncDetectAndTranslate } = await import('../translateService');
-                          syncDetectAndTranslate(
+                          await syncDetectAndTranslate(
                             val,
                             (translated) => handleUpdateLiniaUniforme(linia.id, { nom: translated }),
                             (translated) => handleUpdateLiniaUniforme(linia.id, { nomES: translated }),

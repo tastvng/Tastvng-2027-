@@ -797,13 +797,17 @@ export default function AdminPortada({ onAddLog }: AdminPortadaProps) {
                   onBlur={async (e) => {
                     if (!autoTranslate) return;
                     const val = e.target.value;
-                    const { syncDetectAndTranslate } = await import('../translateService');
-                    syncDetectAndTranslate(
-                      val,
-                      (translated) => updateField('titolCA', translated),
-                      (translated) => updateField('titolES', translated),
-                      (loading) => setTranslatingFields(prev => ({ ...prev, titol: loading }))
-                    );
+                    try {
+                      const { syncDetectAndTranslate } = await import('../translateService');
+                      await syncDetectAndTranslate(
+                        val,
+                        (translated) => updateField('titolCA', translated),
+                        (translated) => updateField('titolES', translated),
+                        (loading) => setTranslatingFields(prev => ({ ...prev, titol: loading }))
+                      );
+                    } catch (err) {
+                      console.error("Error in titol translation onBlur:", err);
+                    }
                   }}
                   placeholder={language === 'ca' ? "El títol principal cridaner..." : "El título principal llamativo..."}
                   className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all placeholder-zinc-400 font-sans"
@@ -832,13 +836,17 @@ export default function AdminPortada({ onAddLog }: AdminPortadaProps) {
                   onBlur={async (e) => {
                     if (!autoTranslate) return;
                     const val = e.target.value;
-                    const { syncDetectAndTranslate } = await import('../translateService');
-                    syncDetectAndTranslate(
-                      val,
-                      (translated) => updateField('subtitolCA', translated),
-                      (translated) => updateField('subtitolES', translated),
-                      (loading) => setTranslatingFields(prev => ({ ...prev, subtitol: loading }))
-                    );
+                    try {
+                      const { syncDetectAndTranslate } = await import('../translateService');
+                      await syncDetectAndTranslate(
+                        val,
+                        (translated) => updateField('subtitolCA', translated),
+                        (translated) => updateField('subtitolES', translated),
+                        (loading) => setTranslatingFields(prev => ({ ...prev, subtitol: loading }))
+                      );
+                    } catch (err) {
+                      console.error("Error in subtitol translation onBlur:", err);
+                    }
                   }}
                   placeholder={language === 'ca' ? "Ex: Benvinguts a les comparses d'El Tast..." : "Ej: Bienvenidos a las comparsas de El Tast..."}
                   className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all placeholder-zinc-400 font-sans"
@@ -868,13 +876,17 @@ export default function AdminPortada({ onAddLog }: AdminPortadaProps) {
                   onBlur={async (e) => {
                     if (!autoTranslate) return;
                     const val = e.target.value;
-                    const { syncDetectAndTranslate } = await import('../translateService');
-                    syncDetectAndTranslate(
-                      val,
-                      (translated) => updateField('descripcioCA', translated),
-                      (translated) => updateField('descripcioES', translated),
-                      (loading) => setTranslatingFields(prev => ({ ...prev, descripcio: loading }))
-                    );
+                    try {
+                      const { syncDetectAndTranslate } = await import('../translateService');
+                      await syncDetectAndTranslate(
+                        val,
+                        (translated) => updateField('descripcioCA', translated),
+                        (translated) => updateField('descripcioES', translated),
+                        (loading) => setTranslatingFields(prev => ({ ...prev, descripcio: loading }))
+                      );
+                    } catch (err) {
+                      console.error("Error in descripcio translation onBlur:", err);
+                    }
                   }}
                   placeholder={language === 'ca' ? "Descriu breument com funciona el registre..." : "Describe brevemente cómo funciona el registro..."}
                   className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all placeholder-zinc-400 font-sans resize-none leading-relaxed"
@@ -904,13 +916,17 @@ export default function AdminPortada({ onAddLog }: AdminPortadaProps) {
                   onBlur={async (e) => {
                     if (!autoTranslate) return;
                     const val = e.target.value;
-                    const { syncDetectAndTranslate } = await import('../translateService');
-                    syncDetectAndTranslate(
-                      val,
-                      (translated) => updateField('botoTextCA', translated),
-                      (translated) => updateField('botoTextES', translated),
-                      (loading) => setTranslatingFields(prev => ({ ...prev, botoText: loading }))
-                    );
+                    try {
+                      const { syncDetectAndTranslate } = await import('../translateService');
+                      await syncDetectAndTranslate(
+                        val,
+                        (translated) => updateField('botoTextCA', translated),
+                        (translated) => updateField('botoTextES', translated),
+                        (loading) => setTranslatingFields(prev => ({ ...prev, botoText: loading }))
+                      );
+                    } catch (err) {
+                      console.error("Error in botoText translation onBlur:", err);
+                    }
                   }}
                   placeholder={language === 'ca' ? "Ex: Iniciar Formulari..." : "Ej: Iniciar Formulario..."}
                   className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all placeholder-zinc-400 font-sans"
@@ -939,13 +955,17 @@ export default function AdminPortada({ onAddLog }: AdminPortadaProps) {
                   onBlur={async (e) => {
                     if (!autoTranslate) return;
                     const val = e.target.value;
-                    const { syncDetectAndTranslate } = await import('../translateService');
-                    syncDetectAndTranslate(
-                      val,
-                      (translated) => updateField('badgeTextCA', translated),
-                      (translated) => updateField('badgeTextES', translated),
-                      (loading) => setTranslatingFields(prev => ({ ...prev, badgeText: loading }))
-                    );
+                    try {
+                      const { syncDetectAndTranslate } = await import('../translateService');
+                      await syncDetectAndTranslate(
+                        val,
+                        (translated) => updateField('badgeTextCA', translated),
+                        (translated) => updateField('badgeTextES', translated),
+                        (loading) => setTranslatingFields(prev => ({ ...prev, badgeText: loading }))
+                      );
+                    } catch (err) {
+                      console.error("Error in badgeText translation onBlur:", err);
+                    }
                   }}
                   placeholder={language === 'ca' ? "Ex: Inscripcions Obertes 2026..." : "Ej: Inscripciones Abiertas 2026..."}
                   className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all placeholder-zinc-400 font-sans"
@@ -1738,13 +1758,17 @@ export default function AdminPortada({ onAddLog }: AdminPortadaProps) {
                   onBlur={async (e) => {
                     if (!autoTranslate) return;
                     const val = e.target.value;
-                    const { syncDetectAndTranslate } = await import('../translateService');
-                    syncDetectAndTranslate(
-                      val,
-                      (translated) => updateField('footerTextCA', translated),
-                      (translated) => updateField('footerTextES', translated),
-                      (loading) => setTranslatingFields(prev => ({ ...prev, footerText: loading }))
-                    );
+                    try {
+                      const { syncDetectAndTranslate } = await import('../translateService');
+                      await syncDetectAndTranslate(
+                        val,
+                        (translated) => updateField('footerTextCA', translated),
+                        (translated) => updateField('footerTextES', translated),
+                        (loading) => setTranslatingFields(prev => ({ ...prev, footerText: loading }))
+                      );
+                    } catch (err) {
+                      console.error("Error in footerText translation onBlur:", err);
+                    }
                   }}
                   className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-0"
                   placeholder={language === 'ca' ? "Ex: © 2026 ASSOCIACIÓ COMPARSES EL TAST" : "Ej: © 2026 ASOCIACIÓN COMPARSAS EL TAST"}
@@ -1796,13 +1820,17 @@ export default function AdminPortada({ onAddLog }: AdminPortadaProps) {
                   onBlur={async (e) => {
                     if (!autoTranslate) return;
                     const val = e.target.value;
-                    const { syncDetectAndTranslate } = await import('../translateService');
-                    syncDetectAndTranslate(
-                      val,
-                      (translated) => updateField('footerLink1LabelCA', translated),
-                      (translated) => updateField('footerLink1LabelES', translated),
-                      (loading) => setTranslatingFields(prev => ({ ...prev, footerLink1Label: loading }))
-                    );
+                    try {
+                      const { syncDetectAndTranslate } = await import('../translateService');
+                      await syncDetectAndTranslate(
+                        val,
+                        (translated) => updateField('footerLink1LabelCA', translated),
+                        (translated) => updateField('footerLink1LabelES', translated),
+                        (loading) => setTranslatingFields(prev => ({ ...prev, footerLink1Label: loading }))
+                      );
+                    } catch (err) {
+                      console.error("Error in footerLink1Label translation onBlur:", err);
+                    }
                   }}
                   className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-0"
                   placeholder={language === 'ca' ? "Ex: Normativa" : "Ej: Normativa"}
@@ -1845,13 +1873,17 @@ export default function AdminPortada({ onAddLog }: AdminPortadaProps) {
                   onBlur={async (e) => {
                     if (!autoTranslate) return;
                     const val = e.target.value;
-                    const { syncDetectAndTranslate } = await import('../translateService');
-                    syncDetectAndTranslate(
-                      val,
-                      (translated) => updateField('footerLink2LabelCA', translated),
-                      (translated) => updateField('footerLink2LabelES', translated),
-                      (loading) => setTranslatingFields(prev => ({ ...prev, footerLink2Label: loading }))
-                    );
+                    try {
+                      const { syncDetectAndTranslate } = await import('../translateService');
+                      await syncDetectAndTranslate(
+                        val,
+                        (translated) => updateField('footerLink2LabelCA', translated),
+                        (translated) => updateField('footerLink2LabelES', translated),
+                        (loading) => setTranslatingFields(prev => ({ ...prev, footerLink2Label: loading }))
+                      );
+                    } catch (err) {
+                      console.error("Error in footerLink2Label translation onBlur:", err);
+                    }
                   }}
                   className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-0"
                   placeholder={language === 'ca' ? "Ex: secretaria@eltast.cat" : "Ej: secretaria@eltast.cat"}
