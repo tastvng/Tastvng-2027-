@@ -2,6 +2,7 @@ import {StrictMode} from 'react';
 import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import { LanguageProvider } from './LanguageContext';
+import { ToastProvider } from './hooks/useToast';
 import './index.css';
 
 // Capture and expose real error traces that might otherwise trigger generic "Script error." in iframe environments
@@ -15,7 +16,9 @@ window.onunhandledrejection = (e) => {
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <LanguageProvider>
-      <App />
+      <ToastProvider>
+        <App />
+      </ToastProvider>
     </LanguageProvider>
   </StrictMode>,
 );

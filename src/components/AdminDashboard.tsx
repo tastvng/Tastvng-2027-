@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useLanguage } from '../LanguageContext';
+import { useToast } from '../hooks/useToast';
 import { 
   Search, 
   Filter, 
@@ -79,6 +80,7 @@ export default function AdminDashboard({
   onSaveInscripcio
 }: AdminDashboardProps) {
   const { language, t } = useLanguage();
+  const { showToast } = useToast();
   
   // Admin Tabs Navigation State
   const [activePanelTab, setActivePanelTab] = useState<'inscripcions' | 'smtp' | 'xarxes' | 'portada' | 'personalitzacio' | 'cierre'>('inscripcions');
@@ -496,6 +498,7 @@ export default function AdminDashboard({
     localStorage.setItem('tast_smtp_contrasenya', smtpContrasenya);
     localStorage.setItem('tast_smtp_from', smtpFrom);
 
+    let isSynced = false;
     try {
       const { isSupabaseConfigured, saveSupabaseSetting } = await import('../supabaseClient');
       if (isSupabaseConfigured) {
@@ -504,10 +507,19 @@ export default function AdminDashboard({
         await saveSupabaseSetting('tast_smtp_usuari', smtpUsuari);
         await saveSupabaseSetting('tast_smtp_contrasenya', smtpContrasenya);
         await saveSupabaseSetting('tast_smtp_from', smtpFrom);
+        isSynced = true;
       }
-    } catch (err) {}
+    } catch (err) {
+      console.error("Error saving SMTP to Supabase:", err);
+    }
 
     setSmtpSaveSuccess(true);
+    showToast(
+      language === 'ca'
+        ? `✓ Configuració SMTP desada correctament${isSynced ? " (Sincronitzat)" : ""}`
+        : `✓ Configuración SMTP guardada correctamente${isSynced ? " (Sincronizado)" : ""}`,
+      'success'
+    );
     if (onAddLog) {
       onAddLog(language === 'ca'
         ? `⚙️ Servidor SMTP configurat: ${smtpUsuari} (${smtpHost}:${smtpPort}) - Remitent: ${smtpFrom}`
@@ -816,13 +828,22 @@ export default function AdminDashboard({
     const updated = [...staffList, nouMembre];
     setStaffList(updated);
     localStorage.setItem('tast_staff_2026', JSON.stringify(updated));
+    let isSynced = false;
     try {
       const { isSupabaseConfigured, saveSupabaseSetting } = await import('../supabaseClient');
       if (isSupabaseConfigured) {
         await saveSupabaseSetting('tast_staff_2026', updated);
+        isSynced = true;
       }
     } catch (err) {}
     window.dispatchEvent(new Event('staffChanged'));
+
+    showToast(
+      language === 'ca'
+        ? `✓ S'ha afegit ${newStaffNom} correctament${isSynced ? " (Sincronitzat)" : ""}`
+        : `✓ Se ha añadido a ${newStaffNom} correctamente${isSynced ? " (Sincronizado)" : ""}`,
+      'success'
+    );
 
     if (onAddLog) {
       onAddLog(`S'ha afegit ${newStaffNom} (${newStaffRol}) al personal d'administració i s'ha desat al núvol.`);
@@ -839,29 +860,46 @@ export default function AdminDashboard({
     const updated = staffList.map(s => s.id === id ? { ...s, rol } : s);
     setStaffList(updated);
     localStorage.setItem('tast_staff_2026', JSON.stringify(updated));
+    let isSynced = false;
     try {
       const { isSupabaseConfigured, saveSupabaseSetting } = await import('../supabaseClient');
       if (isSupabaseConfigured) {
         await saveSupabaseSetting('tast_staff_2026', updated);
+        isSynced = true;
       }
     } catch (err) {}
     window.dispatchEvent(new Event('staffChanged'));
+    showToast(
+      language === 'ca'
+        ? `✓ Rol actualitzat correctament${isSynced ? " (Sincronitzat)" : ""}`
+        : `✓ Rol actualizado correctamente${isSynced ? " (Sincronizado)" : ""}`,
+      'success'
+    );
     if (onAddLog) {
       onAddLog(`S'ha canviat el rol del perfil d'administrador i actualitzat a Supabase.`);
     }
   };
 
   const handleToggleStaffActiu = async (id: string) => {
+    const target = staffList.find(s => s.id === id);
     const updated = staffList.map(s => s.id === id ? { ...s, actiu: !s.actiu } : s);
     setStaffList(updated);
     localStorage.setItem('tast_staff_2026', JSON.stringify(updated));
+    let isSynced = false;
     try {
       const { isSupabaseConfigured, saveSupabaseSetting } = await import('../supabaseClient');
       if (isSupabaseConfigured) {
         await saveSupabaseSetting('tast_staff_2026', updated);
+        isSynced = true;
       }
     } catch (err) {}
     window.dispatchEvent(new Event('staffChanged'));
+    showToast(
+      language === 'ca'
+        ? `✓ Estat d'accés modificat per a ${target?.nom || 'staff'}`
+        : `✓ Estado de acceso modificado para ${target?.nom || 'staff'}`,
+      'success'
+    );
     if (onAddLog) {
       onAddLog(`Estat d'accés del perfil de staff modificat i sincronitzat amb Supabase.`);
     }
@@ -872,13 +910,21 @@ export default function AdminDashboard({
       const updated = staffList.filter(s => s.id !== id);
       setStaffList(updated);
       localStorage.setItem('tast_staff_2026', JSON.stringify(updated));
+      let isSynced = false;
       try {
         const { isSupabaseConfigured, saveSupabaseSetting } = await import('../supabaseClient');
         if (isSupabaseConfigured) {
           await saveSupabaseSetting('tast_staff_2026', updated);
+          isSynced = true;
         }
       } catch (err) {}
       window.dispatchEvent(new Event('staffChanged'));
+      showToast(
+        language === 'ca'
+          ? `✓ S'ha eliminat ${name} correctament${isSynced ? " (Sincronitzat)" : ""}`
+          : `✓ Se ha eliminado a ${name} correctamente${isSynced ? " (Sincronizado)" : ""}`,
+        'success'
+      );
       if (onAddLog) {
         onAddLog(`Retirat ${name} del canal de personal habilitat i sincronitzat amb Supabase.`);
       }

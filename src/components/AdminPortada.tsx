@@ -3,6 +3,7 @@ import { Compass, Sparkles, CheckCircle2, RotateCcw, Image, Video, Palette, Play
 import { PortadaConfig } from './PortadaPage';
 import { saveSupabaseSettings, getSupabaseSettings, isSupabaseConfigured } from '../supabaseClient';
 import { useLanguage } from '../LanguageContext';
+import { useToast } from '../hooks/useToast';
 
 export const PORTADA_CONFIG_DEFAULTS: PortadaConfig = {
   activa: true,
@@ -96,6 +97,7 @@ interface AdminPortadaProps {
 
 export default function AdminPortada({ onAddLog }: AdminPortadaProps) {
   const { language } = useLanguage();
+  const { showToast } = useToast();
   const [config, setConfig] = useState<PortadaConfig>(() => {
     try {
       const saved = localStorage.getItem('tast_portada_config_2026');
@@ -193,6 +195,12 @@ export default function AdminPortada({ onAddLog }: AdminPortadaProps) {
 
       setSemaforSaveSuccess(true);
       setTimeout(() => setSemaforSaveSuccess(false), 3000);
+      showToast(
+        language === 'ca'
+          ? `✓ Estat d'inscripcions actualitzat a: ${newState.toUpperCase()}`
+          : `✓ Estado de inscripciones actualizado a: ${newState.toUpperCase()}`,
+        'success'
+      );
 
       if (onAddLog) {
         onAddLog(language === 'ca' 
@@ -206,6 +214,12 @@ export default function AdminPortada({ onAddLog }: AdminPortadaProps) {
       setSemaforSaveError(language === 'ca'
         ? `Error en desar a Supabase: ${errorMsg}`
         : `Error al guardar en Supabase: ${errorMsg}`
+      );
+      showToast(
+        language === 'ca'
+          ? `❌ Error al desar l'estat: ${errorMsg}`
+          : `❌ Error al guardar el estado: ${errorMsg}`,
+        'error'
       );
     } finally {
       setSavingSemafor(false);
@@ -246,6 +260,12 @@ export default function AdminPortada({ onAddLog }: AdminPortadaProps) {
     window.dispatchEvent(new Event('portadaConfigChanged'));
     
     setSaveSuccess(true);
+    showToast(
+      language === 'ca' 
+        ? `✓ Configuració de la Portada desada correctament${synced ? " (Sincronitzat)" : ""}` 
+        : `✓ Configuración de la Portada guardada correctamente${synced ? " (Sincronizado)" : ""}`,
+      'success'
+    );
     if (onAddLog) {
       onAddLog(language === 'ca' 
         ? `Configuració de la pantalla de Portada actualitzada correctament${synced ? " (Sincronitzat amb Supabase)" : ""}.` 
@@ -269,6 +289,12 @@ export default function AdminPortada({ onAddLog }: AdminPortadaProps) {
       }
       
       window.dispatchEvent(new Event('portadaConfigChanged'));
+      showToast(
+        language === 'ca'
+          ? `✓ Portada restablerta als valors per defecte`
+          : `✓ Portada restablecida a los valores por defecto`,
+        'success'
+      );
       
       if (onAddLog) {
         onAddLog(language === 'ca' 

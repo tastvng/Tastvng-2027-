@@ -35,6 +35,7 @@ import {
 } from './data';
 
 import { useLanguage } from './LanguageContext';
+import { useToast } from './hooks/useToast';
 
 // Component imports
 import PublicForm from './components/PublicForm';
@@ -62,6 +63,7 @@ import {
 
 export default function App() {
   const { language, setLanguage, t } = useLanguage();
+  const { toasts, showToast, removeToast } = useToast();
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
   // Portada Configuration State
@@ -412,9 +414,13 @@ export default function App() {
           await saveSupabaseSetting('estat_inscripcio_global', newConfig.estatInscripcions);
         }
         addLog("✓ Configuració desada globalment a la base de dades d'settings.");
+        showToast(language === 'ca' ? '✓ Configuració desada correctament' : '✓ Configuración guardada correctamente', 'success');
       } catch (err) {
         console.error("Error saving config to Supabase:", err);
+        showToast(language === 'ca' ? '❌ Error al desar la configuració' : '❌ Error al guardar la configuración', 'error');
       }
+    } else {
+      showToast(language === 'ca' ? '✓ Configuració desada localment' : '✓ Configuración guardada localmente', 'success');
     }
   };
 
@@ -427,14 +433,18 @@ export default function App() {
       try {
         await saveSupabaseSetting('tast_config_2026', CONFIG_INICIAL);
         addLog("✓ Configuració de fàbrica desada globalment a Supabase.");
+        showToast(language === 'ca' ? '✓ Configuració restablerta correctament' : '✓ Configuración restablecida correctamente', 'success');
       } catch (err) {
         console.error("Error saving reset config to Supabase:", err);
+        showToast(language === 'ca' ? '❌ Error al restablir la configuració' : '❌ Error al restablecer la configuración', 'error');
       }
+    } else {
+      showToast(language === 'ca' ? '✓ Configuració restablerta localment' : '✓ Configuración restablecida localmente', 'success');
     }
     // Force reload so that state hooks and variables inside subcomponents reinitialize cleanly!
     setTimeout(() => {
       window.location.reload();
-    }, 500);
+    }, 1200); // give toast time to show up
   };
 
   const getEstatInscripcioGlobalFromDatabase = async (): Promise<'obertes' | 'llista_espera'> => {
@@ -597,9 +607,13 @@ export default function App() {
     if (isSupabaseConfigured) {
       try {
         await saveSupabaseSetting('tast_noticies_2026', newNoticies);
+        showToast(language === 'ca' ? '✓ Notícies actualitzades correctament' : '✓ Noticias actualizadas correctamente', 'success');
       } catch (err) {
         console.error("Error saving news to Supabase:", err);
+        showToast(language === 'ca' ? '❌ Error al desar les notícies' : '❌ Error al guardar las noticias', 'error');
       }
+    } else {
+      showToast(language === 'ca' ? '✓ Notícies actualitzades localment' : '✓ Noticias actualizadas localmente', 'success');
     }
   };
 
@@ -613,9 +627,13 @@ export default function App() {
       try {
         await saveSupabaseInscripcion(updatedReg);
         addLog(`✓ Ficha actualitzada persistentment a Supabase.`);
+        showToast(language === 'ca' ? '✓ Inscripció actualitzada correctament' : '✓ Inscripción actualizada correctamente', 'success');
       } catch (err) {
         console.error("Error updating inscription on Supabase:", err);
+        showToast(language === 'ca' ? '❌ Error al desar els canvis' : '❌ Error al guardar los cambios', 'error');
       }
+    } else {
+      showToast(language === 'ca' ? '✓ Inscripció actualitzada localment' : '✓ Inscripción actualizada localmente', 'success');
     }
   };
 
