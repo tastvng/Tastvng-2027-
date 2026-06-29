@@ -1,6 +1,7 @@
 import express from "express";
 import path from "path";
 import nodemailer from "nodemailer";
+import { Resend } from "resend";
 import fs from "fs";
 
 async function startServer() {
@@ -22,84 +23,67 @@ async function startServer() {
     next();
   });
 
-  // API Route to send a real SMTP email
+  // API Route to send a real SMTP email (Now via Resend)
   app.post("/api/send-email", async (req, res) => {
     try {
-      const { emailData } = req.body;
-      if (!emailData) {
-        console.error("[Backend Error] Missing 'emailData' in request body.");
-        return res.status(400).json({ error: "Faltat paràmetre emailData" });
+      const body = req.body || {};
+      const apiKey = process.env.RESEND_API_KEY;
+
+      if (!apiKey) {
+        console.error("[Backend Error] RESEND_API_KEY environment variable is not defined.");
+        return res.status(500).json({ error: "La clau de l'API de Resend (RESEND_API_KEY) no està configurada al servidor." });
       }
 
-      const host = process.env.SMTP_HOST;
-      const port = process.env.SMTP_PORT;
-      const user = process.env.SMTP_USER;
-      const pass = process.env.SMTP_PASSWORD;
-      const senderName = process.env.SMTP_SENDER_NAME || "Inscripcions El Tast";
+      const resend = new Resend(apiKey);
 
-      const { to, subject, html, attachments } = emailData;
+      // Extract values based on payload format
+      let to = "";
+      let subject = "Confirmació d'inscripció - El Tast 2026";
+      let html = "";
+      let attachments: any[] = [];
 
-      const missingVars: string[] = [];
-      if (!host) missingVars.push("SMTP_HOST");
-      if (!port) missingVars.push("SMTP_PORT");
-      if (!user) missingVars.push("SMTP_USER");
-      if (!pass) missingVars.push("SMTP_PASSWORD");
-
-      if (missingVars.length > 0) {
-        console.error("[Backend Error] Missing sever SMTP environment variables:", missingVars);
-        return res.status(500).json({ 
-          error: `Falten les següents variables d'entorn del servidor per a realitzar l'enviament SMTP: ${missingVars.join(", ")}` 
-        });
-      }
-
-      if (!to || !subject || !html) {
-        console.error("[Backend Error] Missing required email fields (to, subject, or html) inside emailData.");
-        return res.status(400).json({ error: "Falten camps obligatoris del correu (to, subject o html)" });
-      }
-
-      const portNum = parseInt(port, 10);
-      
-      // Determine security (TLS/SSL) depending on standard ports
-      // Port 465 typically uses SSL/TLS direct connection from the start, so secure: true
-      // Port 587 uses STARTTLS upgrade from clear text, so secure: false
-      const secure = portNum === 465;
-
-      const transporter = nodemailer.createTransport({
-        host,
-        port: portNum,
-        secure,
-        auth: {
-          user,
-          pass,
-        },
-        tls: {
-          // Do not fail on invalid/self-signed SSL certificates (common with association servers)
-          rejectUnauthorized: false
+      if (body.emailData) {
+        to = body.emailData.to;
+        subject = body.emailData.subject || subject;
+        html = body.emailData.html;
+        attachments = body.emailData.attachments || [];
+      } else {
+        to = body.email || body.to;
+        subject = body.subject || subject;
+        html = body.html || "";
+        if (body.qrCode) {
+          const nombre = body.nombre || "Participant";
+          html = `
+            <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+              <h2>Hola ${nombre},</h2>
+              <p>La teva inscripció s'ha realitzat correctament.</p>
+              <p>Aquí tens el teu codi QR de confirmació:</p>
+              <div style="margin: 20px 0;">
+                <img src="${body.qrCode}" alt="Codi QR" style="width: 200px; height: 200px;" />
+              </div>
+              <p>Presenta aquest codi per recollir el teu material.</p>
+            </div>
+          `;
         }
-      });
+      }
 
-      // Base email options
-      const mailOptions: any = {
-        from: `"${senderName}" <${user}>`,
-        to,
-        subject,
-        html,
-      };
+      if (!to || !html) {
+        console.error("[Backend Error] Missing required fields (to, html).");
+        return res.status(400).json({ error: "Falten camps obligatoris (destinatari o contingut HTML)" });
+      }
 
-      // Handle attachments if specified
+      // Process attachments for Resend
+      let resendAttachments: any[] = [];
       if (attachments && Array.isArray(attachments)) {
-        mailOptions.attachments = attachments.map((att: any) => {
-          // Handle base64 image strings (e.g. inline QR codes or general attachments)
+        resendAttachments = attachments.map((att: any) => {
           if (att.content && typeof att.content === 'string' && att.content.startsWith('data:')) {
             const matches = att.content.match(/^data:(.+);base64,(.+)$/);
             if (matches) {
-              const contentType = matches[1];
               const base64Data = matches[2];
               return {
                 filename: att.filename || "image.png",
                 content: Buffer.from(base64Data, 'base64'),
-                contentType,
-                cid: att.cid // If we want to reference it as <img src="cid:uq-qr-id" />
+                content_id: att.cid || undefined
               };
             }
           }
@@ -107,18 +91,31 @@ async function startServer() {
         });
       }
 
-      const info = await transporter.sendMail(mailOptions);
-      console.log("Email sent successfully through SMTP server:", info.messageId);
-      
-      return res.json({ 
-        success: true, 
-        messageId: info.messageId,
-        response: info.response 
+      // Send email using Resend
+      const response = await resend.emails.send({
+        from: 'noreply@tastvng.cat',
+        to: [to],
+        subject,
+        html,
+        attachments: resendAttachments.length > 0 ? resendAttachments : undefined,
+      });
+
+      if (response.error) {
+        console.error("[Backend Error] Resend API error:", response.error);
+        return res.status(400).json({ error: response.error.message });
+      }
+
+      console.log("Email sent successfully through Resend:", response.data?.id);
+
+      return res.json({
+        success: true,
+        id: response.data?.id,
+        messageId: response.data?.id
       });
     } catch (error: any) {
-      console.error("Error sending email via nodemailer:", error);
-      return res.status(500).json({ 
-        error: error.message || "Error al enviar el correo a través de SMTP." 
+      console.error("Error sending email via Resend:", error);
+      return res.status(500).json({
+        error: error.message || "Error al enviar el correo a través de Resend."
       });
     }
   });

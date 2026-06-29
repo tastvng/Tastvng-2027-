@@ -34,45 +34,59 @@ export async function translateText(
   target: 'ca' | 'es'
 ): Promise<string> {
   if (!text || !text.trim()) return text;
-  if (source !== 'auto' && source === target) return text;
   
-  // If we already detected quota exceeded in this session, return text directly
-  if (typeof window !== 'undefined' && window.sessionStorage?.getItem('tast_translation_quota_exceeded') === 'true') {
-    return text;
-  }
-
   // If the text is standard numbers, punctuation, or very short, bypass translation
   const clean = text.trim();
   if (/^[0-9\s\-\+\.\,€\/]+$/.test(clean)) {
     return clean;
   }
 
-  const cacheKey = `${clean}_${source}_${target}`;
+  // Determine source language if it's 'auto'
+  let srcLang: 'ca' | 'es' = 'ca';
+  if (source === 'auto') {
+    const lowercaseText = clean.toLowerCase();
+    // Simple heuristic to detect Catalan vs Spanish based on common stopwords
+    const isCatalan = /\b(i|amb|els|les|per|del|dels|pel|pels|aquesta|aquest|preguntes|formulari|tast|inscripció|inscripcions|condicions|si us plau)\b/i.test(lowercaseText) || 
+                      lowercaseText.includes(" l'") || 
+                      lowercaseText.includes(" d'") ||
+                      lowercaseText.includes(" m'") ||
+                      lowercaseText.includes(" s'") ||
+                      lowercaseText.includes(" t'");
+                      
+    const isSpanish = /\b(y|con|los|las|por|del|este|esta|preguntas|formulario|inscripción|inscripciones|condiciones|por favor)\b/i.test(lowercaseText);
+
+    if (isCatalan && !isSpanish) {
+      srcLang = 'ca';
+    } else if (isSpanish && !isCatalan) {
+      srcLang = 'es';
+    } else {
+      srcLang = target === 'ca' ? 'es' : 'ca';
+    }
+  } else {
+    srcLang = source;
+  }
+
+  if (srcLang === target) return clean;
+
+  const cacheKey = `${clean}_${srcLang}_${target}`;
   if (translationCache[cacheKey]) {
     return translationCache[cacheKey];
   }
   
   try {
-    const response = await fetch('/api/translate', {
+    const response = await fetch('https://libretranslate.de/translate', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        text: clean,
-        source,
-        target,
+        q: clean,
+        source: srcLang,
+        target: target,
+        format: 'text'
       }),
     });
     
-    if (response.status === 429 || response.status === 503) {
-      if (typeof window !== 'undefined' && window.sessionStorage) {
-        window.sessionStorage.setItem('tast_translation_quota_exceeded', 'true');
-        window.dispatchEvent(new Event('translationQuotaExceeded'));
-      }
-      return text;
-    }
-
     if (response.ok) {
       const data = await response.json();
       const result = data.translatedText || clean;
@@ -81,14 +95,6 @@ export async function translateText(
       translationCache[cacheKey] = result;
       saveCache();
       return result;
-    } else {
-      const data = await response.json().catch(() => ({}));
-      if (data.error === "quota_exceeded") {
-        if (typeof window !== 'undefined' && window.sessionStorage) {
-          window.sessionStorage.setItem('tast_translation_quota_exceeded', 'true');
-          window.dispatchEvent(new Event('translationQuotaExceeded'));
-        }
-      }
     }
   } catch (error) {
     console.warn("Translation service call failed gracefully:", error);

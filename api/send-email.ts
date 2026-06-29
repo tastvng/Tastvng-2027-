@@ -1,4 +1,4 @@
-import nodemailer from "nodemailer";
+import { Resend } from "resend";
 
 export default async function handler(req: any, res: any) {
   // CORS configuration
@@ -19,74 +19,64 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    const { smtpConfig, emailData } = req.body;
+    const body = req.body || {};
+    const apiKey = process.env.RESEND_API_KEY;
 
-    if (!emailData) {
-      console.error("[Vercel Serverless Error] Missing 'emailData' in request body.");
-      return res.status(400).json({ error: "Faltat paràmetre emailData" });
+    if (!apiKey) {
+      console.error("[Vercel Serverless Error] RESEND_API_KEY environment variable is not defined.");
+      return res.status(500).json({ error: "La clau de l'API de Resend (RESEND_API_KEY) no està configurada al servidor." });
     }
 
-    const host = smtpConfig?.host || process.env.SMTP_HOST;
-    const port = smtpConfig?.port || process.env.SMTP_PORT;
-    const user = smtpConfig?.user || process.env.SMTP_USER;
-    const pass = smtpConfig?.pass || process.env.SMTP_PASSWORD;
-    const senderName = smtpConfig?.senderName || process.env.SMTP_SENDER_NAME || "Inscripcions El Tast";
+    const resend = new Resend(apiKey);
 
-    const { to, subject, html, attachments } = emailData;
+    // Extract values based on payload format
+    let to = "";
+    let subject = "Confirmació d'inscripció - El Tast 2026";
+    let html = "";
+    let attachments: any[] = [];
 
-    if (!host || !port || !user || !pass) {
-      const missingVars = [];
-      if (!host) missingVars.push("SMTP_HOST");
-      if (!port) missingVars.push("SMTP_PORT");
-      if (!user) missingVars.push("SMTP_USER");
-      if (!pass) missingVars.push("SMTP_PASSWORD");
-
-      console.error("[Vercel Serverless Error] Missing server SMTP environment variables or smtpConfig:", missingVars);
-      return res.status(500).json({ 
-        error: `Falten les següents variables d'entorn del servidor per a realitzar l'enviament SMTP: ${missingVars.join(", ")}` 
-      });
-    }
-
-    if (!to || !subject || !html) {
-      console.error("[Vercel Serverless Error] Missing required email fields (to, subject, or html) inside emailData.");
-      return res.status(400).json({ error: "Falten camps obligatoris del correu (to, subject o html)" });
-    }
-
-    const portNum = parseInt(port, 10);
-    const secure = portNum === 465;
-
-    const transporter = nodemailer.createTransport({
-      host,
-      port: portNum,
-      secure,
-      auth: {
-        user,
-        pass,
-      },
-      tls: {
-        rejectUnauthorized: false
+    if (body.emailData) {
+      to = body.emailData.to;
+      subject = body.emailData.subject || subject;
+      html = body.emailData.html;
+      attachments = body.emailData.attachments || [];
+    } else {
+      to = body.email || body.to;
+      subject = body.subject || subject;
+      html = body.html || "";
+      if (body.qrCode) {
+        const nombre = body.nombre || "Participant";
+        html = `
+          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <h2>Hola ${nombre},</h2>
+            <p>La teva inscripció s'ha realitzat correctament.</p>
+            <p>Aquí tens el teu codi QR de confirmació:</p>
+            <div style="margin: 20px 0;">
+              <img src="${body.qrCode}" alt="Codi QR" style="width: 200px; height: 200px;" />
+            </div>
+            <p>Presenta aquest codi per recollir el teu material.</p>
+          </div>
+        `;
       }
-    });
+    }
 
-    const mailOptions: any = {
-      from: `"${senderName || 'Inscripcions El Tast'}" <${user}>`,
-      to,
-      subject,
-      html,
-    };
+    if (!to || !html) {
+      console.error("[Vercel Serverless Error] Missing required fields (to, html).");
+      return res.status(400).json({ error: "Falten camps obligatoris (destinatari o contingut HTML)" });
+    }
 
+    // Process attachments for Resend
+    let resendAttachments: any[] = [];
     if (attachments && Array.isArray(attachments)) {
-      mailOptions.attachments = attachments.map((att: any) => {
+      resendAttachments = attachments.map((att: any) => {
         if (att.content && typeof att.content === 'string' && att.content.startsWith('data:')) {
           const matches = att.content.match(/^data:(.+);base64,(.+)$/);
           if (matches) {
-            const contentType = matches[1];
             const base64Data = matches[2];
             return {
               filename: att.filename || "image.png",
               content: Buffer.from(base64Data, 'base64'),
-              contentType,
-              cid: att.cid
+              content_id: att.cid || undefined
             };
           }
         }
@@ -94,18 +84,31 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    const info = await transporter.sendMail(mailOptions);
-    console.log("Email sent successfully through SMTP server:", info.messageId);
+    // Send email using Resend
+    const response = await resend.emails.send({
+      from: 'noreply@tastvng.cat',
+      to: [to],
+      subject,
+      html,
+      attachments: resendAttachments.length > 0 ? resendAttachments : undefined,
+    });
+
+    if (response.error) {
+      console.error("[Vercel Serverless Error] Resend API error:", response.error);
+      return res.status(400).json({ error: response.error.message });
+    }
+
+    console.log("Email sent successfully through Resend:", response.data?.id);
 
     return res.status(200).json({
       success: true,
-      messageId: info.messageId,
-      response: info.response
+      id: response.data?.id,
+      messageId: response.data?.id
     });
   } catch (error: any) {
-    console.error("Error sending email via nodemailer serverless:", error);
+    console.error("Error sending email via Resend:", error);
     return res.status(500).json({
-      error: error.message || "Error al enviar el correo a través de SMTP."
+      error: error.message || "Error al enviar el correo a través de Resend."
     });
   }
 }
