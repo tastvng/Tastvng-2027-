@@ -44,11 +44,15 @@ async function checkKeyColumnExists(): Promise<boolean> {
         hasKeyColumn = false;
         return false;
       }
+      if (error.code === '42P01') {
+        // Table does not exist yet
+        return false;
+      }
+      return false;
     }
     hasKeyColumn = true;
     return true;
   } catch (e) {
-    hasKeyColumn = false;
     return false;
   }
 }
