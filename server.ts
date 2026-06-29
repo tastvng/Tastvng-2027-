@@ -244,4 +244,7 @@ Text: "${text}"`;
   });
 }
 
-startServer();
+startServer().catch((err) => {
+  console.error("Critical error in startServer:", err);
+  process.exit(1);
+});
