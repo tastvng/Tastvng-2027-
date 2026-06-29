@@ -109,6 +109,7 @@ export default function AdminPortada({ onAddLog }: AdminPortadaProps) {
   });
 
   const [estatInscripcions, setEstatInscripcions] = useState<'obertes' | 'espera' | 'tancades'>('obertes');
+  const [activeTab, setActiveTab] = useState<'semaforo' | 'textos' | 'fondo'>('semaforo');
 
   // Load from Supabase on mount
   useEffect(() => {
@@ -497,20 +498,62 @@ export default function AdminPortada({ onAddLog }: AdminPortadaProps) {
     <div className="bg-white rounded-3xl border border-zinc-200 shadow-md p-6 sm:p-8 space-y-8 animate-fade-in" id="panel-view-portada">
       
       {/* Title block */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-5 border-b border-zinc-100">
-        <div className="flex items-start gap-4">
-          <div className="p-3 bg-fuchsia-50 text-[#ff0090] rounded-2xl">
-            <Compass size={24} />
+      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 pb-5 border-b border-zinc-100">
+        <div className="flex flex-col lg:flex-row lg:items-center gap-4">
+          <div className="flex items-start gap-4">
+            <div className="p-3 bg-fuchsia-50 text-[#ff0090] rounded-2xl shrink-0">
+              <Compass size={24} />
+            </div>
+            <div>
+              <h3 className="font-sans font-black text-lg text-zinc-900 uppercase tracking-tight">
+                {language === 'ca' ? "PERSONALITZACIÓ PORTADA" : "PERSONALIZACIÓN PORTADA"}
+              </h3>
+              <p className="text-xs text-zinc-500 max-w-sm hidden md:block">
+                {language === 'ca'
+                  ? "Dissenya i edita completament la pantalla de benvinguda de les inscripcions."
+                  : "Diseña y edita completamente la pantalla de bienvenida de las inscripciones."}
+              </p>
+            </div>
           </div>
-          <div>
-            <h3 className="font-sans font-black text-lg text-zinc-900 uppercase tracking-tight">
-              {language === 'ca' ? "PERSONALITZACIÓ PORTADA" : "PERSONALIZACIÓN PORTADA"}
-            </h3>
-            <p className="text-xs text-zinc-500 max-w-2xl">
-              {language === 'ca'
-                ? "Dissenya i edita completament la pantalla de benvinguda que veuen els comparseres abans d'iniciar el qüestionari d'inscripció mòbil/web."
-                : "Diseña y edita completamente la pantalla de bienvenida que ven los comparsers antes de iniciar el cuestionario de inscripción móvil/web."}
-            </p>
+
+          {/* Horizontal Tabs next to the title */}
+          <div className="flex gap-1 bg-zinc-100 border border-zinc-200 p-1.5 rounded-2xl shadow-xs self-stretch sm:self-auto">
+            <button
+              type="button"
+              className={`flex-1 sm:flex-none px-3.5 py-1.5 text-xs font-bold rounded-xl transition-all duration-150 cursor-pointer flex items-center justify-center gap-1 ${
+                activeTab === 'semaforo'
+                  ? 'bg-zinc-900 text-[#ff0090] shadow-sm'
+                  : 'text-zinc-600 hover:text-zinc-950 hover:bg-white/50'
+              }`}
+              onClick={() => setActiveTab('semaforo')}
+            >
+              <span>🚦</span>
+              <span>{language === 'ca' ? "Semàfor" : "Semáforo"}</span>
+            </button>
+            <button
+              type="button"
+              className={`flex-1 sm:flex-none px-3.5 py-1.5 text-xs font-bold rounded-xl transition-all duration-150 cursor-pointer flex items-center justify-center gap-1.5 ${
+                activeTab === 'textos'
+                  ? 'bg-zinc-900 text-[#ff0090] shadow-sm'
+                  : 'text-zinc-600 hover:text-zinc-950 hover:bg-white/50'
+              }`}
+              onClick={() => setActiveTab('textos')}
+            >
+              <FileText size={12} />
+              <span>{language === 'ca' ? "Textos" : "Textos"}</span>
+            </button>
+            <button
+              type="button"
+              className={`flex-1 sm:flex-none px-3.5 py-1.5 text-xs font-bold rounded-xl transition-all duration-150 cursor-pointer flex items-center justify-center gap-1.5 ${
+                activeTab === 'fondo'
+                  ? 'bg-zinc-900 text-[#ff0090] shadow-sm'
+                  : 'text-zinc-600 hover:text-zinc-950 hover:bg-white/50'
+              }`}
+              onClick={() => setActiveTab('fondo')}
+            >
+              <Palette size={12} />
+              <span>{language === 'ca' ? "Fons" : "Fondo"}</span>
+            </button>
           </div>
         </div>
 
@@ -558,116 +601,151 @@ export default function AdminPortada({ onAddLog }: AdminPortadaProps) {
         </div>
       </div>
 
-      {/* SEMÀFOR D'ESTAT DE LES INSCRIPCIONS (MOVED FROM ADMINCONFIG) */}
-      <div className="bg-white rounded-3xl border border-zinc-200 p-6 shadow-sm space-y-5" id="config-semafor-card">
-        <div className="border-b border-zinc-100 pb-3 flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <h3 className="font-sans font-black text-sm text-zinc-900 uppercase tracking-wider flex items-center gap-2">
-              <span className="text-xl">🚦</span> {language === 'ca' ? "Semàfor d'Estat de les Inscripcions" : "Semáforo de Estado de Inscripciones"}
-            </h3>
-            <p className="text-[10px] text-zinc-400 mt-1">
-              {language === 'ca' 
-                ? "Controla la fase de registre. Canvia els indicadors en temps real." 
-                : "Controla la fase de registro. Modifica los indicadores en tiempo real."}
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            {savingSemafor && (
-              <span className="inline-flex items-center gap-1.5 text-xs text-zinc-500 font-medium">
-                <svg className="animate-spin h-3.5 w-3.5 text-[#ff0090]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                {language === 'ca' ? "Desant estat..." : "Guardando estado..."}
-              </span>
-            )}
-            {semaforSaveSuccess && (
-              <span className="text-xs text-emerald-600 font-bold bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full flex items-center gap-1">
-                ✓ {language === 'ca' ? "Sincronitzat amb Supabase" : "Sincronizado con Supabase"}
-              </span>
-            )}
-          </div>
+      {/* Top Action Control Strip with Guardar and Defectes buttons */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-zinc-50 border border-zinc-200 px-4 py-3 rounded-2xl">
+        <div className="text-left">
+          <span className="text-[10px] font-mono font-bold text-zinc-400 uppercase tracking-widest block">CONTROL DE CONFIGURACIÓ</span>
+          <span className="text-xs text-zinc-600">
+            {activeTab === 'semaforo' && (language === 'ca' ? "Ajusta els períodes de registre actius" : "Ajusta los períodos de registro activos")}
+            {activeTab === 'textos' && (language === 'ca' ? "Gestiona els títols i etiquetes principals" : "Gestiona los títulos y etiquetas principales")}
+            {activeTab === 'fondo' && (language === 'ca' ? "Personalitza aspecte visual, colors i fons" : "Personaliza aspecto visual, colores y fondo")}
+          </span>
         </div>
 
-        {semaforSaveError && (
-          <div className="bg-red-50 border-2 border-red-300 text-red-900 p-4 rounded-xl text-xs font-medium space-y-1">
-            <p className="font-bold flex items-center gap-1.5 text-red-700">
-              ⚠️ {language === 'ca' ? "Error en canviar l'estat a Supabase" : "Error al cambiar el estado en Supabase"}
-            </p>
-            <p className="font-mono bg-white/50 p-2 rounded border border-red-100 text-red-800 break-all">{semaforSaveError}</p>
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          {/* Opció 1: Obertes - VERD */}
+        <div className="flex gap-2 w-full sm:w-auto">
           <button
             type="button"
-            disabled={savingSemafor}
-            onClick={() => handleEstatInscripcionsChange('obertes')}
-            className={`w-full p-3 rounded-2xl border text-left transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
-              estatInscripcions === 'obertes'
-                ? 'bg-emerald-50 border-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.15)] font-black text-emerald-950'
-                : 'bg-zinc-50 hover:bg-zinc-100 border-zinc-200 opacity-60'
-            } disabled:cursor-not-allowed`}
-            id="btn-semafor-obertes"
+            onClick={handleResetDefaults}
+            className="flex-1 sm:flex-none px-3.5 py-2 bg-white hover:bg-zinc-100 border border-zinc-200 text-zinc-700 font-bold rounded-xl transition text-[11px] flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
           >
-            <div className={`w-6 h-6 mb-2 rounded-full bg-emerald-500 relative shrink-0 ${estatInscripcions === 'obertes' ? 'animate-ping' : ''}`}>
-              <div className="absolute inset-0 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981]" />
-            </div>
-            <span className="block font-sans font-bold text-xs text-zinc-850">
-              {language === 'ca' ? "Inscripcions Obertes" : "Inscripciones Abiertas"}
-            </span>
+            <RotateCcw size={13} className="text-[#ff0090]" />
+            <span>{language === 'ca' ? "Restaurar Defecte" : "Restaurar Defectos"}</span>
           </button>
 
-          {/* Opció 2: Espera - TARONJA */}
           <button
-            type="button"
-            disabled={savingSemafor}
-            onClick={() => handleEstatInscripcionsChange('espera')}
-            className={`w-full p-3 rounded-2xl border text-left transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
-              estatInscripcions === 'espera'
-                ? 'bg-amber-50 border-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.15)] font-black text-amber-950'
-                : 'bg-zinc-50 hover:bg-zinc-100 border-zinc-200 opacity-60'
-            } disabled:cursor-not-allowed`}
-            id="btn-semafor-espera"
+            type="submit"
+            form="portada-editor-form"
+            className="flex-1 sm:flex-none px-4 py-2 bg-[#ff0090] hover:bg-[#ff0090]/90 text-white font-bold rounded-xl transition text-[11px] flex items-center justify-center gap-1.5 shadow-md shadow-fuchsia-100 uppercase tracking-widest cursor-pointer"
           >
-            <div className={`w-6 h-6 mb-2 rounded-full bg-amber-500 relative shrink-0 ${estatInscripcions === 'espera' ? 'animate-ping' : ''}`}>
-              <div className="absolute inset-0 rounded-full bg-amber-500 shadow-[0_0_8px_#f59e0b]" />
-            </div>
-            <span className="block font-sans font-bold text-xs text-zinc-850">
-              {language === 'ca' ? "Llista d'Espera" : "Lista de Espera"}
-            </span>
-          </button>
-
-          {/* Opció 3: Tancades - VERMELL */}
-          <button
-            type="button"
-            disabled={savingSemafor}
-            onClick={() => handleEstatInscripcionsChange('tancades')}
-            className={`w-full p-3 rounded-2xl border text-left transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
-              estatInscripcions === 'tancades'
-                ? 'bg-rose-50 border-rose-400 shadow-[0_0_20px_rgba(239,68,68,0.25)] font-black text-rose-950'
-                : 'bg-zinc-50 hover:bg-zinc-100 border-zinc-200 opacity-60'
-            } disabled:cursor-not-allowed`}
-            id="btn-semafor-tancades"
-          >
-            <div className={`w-6 h-6 mb-2 rounded-full bg-red-600 relative shrink-0 ${estatInscripcions === 'tancades' ? 'animate-pulse' : ''}`}>
-              <div className="absolute inset-0 rounded-full bg-red-600 shadow-[0_0_12px_#ef4444]" />
-            </div>
-            <span className="block font-sans font-bold text-xs text-zinc-850">
-              {language === 'ca' ? "Inscripcions Tancades" : "Inscripciones Cerradas"}
-            </span>
+            <CheckCircle2 size={13} />
+            <span>{language === 'ca' ? "Desar" : "Guardar"}</span>
           </button>
         </div>
       </div>
 
-      <form onSubmit={handleSave} className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+      <form id="portada-editor-form" onSubmit={handleSave} className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         
         {/* Left Side: Parameters customize form */}
         <div className="lg:col-span-7 space-y-6">
+
+          {/* TAB 1: SEMÀFOR */}
+          {activeTab === 'semaforo' && (
+            <div className="bg-white rounded-3xl border border-zinc-200 p-6 shadow-sm space-y-5" id="config-semafor-card">
+              <div className="border-b border-zinc-100 pb-3 flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h3 className="font-sans font-black text-sm text-zinc-900 uppercase tracking-wider flex items-center gap-2">
+                    <span className="text-xl">🚦</span> {language === 'ca' ? "Semàfor d'Estat de les Inscripcions" : "Semáforo de Estado de Inscripciones"}
+                  </h3>
+                  <p className="text-[10px] text-zinc-400 mt-1">
+                    {language === 'ca' 
+                      ? "Controla la fase de registre. Canvia els indicadors en temps real." 
+                      : "Controla la fase de registro. Modifica los indicadores en tiempo real."}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {savingSemafor && (
+                    <span className="inline-flex items-center gap-1.5 text-xs text-zinc-500 font-medium">
+                      <svg className="animate-spin h-3.5 w-3.5 text-[#ff0090]" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      {language === 'ca' ? "Desant estat..." : "Guardando estado..."}
+                    </span>
+                  )}
+                  {semaforSaveSuccess && (
+                    <span className="text-xs text-emerald-600 font-bold bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full flex items-center gap-1">
+                      ✓ {language === 'ca' ? "Sincronitzat amb Supabase" : "Sincronizado con Supabase"}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {semaforSaveError && (
+                <div className="bg-red-50 border-2 border-red-300 text-red-900 p-4 rounded-xl text-xs font-medium space-y-1">
+                  <p className="font-bold flex items-center gap-1.5 text-red-700">
+                    ⚠️ {language === 'ca' ? "Error en canviar l'estat a Supabase" : "Error al cambiar el estado en Supabase"}
+                  </p>
+                  <p className="font-mono bg-white/50 p-2 rounded border border-red-100 text-red-800 break-all">{semaforSaveError}</p>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {/* Opció 1: Obertes - VERD */}
+                <button
+                  type="button"
+                  disabled={savingSemafor}
+                  onClick={() => handleEstatInscripcionsChange('obertes')}
+                  className={`w-full p-3 rounded-2xl border text-left transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
+                    estatInscripcions === 'obertes'
+                      ? 'bg-emerald-50 border-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.15)] font-black text-emerald-950'
+                      : 'bg-zinc-50 hover:bg-zinc-100 border-zinc-200 opacity-60'
+                  } disabled:cursor-not-allowed`}
+                  id="btn-semafor-obertes"
+                >
+                  <div className={`w-6 h-6 mb-2 rounded-full bg-emerald-500 relative shrink-0 ${estatInscripcions === 'obertes' ? 'animate-ping' : ''}`}>
+                    <div className="absolute inset-0 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981]" />
+                  </div>
+                  <span className="block font-sans font-bold text-xs text-zinc-850">
+                    {language === 'ca' ? "Inscripcions Obertes" : "Inscripciones Abiertas"}
+                  </span>
+                </button>
+
+                {/* Opció 2: Espera - TARONJA */}
+                <button
+                  type="button"
+                  disabled={savingSemafor}
+                  onClick={() => handleEstatInscripcionsChange('espera')}
+                  className={`w-full p-3 rounded-2xl border text-left transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
+                    estatInscripcions === 'espera'
+                      ? 'bg-amber-50 border-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.15)] font-black text-amber-950'
+                      : 'bg-zinc-50 hover:bg-zinc-100 border-zinc-200 opacity-60'
+                  } disabled:cursor-not-allowed`}
+                  id="btn-semafor-espera"
+                >
+                  <div className={`w-6 h-6 mb-2 rounded-full bg-amber-500 relative shrink-0 ${estatInscripcions === 'espera' ? 'animate-ping' : ''}`}>
+                    <div className="absolute inset-0 rounded-full bg-amber-500 shadow-[0_0_8px_#f59e0b]" />
+                  </div>
+                  <span className="block font-sans font-bold text-xs text-zinc-850">
+                    {language === 'ca' ? "Llista d'Espera" : "Lista de Espera"}
+                  </span>
+                </button>
+
+                {/* Opció 3: Tancades - VERMELL */}
+                <button
+                  type="button"
+                  disabled={savingSemafor}
+                  onClick={() => handleEstatInscripcionsChange('tancades')}
+                  className={`w-full p-3 rounded-2xl border text-left transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
+                    estatInscripcions === 'tancades'
+                      ? 'bg-rose-50 border-rose-400 shadow-[0_0_20px_rgba(239,68,68,0.25)] font-black text-rose-950'
+                      : 'bg-zinc-50 hover:bg-zinc-100 border-zinc-200 opacity-60'
+                  } disabled:cursor-not-allowed`}
+                  id="btn-semafor-tancades"
+                >
+                  <div className={`w-6 h-6 mb-2 rounded-full bg-red-600 relative shrink-0 ${estatInscripcions === 'tancades' ? 'animate-pulse' : ''}`}>
+                    <div className="absolute inset-0 rounded-full bg-red-600 shadow-[0_0_12px_#ef4444]" />
+                  </div>
+                  <span className="block font-sans font-bold text-xs text-zinc-850">
+                    {language === 'ca' ? "Inscripcions Tancades" : "Inscripciones Cerradas"}
+                  </span>
+                </button>
+              </div>
+            </div>
+          )}
           
-          {/* Texts Segment - ONE SINGLE FIELD FOR BOTH LANGUAGES */}
-          <div className="bg-zinc-50 border border-zinc-150 rounded-2xl p-5 space-y-4 text-left">
+          {/* TAB 2: TEXTOS */}
+          {activeTab === 'textos' && (
+            <div className="bg-zinc-50 border border-zinc-150 rounded-2xl p-5 space-y-4 text-left">
             <div className="flex justify-between items-center border-b border-zinc-200 pb-2">
               <h4 className="font-sans font-bold text-xs text-zinc-700 uppercase tracking-widest flex items-center gap-1.5">
                 <FileText size={14} className="text-[#ff0090]" />
@@ -875,9 +953,13 @@ export default function AdminPortada({ onAddLog }: AdminPortadaProps) {
               </div>
             </div>
           </div>
+        )}
 
-          {/* Background customizable rules with photos, HTML, video */}
-          <div className="bg-zinc-50 border border-zinc-150 rounded-2xl p-5 space-y-4 text-left">
+          {/* TAB 3: FONTS I DISSENY */}
+          {activeTab === 'fondo' && (
+            <div className="space-y-6">
+              {/* Background customizable rules with photos, HTML, video */}
+              <div className="bg-zinc-50 border border-zinc-150 rounded-2xl p-5 space-y-4 text-left">
             <h4 className="font-sans font-bold text-xs text-zinc-700 uppercase tracking-widest flex items-center gap-1.5 border-b border-zinc-200 pb-2">
               <Palette size={14} className="text-[#ff0090]" />
               {language === 'ca' ? "Dissenya el Fons de Pantalla" : "Diseña el Fondo de Pantalla"}
@@ -2088,33 +2170,15 @@ export default function AdminPortada({ onAddLog }: AdminPortadaProps) {
               />
             )}
           </div>
+        </div>
+      )}
 
-          {/* Action trigger submits */}
-          <div className="flex flex-col sm:flex-row gap-3 pt-2">
-            <button
-              type="button"
-              onClick={handleResetDefaults}
-              className="px-5 py-3.5 bg-zinc-100 hover:bg-zinc-200/80 active:bg-zinc-50 border border-zinc-200 text-zinc-700 font-bold rounded-2xl transition duration-200 text-xs flex items-center justify-center gap-1.5 uppercase tracking-wide cursor-pointer font-semibold"
-            >
-              <RotateCcw size={14} className="text-[#ff0090]" />
-              {language === 'ca' ? "Restaurar Defecte" : "Restaurar Defectos"}
-            </button>
-
-            <button
-              type="submit"
-              className="flex-1 py-3.5 bg-[#ff0090] text-white hover:bg-[#ff0090]/90 active:scale-[0.99] transition duration-200 text-xs font-black rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-fuchsia-150 uppercase tracking-widest cursor-pointer"
-            >
-              <CheckCircle2 size={15} />
-              {language === 'ca' ? "Desar Configuració" : "Guardar Configuración"}
-            </button>
-          </div>
-
-          {saveSuccess && (
-            <div className="p-3.5 bg-emerald-50 text-emerald-800 text-xs font-bold rounded-xl flex items-center gap-2 border border-emerald-200 animate-pulse text-left font-sans shadow-xs">
-              <CheckCircle2 size={16} className="text-emerald-500" />
-              <span>{language === 'ca' ? "Canvis desats amb èxit! La Portada ha estat actualitzada a l'instant." : "¡Cambios guardados con éxito! La Portada ha sido actualizada al instante."}</span>
-            </div>
-          )}
+      {saveSuccess && (
+        <div className="p-3.5 bg-emerald-50 text-emerald-800 text-xs font-bold rounded-xl flex items-center gap-2 border border-emerald-200 animate-pulse text-left font-sans shadow-xs">
+          <CheckCircle2 size={16} className="text-emerald-500" />
+          <span>{language === 'ca' ? "Canvis desats amb èxit! La Portada ha estat actualitzada a l'instant." : "¡Cambios guardados con éxito! La Portada ha sido actualizada al instante."}</span>
+        </div>
+      )}
 
         </div>
 
