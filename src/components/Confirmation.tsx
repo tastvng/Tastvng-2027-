@@ -328,6 +328,13 @@ export default function Confirmation({ registration, onClear, onUpdate }: Confir
               attachments: emailAttachments
             }
           })
+        }).catch(err => {
+          console.error(`Fetch to /api/send-email failed for ${emailTo}:`, err);
+          return {
+            ok: false,
+            status: 500,
+            text: async () => err.message || String(err)
+          } as Response;
         });
       });
 
