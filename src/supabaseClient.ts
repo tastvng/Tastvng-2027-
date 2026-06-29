@@ -29,6 +29,30 @@ if (isSupabaseConfigured) {
 const settingCache = new Map<string, any>();
 let isSettingCacheInitialized = false;
 
+let hasKeyColumn: boolean | null = null;
+
+async function checkKeyColumnExists(): Promise<boolean> {
+  if (hasKeyColumn !== null) return hasKeyColumn;
+  if (!supabase) return false;
+  try {
+    const { error } = await supabase
+      .from('settings')
+      .select('key')
+      .limit(1);
+    if (error) {
+      if (error.code === '42703' || error.message?.includes('column') || error.message?.includes('does not exist')) {
+        hasKeyColumn = false;
+        return false;
+      }
+    }
+    hasKeyColumn = true;
+    return true;
+  } catch (e) {
+    hasKeyColumn = false;
+    return false;
+  }
+}
+
 /**
  * Generic getter function for any setting in Supabase.
  * Supports adaptive schema formats where columns are named 'id' or 'key' 
@@ -63,6 +87,9 @@ export async function getSupabaseSetting<T>(key: string, defaultValue: T): Promi
     }
     
     if (data && data.length > 0) {
+      // Determine if the key column exists directly from rows
+      hasKeyColumn = data[0].key !== undefined;
+
       for (const row of data) {
         const rowKey = row.key !== undefined ? row.key : row.id;
         if (rowKey !== undefined && rowKey !== null) {
@@ -116,46 +143,68 @@ export async function saveSupabaseSetting(key: string, value: any): Promise<bool
       ? JSON.stringify(value)
       : value;
 
-    // Try multi-column robust upsert (supporting both table structures)
+    const keyExistsInTable = await checkKeyColumnExists();
+    const isNumericKey = /^\d+$/.test(key);
+
+    let upsertPayload: any = { value: normalizedValue };
+    let upsertOptions: any = {};
+
+    if (keyExistsInTable) {
+      upsertPayload.key = key;
+      // If we have a 'key' column, and the string key is purely numeric, we can also pass it as 'id' to be safe.
+      // If it's non-numeric, we MUST NOT pass 'id: key' because id is likely a bigint PK.
+      if (isNumericKey) {
+        upsertPayload.id = parseInt(key, 10);
+      }
+      upsertOptions.onConflict = 'key';
+    } else {
+      // No key column exists, so we must be using 'id' as the text primary key column.
+      upsertPayload.id = key;
+    }
+
     const { error: upsertError } = await supabase
       .from('settings')
-      .upsert({ key: key, id: key, value: normalizedValue });
+      .upsert(upsertPayload, upsertOptions);
 
     if (!upsertError) {
       return true;
     }
 
-    console.warn(`Direct multi-column upsert failed, executing defensive select/update/insert fallback flow:`, upsertError.message);
+    console.warn(`Direct upsert failed, executing defensive fallback flow:`, upsertError.message || upsertError);
 
-    // Update fallback by 'key'
-    const { error: updateKeyError } = await supabase
-      .from('settings')
-      .update({ value: normalizedValue })
-      .eq('key', key);
+    // Update fallback
+    if (keyExistsInTable) {
+      const { error: updateKeyError } = await supabase
+        .from('settings')
+        .update({ value: normalizedValue })
+        .eq('key', key);
+      if (!updateKeyError) return true;
+    } else {
+      const { error: updateIdError } = await supabase
+        .from('settings')
+        .update({ value: normalizedValue })
+        .eq('id', key);
+      if (!updateIdError) return true;
+    }
 
-    if (!updateKeyError) return true;
+    // Insert fallback
+    if (keyExistsInTable) {
+      const insertPayload: any = { key: key, value: normalizedValue };
+      if (isNumericKey) {
+        insertPayload.id = parseInt(key, 10);
+      }
+      const { error: insertKeyError } = await supabase
+        .from('settings')
+        .insert(insertPayload);
+      if (!insertKeyError) return true;
+    } else {
+      const { error: insertIdError } = await supabase
+        .from('settings')
+        .insert({ id: key, value: normalizedValue });
+      if (!insertIdError) return true;
+    }
 
-    // Update fallback by 'id'
-    const { error: updateIdError } = await supabase
-      .from('settings')
-      .update({ value: normalizedValue })
-      .eq('id', key);
-
-    if (!updateIdError) return true;
-
-    // Insert fallback by 'key'
-    const { error: insertKeyError } = await supabase
-      .from('settings')
-      .insert({ key: key, value: normalizedValue });
-
-    if (!insertKeyError) return true;
-
-    // Insert fallback by 'id'
-    const { error: insertIdError } = await supabase
-      .from('settings')
-      .insert({ id: key, value: normalizedValue });
-
-    return !insertIdError;
+    return false;
   } catch (err) {
     console.error(`Exception saving setting to Supabase for key [${key}]:`, err);
     return false;
