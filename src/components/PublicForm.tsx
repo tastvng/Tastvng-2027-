@@ -6,11 +6,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
-  Camera, 
-  Upload, 
-  Check,
   ShieldCheck, 
-  Trash2, 
   Sparkles, 
   Plus, 
   Minus, 
@@ -22,6 +18,8 @@ import {
 import { CategoriaParella, SistemaConfig, Inscripcio, EstatPagament, EstatVerificacio, EstatInscripcio } from '../types';
 import { useLanguage } from '../LanguageContext';
 import TranslatedText, { TranslatedOption } from './TranslatedText';
+import { ComparserCard } from './publicForm/ComparserCard';
+import { CameraModal } from './publicForm/CameraModal';
 
 interface PublicFormProps {
   config: SistemaConfig;
@@ -304,141 +302,121 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
         canvas.width = video.videoWidth || 640;
         canvas.height = video.videoHeight || 480;
         context.drawImage(video, 0, 0, canvas.width, canvas.height);
-        
-        // Add a beautiful watermark of 'El Tast' just to demonstrate realism
-        context.fillStyle = 'rgba(230, 0, 126, 0.4)';
-        context.font = 'bold 20px Inter';
-        context.fillText('EL TAST - DNI VALIDACIÓ', 20, canvas.height - 30);
-        
         const dataUrl = canvas.toDataURL('image/webp');
-        if (cameraOwner === 'c1') setC1DniUrl(dataUrl);
-        if (cameraOwner === 'c2') setC2DniUrl(dataUrl);
-        
-        stopCamera();
+        if (cameraOwner === 'c1') {
+          setC1DniUrl(dataUrl);
+          if (errors.c1Dni) {
+            setErrors(prev => {
+              const copy = { ...prev };
+              delete copy.c1Dni;
+              return copy;
+            });
+          }
+        } else if (cameraOwner === 'c2') {
+          setC2DniUrl(dataUrl);
+          if (errors.c2Dni) {
+            setErrors(prev => {
+              const copy = { ...prev };
+              delete copy.c2Dni;
+              return copy;
+            });
+          }
+        }
       }
-    } else {
-      // Simulator fallback if real webcam does not load or is blocked in iframe
-      simulateCapture();
-    }
-  };
-
-  const simulateCapture = () => {
-    // Generate a beautiful fuchsia stylized voucher image representing a DNI card
-    const c = document.createElement('canvas');
-    c.width = 600;
-    c.height = 380;
-    const ctx = c.getContext('2d');
-    if (ctx) {
-      // Background gradient
-      const gradient = ctx.createLinearGradient(0, 0, 600, 380);
-      gradient.addColorStop(0, '#1c1917');
-      gradient.addColorStop(1, '#e6007e');
-      ctx.fillStyle = gradient;
-      ctx.fillRect(0, 0, 600, 380);
-
-      // Card frame
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 4;
-      ctx.strokeRect(15, 15, 570, 350);
-
-      // Profile avatar mockup
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
-      ctx.fillRect(40, 50, 150, 190);
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(40, 50, 150, 190);
-      
-      // Face placeholder lines
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.arc(115, 120, 40, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(115, 220, 60, Math.PI, 0);
-      ctx.fill();
-
-      // Text fields
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 24px Arial';
-      ctx.fillText('DOCUMENT NACIONAL D\'IDENTITAT', 220, 80);
-      
-      ctx.font = '14px Arial';
-      ctx.fillStyle = '#f3f4f6';
-      ctx.fillText(`NOM: ${cameraOwner === 'c1' ? c1Nom || 'Participant 1' : c2Nom || 'Participant 2'}`, 220, 130);
-      ctx.fillText(`COGNOMS: ${cameraOwner === 'c1' ? c1Cognoms || 'Cognoms 1' : c2Cognoms || 'Cognoms 2'}`, 220, 160);
-      ctx.fillText(`SEXE: M/F   ESTAT: SPANISH`, 220, 190);
-      ctx.fillText('DATA EXP: 31 DEC 2030', 220, 220);
-
-      // Big watermark fuchsia text
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
-      ctx.font = 'bold 90px Arial';
-      ctx.fillText('EL TAST', 200, 310);
-
-      // Signature bar
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-      ctx.fillRect(40, 260, 150, 40);
-      ctx.strokeStyle = '#ffffff';
-      ctx.strokeRect(40, 260, 150, 40);
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'italic 14px Georgia';
-      ctx.fillText('Signatura Oficial', 55, 285);
-
-      const dataUrl = c.toDataURL('image/webp');
-      if (cameraOwner === 'c1') setC1DniUrl(dataUrl);
-      if (cameraOwner === 'c2') setC2DniUrl(dataUrl);
       stopCamera();
     }
   };
 
-  // Convert uploaded files to base64 images
+  const simulateCapture = () => {
+    // Inject custom high-contrast placeholder simulated webp
+    const mockDni = `https://images.unsplash.com/photo-1554774853-aae0a22c8aa4?auto=format&fit=crop&q=80&w=600`;
+    if (cameraOwner === 'c1') {
+      setC1DniUrl(mockDni);
+      if (errors.c1Dni) {
+        setErrors(prev => {
+          const copy = { ...prev };
+          delete copy.c1Dni;
+          return copy;
+        });
+      }
+    } else if (cameraOwner === 'c2') {
+      setC2DniUrl(mockDni);
+      if (errors.c2Dni) {
+        setErrors(prev => {
+          const copy = { ...prev };
+          delete copy.c2Dni;
+          return copy;
+        });
+      }
+    }
+    stopCamera();
+  };
+
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, owner: 'c1' | 'c2') => {
     const file = e.target.files?.[0];
     if (file) {
       if (file.size > 10 * 1024 * 1024) {
-        alert("La imatge és massa gran (màxim 10MB).");
+        alert(language === 'ca' ? "L'arxiu supera el màxim permès de 10MB." : "El archivo supera el máximo permitido de 10MB.");
         return;
       }
       const reader = new FileReader();
       reader.onloadend = () => {
-        if (owner === 'c1') setC1DniUrl(reader.result as string);
-        if (owner === 'c2') setC2DniUrl(reader.result as string);
+        const dataUrl = reader.result as string;
+        if (owner === 'c1') {
+          setC1DniUrl(dataUrl);
+          if (errors.c1Dni) {
+            setErrors(prev => {
+              const copy = { ...prev };
+              delete copy.c1Dni;
+              return copy;
+            });
+          }
+        } else if (owner === 'c2') {
+          setC2DniUrl(dataUrl);
+          if (errors.c2Dni) {
+            setErrors(prev => {
+              const copy = { ...prev };
+              delete copy.c2Dni;
+              return copy;
+            });
+          }
+        }
       };
       reader.readAsDataURL(file);
     }
   };
 
-    // Validators
   const validateForm = () => {
     const tempErrors: Record<string, string> = {};
-    if (!c1Nom.trim()) tempErrors.c1Nom = language === 'ca' ? "El nom és requerit" : "El nombre es requerido";
-    if (!c1Cognoms.trim()) tempErrors.c1Cognoms = language === 'ca' ? "Els cognoms són requerits" : "Los apellidos son requeridos";
-    if (!c1Email.trim() || !/\S+@\S+\.\S+/.test(c1Email)) tempErrors.c1Email = language === 'ca' ? "Email vàlid requerit" : "Email válido requerido";
-    if (!c1Telefon.trim()) tempErrors.c1Telefon = language === 'ca' ? "El telèfon és requerit" : "El teléfono es requerido";
-    if (!c1DniUrl) tempErrors.c1Dni = language === 'ca' ? "Cal pujar el DNI del/de la Comparser/a 1" : "Es necesario subir el DNI del/de la Comparser/a 1";
+
+    if (!c1Nom.trim()) tempErrors.c1Nom = language === 'ca' ? "El nom del primer participant és obligatori" : "El nombre del primer participante es obligatorio";
+    if (!c1Cognoms.trim()) tempErrors.c1Cognoms = language === 'ca' ? "Els cognoms del primer participant són obligatoris" : "Los apellidos del primer participante son obligatorios";
+    if (!c1Telefon.trim()) tempErrors.c1Telefon = language === 'ca' ? "El telèfon del primer participant és obligatori" : "El teléfono del primer participante es obligatorio";
+    if (!c1Email.trim()) tempErrors.c1Email = language === 'ca' ? "El correu del primer participant és obligatori" : "El correo del primer participante es obligatorio";
+    if (!c1DniUrl) tempErrors.c1Dni = language === 'ca' ? "Heu de pujar una imatge del DNI frontal" : "Debe subir una imagen del DNI frontal";
 
     if (c1EsMenor) {
-      if (!c1TutorNom.trim()) tempErrors.c1TutorNom = language === 'ca' ? "El nom del tutor és requerit" : "El nombre del tutor es requerido";
-      if (!c1TutorCognoms.trim()) tempErrors.c1TutorCognoms = language === 'ca' ? "Els cognoms del tutor són requerits" : "Los apellidos del tutor son requeridos";
-      if (!c1TutorDni.trim()) tempErrors.c1TutorDni = language === 'ca' ? "El DNI del tutor és requerit" : "El DNI del tutor es requerido";
-      if (!c1TutorTelefon.trim()) tempErrors.c1TutorTelefon = language === 'ca' ? "El telèfon del tutor és requerit" : "El teléfono del tutor es requerido";
-      if (!c1TutorAccepta) tempErrors.c1TutorAccepta = language === 'ca' ? "Cal acceptar l'autorització de menors" : "Es necesario aceptar la autorización de menores";
+      if (!c1TutorNom.trim()) tempErrors.c1TutorNom = language === 'ca' ? "El nom del tutor és obligatori" : "El nombre del tutor es obligatorio";
+      if (!c1TutorCognoms.trim()) tempErrors.c1TutorCognoms = language === 'ca' ? "Els cognoms del tutor són obligatoris" : "Los apellidos del tutor son obligatorios";
+      if (!c1TutorDni.trim()) tempErrors.c1TutorDni = language === 'ca' ? "El DNI del tutor és obligatori" : "El DNI del tutor es obligatorio";
+      if (!c1TutorTelefon.trim()) tempErrors.c1TutorTelefon = language === 'ca' ? "El telèfon del tutor és obligatori" : "El teléfono del tutor es obligatorio";
+      if (!c1TutorAccepta) tempErrors.c1TutorAccepta = language === 'ca' ? "Heu d'acceptar l'autorització de menors" : "Debe aceptar la autorización de menores";
     }
 
-    if (!c2Nom.trim()) tempErrors.c2Nom = language === 'ca' ? "El nom és requerit" : "El nombre es requerido";
-    if (!c2Cognoms.trim()) tempErrors.c2Cognoms = language === 'ca' ? "Els cognoms són requerits" : "Los apellidos son requeridos";
-    if (!c2Email.trim() || !/\S+@\S+\.\S+/.test(c2Email)) tempErrors.c2Email = language === 'ca' ? "Email vàlid requerit" : "Email válido requerido";
-    if (!c2Telefon.trim()) tempErrors.c2Telefon = language === 'ca' ? "El telèfon és requerit" : "El teléfono es requerido";
-    if (!c2DniUrl) tempErrors.c2Dni = language === 'ca' ? "Cal pujar el DNI del/de la Comparser/a 2" : "Es necesario subir el DNI del/de la Comparser/a 2";
+    if (!c2Nom.trim()) tempErrors.c2Nom = language === 'ca' ? "El nom del segon participant és obligatori" : "El nombre del segundo participante es obligatorio";
+    if (!c2Cognoms.trim()) tempErrors.c2Cognoms = language === 'ca' ? "Els cognoms del segon participant són obligatoris" : "Los apellidos del segundo participante son obligatorios";
+    if (!c2Telefon.trim()) tempErrors.c2Telefon = language === 'ca' ? "El telèfon del segon participant és obligatori" : "El teléfono del segundo participante es obligatorio";
+    if (!c2Email.trim()) tempErrors.c2Email = language === 'ca' ? "El correu del segon participant és obligatori" : "El correo del segundo participante es obligatorio";
+    if (!c2DniUrl) tempErrors.c2Dni = language === 'ca' ? "Heu de pujar una imatge del DNI frontal del segon participant" : "Debe subir una imagen del DNI frontal del segundo participante";
 
     if (c2EsMenor) {
-      if (!c2TutorNom.trim()) tempErrors.c2TutorNom = language === 'ca' ? "El nom del tutor és requerit" : "El nombre del tutor es requerido";
-      if (!c2TutorCognoms.trim()) tempErrors.c2TutorCognoms = language === 'ca' ? "Els cognoms del tutor són requerits" : "Los apellidos del tutor son requeridos";
-      if (!c2TutorDni.trim()) tempErrors.c2TutorDni = language === 'ca' ? "El DNI del tutor és requerit" : "El DNI del tutor es requerido";
-      if (!c2TutorTelefon.trim()) tempErrors.c2TutorTelefon = language === 'ca' ? "El telèfon del tutor és requerit" : "El teléfono del tutor es requerido";
-      if (!c2TutorAccepta) tempErrors.c2TutorAccepta = language === 'ca' ? "Cal acceptar l'autorització de menors" : "Es necesario aceptar la autorización de menores";
+      if (!c2TutorNom.trim()) tempErrors.c2TutorNom = language === 'ca' ? "El nom del tutor 2 és obligatori" : "El nombre del tutor 2 es obligatorio";
+      if (!c2TutorCognoms.trim()) tempErrors.c2TutorCognoms = language === 'ca' ? "Els cognoms del tutor 2 són obligatoris" : "Los apellidos del tutor 2 son obligatorios";
+      if (!c2TutorDni.trim()) tempErrors.c2TutorDni = language === 'ca' ? "El DNI del tutor 2 és obligatori" : "El DNI del tutor 2 es obligatorio";
+      if (!c2TutorTelefon.trim()) tempErrors.c2TutorTelefon = language === 'ca' ? "El telèfon del tutor 2 és obligatori" : "El teléfono del tutor 2 es obligatorio";
+      if (!c2TutorAccepta) tempErrors.c2TutorAccepta = language === 'ca' ? "Heu d'acceptar l'autorització de menors 2" : "Debe aceptar la autorización de menores 2";
     }
 
-    // Validate active required dynamic questions (only if questionnaire is active)
     if (config.cuestionariActiu !== false && config.preguntesFormulari) {
       config.preguntesFormulari.filter(q => q.activa && q.requerit).forEach(q => {
         const val = respostesCuestionari[q.id];
@@ -578,7 +556,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
       const codiSeguiment = `${prefix}-TEMP-${Math.floor(1000 + Math.random() * 9000)}`;
 
       const finalRespostes: Record<string, string> = {
-        ...respostesCuestionari
+        ...respostesCuestionari as Record<string, string>
       };
 
       if (teDomasBalcoQty > 0) finalRespostes['domas_qty'] = String(teDomasBalcoQty);
@@ -908,929 +886,84 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
 
         {/* Two-Column Comparser Info Sheets */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          
-          {/* Comparser 1 Card */}
-          <div className={`rounded-3xl p-6 border transition-all relative overflow-hidden ${errors.c1Duplicat || isC1NameDuplicate || isC1EmailDuplicate || isC1PhoneDuplicate ? 'bg-amber-50/10 border-amber-300 ring-2 ring-amber-300 shadow-amber-100/30' : 'bg-white border-zinc-200/80 shadow-md'}`}>
-            <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-zinc-100 to-transparent pointer-events-none rounded-bl-3xl flex items-center justify-center">
-              <span className="font-mono text-zinc-400 text-sm font-bold">#1</span>
-            </div>
-            
-            <div className="flex justify-between items-center mb-5 pb-2 border-b border-zinc-100">
-              <h3 className="font-sans font-bold text-zinc-900 text-lg flex items-center gap-2">
-                <div className="w-2.5 h-2.5 bg-fuchsia-500 rounded-full" />
-                {language === 'ca' ? 'Comparser/a 1' : 'Comparsero/a 1'}
-              </h3>
-              <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-150 px-2 py-0.5 rounded-full font-mono uppercase tracking-tight flex items-center gap-1 shadow-sm shrink-0" title={language === 'ca' ? "Sincronitzat amb la base de dades" : "Sincronizado con la base de datos"}>
-                <Database size={9} /> {language === 'ca' ? 'Enllaç BBDD' : 'Enlace BBDD'}
-              </span>
-            </div>
+          <ComparserCard
+            num={1}
+            nom={c1Nom}
+            setNom={setC1Nom}
+            cognoms={c1Cognoms}
+            setCognoms={setC1Cognoms}
+            telefon={c1Telefon}
+            setTelefon={setC1Telefon}
+            email={c1Email}
+            setEmail={setC1Email}
+            dniUrl={c1DniUrl}
+            setDniUrl={setC1DniUrl}
+            esMenor={c1EsMenor}
+            setEsMenor={setC1EsMenor}
+            tutorNom={c1TutorNom}
+            setTutorNom={setC1TutorNom}
+            tutorCognoms={c1TutorCognoms}
+            setTutorCognoms={setC1TutorCognoms}
+            tutorDni={c1TutorDni}
+            setTutorDni={setC1TutorDni}
+            tutorTelefon={c1TutorTelefon}
+            setTutorTelefon={setC1TutorTelefon}
+            tutorAccepta={c1TutorAccepta}
+            setTutorAccepta={setC1TutorAccepta}
+            seleccionsUniforme={seleccionsUniforme}
+            setSeleccionsUniforme={setSeleccionsUniforme}
+            setTallaBackwards={setC1Talla}
+            setUniformeTipusBackwards={setC1UniformeTipus}
+            extrasSeleccionats={c1ExtrasSeleccionats}
+            setExtrasSeleccionats={setC1ExtrasSeleccionats}
+            isNameDuplicate={isC1NameDuplicate}
+            isEmailDuplicate={isC1EmailDuplicate}
+            isPhoneDuplicate={isC1PhoneDuplicate}
+            errors={errors}
+            config={config}
+            handleFileUpload={handleFileUpload}
+            startCamera={startCamera}
+          />
 
-            {(errors.c1Duplicat || isC1NameDuplicate || isC1EmailDuplicate || isC1PhoneDuplicate) && (
-              <div className="bg-amber-50 border border-amber-200 text-amber-900 px-4 py-3 rounded-2xl mb-4 flex items-start gap-2.5 text-xs">
-                <AlertTriangle className="shrink-0 text-amber-600 mt-0.5" size={16} />
-                <div>
-                  <p className="font-bold">{language === 'ca' ? "Avís de dades coincidents" : "Aviso de datos coincidentes"}</p>
-                  <p className="text-[11px] text-amber-700 leading-normal mt-0.5">
-                    {language === 'ca'
-                      ? "S'ha detectat que part d'aquestes dades ja estan registrades a la base de dades d'inscripcions!"
-                      : "¡Se ha detectado que parte de estos datos ya están registrados en la base de datos de inscripciones!"}
-                  </p>
-                </div>
-              </div>
-            )}
-
-            <div className="space-y-4">
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-bold text-zinc-700 tracking-tight">
-                    {language === 'ca' ? 'Nom *' : 'Nombre *'}
-                  </label>
-                  <span className="text-[8px] font-bold text-emerald-600 bg-emerald-50 px-1 py-0.5 rounded font-mono uppercase tracking-tight flex items-center gap-0.5" title={language === 'ca' ? "Es desa a la base de dades" : "Se guarda en la base de datos"}>
-                    <Database size={8} /> BBDD
-                  </span>
-                </div>
-                <input 
-                  type="text" 
-                  value={c1Nom} 
-                  onChange={(e) => setC1Nom(e.target.value)}
-                  className={`w-full bg-zinc-50 border ${errors.c1Nom || isC1NameDuplicate ? 'border-amber-400 focus:border-amber-500 bg-amber-50/5' : 'border-zinc-200 focus:border-fuchsia-500'} focus:bg-white rounded-xl px-4 py-3 text-sm focus:outline-none transition-all`}
-                  placeholder={language === 'ca' ? "Ex. Joan" : "Ej. Juan"}
-                  id="input-c1-nom"
-                />
-                {isC1NameDuplicate && (
-                  <p className="text-[9px] text-amber-600 font-bold mt-1 flex items-center gap-1 animate-pulse">
-                    <AlertTriangle size={10} /> {language === 'ca' ? "Ja existeix un participant amb aquest nom a la BBDD" : "Ya existe un participante con este nombre en la BBDD"}
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-bold text-zinc-700 tracking-tight">
-                    {language === 'ca' ? 'Cognoms *' : 'Apellidos *'}
-                  </label>
-                  <span className="text-[8px] font-bold text-emerald-600 bg-emerald-50 px-1 py-0.5 rounded font-mono uppercase tracking-tight flex items-center gap-0.5" title={language === 'ca' ? "Es desa a la base de dades" : "Se guarda en la base de datos"}>
-                    <Database size={8} /> BBDD
-                  </span>
-                </div>
-                <input 
-                  type="text" 
-                  value={c1Cognoms} 
-                  onChange={(e) => setC1Cognoms(e.target.value)}
-                  className={`w-full bg-zinc-50 border ${errors.c1Cognoms || isC1NameDuplicate ? 'border-amber-400 focus:border-amber-500 bg-amber-50/5' : 'border-zinc-200 focus:border-fuchsia-500'} focus:bg-white rounded-xl px-4 py-3 text-sm focus:outline-none transition-all`}
-                  placeholder={language === 'ca' ? "Ex. Garcia Pujol" : "Ej. García Pujol"}
-                  id="input-c1-cognoms"
-                />
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-bold text-zinc-700 tracking-tight">
-                    {language === 'ca' ? 'Telèfon de contacte *' : 'Teléfono de contacto *'}
-                  </label>
-                  <span className="text-[8px] font-bold text-emerald-600 bg-emerald-50 px-1 py-0.5 rounded font-mono uppercase tracking-tight flex items-center gap-0.5" title={language === 'ca' ? "Es desa a la base de dades" : "Se guarda en la base de datos"}>
-                    <Database size={8} /> BBDD
-                  </span>
-                </div>
-                <input 
-                  type="tel" 
-                  value={c1Telefon} 
-                  onChange={(e) => setC1Telefon(e.target.value)}
-                  className={`w-full bg-zinc-50 border ${errors.c1Telefon || isC1PhoneDuplicate ? 'border-amber-400 focus:border-amber-500 bg-amber-50/5' : 'border-zinc-200 focus:border-fuchsia-500'} focus:bg-white rounded-xl px-4 py-3 text-sm focus:outline-none transition-all`}
-                  placeholder={language === 'ca' ? "Ex. 600123456" : "Ej. 600123456"}
-                  id="input-c1-telefon"
-                />
-                {isC1PhoneDuplicate && (
-                  <p className="text-[9px] text-amber-600 font-bold mt-1 flex items-center gap-1 animate-pulse">
-                    <AlertTriangle size={10} /> {language === 'ca' ? "Aquest telèfon ja consta registrat a la BBDD" : "Este teléfono ya consta registrado en la BBDD"}
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-bold text-zinc-700 tracking-tight">
-                    {language === 'ca' ? 'Correu electrònic *' : 'Correo electrónico *'}
-                  </label>
-                  <span className="text-[8px] font-bold text-emerald-600 bg-emerald-50 px-1 py-0.5 rounded font-mono uppercase tracking-tight flex items-center gap-0.5" title={language === 'ca' ? "Es desa a la base de dades" : "Se guarda en la base de datos"}>
-                    <Database size={8} /> BBDD
-                  </span>
-                </div>
-                <input 
-                  type="email" 
-                  value={c1Email} 
-                  onChange={(e) => setC1Email(e.target.value)}
-                  className={`w-full bg-zinc-50 border ${errors.c1Email || isC1EmailDuplicate ? 'border-amber-400 focus:border-amber-500 bg-amber-50/5' : 'border-zinc-200 focus:border-fuchsia-500'} focus:bg-white rounded-xl px-4 py-3 text-sm focus:outline-none transition-all`}
-                  placeholder={language === 'ca' ? "Ex. joan@gmail.com" : "Ej. juan@gmail.com"}
-                  id="input-c1-email"
-                />
-                {isC1EmailDuplicate && (
-                  <p className="text-[9px] text-amber-600 font-bold mt-1 flex items-center gap-1 animate-pulse">
-                    <AlertTriangle size={10} /> {language === 'ca' ? "Aquest correu ja consta registrat a la BBDD" : "Este correo ya consta registrado en la BBDD"}
-                  </p>
-                )}
-              </div>
-
-              {/* Minor status and Tutor details for Comparser 1 */}
-              <div className="bg-zinc-50 border border-zinc-200 rounded-2xl p-4 space-y-3">
-                <div className="flex justify-between items-center">
-                  <label className="block text-xs font-bold text-zinc-700 tracking-tight">
-                    {language === 'ca' ? "El primer comparser és menor d'edat? *" : "¿El primer comparsero es menor de edad? *"}
-                  </label>
-                  <div className="flex rounded-lg overflow-hidden border border-zinc-200 bg-white p-0.5">
-                    <button
-                      type="button"
-                      onClick={() => setC1EsMenor(false)}
-                      className={`text-xs px-3 py-1 font-bold rounded-md transition-all cursor-pointer ${!c1EsMenor ? 'bg-fuchsia-100 text-fuchsia-700 shadow-sm' : 'text-zinc-500 hover:text-zinc-800'}`}
-                    >
-                      {language === 'ca' ? "No" : "No"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setC1EsMenor(true)}
-                      className={`text-xs px-3 py-1 font-bold rounded-md transition-all cursor-pointer ${c1EsMenor ? 'bg-fuchsia-600 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-800'}`}
-                    >
-                      {language === 'ca' ? "Sí" : "Sí"}
-                    </button>
-                  </div>
-                </div>
-
-                {c1EsMenor && (
-                  <div className="pt-2 border-t border-zinc-200/60 space-y-3 animate-fadeIn">
-                    <div className="text-[10px] bg-amber-50 text-amber-800 border border-amber-200 rounded-lg p-2 font-semibold">
-                      {language === 'ca' 
-                        ? "En ser menor d'edat, cal incloure obligatòriament les dades de contacte del tutor legal."
-                        : "Al ser menor de edad, es obligatorio incluir los datos de contacto de su tutor legal."}
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-[10px] font-bold text-zinc-500 uppercase font-mono mb-1">
-                          {language === 'ca' ? "Nom del Tutor *" : "Nombre del Tutor *"}
-                        </label>
-                        <input 
-                          type="text"
-                          value={c1TutorNom}
-                          onChange={(e) => setC1TutorNom(e.target.value)}
-                          className={`w-full bg-white border ${errors.c1TutorNom ? 'border-red-500' : 'border-zinc-250'} focus:border-fuchsia-500 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none`}
-                          placeholder={language === 'ca' ? "Ex. Pere" : "Ej. Pedro"}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-zinc-500 uppercase font-mono mb-1">
-                          {language === 'ca' ? "Cognoms del Tutor *" : "Apellidos del Tutor *"}
-                        </label>
-                        <input 
-                          type="text"
-                          value={c1TutorCognoms}
-                          onChange={(e) => setC1TutorCognoms(e.target.value)}
-                          className={`w-full bg-white border ${errors.c1TutorCognoms ? 'border-red-500' : 'border-zinc-250'} focus:border-fuchsia-500 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none`}
-                          placeholder={language === 'ca' ? "Ex. Garcia Pou" : "Ej. García Pou"}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-[10px] font-bold text-zinc-500 uppercase font-mono mb-1">
-                          {language === 'ca' ? "DNI / NIE del Tutor *" : "DNI / NIE del Tutor *"}
-                        </label>
-                        <input 
-                          type="text"
-                          value={c1TutorDni}
-                          onChange={(e) => setC1TutorDni(e.target.value)}
-                          className={`w-full bg-white border ${errors.c1TutorDni ? 'border-red-500' : 'border-zinc-250'} focus:border-fuchsia-500 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none`}
-                          placeholder={language === 'ca' ? "Ex. 12345678Z" : "Ej. 12345678Z"}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-zinc-500 uppercase font-mono mb-1">
-                          {language === 'ca' ? "Telèfon del Tutor *" : "Teléfono del Tutor *"}
-                        </label>
-                        <input 
-                          type="tel"
-                          value={c1TutorTelefon}
-                          onChange={(e) => setC1TutorTelefon(e.target.value)}
-                          className={`w-full bg-white border ${errors.c1TutorTelefon ? 'border-red-500' : 'border-zinc-250'} focus:border-fuchsia-500 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none`}
-                          placeholder={language === 'ca' ? "Ex. 600123456" : "Ej. 600123456"}
-                        />
-                      </div>
-                    </div>
-
-                    {/* Legal Authorization Text for Minors */}
-                    <div className="pt-3 border-t border-zinc-200/80 space-y-2">
-                      <label className="block text-[10px] font-bold text-zinc-500 uppercase font-mono">
-                        {language === 'ca' ? "Autorització de deures i responsabilitats de menors *" : "Autorización de deberes y responsabilidades de menores *"}
-                      </label>
-                      <div className="bg-white border border-zinc-200 rounded-xl p-3 max-h-32 overflow-y-auto text-[11px] text-zinc-600 leading-relaxed font-sans whitespace-pre-line shadow-inner">
-                        {language === 'ca' 
-                          ? (config.textLegalAutoritzacioMenors || "AUTORITZACIÓ DE MENORS D'EDAT\n\nEn condició de tutor/a legal del menor inscrit, declaro sota la meva responsabilitat que autoritzo expressament la seva participació a l'esdeveniment i activitats organitzades per l'Associació Cultural El Tast.")
-                          : (config.textLegalAutoritzacioMenorsES || "AUTORIZACIÓN DE MENORES DE EDAD\n\nEn condición de tutor/a legal del menor inscrito, declaro bajo mi responsabilidad que autorizo expresamente su participación en el evento y actividades organizadas por la Associació Cultural El Tast.")
-                        }
-                      </div>
-
-                      <label className={`flex items-start gap-2.5 p-3 rounded-xl border transition-all cursor-pointer ${c1TutorAccepta ? 'bg-fuchsia-50/40 border-fuchsia-200 text-fuchsia-950' : errors.c1TutorAccepta ? 'bg-red-50/40 border-red-200 text-red-950 animate-shake' : 'bg-white border-zinc-200 text-zinc-700 hover:border-zinc-300'}`}>
-                        <input
-                          type="checkbox"
-                          checked={c1TutorAccepta}
-                          onChange={(e) => setC1TutorAccepta(e.target.checked)}
-                          className="mt-0.5 rounded border-zinc-300 text-fuchsia-600 filter-none focus:ring-fuchsia-500 cursor-pointer"
-                        />
-                        <span className="text-xs font-semibold leading-tight select-none">
-                          {language === 'ca'
-                            ? "Com a tutor legal, autoritzo i accepto de forma expressa les condicions i responsabilitats indicades."
-                            : "Como tutor legal, autorizo y acepto de forma expresa las condiciones y responsabilidades indicadas."
-                          }
-                        </span>
-                      </label>
-                      {errors.c1TutorAccepta && (
-                        <p className="text-[10px] text-red-500 font-bold">{errors.c1TutorAccepta}</p>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Dynamic clothing lines and custom equipment options - Comparser 1 */}
-              {(config.liniisUniforme || [
-                {
-                  id: 'lin-1',
-                  nom: config.nomUniforme || 'Talla de Samarreta',
-                  nomES: config.nomUniformeES || 'Talla de Camiseta',
-                  opcions: config.opcionsUniforme || ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'],
-                  requeixQuantitat: false
-                }
-              ]).map((linia) => {
-                const sel = seleccionsUniforme[linia.id] || { c1Talla: linia.opcions[0] || 'M', c2Talla: linia.opcions[0] || 'M', c1Quantitat: 1, c2Quantitat: 1, c1Tipus: 'compra' as const, c2Tipus: 'compra' as const };
-                return (
-                  <div key={linia.id} className="space-y-2 p-4 bg-zinc-50 border border-zinc-200 rounded-2xl">
-                    <div className="flex justify-between items-center mb-1 bg-white px-3 py-1.5 rounded-lg border border-zinc-100 shadow-sm">
-                      <label className="block text-xs font-bold text-zinc-800 tracking-tight">
-                        {language === 'ca' ? linia.nom : linia.nomES} *
-                      </label>
-                      {(linia.preu || linia.preuLloguer) ? (
-                        <div className="flex gap-1.5 flex-wrap justify-end">
-                          {linia.preu && (!sel || !sel.c1Tipus || sel.c1Tipus === 'compra') ? (
-                            <span className="text-[10px] font-mono text-fuchsia-600 bg-fuchsia-50 rounded px-1.5 py-0.5 border border-fuchsia-100 font-bold tracking-tight">
-                              +{linia.preu}€ (compra)
-                            </span>
-                          ) : null}
-                          {linia.preuLloguer && sel && sel.c1Tipus === 'lloguer' ? (
-                            <span className="text-[10px] font-mono text-sky-600 bg-sky-50 rounded px-1.5 py-0.5 border border-sky-100 font-bold tracking-tight">
-                              +{linia.preuLloguer}€ {language === 'ca' ? '(lloguer)' : '(alquiler)'}
-                            </span>
-                          ) : null}
-                        </div>
-                      ) : null}
-                    </div>
-
-                    <div className="flex gap-2.5">
-                      <select 
-                        value={sel.c1Talla}
-                        onChange={(e) => {
-                          const newSel = { ...sel, c1Talla: e.target.value };
-                          setSeleccionsUniforme({
-                            ...seleccionsUniforme,
-                            [linia.id]: newSel
-                          });
-                          // Maintain backward compatibility for c1Talla if it matches the first item
-                          const firstId = (config.liniisUniforme && config.liniisUniforme[0]?.id) || 'lin-1';
-                          if (linia.id === firstId) {
-                            setC1Talla(e.target.value);
-                          }
-                        }}
-                        className="flex-1 bg-white border border-zinc-200 focus:border-fuchsia-500 rounded-xl px-4 py-2.5 text-xs font-bold focus:outline-none cursor-pointer"
-                      >
-                        {linia.opcions.map(opt => (
-                          <option key={opt} value={opt}>{opt}</option>
-                        ))}
-                      </select>
-
-                      {linia.requeixQuantitat && (
-                        <div className="flex items-center gap-2 bg-white border border-zinc-200 rounded-xl px-3 py-1 text-xs shrink-0">
-                          <span className="text-[10px] text-zinc-400 font-mono font-bold uppercase">{language === 'ca' ? "Cant." : "Cant."}</span>
-                          <select
-                            value={sel.c1Quantitat || 1}
-                            onChange={(e) => {
-                              const newSel = { ...sel, c1Quantitat: Math.max(1, Number(e.target.value)) };
-                              setSeleccionsUniforme({
-                                ...seleccionsUniforme,
-                                [linia.id]: newSel
-                              });
-                            }}
-                            className="bg-transparent border-none text-xs font-bold text-zinc-800 focus:ring-0 focus:outline-none cursor-pointer"
-                          >
-                            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => (
-                              <option key={n} value={n}>{n}</option>
-                            ))}
-                          </select>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Casilla o Toggles per triar Venda o Lloguer */}
-                    <div className="mt-2 text-left pt-2 border-t border-zinc-200/50 flex items-center justify-between gap-3">
-                      <span className="text-[10px] font-bold text-zinc-500 uppercase font-mono tracking-tight">
-                        {language === 'ca' ? "Tipus d'Adquisició:" : "Tipo de Adquisición:"}
-                      </span>
-                      <div className="flex bg-white rounded-lg overflow-hidden border border-zinc-200 p-0.5 shrink-0" id="c1-uniform-adquisicio-container">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const newSel = { ...sel, c1Tipus: 'compra' as const };
-                            setSeleccionsUniforme({
-                              ...seleccionsUniforme,
-                              [linia.id]: newSel
-                            });
-                            const firstId = (config.liniisUniforme && config.liniisUniforme[0]?.id) || 'lin-1';
-                            if (linia.id === firstId) {
-                              setC1UniformeTipus('compra');
-                            }
-                          }}
-                          className={`text-[10px] px-2.5 py-1 font-bold rounded-md transition-all cursor-pointer ${(!sel.c1Tipus || sel.c1Tipus === 'compra') ? 'bg-fuchsia-100 text-fuchsia-700 shadow-sm' : 'text-zinc-550 hover:text-zinc-855'}`}
-                        >
-                          Compra
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const newSel = { ...sel, c1Tipus: 'lloguer' as const };
-                            setSeleccionsUniforme({
-                              ...seleccionsUniforme,
-                              [linia.id]: newSel
-                            });
-                            const firstId = (config.liniisUniforme && config.liniisUniforme[0]?.id) || 'lin-1';
-                            if (linia.id === firstId) {
-                              setC1UniformeTipus('lloguer');
-                            }
-                          }}
-                          className={`text-[10px] px-2.5 py-1 font-bold rounded-md transition-all cursor-pointer ${sel.c1Tipus === 'lloguer' ? 'bg-fuchsia-600 text-white shadow-sm' : 'text-zinc-550 hover:text-zinc-855'}`}
-                        >
-                          {language === 'ca' ? "Lloguer" : "Alquiler"}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-
-              {/* Extras per Comparser 1 */}
-              {(() => {
-                const extrasForThisComparser = (config.tarifesDinamiques || []).filter(t => t.actiu && t.tipus === 'extra_generic');
-                if (extrasForThisComparser.length === 0) return null;
-                return (
-                  <div className="pt-4 border-t border-zinc-200/60 pb-2">
-                    <label className="block text-xs font-bold text-zinc-700 tracking-tight mb-3">
-                      {language === 'ca' ? 'Extras / Complements' : 'Extras / Complementos'}
-                    </label>
-                    <div className="space-y-3">
-                      {extrasForThisComparser.map(extr => {
-                        const isChecked = (c1ExtrasSeleccionats[extr.id] || 0) > 0;
-                        return (
-                          <div key={extr.id} 
-                               onClick={() => setC1ExtrasSeleccionats(prev => ({ ...prev, [extr.id]: isChecked ? 0 : 1 }))}
-                               className={`flex justify-between items-center bg-zinc-50 border rounded-xl p-3 cursor-pointer transition-colors ${isChecked ? 'border-[#ff0090] bg-fuchsia-50/50' : 'border-zinc-200 hover:border-zinc-300'}`}>
-                            <div>
-                              <span className="block text-xs font-bold text-zinc-800">{extr.nom}</span>
-                              <span className="block text-[10px] text-zinc-500 font-mono">+{extr.valor}€</span>
-                            </div>
-                            <div className="flex items-center">
-                              <div className={`w-6 h-6 rounded border flex items-center justify-center transition-colors ${isChecked ? 'bg-[#ff0090] border-[#ff0090]' : 'bg-white border-zinc-300'}`}>
-                                {isChecked && <Check className="w-4 h-4 text-white" />}
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {/* DNI upload zona */}
-              <div className="pt-2">
-                <label className="block text-xs font-bold text-zinc-700 tracking-tight mb-1.5">
-                  {language === 'ca' ? 'Foto de la part frontal del DNI *' : 'Foto de la parte frontal del DNI *'}
-                </label>
-                {c1DniUrl ? (
-                  <div className="border border-zinc-200 rounded-2xl p-3 bg-zinc-50 flex items-center justify-between gap-3 relative overflow-hidden group">
-                    <img 
-                      src={c1DniUrl} 
-                      alt="DNI Comparser 1" 
-                      className="w-20 h-14 object-cover rounded-md border border-zinc-200"
-                      referrerPolicy="no-referrer"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-zinc-800 truncate">DNI_Comparser_1.webp</p>
-                      <p className="text-[10px] text-zinc-400 font-mono">
-                        {language === 'ca' ? 'Arxiu penjat correctament' : 'Archivo subido correctamente'}
-                      </p>
-                    </div>
-                    <button 
-                      type="button"
-                      onClick={() => setC1DniUrl(null)}
-                      className="p-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl transition-colors"
-                      title={language === 'ca' ? "Eliminar arxiu" : "Eliminar archivo"}
-                      id="btn-remove-c1-dni"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                ) : (
-                  <div className={`border-2 border-dashed ${errors.c1Dni ? 'border-red-300 bg-red-50/20' : 'border-zinc-200 hover:border-fuchsia-300'} rounded-2xl p-5 text-center transition-all`}>
-                    <Upload className="mx-auto text-zinc-400 mb-2" size={24} />
-                    <p className="text-xs text-zinc-600 font-semibold mb-1">
-                      {language === 'ca' ? 'Arrossega una foto o selecciona un arxiu' : 'Arrastra una foto o selecciona un archivo'}
-                    </p>
-                    <p className="text-[11px] text-zinc-400 mb-3 font-mono">Format PNG, JPG o WEBP (màx 10MB)</p>
-                    
-                    <div className="flex flex-wrap gap-2 justify-center">
-                      <label className="text-xs bg-zinc-100 hover:bg-zinc-200 text-zinc-800 font-bold px-3 py-2 rounded-xl cursor-pointer transition-colors border border-zinc-200">
-                        {language === 'ca' ? 'Pujar fitxer' : 'Subir archivo'}
-                        <input 
-                          type="file" 
-                          accept="image/*" 
-                          onChange={(e) => handleFileUpload(e, 'c1')} 
-                          className="hidden" 
-                        />
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => startCamera('c1')}
-                        className="text-xs bg-fuchsia-600 hover:bg-fuchsia-700 text-white font-bold px-3 py-2 rounded-xl transition-all flex items-center gap-1 shadow-sm cursor-pointer"
-                        id="btn-camera-c1"
-                      >
-                        <Camera size={14} /> {language === 'ca' ? 'Fes foto' : 'Hacer foto'}
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Comparser 2 Card */}
-          <div className={`rounded-3xl p-6 border transition-all relative overflow-hidden ${errors.c2Duplicat || isC2NameDuplicate || isC2EmailDuplicate || isC2PhoneDuplicate ? 'bg-amber-50/10 border-amber-300 ring-2 ring-amber-300 shadow-amber-100/30' : 'bg-white border-zinc-200/80 shadow-md'}`}>
-            <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-zinc-100 to-transparent pointer-events-none rounded-bl-3xl flex items-center justify-center">
-              <span className="font-mono text-zinc-400 text-sm font-bold">#2</span>
-            </div>
-
-            <div className="flex justify-between items-center mb-5 pb-2 border-b border-zinc-100">
-              <h3 className="font-sans font-bold text-zinc-900 text-lg flex items-center gap-2">
-                <div className="w-2.5 h-2.5 bg-fuchsia-500 rounded-full" />
-                {language === 'ca' ? 'Comparser/a 2' : 'Comparsero/a 2'}
-              </h3>
-              <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-150 px-2 py-0.5 rounded-full font-mono uppercase tracking-tight flex items-center gap-1 shadow-sm shrink-0" title={language === 'ca' ? "Sincronitzat amb la base de dades" : "Sincronizado con la base de datos"}>
-                <Database size={9} /> {language === 'ca' ? 'Enllaç BBDD' : 'Enlace BBDD'}
-              </span>
-            </div>
-
-            {(errors.c2Duplicat || isC2NameDuplicate || isC2EmailDuplicate || isC2PhoneDuplicate) && (
-              <div className="bg-amber-50 border border-amber-200 text-amber-900 px-4 py-3 rounded-2xl mb-4 flex items-start gap-2.5 text-xs">
-                <AlertTriangle className="shrink-0 text-amber-600 mt-0.5" size={16} />
-                <div>
-                  <p className="font-bold">{language === 'ca' ? "Avís de dades coincidents" : "Aviso de datos coincidentes"}</p>
-                  <p className="text-[11px] text-amber-700 leading-normal mt-0.5">
-                    {language === 'ca'
-                      ? "S'ha detectat que part d'aquestes dades ja estan registrades a la base de dades d'inscripcions!"
-                      : "¡Se ha detectado que parte de estos datos ya están registrados en la base de datos de inscripciones!"}
-                  </p>
-                </div>
-              </div>
-            )}
-
-            <div className="space-y-4">
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-bold text-zinc-700 tracking-tight">
-                    {language === 'ca' ? 'Nom *' : 'Nombre *'}
-                  </label>
-                  <span className="text-[8px] font-bold text-emerald-600 bg-emerald-50 px-1 py-0.5 rounded font-mono uppercase tracking-tight flex items-center gap-0.5" title={language === 'ca' ? "Es desa a la base de dades" : "Se guarda en la base de datos"}>
-                    <Database size={8} /> BBDD
-                  </span>
-                </div>
-                <input 
-                  type="text" 
-                  value={c2Nom} 
-                  onChange={(e) => setC2Nom(e.target.value)}
-                  className={`w-full bg-zinc-50 border ${errors.c2Nom || isC2NameDuplicate ? 'border-amber-400 focus:border-amber-500 bg-amber-50/5' : 'border-zinc-200 focus:border-fuchsia-500'} focus:bg-white rounded-xl px-4 py-3 text-sm focus:outline-none transition-all`}
-                  placeholder={language === 'ca' ? "Ex. Marta" : "Ej. Marta"}
-                  id="input-c2-nom"
-                />
-                {isC2NameDuplicate && (
-                  <p className="text-[9px] text-amber-600 font-bold mt-1 flex items-center gap-1 animate-pulse">
-                    <AlertTriangle size={10} /> {language === 'ca' ? "Ja existeix un participant amb aquest nom a la BBDD" : "Ya existe un participante con este nombre en la BBDD"}
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-bold text-zinc-700 tracking-tight">
-                    {language === 'ca' ? 'Cognoms *' : 'Apellidos *'}
-                  </label>
-                  <span className="text-[8px] font-bold text-emerald-600 bg-emerald-50 px-1 py-0.5 rounded font-mono uppercase tracking-tight flex items-center gap-0.5" title={language === 'ca' ? "Es desa a la base de dades" : "Se guarda en la base de datos"}>
-                    <Database size={8} /> BBDD
-                  </span>
-                </div>
-                <input 
-                  type="text" 
-                  value={c2Cognoms} 
-                  onChange={(e) => setC2Cognoms(e.target.value)}
-                  className={`w-full bg-zinc-50 border ${errors.c2Cognoms || isC2NameDuplicate ? 'border-amber-400 focus:border-amber-500 bg-amber-50/5' : 'border-zinc-200 focus:border-fuchsia-500'} focus:bg-white rounded-xl px-4 py-3 text-sm focus:outline-none transition-all`}
-                  placeholder={language === 'ca' ? "Ex. Vilanova Soler" : "Ej. Vilanova Soler"}
-                  id="input-c2-cognoms"
-                />
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-bold text-zinc-700 tracking-tight">
-                    {language === 'ca' ? 'Telèfon de contacte *' : 'Teléfono de contacto *'}
-                  </label>
-                  <span className="text-[8px] font-bold text-emerald-600 bg-emerald-50 px-1 py-0.5 rounded font-mono uppercase tracking-tight flex items-center gap-0.5" title={language === 'ca' ? "Es desa a la base de dades" : "Se guarda en la base de datos"}>
-                    <Database size={8} /> BBDD
-                  </span>
-                </div>
-                <input 
-                  type="tel" 
-                  value={c2Telefon} 
-                  onChange={(e) => setC2Telefon(e.target.value)}
-                  className={`w-full bg-zinc-50 border ${errors.c2Telefon || isC2PhoneDuplicate ? 'border-amber-400 focus:border-amber-500 bg-amber-50/5' : 'border-zinc-200 focus:border-fuchsia-500'} focus:bg-white rounded-xl px-4 py-3 text-sm focus:outline-none transition-all`}
-                  placeholder={language === 'ca' ? "Ex. 600654321" : "Ej. 600654321"}
-                  id="input-c2-telefon"
-                />
-                {isC2PhoneDuplicate && (
-                  <p className="text-[9px] text-amber-600 font-bold mt-1 flex items-center gap-1 animate-pulse">
-                    <AlertTriangle size={10} /> {language === 'ca' ? "Aquest telèfon ja consta registrat a la BBDD" : "Este teléfono ya consta registrado en la BBDD"}
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-bold text-zinc-700 tracking-tight">
-                    {language === 'ca' ? 'Correu electrònic *' : 'Correo electrónico *'}
-                  </label>
-                  <span className="text-[8px] font-bold text-emerald-600 bg-emerald-50 px-1 py-0.5 rounded font-mono uppercase tracking-tight flex items-center gap-0.5" title={language === 'ca' ? "Es desa a la base de dades" : "Se guarda en la base de datos"}>
-                    <Database size={8} /> BBDD
-                  </span>
-                </div>
-                <input 
-                  type="email" 
-                  value={c2Email} 
-                  onChange={(e) => setC2Email(e.target.value)}
-                  className={`w-full bg-zinc-50 border ${errors.c2Email || isC2EmailDuplicate ? 'border-amber-400 focus:border-amber-500 bg-amber-50/5' : 'border-zinc-200 focus:border-fuchsia-500'} focus:bg-white rounded-xl px-4 py-3 text-sm focus:outline-none transition-all`}
-                  placeholder={language === 'ca' ? "Ex. marta@gmail.com" : "Ej. marta@gmail.com"}
-                  id="input-c2-email"
-                />
-                {isC2EmailDuplicate && (
-                  <p className="text-[9px] text-amber-600 font-bold mt-1 flex items-center gap-1 animate-pulse">
-                    <AlertTriangle size={10} /> {language === 'ca' ? "Aquest correu ja consta registrat a la BBDD" : "Este correo ya consta registrado en la BBDD"}
-                  </p>
-                )}
-              </div>
-
-              {/* Minor status and Tutor details for Comparser 2 */}
-              <div className="bg-zinc-50 border border-zinc-200 rounded-2xl p-4 space-y-3">
-                <div className="flex justify-between items-center">
-                  <label className="block text-xs font-bold text-zinc-700 tracking-tight">
-                    {language === 'ca' ? "El segon comparser és menor d'edat? *" : "¿El segundo comparsero es menor de edad? *"}
-                  </label>
-                  <div className="flex rounded-lg overflow-hidden border border-zinc-200 bg-white p-0.5">
-                    <button
-                      type="button"
-                      onClick={() => setC2EsMenor(false)}
-                      className={`text-xs px-3 py-1 font-bold rounded-md transition-all cursor-pointer ${!c2EsMenor ? 'bg-fuchsia-100 text-fuchsia-700 shadow-sm' : 'text-zinc-500 hover:text-zinc-800'}`}
-                    >
-                      {language === 'ca' ? "No" : "No"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setC2EsMenor(true)}
-                      className={`text-xs px-3 py-1 font-bold rounded-md transition-all cursor-pointer ${c2EsMenor ? 'bg-fuchsia-600 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-800'}`}
-                    >
-                      {language === 'ca' ? "Sí" : "Sí"}
-                    </button>
-                  </div>
-                </div>
-
-                {c2EsMenor && (
-                  <div className="pt-2 border-t border-zinc-200/60 space-y-3 animate-fadeIn">
-                    <div className="text-[10px] bg-amber-50 text-amber-800 border border-amber-200 rounded-lg p-2 font-semibold">
-                      {language === 'ca' 
-                        ? "En ser menor d'edat, cal incloure obligatòriament les dades de contacte del tutor legal."
-                        : "Al ser menor de edad, es obligatorio incluir los datos de contacto de su tutor legal."}
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-[10px] font-bold text-zinc-500 uppercase font-mono mb-1">
-                          {language === 'ca' ? "Nom del Tutor *" : "Nombre del Tutor *"}
-                        </label>
-                        <input 
-                          type="text"
-                          value={c2TutorNom}
-                          onChange={(e) => setC2TutorNom(e.target.value)}
-                          className={`w-full bg-white border ${errors.c2TutorNom ? 'border-red-500' : 'border-zinc-250'} focus:border-fuchsia-500 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none`}
-                          placeholder={language === 'ca' ? "Ex. Pere" : "Ej. Pedro"}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-zinc-500 uppercase font-mono mb-1">
-                          {language === 'ca' ? "Cognoms del Tutor *" : "Apellidos del Tutor *"}
-                        </label>
-                        <input 
-                          type="text"
-                          value={c2TutorCognoms}
-                          onChange={(e) => setC2TutorCognoms(e.target.value)}
-                          className={`w-full bg-white border ${errors.c2TutorCognoms ? 'border-red-500' : 'border-zinc-250'} focus:border-fuchsia-500 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none`}
-                          placeholder={language === 'ca' ? "Ex. Garcia Pou" : "Ej. García Pou"}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-[10px] font-bold text-zinc-500 uppercase font-mono mb-1">
-                          {language === 'ca' ? "DNI / NIE del Tutor *" : "DNI / NIE del Tutor *"}
-                        </label>
-                        <input 
-                          type="text"
-                          value={c2TutorDni}
-                          onChange={(e) => setC2TutorDni(e.target.value)}
-                          className={`w-full bg-white border ${errors.c2TutorDni ? 'border-red-500' : 'border-zinc-250'} focus:border-fuchsia-500 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none`}
-                          placeholder={language === 'ca' ? "Ex. 12345678Z" : "Ej. 12345678Z"}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-zinc-500 uppercase font-mono mb-1">
-                          {language === 'ca' ? "Telèfon del Tutor *" : "Teléfono del Tutor *"}
-                        </label>
-                        <input 
-                          type="tel"
-                          value={c2TutorTelefon}
-                          onChange={(e) => setC2TutorTelefon(e.target.value)}
-                          className={`w-full bg-white border ${errors.c2TutorTelefon ? 'border-red-500' : 'border-zinc-250'} focus:border-fuchsia-500 rounded-xl px-3 py-2 text-xs font-bold focus:outline-none`}
-                          placeholder={language === 'ca' ? "Ex. 600123456" : "Ej. 600123456"}
-                        />
-                      </div>
-                    </div>
-
-                    {/* Legal Authorization Text for Minors */}
-                    <div className="pt-3 border-t border-zinc-200/80 space-y-2">
-                      <label className="block text-[10px] font-bold text-zinc-500 uppercase font-mono">
-                        {language === 'ca' ? "Autorització de deures i responsabilitats de menors *" : "Autorización de deberes y responsabilidades de menores *"}
-                      </label>
-                      <div className="bg-white border border-zinc-200 rounded-xl p-3 max-h-32 overflow-y-auto text-[11px] text-zinc-600 leading-relaxed font-sans whitespace-pre-line shadow-inner">
-                        {language === 'ca' 
-                          ? (config.textLegalAutoritzacioMenors || "AUTORITZACIÓ DE MENORS D'EDAT\n\nEn condició de tutor/a legal del menor inscrit, declaro sota la meva responsabilitat que autoritzo expressament la seva participació a l'esdeveniment i activitats organitzades per l'Associació Cultural El Tast.")
-                          : (config.textLegalAutoritzacioMenorsES || "AUTORIZACIÓN DE MENORES DE EDAD\n\nEn condición de tutor/a legal del menor inscrito, declaro bajo mi responsabilidad que autorizo expresamente su participación en el evento y actividades organizadas por la Associació Cultural El Tast.")
-                        }
-                      </div>
-
-                      <label className={`flex items-start gap-2.5 p-3 rounded-xl border transition-all cursor-pointer ${c2TutorAccepta ? 'bg-fuchsia-50/40 border-fuchsia-200 text-fuchsia-950' : errors.c2TutorAccepta ? 'bg-red-50/40 border-red-200 text-red-950 animate-shake' : 'bg-white border-zinc-200 text-zinc-700 hover:border-zinc-300'}`}>
-                        <input
-                          type="checkbox"
-                          checked={c2TutorAccepta}
-                          onChange={(e) => setC2TutorAccepta(e.target.checked)}
-                          className="mt-0.5 rounded border-zinc-300 text-fuchsia-600 filter-none focus:ring-fuchsia-500 cursor-pointer"
-                        />
-                        <span className="text-xs font-semibold leading-tight select-none">
-                          {language === 'ca'
-                            ? "Com a tutor legal, autoritzo i accepto de forma expressa les condicions i responsabilitats indicades."
-                            : "Como tutor legal, autorizo y acepto de forma expresa las condiciones y responsabilidades indicadas."
-                          }
-                        </span>
-                      </label>
-                      {errors.c2TutorAccepta && (
-                        <p className="text-[10px] text-red-500 font-bold">{errors.c2TutorAccepta}</p>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Dynamic clothing lines and custom equipment options - Comparser 2 */}
-              {(config.liniisUniforme || [
-                {
-                  id: 'lin-1',
-                  nom: config.nomUniforme || 'Talla de Samarreta',
-                  nomES: config.nomUniformeES || 'Talla de Camiseta',
-                  opcions: config.opcionsUniforme || ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'],
-                  requeixQuantitat: false
-                }
-              ]).map((linia) => {
-                const sel = seleccionsUniforme[linia.id] || { c1Talla: linia.opcions[0] || 'M', c2Talla: linia.opcions[0] || 'M', c1Quantitat: 1, c2Quantitat: 1, c1Tipus: 'compra' as const, c2Tipus: 'compra' as const };
-                return (
-                  <div key={linia.id} className="space-y-2 p-4 bg-zinc-50 border border-zinc-200 rounded-2xl">
-                    <div className="flex justify-between items-center mb-1 bg-white px-3 py-1.5 rounded-lg border border-zinc-100 shadow-sm">
-                      <label className="block text-xs font-bold text-zinc-800 tracking-tight">
-                        {language === 'ca' ? linia.nom : linia.nomES} *
-                      </label>
-                      {(linia.preu || linia.preuLloguer) ? (
-                        <div className="flex gap-1.5 flex-wrap justify-end">
-                          {linia.preu && (!sel || !sel.c2Tipus || sel.c2Tipus === 'compra') ? (
-                            <span className="text-[10px] font-mono text-fuchsia-600 bg-fuchsia-50 rounded px-1.5 py-0.5 border border-fuchsia-100 font-bold tracking-tight">
-                              +{linia.preu}€ (compra)
-                            </span>
-                          ) : null}
-                          {linia.preuLloguer && sel && sel.c2Tipus === 'lloguer' ? (
-                            <span className="text-[10px] font-mono text-sky-600 bg-sky-50 rounded px-1.5 py-0.5 border border-sky-100 font-bold tracking-tight">
-                              +{linia.preuLloguer}€ {language === 'ca' ? '(lloguer)' : '(alquiler)'}
-                            </span>
-                          ) : null}
-                        </div>
-                      ) : null}
-                    </div>
-
-                    <div className="flex gap-2.5">
-                      <select 
-                        value={sel.c2Talla}
-                        onChange={(e) => {
-                          const newSel = { ...sel, c2Talla: e.target.value };
-                          setSeleccionsUniforme({
-                            ...seleccionsUniforme,
-                            [linia.id]: newSel
-                          });
-                          // Maintain backward compatibility for c2Talla if it matches the first item
-                          const firstId = (config.liniisUniforme && config.liniisUniforme[0]?.id) || 'lin-1';
-                          if (linia.id === firstId) {
-                            setC2Talla(e.target.value);
-                          }
-                        }}
-                        className="flex-1 bg-white border border-zinc-200 focus:border-fuchsia-500 rounded-xl px-4 py-2.5 text-xs font-bold focus:outline-none cursor-pointer"
-                      >
-                        {linia.opcions.map(opt => (
-                          <option key={opt} value={opt}>{opt}</option>
-                        ))}
-                      </select>
-
-                      {linia.requeixQuantitat && (
-                        <div className="flex items-center gap-2 bg-white border border-zinc-200 rounded-xl px-3 py-1 text-xs shrink-0">
-                          <span className="text-[10px] text-zinc-400 font-mono font-bold uppercase">{language === 'ca' ? "Cant." : "Cant."}</span>
-                          <select
-                            value={sel.c2Quantitat || 1}
-                            onChange={(e) => {
-                              const newSel = { ...sel, c2Quantitat: Math.max(1, Number(e.target.value)) };
-                              setSeleccionsUniforme({
-                                ...seleccionsUniforme,
-                                [linia.id]: newSel
-                              });
-                            }}
-                            className="bg-transparent border-none text-xs font-bold text-zinc-800 focus:ring-0 focus:outline-none cursor-pointer"
-                          >
-                            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => (
-                              <option key={n} value={n}>{n}</option>
-                            ))}
-                          </select>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Casilla o Toggles per triar Venda o Lloguer */}
-                    <div className="mt-2 text-left pt-2 border-t border-zinc-200/50 flex items-center justify-between gap-3">
-                      <span className="text-[10px] font-bold text-zinc-500 uppercase font-mono tracking-tight">
-                        {language === 'ca' ? "Tipus d'Adquisició:" : "Tipo de Adquisición:"}
-                      </span>
-                      <div className="flex bg-white rounded-lg overflow-hidden border border-zinc-200 p-0.5 shrink-0" id="c2-uniform-adquisicio-container">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const newSel = { ...sel, c2Tipus: 'compra' as const };
-                            setSeleccionsUniforme({
-                              ...seleccionsUniforme,
-                              [linia.id]: newSel
-                            });
-                            const firstId = (config.liniisUniforme && config.liniisUniforme[0]?.id) || 'lin-1';
-                            if (linia.id === firstId) {
-                              setC2UniformeTipus('compra');
-                            }
-                          }}
-                          className={`text-[10px] px-2.5 py-1 font-bold rounded-md transition-all cursor-pointer ${(!sel.c2Tipus || sel.c2Tipus === 'compra') ? 'bg-fuchsia-100 text-fuchsia-700 shadow-sm' : 'text-zinc-550 hover:text-zinc-855'}`}
-                        >
-                          Compra
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const newSel = { ...sel, c2Tipus: 'lloguer' as const };
-                            setSeleccionsUniforme({
-                              ...seleccionsUniforme,
-                              [linia.id]: newSel
-                            });
-                            const firstId = (config.liniisUniforme && config.liniisUniforme[0]?.id) || 'lin-1';
-                            if (linia.id === firstId) {
-                              setC2UniformeTipus('lloguer');
-                            }
-                          }}
-                          className={`text-[10px] px-2.5 py-1 font-bold rounded-md transition-all cursor-pointer ${sel.c2Tipus === 'lloguer' ? 'bg-fuchsia-600 text-white shadow-sm' : 'text-zinc-550 hover:text-zinc-855'}`}
-                        >
-                          {language === 'ca' ? "Lloguer" : "Alquiler"}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-
-              {/* Extras per Comparser 2 */}
-              {(() => {
-                const extrasForThisComparser = (config.tarifesDinamiques || []).filter(t => t.actiu && t.tipus === 'extra_generic');
-                if (extrasForThisComparser.length === 0) return null;
-                return (
-                  <div className="pt-4 border-t border-zinc-200/60 pb-2">
-                    <label className="block text-xs font-bold text-zinc-700 tracking-tight mb-3">
-                      {language === 'ca' ? 'Extras / Complements' : 'Extras / Complementos'}
-                    </label>
-                    <div className="space-y-3">
-                      {extrasForThisComparser.map(extr => {
-                        const isChecked = (c2ExtrasSeleccionats[extr.id] || 0) > 0;
-                        return (
-                          <div key={extr.id} 
-                               onClick={() => setC2ExtrasSeleccionats(prev => ({ ...prev, [extr.id]: isChecked ? 0 : 1 }))}
-                               className={`flex justify-between items-center bg-zinc-50 border rounded-xl p-3 cursor-pointer transition-colors ${isChecked ? 'border-[#ff0090] bg-fuchsia-50/50' : 'border-zinc-200 hover:border-zinc-300'}`}>
-                            <div>
-                              <span className="block text-xs font-bold text-zinc-800">{extr.nom}</span>
-                              <span className="block text-[10px] text-zinc-500 font-mono">+{extr.valor}€</span>
-                            </div>
-                            <div className="flex items-center">
-                              <div className={`w-6 h-6 rounded border flex items-center justify-center transition-colors ${isChecked ? 'bg-[#ff0090] border-[#ff0090]' : 'bg-white border-zinc-300'}`}>
-                                {isChecked && <Check className="w-4 h-4 text-white" />}
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {/* DNI upload zona */}
-              <div className="pt-2">
-                <label className="block text-xs font-bold text-zinc-700 tracking-tight mb-1.5">
-                  {language === 'ca' ? 'Foto de la part frontal del DNI *' : 'Foto de la parte frontal del DNI *'}
-                </label>
-                {c2DniUrl ? (
-                  <div className="border border-zinc-200 rounded-2xl p-3 bg-zinc-50 flex items-center justify-between gap-3 relative overflow-hidden group">
-                    <img 
-                      src={c2DniUrl} 
-                      alt="DNI Comparser 2" 
-                      className="w-20 h-14 object-cover rounded-md border border-zinc-200"
-                      referrerPolicy="no-referrer"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-zinc-800 truncate">DNI_Comparser_2.webp</p>
-                      <p className="text-[10px] text-zinc-400 font-mono">
-                        {language === 'ca' ? 'Arxiu penjat correctament' : 'Archivo subido correctamente'}
-                      </p>
-                    </div>
-                    <button 
-                      type="button"
-                      onClick={() => setC2DniUrl(null)}
-                      className="p-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-xl transition-colors"
-                      title={language === 'ca' ? "Eliminar arxiu" : "Eliminar archivo"}
-                      id="btn-remove-c2-dni"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                ) : (
-                  <div className={`border-2 border-dashed ${errors.c2Dni ? 'border-red-300 bg-red-50/20' : 'border-zinc-200 hover:border-fuchsia-300'} rounded-2xl p-5 text-center transition-all`}>
-                    <Upload className="mx-auto text-zinc-400 mb-2" size={24} />
-                    <p className="text-xs text-zinc-600 font-semibold mb-1">
-                      {language === 'ca' ? 'Arrossega una foto o selecciona un arxiu' : 'Arrastra una foto o selecciona un archivo'}
-                    </p>
-                    <p className="text-[11px] text-zinc-400 mb-3 font-mono">Format PNG, JPG o WEBP (màx 10MB)</p>
-                    
-                    <div className="flex flex-wrap gap-2 justify-center">
-                      <label className="text-xs bg-zinc-100 hover:bg-zinc-200 text-zinc-800 font-bold px-3 py-2 rounded-xl cursor-pointer transition-colors border border-zinc-200">
-                        {language === 'ca' ? 'Pujar fitxer' : 'Subir archivo'}
-                        <input 
-                          type="file" 
-                          accept="image/*" 
-                          onChange={(e) => handleFileUpload(e, 'c2')} 
-                          className="hidden" 
-                        />
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => startCamera('c2')}
-                        className="text-xs bg-fuchsia-600 hover:bg-fuchsia-700 text-white font-bold px-3 py-2 rounded-xl transition-all flex items-center gap-1 shadow-sm cursor-pointer"
-                        id="btn-camera-c2"
-                      >
-                        <Camera size={14} /> {language === 'ca' ? 'Fes foto' : 'Hacer foto'}
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
+          <ComparserCard
+            num={2}
+            nom={c2Nom}
+            setNom={setC2Nom}
+            cognoms={c2Cognoms}
+            setCognoms={setC2Cognoms}
+            telefon={c2Telefon}
+            setTelefon={setC2Telefon}
+            email={c2Email}
+            setEmail={setC2Email}
+            dniUrl={c2DniUrl}
+            setDniUrl={setC2DniUrl}
+            esMenor={c2EsMenor}
+            setEsMenor={setC2EsMenor}
+            tutorNom={c2TutorNom}
+            setTutorNom={setC2TutorNom}
+            tutorCognoms={c2TutorCognoms}
+            setTutorCognoms={setC2TutorCognoms}
+            tutorDni={c2TutorDni}
+            setTutorDni={setC2TutorDni}
+            tutorTelefon={c2TutorTelefon}
+            setTutorTelefon={setC2TutorTelefon}
+            tutorAccepta={c2TutorAccepta}
+            setTutorAccepta={setC2TutorAccepta}
+            seleccionsUniforme={seleccionsUniforme}
+            setSeleccionsUniforme={setSeleccionsUniforme}
+            setTallaBackwards={setC2Talla}
+            setUniformeTipusBackwards={setC2UniformeTipus}
+            extrasSeleccionats={c2ExtrasSeleccionats}
+            setExtrasSeleccionats={setC2ExtrasSeleccionats}
+            isNameDuplicate={isC2NameDuplicate}
+            isEmailDuplicate={isC2EmailDuplicate}
+            isPhoneDuplicate={isC2PhoneDuplicate}
+            errors={errors}
+            config={config}
+            handleFileUpload={handleFileUpload}
+            startCamera={startCamera}
+          />
         </div>
-
-
 
         {/* Extra Accessories Order Section */}
         {(() => {
@@ -1849,61 +982,68 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
               </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 text-left">
+            <div className="space-y-4">
               {config.preguntesFormulari.filter(q => q.activa).map((q) => {
-                const isRequired = q.requerit;
-                const errorMsg = errors[`question_${q.id}`];
-
+                const isErr = !!errors[`question_${q.id}`];
                 return (
-                  <div key={q.id} className={`space-y-1.5 ${q.tipus === 'text' ? 'col-span-1 md:col-span-2' : ''}`}>
+                  <div key={q.id} className="space-y-1.5">
                     <label className="block text-xs font-bold text-zinc-700 tracking-tight">
-                      <TranslatedText text={q.titol} /> {isRequired && <span className="text-red-500">*</span>}
+                      <TranslatedText text={q.titol} /> {q.requerit && '*'}
                     </label>
+                    {q.descripcio && (
+                      <p className="text-[11px] text-zinc-400 italic">
+                        <TranslatedText text={q.descripcio} />
+                      </p>
+                    )}
 
                     {q.tipus === 'text' && (
-                      <input
+                      <input 
                         type="text"
                         value={String(respostesCuestionari[q.id] || '')}
-                        onChange={(e) => setRespostesCuestionari(prev => ({ ...prev, [q.id]: e.target.value }))}
-                        className={`w-full bg-zinc-50 border ${errorMsg ? 'border-red-400 focus:border-red-500 bg-red-50/5' : 'border-zinc-200 focus:border-fuchsia-500'} focus:bg-white rounded-xl px-4 py-3 text-sm focus:outline-none transition-all`}
-                        placeholder={language === 'ca' ? "La teva resposta..." : "Tu respuesta..."}
+                        onChange={(e) => setRespostesCuestionari({
+                          ...respostesCuestionari,
+                          [q.id]: e.target.value
+                        })}
+                        className={`w-full bg-zinc-50 border ${isErr ? 'border-red-400 focus:border-red-500 bg-red-50/5' : 'border-zinc-200 focus:border-fuchsia-500'} focus:bg-white rounded-xl px-4 py-2.5 text-xs font-bold focus:outline-none transition-all`}
+                        placeholder={language === 'ca' ? "La vostra resposta..." : "Su respuesta..."}
                       />
+                    )}
+
+                    {q.tipus === 'boolean' && (
+                      <label className={`flex items-start gap-2.5 p-3 rounded-xl border transition-all cursor-pointer ${respostesCuestionari[q.id] ? 'bg-fuchsia-50/40 border-fuchsia-200 text-fuchsia-950 font-bold' : 'bg-zinc-50 border-zinc-200 text-zinc-700 hover:border-zinc-300'}`}>
+                        <input
+                          type="checkbox"
+                          checked={!!respostesCuestionari[q.id]}
+                          onChange={(e) => setRespostesCuestionari({
+                            ...respostesCuestionari,
+                            [q.id]: e.target.checked
+                          })}
+                          className="mt-0.5 rounded border-zinc-300 text-fuchsia-600 focus:ring-fuchsia-500 cursor-pointer"
+                        />
+                        <span className="text-xs font-semibold leading-normal select-none">
+                          {language === 'ca' ? 'Sí, confirmo aquesta opció.' : 'Sí, confirmo esta opción.'}
+                        </span>
+                      </label>
                     )}
 
                     {q.tipus === 'select' && (
                       <select
                         value={String(respostesCuestionari[q.id] || '')}
-                        onChange={(e) => setRespostesCuestionari(prev => ({ ...prev, [q.id]: e.target.value }))}
-                        className={`w-full bg-zinc-50 border ${errorMsg ? 'border-red-400 focus:border-red-500 bg-red-50/5' : 'border-zinc-200 focus:border-fuchsia-500'} focus:bg-white rounded-xl px-4 py-3 text-sm focus:outline-none transition-all`}
+                        onChange={(e) => setRespostesCuestionari({
+                          ...respostesCuestionari,
+                          [q.id]: e.target.value
+                        })}
+                        className={`w-full bg-zinc-50 border ${isErr ? 'border-red-400 focus:border-red-500' : 'border-zinc-200 focus:border-fuchsia-500'} rounded-xl px-4 py-2.5 text-xs font-bold focus:outline-none cursor-pointer`}
                       >
-                        <option value="">
-                          {language === 'ca' ? '-- Seleccioneu una opció --' : '-- Seleccione una opción --'}
-                        </option>
+                        <option value="">{language === 'ca' ? '-- Seleccioneu una opció --' : '-- Seleccione una opción --'}</option>
                         {(q.opcions || []).map((opt) => (
-                          <TranslatedOption key={opt} value={opt} />
+                          <option key={opt} value={opt}>{opt}</option>
                         ))}
                       </select>
                     )}
 
-                    {q.tipus === 'boolean' && (
-                      <div className="flex items-center gap-3 p-3 bg-zinc-50/50 border border-zinc-150 rounded-xl hover:bg-zinc-50 transition-all">
-                        <input
-                          type="checkbox"
-                          checked={!!respostesCuestionari[q.id]}
-                          onChange={(e) => setRespostesCuestionari(prev => ({ ...prev, [q.id]: e.target.checked }))}
-                          className="w-4 h-4 rounded text-fuchsia-500 outline-none accent-fuchsia-500 cursor-pointer shrink-0"
-                          id={`check-${q.id}`}
-                        />
-                        <label htmlFor={`check-${q.id}`} className="text-xs text-zinc-650 font-semibold cursor-pointer select-none">
-                          {language === 'ca' ? 'Confirmar / Sí' : 'Confirmar / Sí'}
-                        </label>
-                      </div>
-                    )}
-
-                    {errorMsg && (
-                      <p className="text-[10px] text-red-500 font-mono flex items-center gap-1 animate-pulse">
-                        ⚠️ {errorMsg}
-                      </p>
+                    {isErr && (
+                      <p className="text-[10px] text-red-500 font-bold">{errors[`question_${q.id}`]}</p>
                     )}
                   </div>
                 );
@@ -1912,194 +1052,112 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
           </div>
         )}
 
-        {/* Legal RGPD and Payment policy */}
-        <div className="bg-white rounded-3xl p-6 border border-zinc-200 shadow-sm space-y-4">
-          <div className="flex items-start gap-3 p-4 bg-zinc-50 border border-zinc-200 hover:border-fuchsia-300 rounded-2xl transition-all shadow-sm">
-            <input 
-              type="checkbox" 
-              checked={acceptaRGPD}
-              onChange={(e) => setAcceptaRGPD(e.target.checked)}
-              className="mt-1 w-4 h-4 rounded text-fuchsia-500 outline-none accent-fuchsia-500 cursor-pointer shrink-0"
-              id="checkbox-rgpd"
-            />
-            <div className="space-y-1 bg-transparent">
-              <p className="text-xs text-zinc-700 font-sans leading-relaxed">
-                {language === 'ca'
-                  ? "Accepto que l'Associació Cultural El Tast tracti les meves dades i arxius dels DNIs exclusivament per a la finalitat de validar legalment la pertinença a les comparses 2026. Els fitxers s'eliminaran del servidor acabada la jornada festiva l'acord amb la RGPD europea. *"
-                  : "Acepto que la Associació Cultural El Tast trate mis datos y archivos de los DNIs exclusivamente para la finalidad de validar legalmente la pertenencia a las comparsas 2026. Los archivos se eliminarán del servidor al finalizar la jornada festiva de acuerdo con la RGPD europea. *"}
-              </p>
-              <div className="flex items-center gap-1.5 pt-1">
-                <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded uppercase font-mono tracking-tight flex items-center gap-1" title={language === 'ca' ? "Sota protecció de dades xifrades" : "Bajo protección de datos cifrados"}>
-                  <Database size={8} /> RGPD BBDD SECURE
-                </span>
-                <span className="text-[9px] font-bold text-zinc-500 bg-zinc-100 px-1.5 py-0.5 rounded uppercase font-mono tracking-tight">
-                  {language === 'ca' ? "Eliminació automàtica" : "Remoción automática"}
-                </span>
-              </div>
-              {errors.rgpd && <p className="text-red-500 text-[10px] font-mono mt-0.5">{errors.rgpd}</p>}
-            </div>
+        {/* Legal Agreements and Terms Checkboxes */}
+        <div className="bg-white rounded-3xl p-6 border border-zinc-200 shadow-md space-y-4">
+          <div className="border-b border-zinc-100 pb-3">
+            <h3 className="font-sans font-bold text-zinc-900 text-base tracking-tight uppercase flex items-center gap-1.5">
+              <ShieldCheck className="text-fuchsia-600" size={18} />
+              {language === 'ca' ? 'Termes Legals i Protecció de Dades' : 'Términos Legales y Protección de Datos'}
+            </h3>
           </div>
 
-          <div className="flex items-start gap-3 p-4 bg-zinc-50 border border-zinc-200 hover:border-fuchsia-300 rounded-2xl transition-all shadow-sm">
-            <input 
-              type="checkbox" 
-              checked={acceptaPresencial}
-              onChange={(e) => setAcceptaPresencial(e.target.checked)}
-              className="mt-1 w-4 h-4 rounded text-fuchsia-500 outline-none accent-fuchsia-500 cursor-pointer shrink-0"
-              id="checkbox-presencial"
-            />
-            <div className="space-y-1 bg-transparent">
-              <p className="text-xs text-zinc-700 font-sans leading-relaxed font-semibold">
-                {language === 'ca'
-                  ? "Accepto que la formalització del pagament (metàl·lic o Bizum de la colla) i la recollida del material d'armilles i mocadors es farà obligatòriament de forma presencial a la secretaria del local d'El Tast presentant el codi QR de preinscripció enviat per correu. *"
-                  : "Acepto que la formalización del pago (metálico o Bizum de la colla) y la recogida del material de chalecos y pañuelos se realizará obligatoriamente de forma presencial en la secretaría del local de El Tast presentando el código QR de preinscripción enviado por correo. *"}
-              </p>
-              <div className="flex items-center gap-1.5 pt-1">
-                <span className="text-[9px] font-bold text-fuchsia-700 bg-fuchsia-50 border border-fuchsia-100 px-1.5 py-0.5 rounded uppercase font-mono tracking-tight flex items-center gap-1">
-                  🔒 VERIFICACIÓ PRESENCIAL
-                </span>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <span className="block text-[10px] font-bold text-zinc-500 uppercase font-mono">{language === 'ca' ? 'Normativa de Protecció de Dades (RGPD) *' : 'Normativa de Protección de Datos (RGPD) *'}</span>
+              <div className="bg-zinc-50 border border-zinc-200 rounded-2xl p-4 max-h-36 overflow-y-auto text-[11px] text-zinc-600 leading-relaxed font-sans whitespace-pre-line shadow-inner">
+                {language === 'ca' 
+                  ? (config.textLegalRgpd || "En compliment del Reglament General de Protecció de Dades (RGPD), us informem que les vostres dades personals i la imatge del DNI frontal seran tractades exclusivament per l'Associació Cultural El Tast per gestionar la inscripció al Carnaval i verificar l'edat dels participants. No se cediran dades a tercers excepte obligació legal i seran totalment destruïdes una vegada finalitzat el Carnaval.")
+                  : (config.textLegalRgpdES || "En cumplimiento del Reglamento General de Protección de Datos (RGPD), le informamos que sus datos personales y la imagen del DNI frontal serán tratados exclusivamente por la Associació Cultural El Tast para gestionar la inscripción al Carnaval y verificar la edad de los participantes. No se cederán datos a terceros salvo obligación legal y serán totalmente destruidos una vez finalizado el Carnaval.")
+                }
               </div>
-              {errors.presencial && <p className="text-red-500 text-[10px] font-mono mt-0.5">{errors.presencial}</p>}
+
+              <label className={`flex items-start gap-2.5 p-3.5 rounded-2xl border transition-all cursor-pointer ${acceptaRGPD ? 'bg-fuchsia-50/40 border-fuchsia-200 text-fuchsia-950 font-bold' : errors.rgpd ? 'bg-red-50/40 border-red-200 text-red-950 animate-shake' : 'bg-zinc-50 border-zinc-200 text-zinc-700 hover:border-zinc-350'}`}>
+                <input
+                  type="checkbox"
+                  checked={acceptaRGPD}
+                  onChange={(e) => setAcceptaRGPD(e.target.checked)}
+                  className="mt-0.5 rounded border-zinc-300 text-fuchsia-600 filter-none focus:ring-fuchsia-500 cursor-pointer"
+                />
+                <span className="text-xs font-semibold leading-normal select-none">
+                  {language === 'ca'
+                    ? "He llegit i accepto expressament el tractament de les meves dades sota la política de privadesa descrita."
+                    : "He leído y acepto expresamente el tratamiento de mis datos bajo la política de privacidad descrita."
+                  }
+                </span>
+              </label>
+              {errors.rgpd && (
+                <p className="text-[10px] text-red-500 font-bold">{errors.rgpd}</p>
+              )}
+            </div>
+
+            <div className="space-y-2 pt-2 border-t border-zinc-100">
+              <span className="block text-[10px] font-bold text-zinc-500 uppercase font-mono">{language === 'ca' ? 'Condicions d\'Inscripció i Pagament Presencial *' : 'Condiciones de Inscripción y Pago Presencial *'}</span>
+              
+              <label className={`flex items-start gap-2.5 p-3.5 rounded-2xl border transition-all cursor-pointer ${acceptaPresencial ? 'bg-fuchsia-50/40 border-fuchsia-200 text-fuchsia-950 font-bold' : errors.presencial ? 'bg-red-50/40 border-red-200 text-red-950 animate-shake' : 'bg-zinc-50 border-zinc-200 text-zinc-700 hover:border-zinc-350'}`}>
+                <input
+                  type="checkbox"
+                  checked={acceptaPresencial}
+                  onChange={(e) => setAcceptaPresencial(e.target.checked)}
+                  className="mt-0.5 rounded border-zinc-300 text-fuchsia-600 filter-none focus:ring-fuchsia-500 cursor-pointer"
+                />
+                <span className="text-xs font-semibold leading-normal select-none">
+                  {language === 'ca'
+                    ? "Confirmo i accepto que la inscripció requereix fer el pagament presencial obligatori i la recollida del material a les oficines d'El Tast en els terminis assenyalats."
+                    : "Confirmo y acepto que la inscripción requiere realizar el pago presencial obligatorio y la recogida del material en las oficinas de El Tast en los plazos señalados."
+                  }
+                </span>
+              </label>
+              {errors.presencial && (
+                <p className="text-[10px] text-red-500 font-bold">{errors.presencial}</p>
+              )}
             </div>
           </div>
         </div>
 
-        {/* Floating action bar with prices breakdown */}
-        <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 shadow-2xl text-white flex flex-col sm:flex-row justify-between items-center gap-6 sticky bottom-4 z-40 backdrop-blur-md bg-zinc-900/95">
-          <div className="space-y-1 text-center sm:text-left">
-            <p className="text-zinc-400 text-xs font-mono uppercase tracking-wider">
-              {language === 'ca' ? 'RESUM ECONÒMIC DE LA PARELLA' : 'RESUMEN ECONÓMICO DE LA PAREJA'}
-            </p>
-            <div className="flex flex-wrap items-baseline gap-2 justify-center sm:justify-start">
-              <span className="font-sans font-extrabold text-3xl md:text-4xl text-fuchsia-400">{totalCalculat}€</span>
-              <span className="text-zinc-400 text-xs font-mono">
-                ({categoria === CategoriaParella.ADULT ? (language === 'ca' ? 'Adults' : 'Adultos') : (language === 'ca' ? 'Juvenil' : 'Juvenil')}: {basePrice}€
-                {teDomasBalcoQty > 0 ? ` + ${teDomasBalcoQty}x ${language === 'ca' ? 'Domàs' : 'Colgadura'}: ${domasCost}€` : ''}
-                {teMocadorsExtra > 0 ? ` + ${teMocadorsExtra}x ${language === 'ca' ? 'mocadors' : 'pañuelos'}: ${mocadorsCost}€` : ''}
-                {Object.entries(genericExtrasQty)
-                  .filter(([_, qty]) => Number(qty) > 0)
-                  .map(([id, qty]) => {
-                    const extra = (config.tarifesDinamiques || []).find(t => t.id === id);
-                    if (!extra) return null;
-                    const qCount = Number(qty);
-                    return ` + ${qCount}x ${extra.nom}: ${qCount * extra.valor}€`;
-                  }).filter(Boolean).join('')}
-                {(config.liniisUniforme || []).map((linia) => {
-                  const sel = seleccionsUniforme[linia.id];
-                  if (!sel) return '';
-                  let str = '';
-                  const lnNom = language === 'ca' ? linia.nom : linia.nomES;
-                  
-                  const c1Qty = sel.c1Quantitat || (linia.requeixQuantitat ? 0 : 1);
-                  const p1 = sel.c1Tipus === 'lloguer' ? (linia.preuLloguer || 0) : (linia.preu || 0);
-                  const t1 = sel.c1Tipus === 'lloguer' ? (language === 'ca' ? 'Llog.' : 'Alq.') : 'Comp.';
-                  if (c1Qty > 0 && p1 > 0) {
-                    str += ` + ${c1Qty}x ${lnNom} (${t1}): ${c1Qty * p1}€`;
-                  }
-                  
-                  const c2Qty = sel.c2Quantitat || (linia.requeixQuantitat ? 0 : 1);
-                  const p2 = sel.c2Tipus === 'lloguer' ? (linia.preuLloguer || 0) : (linia.preu || 0);
-                  const t2 = sel.c2Tipus === 'lloguer' ? (language === 'ca' ? 'Llog.' : 'Alq.') : 'Comp.';
-                  if (c2Qty > 0 && p2 > 0) {
-                    str += ` + ${c2Qty}x ${lnNom} (${t2}): ${c2Qty * p2}€`;
-                  }
-                  
-                  return str;
-                }).filter(Boolean).join('')}
-                )
-              </span>
-            </div>
+        {/* Floating/Bottom Action price breakdown bar */}
+        <div className="bg-zinc-950 rounded-3xl p-6 border border-zinc-850 shadow-2xl flex flex-col md:flex-row justify-between items-center gap-6 relative overflow-hidden">
+          <div className="absolute top-0 left-0 p-8 text-zinc-900/40 pointer-events-none">
+            <Sparkles size={80} className="stroke-[0.5]" />
           </div>
 
-          <button 
+          <div className="space-y-1 relative z-10 text-center md:text-left">
+            <span className="text-[9px] font-bold font-mono text-fuchsia-400 tracking-widest uppercase bg-fuchsia-950/60 px-2 py-1 rounded border border-fuchsia-900">
+              {language === 'ca' ? 'Detall de pagament total' : 'Detalle de pago total'}
+            </span>
+            <div className="flex items-baseline gap-1 justify-center md:justify-start mt-2">
+              <span className="font-sans font-black text-white text-3xl md:text-4xl tracking-tight leading-none">{totalCalculat}€</span>
+              <span className="text-zinc-400 text-xs font-mono">EUR</span>
+            </div>
+            <p className="text-[10px] text-zinc-400 leading-normal max-w-sm">
+              {language === 'ca'
+                ? "El preu reflecteix la parella de comparsers, les talles d'uniformes seleccionades i qualsevol complement adquirit."
+                : "El precio refleja la pareja de comparseros, las tallas de uniformes seleccionadas y cualquier complemento adquirido."
+              }
+            </p>
+          </div>
+
+          <button
             type="submit"
-            className="w-full sm:w-auto px-8 py-4 bg-fuchsia-600 hover:bg-fuchsia-500 text-white font-bold rounded-2xl shadow-lg shadow-fuchsia-600/30 transition-all hover:scale-[1.02] flex items-center justify-center gap-2 cursor-pointer"
+            className="w-full md:w-auto bg-[#ff0090] hover:bg-[#d60079] text-white font-sans font-extrabold text-sm uppercase tracking-wider px-8 py-4.5 rounded-2xl shadow-xl shadow-fuchsia-900/30 transition-all flex items-center justify-center gap-2 group shrink-0 cursor-pointer"
+            id="btn-submit-registration"
           >
-            {t('submit_btn')} <ShieldCheck size={18} />
+            <span>{language === 'ca' ? "Enviar Preinscripció" : "Enviar Preinscripción"}</span>
+            <ChevronRight size={16} className="group-hover:translate-x-1 transition-transform" />
           </button>
         </div>
       </form>
       )}
 
       {/* Camera Live/Mock Modal Screen Overlay */}
-      <AnimatePresence>
-        {cameraActive && (
-          <motion.div 
-            initial={{ opacity: 0 }} 
-            animate={{ opacity: 1 }} 
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex flex-col items-center justify-center p-4 text-center"
-            id="camera-overlay"
-          >
-            <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-3xl max-w-lg w-full relative">
-              <h3 className="font-sans font-bold text-white text-lg mb-1 tracking-tight">
-                {language === 'ca' ? 'Capturadora de DNI' : 'Capturadora de DNI'}
-              </h3>
-              <p className="text-zinc-400 text-xs mb-4">
-                {language === 'ca' 
-                  ? "Centreu el document nacional d'identitat (part davantera) dins el quadre." 
-                  : "Centre el documento nacional de identidad (parte delantera) dentro del recuadro."}
-              </p>
-
-              {/* Viewfinder stage */}
-              <div className="relative aspect-[16/10] bg-zinc-950 rounded-2xl overflow-hidden border border-zinc-800 flex items-center justify-center mb-6">
-                {videoError ? (
-                  <div className="p-6 text-center">
-                    <AlertTriangle className="mx-auto text-amber-500 mb-2" size={28} />
-                    <p className="text-xs text-zinc-300 mb-4">{videoError}</p>
-                    <button 
-                      type="button"
-                      onClick={simulateCapture}
-                      className="px-4 py-2 bg-fuchsia-600 hover:bg-fuchsia-500 text-white font-bold text-xs rounded-xl shadow-lg transition cursor-pointer"
-                      id="btn-simulate-dni"
-                    >
-                      {language === 'ca' ? "Simular captura amb foto d'exemple" : "Simular captura con foto de ejemplo"}
-                    </button>
-                  </div>
-                ) : (
-                  <>
-                    <video 
-                      ref={videoRef} 
-                      autoPlay 
-                      playsInline 
-                      muted
-                      className="absolute inset-0 object-cover w-full h-full"
-                    />
-                    {/* Visual Crop Guide overlay */}
-                    <div className="absolute inset-4 border-2 border-dashed border-fuchsia-500/80 rounded-xl pointer-events-none flex items-center justify-center">
-                      <div className="text-[10px] bg-fuchsia-500/90 text-white font-bold px-2 py-1 rounded tracking-widest uppercase font-mono">
-                        {language === 'ca' ? 'EMQUADREU DNI FRONT' : 'ENCUADRE DNI FRONTAL'}
-                      </div>
-                    </div>
-                  </>
-                )}
-                <canvas ref={canvasRef} className="hidden" />
-              </div>
-
-              <div className="flex gap-3 justify-end">
-                <button 
-                  type="button"
-                  onClick={stopCamera}
-                  className="px-4 py-2.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold text-xs rounded-xl transition cursor-pointer"
-                  id="btn-cancel-camera"
-                >
-                  {language === 'ca' ? 'Cancel·lar' : 'Cancelar'}
-                </button>
-                {!videoError && (
-                  <button 
-                    type="button"
-                    onClick={capturePhoto}
-                    className="px-5 py-2.5 bg-fuchsia-600 hover:bg-fuchsia-500 text-white font-bold text-xs rounded-xl shadow-lg shadow-fuchsia-600/30 transition flex items-center gap-1.5 cursor-pointer"
-                    id="btn-capture-camera"
-                  >
-                    <Camera size={14} /> {language === 'ca' ? 'Fes la foto del DNI' : 'Hacer foto del DNI'}
-                  </button>
-                )}
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <CameraModal
+        cameraActive={cameraActive}
+        videoError={videoError}
+        videoRef={videoRef}
+        canvasRef={canvasRef}
+        simulateCapture={simulateCapture}
+        stopCamera={stopCamera}
+        capturePhoto={capturePhoto}
+      />
     </div>
   );
 }

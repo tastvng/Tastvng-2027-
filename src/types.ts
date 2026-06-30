@@ -36,6 +36,7 @@ export interface PreguntaDinamica {
   opcions?: string[];
   requerit: boolean;
   activa: boolean;
+  descripcio?: string;
 }
 
 export interface Inscripcio {
@@ -137,6 +138,8 @@ export interface SistemaConfig {
   liniisUniforme?: LiniaUniforme[];
   textLegalAutoritzacioMenors?: string;
   textLegalAutoritzacioMenorsES?: string;
+  textLegalRgpd?: string;
+  textLegalRgpdES?: string;
   estatInscripcions?: 'obertes' | 'espera' | 'tancades';
   googleSheetSyncUrl?: string;
   googleSheetSyncActive?: boolean;
