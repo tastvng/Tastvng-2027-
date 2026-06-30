@@ -831,6 +831,25 @@ export default function App() {
     };
   }, []);
 
+  useEffect(() => {
+    document.title = `Inscripcions El Tast ${activeYear} — Secretariat Digital`;
+    
+    const descEl = document.querySelector('meta[name="description"]');
+    if (descEl) {
+      descEl.setAttribute('content', `Registre i gestió d'inscripcions oficials de la parella saltadora per al Tast i les Comparses de Vilanova i la Geltrú ${activeYear}.`);
+    }
+    
+    const ogTitleEl = document.querySelector('meta[property="og:title"]');
+    if (ogTitleEl) {
+      ogTitleEl.setAttribute('content', `Inscripcions El Tast ${activeYear}`);
+    }
+
+    const twTitleEl = document.querySelector('meta[name="twitter:title"]');
+    if (twTitleEl) {
+      twTitleEl.setAttribute('content', `Inscripcions El Tast ${activeYear}`);
+    }
+  }, [activeYear]);
+
   const logoText = config.logoText || 'T';
   const titolPrincipal = config.titolPrincipal || 'EL TAST';
   const titolSecundari = config.titolSecundari || 'VILANOVA';

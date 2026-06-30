@@ -86,7 +86,26 @@ const translations: Record<Language, Record<string, string>> = {
     // Side help widget
     help_title: "Necessites ajuda amb la inscripció?",
     help_desc_1: "El lliurament de dorsals i armilles oficials tindrà lloc a la seu de l'Associació el proper mes.",
-    help_desc_2: "Per a dubtes urgents sobre formularis o pagaments de grups, podeu contactar amb la junta directiva."
+    help_desc_2: "Per a dubtes urgents sobre formularis o pagaments de grups, podeu contactar amb la junta directiva.",
+    // Dashboard KPI Metrics
+    total_recaptat: "Total recaptat",
+    efectiu_label: "Efectiu",
+    parelles_inscrites_label: "PARELLES INSCRITES",
+    parelles_unit: "parelles",
+    juvenils_label: "Juvenils",
+    materials_lliurats_label: "MATERIALS LLIURATS",
+    lliurats_label: "Lliurats",
+    dnis_revisats_label: "DNIS REVISATS",
+    dnis_pendents_format: "Pendents: {count} per revisar",
+    dnis_validads_format: "validats",
+    // Cierre de día
+    cierre_dia_tab: "Tancament del dia",
+    cierre_dia_title: "Tancament del dia / Resum diari",
+    recaptacio_mitjana: "RECAPTACIÓ MITJANA DIÀRIA",
+    // Personalització Portada headings
+    estat_portada: "ESTAT DE PORTADA",
+    bloc_questionari: "BLOC QÜESTIONARI",
+    control_configuracio: "CONTROL DE CONFIGURACIÓ"
   },
   es: {
     // Header
@@ -159,7 +178,26 @@ const translations: Record<Language, Record<string, string>> = {
     // Side help widget
     help_title: "¿Necesitas ayuda con la inscripción?",
     help_desc_1: "La entrega de dorsales y chalecos oficiales tendrá lugar en la sede de la Asociación el próximo mes.",
-    help_desc_2: "Para dudas urgentes sobre formularios o pagos de grupos, podéis contactar con la junta directiva."
+    help_desc_2: "Para dudas urgentes sobre formularios o pagos de grupos, podéis contactar con la junta directiva.",
+    // Dashboard KPI Metrics
+    total_recaptat: "Total recaudado",
+    efectiu_label: "Efectivo",
+    parelles_inscrites_label: "PAREJAS INSCRITAS",
+    parelles_unit: "parejas",
+    juvenils_label: "Juveniles",
+    materials_lliurats_label: "MATERIALES ENTREGADOS",
+    lliurats_label: "Entregados",
+    dnis_revisats_label: "DNIS REVISADOS",
+    dnis_pendents_format: "Pendientes: {count} por revisar",
+    dnis_validads_format: "validados",
+    // Cierre de día
+    cierre_dia_tab: "Cierre de Día",
+    cierre_dia_title: "Cierre de Día / Resumen Diario",
+    recaptacio_mitjana: "RECAUDACIÓN MEDIA DIARIA",
+    // Personalización Portada headings
+    estat_portada: "ESTADO DE PORTADA",
+    bloc_questionari: "BLOQUE CUESTIONARIO",
+    control_configuracio: "CONTROL DE CONFIGURACIÓN"
   }
 };
 

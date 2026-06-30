@@ -5,6 +5,7 @@ import { saveSupabaseSettings, getSupabaseSettings, isSupabaseConfigured } from 
 import { useLanguage } from '../LanguageContext';
 import { useToast } from '../hooks/useToast';
 import { saveLogger } from '../services/SaveLogger';
+import { useActiveYear } from '../hooks/useActiveYear';
 
 export const PORTADA_CONFIG_DEFAULTS: PortadaConfig = {
   activa: true,
@@ -97,7 +98,8 @@ interface AdminPortadaProps {
 }
 
 export default function AdminPortada({ onAddLog }: AdminPortadaProps) {
-  const { language } = useLanguage();
+  const { language, t } = useLanguage();
+  const activeYear = useActiveYear();
   const { showToast } = useToast();
   const [config, setConfig] = useState<PortadaConfig>(() => {
     try {
@@ -649,7 +651,7 @@ export default function AdminPortada({ onAddLog }: AdminPortadaProps) {
           {/* Switch 1: Portada Activa */}
           <div className="bg-zinc-50 border border-zinc-200 rounded-2xl p-3 flex items-center justify-between gap-3 shadow-xs">
             <div className="text-left">
-              <p className="text-[10px] font-mono font-bold text-zinc-400 uppercase tracking-widest leading-none">ESTAT DE PORTADA</p>
+              <p className="text-[10px] font-mono font-bold text-zinc-400 uppercase tracking-widest leading-none">{t('estat_portada')}</p>
               <p className="text-xs font-semibold text-zinc-800 mt-1">
                 {config.activa 
                   ? (language === 'ca' ? "✅ Activa abans de l'app" : "✅ Activa antes de la app")
@@ -669,7 +671,7 @@ export default function AdminPortada({ onAddLog }: AdminPortadaProps) {
           {/* Switch 2: Qüestionari Actiu */}
           <div className="bg-zinc-50 border border-zinc-200 rounded-2xl p-3 flex items-center justify-between gap-3 shadow-xs">
             <div className="text-left">
-              <p className="text-[10px] font-mono font-bold text-zinc-400 uppercase tracking-widest leading-none">BLOC QÜESTIONARI</p>
+              <p className="text-[10px] font-mono font-bold text-zinc-400 uppercase tracking-widest leading-none">{t('bloc_questionari')}</p>
               <p className="text-xs font-semibold text-zinc-800 mt-1">
                 {config.cuestionariActiu !== false
                   ? (language === 'ca' ? "✅ Qüestionari Visible" : "✅ Cuestionario Visible")
@@ -691,7 +693,7 @@ export default function AdminPortada({ onAddLog }: AdminPortadaProps) {
       {/* Top Action Control Strip with Guardar and Defectes buttons */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-zinc-50 border border-zinc-200 px-4 py-3 rounded-2xl">
         <div className="text-left">
-          <span className="text-[10px] font-mono font-bold text-zinc-400 uppercase tracking-widest block">CONTROL DE CONFIGURACIÓ</span>
+          <span className="text-[10px] font-mono font-bold text-zinc-400 uppercase tracking-widest block">{t('control_configuracio')}</span>
           <span className="text-xs text-zinc-600">
             {activeTab === 'semaforo' && (language === 'ca' ? "Ajusta els períodes de registre actius" : "Ajusta los períodos de registro activos")}
             {activeTab === 'textos' && (language === 'ca' ? "Gestiona els títols i etiquetes principals" : "Gestiona los títulos y etiquetas principales")}
@@ -1054,7 +1056,7 @@ export default function AdminPortada({ onAddLog }: AdminPortadaProps) {
                       console.error("Error in badgeText translation onBlur:", err);
                     }
                   }}
-                  placeholder={language === 'ca' ? "Ex: Inscripcions Obertes 2026..." : "Ej: Inscripciones Abiertas 2026..."}
+                  placeholder={language === 'ca' ? `Ex: Inscripcions Obertes ${activeYear}...` : `Ej: Inscripciones Abiertas ${activeYear}...`}
                   className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all placeholder-zinc-400 font-sans"
                 />
               </div>
@@ -1858,7 +1860,7 @@ export default function AdminPortada({ onAddLog }: AdminPortadaProps) {
                     }
                   }}
                   className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3 py-2 text-xs focus:outline-none focus:ring-0"
-                  placeholder={language === 'ca' ? "Ex: © 2026 ASSOCIACIÓ COMPARSES EL TAST" : "Ej: © 2026 ASOCIACIÓN COMPARSAS EL TAST"}
+                  placeholder={language === 'ca' ? `Ex: © ${activeYear} ASSOCIACIÓ COMPARSES EL TAST` : `Ej: © ${activeYear} ASOCIACIÓN COMPARSAS EL TAST`}
                 />
               </div>
 
@@ -2343,7 +2345,7 @@ export default function AdminPortada({ onAddLog }: AdminPortadaProps) {
 
               {/* Shell mock header */}
               <div className="relative z-10 w-full flex justify-between items-center text-[8px] text-zinc-550 uppercase tracking-widest border-b border-white/5 pb-2 font-mono">
-                <span>⚡ el tast vng 2026</span>
+                <span>⚡ el tast vng {activeYear}</span>
                 <span className="text-[7px] bg-white/5 px-1.5 py-0.5 rounded text-fuchsia-400">mockup</span>
               </div>
 
@@ -2351,8 +2353,8 @@ export default function AdminPortada({ onAddLog }: AdminPortadaProps) {
               <div className="relative z-10 flex-1 flex flex-col justify-center space-y-3 py-4 text-left">
                 {(() => {
                   const badgeText = activeLangTab === 'ca' 
-                    ? (config.badgeTextCA || 'Inscripcions Obertes 2026') 
-                    : (config.badgeTextES || 'Inscripciones Abiertas 2026');
+                    ? (config.badgeTextCA || `Inscripcions Obertes ${activeYear}`) 
+                    : (config.badgeTextES || `Inscripciones Abiertas ${activeYear}`);
                   
                   const badgeIconName = config.badgeIcon || 'compass';
                   const badgeStyleType = config.badgeStyle || 'custom';

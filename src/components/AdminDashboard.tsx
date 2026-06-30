@@ -1649,10 +1649,10 @@ export default function AdminDashboard({
             <Coins size={28} />
           </div>
           <div>
-            <p className="text-zinc-400 text-[10px] font-mono font-bold uppercase tracking-wider">TOTAL RECAUDAT</p>
+            <p className="text-zinc-400 text-[10px] font-mono font-bold uppercase tracking-wider">{t('total_recaptat')}</p>
             <h3 className="font-sans font-black text-2xl text-zinc-900 mt-0.5">{totalRecaudat.toFixed(2)}€</h3>
             <p className="text-[10px] text-zinc-500 mt-1">
-              Efectiu: <span className="font-bold">{totalEfectiuVal}€</span> • Bizum: <span className="font-bold">{totalBizumVal}€</span>
+              {t('efectiu_label')}: <span className="font-bold">{totalEfectiuVal}€</span> • Bizum: <span className="font-bold">{totalBizumVal}€</span>
             </p>
           </div>
           <div className="absolute top-0 right-0 h-full w-2 bg-fuchsia-500" />
@@ -1664,13 +1664,13 @@ export default function AdminDashboard({
             <Users size={28} />
           </div>
           <div>
-            <p className="text-zinc-400 text-[10px] font-mono font-bold uppercase tracking-wider">PARELLES INSCRITES</p>
-            <h3 className="font-sans font-black text-2xl text-zinc-900 mt-0.5">{totalInscrites} parelles</h3>
+            <p className="text-zinc-400 text-[10px] font-mono font-bold uppercase tracking-wider">{t('parelles_inscrites_label')}</p>
+            <h3 className="font-sans font-black text-2xl text-zinc-900 mt-0.5">{totalInscrites} {t('parelles_unit')}</h3>
             <p className="text-[10px] text-zinc-500 mt-1">
-              Adults: <span className="font-bold">{adultCount}</span> • Juvenils: <span className="font-bold">{juvenilCount}</span>
+              {language === 'ca' ? "Adults" : "Adultos"}: <span className="font-bold">{adultCount}</span> • {t('juvenils_label')}: <span className="font-bold">{juvenilCount}</span>
               {esperaCount > 0 && (
                 <span className="text-amber-600 font-extrabold ml-1 px-1 py-0.2 bg-amber-500/10 rounded font-sans inline-block" title="Parella en llista d'espera">
-                  • {esperaCount} espera
+                  • {esperaCount} {language === 'ca' ? "espera" : "espera"}
                 </span>
               )}
             </p>
@@ -1684,14 +1684,14 @@ export default function AdminDashboard({
             <Package size={28} />
           </div>
           <div className="flex-1">
-            <p className="text-zinc-400 text-[10px] font-mono font-bold uppercase tracking-wider">MATERIALS LLIURATS</p>
+            <p className="text-zinc-400 text-[10px] font-mono font-bold uppercase tracking-wider">{t('materials_lliurats_label')}</p>
             <h3 className="font-sans font-black text-2xl text-zinc-900 mt-0.5">{percentatgeEntrega}%</h3>
             
             <div className="w-full bg-zinc-100 h-1.5 rounded-full mt-2 overflow-hidden">
               <div className="bg-fuchsia-500 h-full" style={{ width: `${percentatgeEntrega}%` }} />
             </div>
             <p className="text-[10px] text-zinc-500 mt-1">
-              Lliurats: <span className="font-bold">{materialsEntregats}</span> de <span className="font-bold">{totalInscrites}</span>
+              {t('lliurats_label')}: <span className="font-bold">{materialsEntregats}</span> {language === 'ca' ? "de" : "de"} <span className="font-bold">{totalInscrites}</span>
             </p>
           </div>
           <div className="absolute top-0 right-0 h-full w-2 bg-fuchsia-500" />
@@ -1703,10 +1703,14 @@ export default function AdminDashboard({
             <FileText size={28} />
           </div>
           <div>
-            <p className="text-zinc-400 text-[10px] font-mono font-bold uppercase tracking-wider">DNIS REVISATS</p>
-            <h3 className="font-sans font-black text-2xl text-zinc-900 mt-0.5">{dnisValidads} validads</h3>
+            <p className="text-zinc-400 text-[10px] font-mono font-bold uppercase tracking-wider">{t('dnis_revisats_label')}</p>
+            <h3 className="font-sans font-black text-2xl text-zinc-900 mt-0.5">{dnisValidads} {language === 'ca' ? 'validats' : 'validados'}</h3>
             <p className="text-[10px] text-zinc-500 mt-1">
-              Pendents: <span className="font-bold text-amber-600">{inscripcions.filter(i => i.estatDni === EstatVerificacio.PENDENT).length}</span> por revisar
+              {language === 'ca' ? (
+                <>Pendents: <span className="font-bold text-amber-600">{inscripcions.filter(i => i.estatDni === EstatVerificacio.PENDENT).length}</span> per revisar</>
+              ) : (
+                <>Pendientes: <span className="font-bold text-amber-600">{inscripcions.filter(i => i.estatDni === EstatVerificacio.PENDENT).length}</span> por revisar</>
+              )}
             </p>
           </div>
           <div className="absolute top-0 right-0 h-full w-2 bg-zinc-800" />
@@ -1778,7 +1782,7 @@ export default function AdminDashboard({
           id="btn-nav-cierre"
         >
           <Clock size={14} />
-          {language === 'ca' ? "Cierre de Día" : "Cierre de Día"}
+          {t('cierre_dia_tab')}
         </button>
       </div>
 
@@ -2746,7 +2750,7 @@ export default function AdminDashboard({
           <div className="p-6 border-b border-zinc-100 bg-zinc-50 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
               <h2 className="font-sans font-black text-sm text-zinc-900 uppercase tracking-wider flex items-center gap-2">
-                <span className="text-lg">📊</span> {language === 'ca' ? "Cierre de Día / Resum Diari" : "Cierre de Día / Resumen Diario"}
+                <span className="text-lg">📊</span> {t('cierre_dia_title')}
               </h2>
               <p className="text-[10px] text-zinc-400 mt-1">
                 {language === 'ca'
@@ -2800,9 +2804,9 @@ export default function AdminDashboard({
               <div className="bg-fuchsia-50/60 border border-fuchsia-100 p-4 rounded-2xl flex items-center gap-3">
                 <span className="text-xl">💰</span>
                 <div>
-                  <h4 className="text-[9px] text-fuchsia-800 font-mono font-bold uppercase tracking-wider">{language === 'ca' ? "RECAUDACIÓ MITJANA DIÀRIA" : "RECAUDACIÓN MEDIA DIARIA"}</h4>
+                  <h4 className="text-[9px] text-fuchsia-800 font-mono font-bold uppercase tracking-wider">{t('recaptacio_mitjana')}</h4>
                   <p className="font-sans font-black text-base text-fuchsia-950 mt-0.5">
-                    {(inscripcions.reduce((acc, current) => acc + (current.preuCalculat || 0), 0) / Math.max(1, calculateDailySummaries(inscripcions).length)).toFixed(2)}€ / dia
+                    {(inscripcions.reduce((acc, current) => acc + (current.preuCalculat || 0), 0) / Math.max(1, calculateDailySummaries(inscripcions).length)).toFixed(2)}€ / {language === 'ca' ? 'dia' : 'día'}
                   </p>
                 </div>
               </div>
@@ -2902,7 +2906,7 @@ export default function AdminDashboard({
                 <p className="font-bold text-zinc-700 mb-0.5">{language === 'ca' ? "Sincronització de doble pestanya activa" : "Sincronización de doble pestaña activa"}</p>
                 <p className="mb-0 text-zinc-500 text-[10px]">
                   {language === 'ca'
-                    ? "Cada vegada que es realitza, s'actualitzi o s'elimina una inscripció, el programari envia la llista raw a la pestanya 'Inscripcions' i genera aquest resum de Cierre de Día a la pestanya 'Cierre del Dia' al vostre full de Google de forma automatitzada i instantània."
+                    ? "Cada vegada que es realitza, s'actualitzi o s'elimina una inscripció, el programari envia la llista raw a la pestanya 'Inscripcions' i genera aquest resum de Tancament del dia a la pestanya 'Cierre del Dia' al vostre full de Google de forma automatitzada i instantània."
                     : "Cada vez que se realiza, actualiza o elimina una inscripción, el software envía la lista cruda a la pestaña 'Inscripcions' y genera este resumen de Cierre de Día en la pestaña 'Cierre del Dia' en su hoja de Google de forma automatizada e instantánea."}
                 </p>
               </div>
