@@ -6,6 +6,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLanguage } from '../LanguageContext';
 import { useToast } from '../hooks/useToast';
+import { saveLogger } from '../services/SaveLogger';
 import { 
   Search, 
   Filter, 
@@ -509,8 +510,21 @@ export default function AdminDashboard({
         await saveSupabaseSetting('tast_smtp_from', smtpFrom);
         isSynced = true;
       }
-    } catch (err) {
+      saveLogger.log(
+        'Admin SMTP',
+        language === 'ca' ? 'Guardar configuració SMTP' : 'Guardar configuración SMTP',
+        'success',
+        language === 'ca' ? `Host: ${smtpHost}:${smtpPort} - ${isSynced ? "Sincronitzat" : "Desat localment"}` : `Host: ${smtpHost}:${smtpPort} - ${isSynced ? "Sincronizado" : "Guardado localmente"}`
+      );
+    } catch (err: any) {
       console.error("Error saving SMTP to Supabase:", err);
+      saveLogger.log(
+        'Admin SMTP',
+        language === 'ca' ? 'Guardar configuració SMTP' : 'Guardar configuración SMTP',
+        'error',
+        undefined,
+        err?.message || String(err)
+      );
     }
 
     setSmtpSaveSuccess(true);
@@ -835,7 +849,21 @@ export default function AdminDashboard({
         await saveSupabaseSetting('tast_staff_2026', updated);
         isSynced = true;
       }
-    } catch (err) {}
+      saveLogger.log(
+        'Admin Staff',
+        language === 'ca' ? `Afegir membre de personal: ${newStaffNom}` : `Añadir miembro de personal: ${newStaffNom}`,
+        'success',
+        language === 'ca' ? `Rol: ${newStaffRol} - ${isSynced ? "Sincronitzat amb Supabase" : "Desat localment"}` : `Rol: ${newStaffRol} - ${isSynced ? "Sincronizado con Supabase" : "Guardado localmente"}`
+      );
+    } catch (err: any) {
+      saveLogger.log(
+        'Admin Staff',
+        language === 'ca' ? `Afegir membre de personal: ${newStaffNom}` : `Añadir miembro de personal: ${newStaffNom}`,
+        'error',
+        undefined,
+        err?.message || String(err)
+      );
+    }
     window.dispatchEvent(new Event('staffChanged'));
 
     showToast(
@@ -861,13 +889,28 @@ export default function AdminDashboard({
     setStaffList(updated);
     localStorage.setItem('tast_staff_2026', JSON.stringify(updated));
     let isSynced = false;
+    const target = staffList.find(s => s.id === id);
     try {
       const { isSupabaseConfigured, saveSupabaseSetting } = await import('../supabaseClient');
       if (isSupabaseConfigured) {
         await saveSupabaseSetting('tast_staff_2026', updated);
         isSynced = true;
       }
-    } catch (err) {}
+      saveLogger.log(
+        'Admin Staff',
+        language === 'ca' ? `Actualitzar rol de personal: ${target?.nom || 'staff'}` : `Actualizar rol de personal: ${target?.nom || 'staff'}`,
+        'success',
+        language === 'ca' ? `Nou rol: ${rol} - ${isSynced ? "Sincronitzat amb Supabase" : "Desat localment"}` : `Nuevo rol: ${rol} - ${isSynced ? "Sincronizado con Supabase" : "Guardado localmente"}`
+      );
+    } catch (err: any) {
+      saveLogger.log(
+        'Admin Staff',
+        language === 'ca' ? `Actualitzar rol de personal: ${target?.nom || 'staff'}` : `Actualizar rol de personal: ${target?.nom || 'staff'}`,
+        'error',
+        undefined,
+        err?.message || String(err)
+      );
+    }
     window.dispatchEvent(new Event('staffChanged'));
     showToast(
       language === 'ca'
@@ -892,7 +935,21 @@ export default function AdminDashboard({
         await saveSupabaseSetting('tast_staff_2026', updated);
         isSynced = true;
       }
-    } catch (err) {}
+      saveLogger.log(
+        'Admin Staff',
+        language === 'ca' ? `Modificar estat d'accés: ${target?.nom || 'staff'}` : `Modificar estado de acceso: ${target?.nom || 'staff'}`,
+        'success',
+        language === 'ca' ? `Estat actiu: ${!target?.actiu} - ${isSynced ? "Sincronitzat amb Supabase" : "Desat localment"}` : `Estado activo: ${!target?.actiu} - ${isSynced ? "Sincronizado con Supabase" : "Guardado localmente"}`
+      );
+    } catch (err: any) {
+      saveLogger.log(
+        'Admin Staff',
+        language === 'ca' ? `Modificar estat d'accés: ${target?.nom || 'staff'}` : `Modificar estado de acceso: ${target?.nom || 'staff'}`,
+        'error',
+        undefined,
+        err?.message || String(err)
+      );
+    }
     window.dispatchEvent(new Event('staffChanged'));
     showToast(
       language === 'ca'
@@ -917,7 +974,21 @@ export default function AdminDashboard({
           await saveSupabaseSetting('tast_staff_2026', updated);
           isSynced = true;
         }
-      } catch (err) {}
+        saveLogger.log(
+          'Admin Staff',
+          language === 'ca' ? `Eliminar membre de personal: ${name}` : `Eliminar miembro de personal: ${name}`,
+          'success',
+          language === 'ca' ? `Sincronitzat amb Supabase` : `Sincronizado con Supabase`
+        );
+      } catch (err: any) {
+        saveLogger.log(
+          'Admin Staff',
+          language === 'ca' ? `Eliminar membre de personal: ${name}` : `Eliminar miembro de personal: ${name}`,
+          'error',
+          undefined,
+          err?.message || String(err)
+        );
+      }
       window.dispatchEvent(new Event('staffChanged'));
       showToast(
         language === 'ca'

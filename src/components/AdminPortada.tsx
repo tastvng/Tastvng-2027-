@@ -4,6 +4,7 @@ import { PortadaConfig } from './PortadaPage';
 import { saveSupabaseSettings, getSupabaseSettings, isSupabaseConfigured } from '../supabaseClient';
 import { useLanguage } from '../LanguageContext';
 import { useToast } from '../hooks/useToast';
+import { saveLogger } from '../services/SaveLogger';
 
 export const PORTADA_CONFIG_DEFAULTS: PortadaConfig = {
   activa: true,
@@ -201,6 +202,12 @@ export default function AdminPortada({ onAddLog }: AdminPortadaProps) {
           : `✓ Estado de inscripciones actualizado a: ${newState.toUpperCase()}`,
         'success'
       );
+      saveLogger.log(
+        'Admin Portada',
+        language === 'ca' ? `Actualitzar estat inscripcions: ${newState.toUpperCase()}` : `Actualizar estado inscripciones: ${newState.toUpperCase()}`,
+        'success',
+        language === 'ca' ? 'Sincronitzat amb Supabase' : 'Sincronizado con Supabase'
+      );
 
       if (onAddLog) {
         onAddLog(language === 'ca' 
@@ -220,6 +227,13 @@ export default function AdminPortada({ onAddLog }: AdminPortadaProps) {
           ? `❌ Error al desar l'estat: ${errorMsg}`
           : `❌ Error al guardar el estado: ${errorMsg}`,
         'error'
+      );
+      saveLogger.log(
+        'Admin Portada',
+        language === 'ca' ? `Actualitzar estat inscripcions: ${newState.toUpperCase()}` : `Actualizar estado inscripciones: ${newState.toUpperCase()}`,
+        'error',
+        undefined,
+        errorMsg
       );
     } finally {
       setSavingSemafor(false);
@@ -242,34 +256,58 @@ export default function AdminPortada({ onAddLog }: AdminPortadaProps) {
       } catch {}
     }
     
-    // Save to Supabase using settings table
-    let synced = false;
-    if (isSupabaseConfigured) {
-      synced = await saveSupabaseSettings(config);
-      
-      const { getSupabaseSetting, saveSupabaseSetting } = await import('../supabaseClient');
-      const sc = await getSupabaseSetting('tast_config_2026', null);
-      if (sc) {
-        sc.estatInscripcions = estatInscripcions;
-        await saveSupabaseSetting('tast_config_2026', sc);
+    try {
+      // Save to Supabase using settings table
+      let synced = false;
+      if (isSupabaseConfigured) {
+        synced = await saveSupabaseSettings(config);
+        
+        const { getSupabaseSetting, saveSupabaseSetting } = await import('../supabaseClient');
+        const sc = await getSupabaseSetting('tast_config_2026', null);
+        if (sc) {
+          sc.estatInscripcions = estatInscripcions;
+          await saveSupabaseSetting('tast_config_2026', sc);
+        }
+        await saveSupabaseSetting('estat_inscripcio_global', estatInscripcions);
       }
-      await saveSupabaseSetting('estat_inscripcio_global', estatInscripcions);
-    }
-    
-    // Dispatch custom event to let App know configuration changed
-    window.dispatchEvent(new Event('portadaConfigChanged'));
-    
-    setSaveSuccess(true);
-    showToast(
-      language === 'ca' 
-        ? `✓ Configuració de la Portada desada correctament${synced ? " (Sincronitzat)" : ""}` 
-        : `✓ Configuración de la Portada guardada correctamente${synced ? " (Sincronizado)" : ""}`,
-      'success'
-    );
-    if (onAddLog) {
-      onAddLog(language === 'ca' 
-        ? `Configuració de la pantalla de Portada actualitzada correctament${synced ? " (Sincronitzat amb Supabase)" : ""}.` 
-        : `Configuración de la pantalla de Portada actualizada correctamente${synced ? " (Sincronizado con Supabase)" : ""}.`
+      
+      // Dispatch custom event to let App know configuration changed
+      window.dispatchEvent(new Event('portadaConfigChanged'));
+      
+      setSaveSuccess(true);
+      showToast(
+        language === 'ca' 
+          ? `✓ Configuració de la Portada desada correctament${synced ? " (Sincronitzat)" : ""}` 
+          : `✓ Configuración de la Portada guardada correctamente${synced ? " (Sincronizado)" : ""}`,
+        'success'
+      );
+      saveLogger.log(
+        'Admin Portada',
+        language === 'ca' ? 'Guardar portada' : 'Guardar portada',
+        'success',
+        language === 'ca' ? `Textos i fons actualitzats${synced ? " (Sincronitzat)" : ""}` : `Textos y fondo actualizados${synced ? " (Sincronizado)" : ""}`
+      );
+      if (onAddLog) {
+        onAddLog(language === 'ca' 
+          ? `Configuració de la pantalla de Portada actualitzada correctament${synced ? " (Sincronitzat amb Supabase)" : ""}.` 
+          : `Configuración de la pantalla de Portada actualizada correctamente${synced ? " (Sincronizado con Supabase)" : ""}.`
+        );
+      }
+    } catch (err: any) {
+      console.error("Error saving portada config:", err);
+      const errorMsg = err?.message || String(err);
+      showToast(
+        language === 'ca'
+          ? `❌ Error al desar la configuració: ${errorMsg}`
+          : `❌ Error al guardar la configuración: ${errorMsg}`,
+        'error'
+      );
+      saveLogger.log(
+        'Admin Portada',
+        language === 'ca' ? 'Guardar portada' : 'Guardar portada',
+        'error',
+        undefined,
+        errorMsg
       );
     }
     setTimeout(() => setSaveSuccess(false), 3000);
@@ -283,23 +321,46 @@ export default function AdminPortada({ onAddLog }: AdminPortadaProps) {
       setConfig(PORTADA_CONFIG_DEFAULTS);
       localStorage.setItem('tast_portada_config_2026', JSON.stringify(PORTADA_CONFIG_DEFAULTS));
       
-      let synced = false;
-      if (isSupabaseConfigured) {
-        synced = await saveSupabaseSettings(PORTADA_CONFIG_DEFAULTS);
-      }
-      
-      window.dispatchEvent(new Event('portadaConfigChanged'));
-      showToast(
-        language === 'ca'
-          ? `✓ Portada restablerta als valors per defecte`
-          : `✓ Portada restablecida a los valores por defecto`,
-        'success'
-      );
-      
-      if (onAddLog) {
-        onAddLog(language === 'ca' 
-          ? `Restaurats valors per defecte de la Portada${synced ? " (Sincronitzat amb Supabase)" : ""}.` 
-          : `Restaurado valores por defecto de la Portada${synced ? " (Sincronizado con Supabase)" : ""}.`
+      try {
+        let synced = false;
+        if (isSupabaseConfigured) {
+          synced = await saveSupabaseSettings(PORTADA_CONFIG_DEFAULTS);
+        }
+        
+        window.dispatchEvent(new Event('portadaConfigChanged'));
+        showToast(
+          language === 'ca'
+            ? `✓ Portada restablerta als valors per defecte`
+            : `✓ Portada restablecida a los valores por defecto`,
+          'success'
+        );
+        saveLogger.log(
+          'Admin Portada',
+          language === 'ca' ? 'Restablir portada' : 'Restablecer portada',
+          'success',
+          language === 'ca' ? 'Valors per defecte de la Portada restablerts correctament' : 'Valores por defecto de la Portada restablecidos correctamente'
+        );
+        
+        if (onAddLog) {
+          onAddLog(language === 'ca' 
+            ? `Restaurats valors per defecte de la Portada${synced ? " (Sincronitzat amb Supabase)" : ""}.` 
+            : `Restaurado valores por defecto de la Portada${synced ? " (Sincronizado con Supabase)" : ""}.`
+          );
+        }
+      } catch (err: any) {
+        const errorMsg = err?.message || String(err);
+        showToast(
+          language === 'ca'
+            ? `❌ Error al restablir la portada: ${errorMsg}`
+            : `❌ Error al restablecer la portada: ${errorMsg}`,
+          'error'
+        );
+        saveLogger.log(
+          'Admin Portada',
+          language === 'ca' ? 'Restablir portada' : 'Restablecer portada',
+          'error',
+          undefined,
+          errorMsg
         );
       }
       setSaveSuccess(true);

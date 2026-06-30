@@ -36,6 +36,7 @@ import {
 
 import { useLanguage } from './LanguageContext';
 import { useToast } from './hooks/useToast';
+import { saveLogger } from './services/SaveLogger';
 
 // Component imports
 import PublicForm from './components/PublicForm';
@@ -43,6 +44,7 @@ import Confirmation from './components/Confirmation';
 import AdminLogin from './components/AdminLogin';
 import AdminDashboard from './components/AdminDashboard';
 import AdminFicha from './components/AdminFicha';
+import { AdminStatusPanel } from './components/AdminStatusPanel';
 import AdminConfig from './components/AdminConfig';
 import AdminScanner from './components/AdminScanner';
 import NotificationFeed from './components/NotificationFeed';
@@ -415,12 +417,31 @@ export default function App() {
         }
         addLog("✓ Configuració desada globalment a la base de dades d'settings.");
         showToast(language === 'ca' ? '✓ Configuració desada correctament' : '✓ Configuración guardada correctamente', 'success');
+        saveLogger.log(
+          'Admin Diseño',
+          language === 'ca' ? 'Guardar configuració' : 'Guardar configuración',
+          'success',
+          language === 'ca' ? 'Configuració i estat d\'inscripcions actualitzats a Supabase' : 'Configuración y estado de inscripciones actualizados en Supabase'
+        );
       } catch (err) {
         console.error("Error saving config to Supabase:", err);
         showToast(language === 'ca' ? '❌ Error al desar la configuració' : '❌ Error al guardar la configuración', 'error');
+        saveLogger.log(
+          'Admin Diseño',
+          language === 'ca' ? 'Guardar configuració' : 'Guardar configuración',
+          'error',
+          undefined,
+          err instanceof Error ? err.message : String(err)
+        );
       }
     } else {
       showToast(language === 'ca' ? '✓ Configuració desada localment' : '✓ Configuración guardada localmente', 'success');
+      saveLogger.log(
+        'Admin Diseño',
+        language === 'ca' ? 'Guardar configuració' : 'Guardar configuración',
+        'success',
+        language === 'ca' ? 'Desat localment' : 'Guardado localmente'
+      );
     }
   };
 
@@ -434,12 +455,31 @@ export default function App() {
         await saveSupabaseSetting('tast_config_2026', CONFIG_INICIAL);
         addLog("✓ Configuració de fàbrica desada globalment a Supabase.");
         showToast(language === 'ca' ? '✓ Configuració restablerta correctament' : '✓ Configuración restablecida correctamente', 'success');
+        saveLogger.log(
+          'Admin Diseño',
+          language === 'ca' ? 'Restablir configuració' : 'Restablecer configuración',
+          'success',
+          language === 'ca' ? 'Configuració inicial de fàbrica restablerta a Supabase' : 'Configuración inicial de fábrica restablecida en Supabase'
+        );
       } catch (err) {
         console.error("Error saving reset config to Supabase:", err);
         showToast(language === 'ca' ? '❌ Error al restablir la configuració' : '❌ Error al restablecer la configuración', 'error');
+        saveLogger.log(
+          'Admin Diseño',
+          language === 'ca' ? 'Restablir configuració' : 'Restablecer configuración',
+          'error',
+          undefined,
+          err instanceof Error ? err.message : String(err)
+        );
       }
     } else {
       showToast(language === 'ca' ? '✓ Configuració restablerta localment' : '✓ Configuración restablecida localmente', 'success');
+      saveLogger.log(
+        'Admin Diseño',
+        language === 'ca' ? 'Restablir configuració' : 'Restablecer configuración',
+        'success',
+        language === 'ca' ? 'Configuració restablerta localment' : 'Configuración restablecida localmente'
+      );
     }
     // Force reload so that state hooks and variables inside subcomponents reinitialize cleanly!
     setTimeout(() => {
@@ -515,9 +555,29 @@ export default function App() {
       try {
         await saveSupabaseInscripcion(newReg);
         addLog(`✓ Inscripció registrada persistentment a Supabase.`);
+        saveLogger.log(
+          'Inscripción',
+          language === 'ca' ? `Nova inscripció: ${newReg.c1Nom} & ${newReg.c2Nom}` : `Nueva inscripción: ${newReg.c1Nom} & ${newReg.c2Nom}`,
+          'success',
+          language === 'ca' ? `Codi: ${newReg.codiSeguiment} - Registrada a Supabase` : `Código: ${newReg.codiSeguiment} - Registrada en Supabase`
+        );
       } catch (err) {
         console.error("Error saving inscription to Supabase:", err);
+        saveLogger.log(
+          'Inscripción',
+          language === 'ca' ? `Nova inscripció: ${newReg.c1Nom} & ${newReg.c2Nom}` : `Nueva inscripción: ${newReg.c1Nom} & ${newReg.c2Nom}`,
+          'error',
+          undefined,
+          err instanceof Error ? err.message : String(err)
+        );
       }
+    } else {
+      saveLogger.log(
+        'Inscripción',
+        language === 'ca' ? `Nova inscripció: ${newReg.c1Nom} & ${newReg.c2Nom}` : `Nueva inscripción: ${newReg.c1Nom} & ${newReg.c2Nom}`,
+        'success',
+        language === 'ca' ? `Codi: ${newReg.codiSeguiment} - Desat localment` : `Código: ${newReg.codiSeguiment} - Guardado localmente`
+      );
     }
   };
 
@@ -546,9 +606,29 @@ export default function App() {
       try {
         await saveSupabaseInscripcion(newReg);
         addLog(`✓ Inscripció manual registrada persistentment a Supabase.`);
+        saveLogger.log(
+          'Inscripción Manual',
+          language === 'ca' ? `Alta manual: ${newReg.c1Nom} & ${newReg.c2Nom}` : `Alta manual: ${newReg.c1Nom} & ${newReg.c2Nom}`,
+          'success',
+          language === 'ca' ? `Codi: ${newReg.codiSeguiment} - Sincronitzat amb Supabase` : `Código: ${newReg.codiSeguiment} - Sincronizado con Supabase`
+        );
       } catch (err) {
         console.error("Error saving manual inscription to Supabase:", err);
+        saveLogger.log(
+          'Inscripción Manual',
+          language === 'ca' ? `Alta manual: ${newReg.c1Nom} & ${newReg.c2Nom}` : `Alta manual: ${newReg.c1Nom} & ${newReg.c2Nom}`,
+          'error',
+          undefined,
+          err instanceof Error ? err.message : String(err)
+        );
       }
+    } else {
+      saveLogger.log(
+        'Inscripción Manual',
+        language === 'ca' ? `Alta manual: ${newReg.c1Nom} & ${newReg.c2Nom}` : `Alta manual: ${newReg.c1Nom} & ${newReg.c2Nom}`,
+        'success',
+        language === 'ca' ? `Codi: ${newReg.codiSeguiment} - Desat localment` : `Código: ${newReg.codiSeguiment} - Guardado localmente`
+      );
     }
   };
 
@@ -563,9 +643,29 @@ export default function App() {
       try {
         await deleteSupabaseInscripcion(id);
         addLog(`✓ Inscripció eliminada a Supabase.`);
+        saveLogger.log(
+          'Inscripción',
+          language === 'ca' ? `Eliminar inscripció: ${itemToDelete?.c1Nom || id}` : `Eliminar inscripción: ${itemToDelete?.c1Nom || id}`,
+          'success',
+          language === 'ca' ? `Sincronitzat amb Supabase` : `Sincronizado con Supabase`
+        );
       } catch (err) {
         console.error("Error deleting inscription from Supabase:", err);
+        saveLogger.log(
+          'Inscripción',
+          language === 'ca' ? `Eliminar inscripció: ${itemToDelete?.c1Nom || id}` : `Eliminar inscripción: ${itemToDelete?.c1Nom || id}`,
+          'error',
+          undefined,
+          err instanceof Error ? err.message : String(err)
+        );
       }
+    } else {
+      saveLogger.log(
+        'Inscripción',
+        language === 'ca' ? `Eliminar inscripció: ${itemToDelete?.c1Nom || id}` : `Eliminar inscripción: ${itemToDelete?.c1Nom || id}`,
+        'success',
+        language === 'ca' ? `Eliminat localment` : `Eliminado localmente`
+      );
     }
   };
 
@@ -608,12 +708,31 @@ export default function App() {
       try {
         await saveSupabaseSetting('tast_noticies_2026', newNoticies);
         showToast(language === 'ca' ? '✓ Notícies actualitzades correctament' : '✓ Noticias actualizadas correctamente', 'success');
+        saveLogger.log(
+          'Admin Redes',
+          language === 'ca' ? 'Actualitzar notícies' : 'Actualizar noticias',
+          'success',
+          language === 'ca' ? `S'han desat ${newNoticies.length} notícies correctament a Supabase` : `Se han guardado ${newNoticies.length} noticias correctamente en Supabase`
+        );
       } catch (err) {
         console.error("Error saving news to Supabase:", err);
         showToast(language === 'ca' ? '❌ Error al desar les notícies' : '❌ Error al guardar las noticias', 'error');
+        saveLogger.log(
+          'Admin Redes',
+          language === 'ca' ? 'Actualitzar notícies' : 'Actualizar noticias',
+          'error',
+          undefined,
+          err instanceof Error ? err.message : String(err)
+        );
       }
     } else {
       showToast(language === 'ca' ? '✓ Notícies actualitzades localment' : '✓ Noticias actualizadas localmente', 'success');
+      saveLogger.log(
+        'Admin Redes',
+        language === 'ca' ? 'Actualitzar notícies' : 'Actualizar noticias',
+        'success',
+        language === 'ca' ? `Notícies actualitzades localment (${newNoticies.length} items)` : `Noticias actualizadas localmente (${newNoticies.length} items)`
+      );
     }
   };
 
@@ -628,12 +747,31 @@ export default function App() {
         await saveSupabaseInscripcion(updatedReg);
         addLog(`✓ Ficha actualitzada persistentment a Supabase.`);
         showToast(language === 'ca' ? '✓ Inscripció actualitzada correctament' : '✓ Inscripción actualizada correctamente', 'success');
+        saveLogger.log(
+          'Inscripción',
+          language === 'ca' ? `Actualitzar parella: ${updatedReg.c1Nom}` : `Actualizar pareja: ${updatedReg.c1Nom}`,
+          'success',
+          language === 'ca' ? `Codi: ${updatedReg.codiSeguiment} - Sincronitzat amb Supabase` : `Código: ${updatedReg.codiSeguiment} - Sincronizado con Supabase`
+        );
       } catch (err) {
         console.error("Error updating inscription on Supabase:", err);
         showToast(language === 'ca' ? '❌ Error al desar els canvis' : '❌ Error al guardar los cambios', 'error');
+        saveLogger.log(
+          'Inscripción',
+          language === 'ca' ? `Actualitzar parella: ${updatedReg.c1Nom}` : `Actualizar pareja: ${updatedReg.c1Nom}`,
+          'error',
+          undefined,
+          err instanceof Error ? err.message : String(err)
+        );
       }
     } else {
       showToast(language === 'ca' ? '✓ Inscripció actualitzada localment' : '✓ Inscripción actualizada localmente', 'success');
+      saveLogger.log(
+        'Inscripción',
+        language === 'ca' ? `Actualitzar parella: ${updatedReg.c1Nom}` : `Actualizar pareja: ${updatedReg.c1Nom}`,
+        'success',
+        language === 'ca' ? `Codi: ${updatedReg.codiSeguiment} - Desat localment` : `Código: ${updatedReg.codiSeguiment} - Guardado localmente`
+      );
     }
   };
 
@@ -981,6 +1119,9 @@ export default function App() {
             : 'diseño del cuadro de mando y formulario integral 2026'}
         </p>
       </footer>
+
+      {/* Floating System Status logs panel (Visible to logged-in admins) */}
+      <AdminStatusPanel isAdmin={isAdminLoggedIn} />
     </div>
   );
 }
