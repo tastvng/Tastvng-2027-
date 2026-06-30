@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import { Inscripcio, EstatPagament, EstatVerificacio, EstatInscripcio, MetodePagament, CategoriaParella, SistemaConfig } from '../types';
 import { useLanguage } from '../LanguageContext';
+import { useActiveYear } from '../hooks/useActiveYear';
 import TranslatedText from './TranslatedText';
 import jsQR from 'jsqr';
 
@@ -64,6 +65,7 @@ export default function AdminScanner({
   onSaveInscripcio 
 }: AdminScannerProps) {
   const { language } = useLanguage();
+  const activeYear = useActiveYear();
   // Simulator active selected phone couple index (dropdown)
   const [selectedMobileId, setSelectedMobileId] = useState<string>(inscripcions[0]?.id || '');
 
@@ -586,7 +588,7 @@ export default function AdminScanner({
                   {/* Digital ticket header */}
                   <div className="text-center border-b border-dashed border-zinc-300 pb-2 relative">
                     <span className="font-mono text-[8px] text-[#ff0090] font-bold block tracking-wider">
-                      {language === 'ca' ? "COMPROVANT EL TAST 2026" : "COMPROBANTE EL TAST 2026"}
+                      {language === 'ca' ? `COMPROVANT EL TAST ${activeYear}` : `COMPROBANTE EL TAST ${activeYear}`}
                     </span>
                     <p className="font-bold text-[11px] text-zinc-900 tracking-tight mt-0.5">
                       {language === 'ca' ? "LES COMPARSES DE VILANOVA" : "LAS COMPARSAS DE VILANOVA"}
@@ -742,7 +744,7 @@ export default function AdminScanner({
                       <p className="text-[10px] text-zinc-500 font-mono mt-1">
                         {language === 'ca' ? "Registrat el: " : "Registrado el: "} 
                         <span className="text-zinc-300 font-bold">
-                          {tempRecord.creadoEn ? new Date(tempRecord.creadoEn).toLocaleString(language === 'ca' ? 'ca-ES' : 'es-ES') : "13/06/2026, 17:34:20"}
+                          {tempRecord.creadoEn ? new Date(tempRecord.creadoEn).toLocaleString(language === 'ca' ? 'ca-ES' : 'es-ES') : `13/06/${activeYear}, 17:34:20`}
                         </span>
                       </p>
                     </div>
@@ -1072,7 +1074,7 @@ export default function AdminScanner({
                       <div className="flex justify-between items-center">
                         <span className="flex items-center gap-1.5">
                           <span className={`w-1.5 h-1.5 rounded-full ${tempRecord.teDomasBalco ? 'bg-[#ff0090]' : 'bg-zinc-750'}`} />
-                          {language === 'ca' ? "Estandart / Domàs de Balcó Oficial tast 2026:" : "Estandarte / Domás de Balcón Oficial tast 2026:"}
+                          {language === 'ca' ? `Estandart / Domàs de Balcó Oficial tast ${activeYear}:` : `Estandarte / Domás de Balcón Oficial tast ${activeYear}:`}
                         </span>
                         <span className={`font-bold ${tempRecord.teDomasBalco ? 'text-zinc-200' : 'text-zinc-600'}`}>
                           {tempRecord.teDomasBalco ? "+15.00€" : "0.00€"}
@@ -1466,7 +1468,7 @@ export default function AdminScanner({
                             handleManualSearch();
                           }
                         }}
-                        placeholder="Ex: TAST-2026-1234, Joan..."
+                        placeholder={`Ex: TAST-${activeYear}-1234, Joan...`}
                         className="flex-1 bg-zinc-950 border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white uppercase font-mono font-bold focus:outline-none focus:border-[#ff0090]"
                         id="input-manual-clerk-search"
                       />

@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useLanguage } from '../LanguageContext';
+import { useActiveYear } from '../hooks/useActiveYear';
 import { 
   ArrowLeft, 
   Save, 
@@ -38,6 +39,7 @@ interface AdminConfigProps {
 
 export default function AdminConfig({ config, onBack, onSave, onResetConfig, noticies, onSaveNoticies }: AdminConfigProps) {
   const { language, t } = useLanguage();
+  const activeYear = useActiveYear();
   // Config parameters state
   const [showResetModal, setShowResetModal] = useState(false);
   const [preuAdult, setPreuAdult] = useState(config.preuAdult);
@@ -70,7 +72,7 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
   };
 
   // States for dynamic customizable tariffs/payment lines
-  const [titolSeccioTarifes, setTitolSeccioTarifes] = useState(config.titolSeccioTarifes || 'Tarifes i Cànons 2026');
+  const [titolSeccioTarifes, setTitolSeccioTarifes] = useState(config.titolSeccioTarifes || `Tarifes i Cànons ${activeYear}`);
   const [tarifesDinamiques, setTarifesDinamiques] = useState<TarifaConcept[]>(
     config.tarifesDinamiques || [
       { id: 'adults', nom: 'Preu Parella Adulta (€)', valor: config.preuAdult, actiu: true, tipus: 'categoria_adult' },
@@ -219,7 +221,7 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
   const [logoText, setLogoText] = useState(config.logoText || 'T');
   const [titolPrincipal, setTitolPrincipal] = useState(config.titolPrincipal || 'EL TAST');
   const [titolSecundari, setTitolSecundari] = useState(config.titolSecundari || 'VILANOVA');
-  const [subtitol, setSubtitol] = useState(config.subtitol || 'Vilanova i la Geltrú 2026');
+  const [subtitol, setSubtitol] = useState(config.subtitol || `Vilanova i la Geltrú ${activeYear}`);
   const [logoColor, setLogoColor] = useState(config.logoColor || '#ff0090');
   const [titolFormulariDinamic, setTitolFormulariDinamic] = useState(config.titolFormulariDinamic || "Preguntes del Qüestionari d'El Tast");
   const [logoImgUrl, setLogoImgUrl] = useState(config.logoImgUrl || '');
@@ -268,8 +270,8 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
   const [newTipus, setNewTipus] = useState<'text' | 'select' | 'boolean'>('text');
   const [newOpcionsCsv, setNewOpcionsCsv] = useState('');
 
-  const [textLegalAutoritzacioMenors, setTextLegalAutoritzacioMenors] = useState(config.textLegalAutoritzacioMenors || "AUTORITZACIÓ DE MENORS D'EDAT\n\nEn condició de tutor/a legal del menor inscrit, declaro sota la meva responsabilitat que autoritzo expressament la seva participació a l'esdeveniment i activitats organitzades per l'Associació Cultural El Tast (Vilanova i la Geltrú 2026).\n\nCertifico que el menor es troba en condicions físiques i de salut aptes per al correcte desenvolupament de l'activitat, i m'en faig responsable de qualsevol incidència que se'n derivi del seu estat previ de salut, així com del cumprimento de la normativa vigent de l'organització.");
-  const [textLegalAutoritzacioMenorsES, setTextLegalAutoritzacioMenorsES] = useState(config.textLegalAutoritzacioMenorsES || "AUTORIZACIÓN DE MENORES DE EDAD\n\nEn condición de tutor/a legal del menor inscrito, declaro bajo mi responsabilidad que autorizo expresamente su participación en el evento y actividades organizadas por la Associació Cultural El Tast (Vilanova i la Geltrú 2026).\n\nCertifico que el menor se encuentra en condiciones físicas y de salud aptas para el correcto desarrollo de la actividad, y me hago responsable de cualquier incidencia que se derive de su estado previo de salud, así como del cumplimiento de la normativa de la organización.");
+  const [textLegalAutoritzacioMenors, setTextLegalAutoritzacioMenors] = useState(config.textLegalAutoritzacioMenors || `AUTORITZACIÓ DE MENORS D'EDAT\n\nEn condició de tutor/a legal del menor inscrit, declaro sota la meva responsabilitat que autoritzo expressament la seva participació a l'esdeveniment i activitats organitzades per l'Associació Cultural El Tast (Vilanova i la Geltrú ${activeYear}).\n\nCertifico que el menor es troba en condicions físiques i de salut aptes per al correcte desenvolupament de l'activitat, i m'en faig responsable de qualsevol incidència que se'n derivi del seu estat previ de salut, així com del cumprimento de la normativa vigent de l'organització.`);
+  const [textLegalAutoritzacioMenorsES, setTextLegalAutoritzacioMenorsES] = useState(config.textLegalAutoritzacioMenorsES || `AUTORIZACIÓN DE MENORES DE EDAD\n\nEn condición de tutor/a legal del menor inscrito, declaro bajo mi responsabilidad que autorizo expresamente su participación en el evento y actividades organizadas por la Associació Cultural El Tast (Vilanova i la Geltrú ${activeYear}).\n\nCertifico que el menor se encuentra en condiciones físicas y de salud aptas para el correcto desarrollo de la actividad, y me hago responsable de cualquier incidencia que se derive de su estado previo de salud, así como del cumplimiento de la normativa de la organización.`);
 
   const [notifSuccess, setNotifSuccess] = useState(false);
 
@@ -1207,7 +1209,7 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                   value={subtitol} 
                   onChange={(e) => setSubtitol(e.target.value)}
                   className="w-full bg-zinc-50 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-4 py-2.5 focus:outline-none transition-all"
-                  placeholder={language === 'ca' ? "Ex: Vilanova i la Geltrú 2026" : "Ej: Vilanova i la Geltrú 2026"}
+                  placeholder={language === 'ca' ? `Ex: Vilanova i la Geltrú ${activeYear}` : `Ej: Vilanova i la Geltrú ${activeYear}`}
                   id="input-config-title-subtitle"
                 />
               </div>

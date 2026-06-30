@@ -834,7 +834,8 @@ export default function App() {
   const logoText = config.logoText || 'T';
   const titolPrincipal = config.titolPrincipal || 'EL TAST';
   const titolSecundari = config.titolSecundari || 'VILANOVA';
-  const subtitol = config.subtitol || `Vilanova i la Geltrú ${activeYear}`;
+  const subtitolRaw = config.subtitol || `Vilanova i la Geltrú ${activeYear}`;
+  const subtitol = subtitolRaw.replace(/2026/g, activeYear).replace(/2027/g, activeYear);
   const logoColor = config.logoColor || '#ff0090';
 
   if (isLoading) {

@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion } from 'motion/react';
 import { useLanguage } from '../LanguageContext';
+import { useActiveYear } from '../hooks/useActiveYear';
 import TranslatedText from './TranslatedText';
 import { Play, Image, Sparkles, ChevronRight, VolumeX, Mail, FileText, Compass, ExternalLink, Instagram, Heart, Star, Zap, Bell } from 'lucide-react';
 
@@ -109,6 +110,7 @@ export default function PortadaPage({
   onGoToLogin
 }: PortadaPageProps) {
   const { language, setLanguage } = useLanguage();
+  const activeYear = useActiveYear();
 
   const [customLogo, setCustomLogo] = React.useState(() => localStorage.getItem('tast_email_logo') || "");
 
@@ -185,7 +187,8 @@ export default function PortadaPage({
   const descripcio = (language === 'ca' ? config.descripcioCA : config.descripcioES) || (language === 'ca' ? config.descripcioES : config.descripcioCA) || '';
   const botoText = (language === 'ca' ? config.botoTextCA : config.botoTextES) || (language === 'ca' ? config.botoTextES : config.botoTextCA) || '';
 
-  const footerText = (language === 'ca' ? config.footerTextCA : config.footerTextES) || (language === 'ca' ? config.footerTextES : config.footerTextCA) || `© ${new Date().getFullYear()} ASSOCIACIÓ COMPARSES EL TAST • VILANOVA`;
+  const footerTextRaw = (language === 'ca' ? config.footerTextCA : config.footerTextES) || (language === 'ca' ? config.footerTextES : config.footerTextCA) || `© ${activeYear} ASSOCIACIÓ COMPARSES EL TAST • VILANOVA`;
+  const footerText = footerTextRaw.replace(/2026/g, activeYear).replace(/2027/g, activeYear);
 
   const footerLink1Label = (language === 'ca' ? config.footerLink1LabelCA : config.footerLink1LabelES) || (language === 'ca' ? config.footerLink1LabelES : config.footerLink1LabelCA) || 'Normativa';
 
@@ -421,10 +424,10 @@ export default function PortadaPage({
               const badgeText = globalEstatInscripcions === 'tancades'
                 ? (language === 'ca' ? 'Inscripcions Tancades' : 'Inscripciones Cerradas')
                 : globalEstatInscripcions === 'espera'
-                  ? (language === 'ca' ? "Llista d'Espera 2026" : "Lista de Espera 2026")
+                  ? (language === 'ca' ? `Llista d'Espera ${activeYear}` : `Lista de Espera ${activeYear}`)
                   : (language === 'ca' 
-                      ? (config.badgeTextCA || 'Inscripcions Obertes 2026') 
-                      : (config.badgeTextES || 'Inscripciones Abiertas 2026'));
+                      ? (config.badgeTextCA || `Inscripcions Obertes ${activeYear}`) 
+                      : (config.badgeTextES || `Inscripciones Abiertas ${activeYear}`));
               
               const badgeStyleType = config.badgeStyle || 'custom';
               const badgeBg = config.badgeBgColor || accentColor;
