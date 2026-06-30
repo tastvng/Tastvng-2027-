@@ -31,7 +31,9 @@ export async function syncToGoogleSheet(
 
     syncTimeout = setTimeout(async () => {
       try {
+        const activeYear = localStorage.getItem('tast_any_edicio') || '2026';
         const formattedData = inscripcions.map((i) => ({
+          anyEdicio: activeYear,
           codiSeguiment: i.codiSeguiment,
           categoria: i.categoria,
           c1Nom: i.c1Nom,
@@ -70,7 +72,7 @@ export async function syncToGoogleSheet(
         const summaries = calculateDailySummaries(inscripcions);
 
         // 2. Compute payload signature to filter out duplicate/redundant sync requests
-        const currentSignature = JSON.stringify(formattedData) + JSON.stringify(summaries);
+        const currentSignature = JSON.stringify(formattedData) + JSON.stringify(summaries) + activeYear;
         if (currentSignature === lastSyncedDataSignature) {
           console.log("Google Sheets sync skipped: Data signature matches historical state.");
           resolve(true);
@@ -87,6 +89,8 @@ export async function syncToGoogleSheet(
           },
           body: JSON.stringify({
             action: 'sync_dual',
+            any_edicio: activeYear,
+            anyEdicio: activeYear,
             data: formattedData,
             summaries: summaries,
           }),

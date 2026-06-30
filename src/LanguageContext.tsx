@@ -4,6 +4,7 @@
  */
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { useActiveYear } from './hooks/useActiveYear';
 
 export type Language = 'ca' | 'es';
 
@@ -165,6 +166,7 @@ const translations: Record<Language, Record<string, string>> = {
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
+  const activeYear = useActiveYear();
   const [language, setLanguageState] = useState<Language>(() => {
     try {
       const saved = localStorage.getItem('tast_idioma_2026');
@@ -189,13 +191,18 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
   const t = (key: string, replacements?: Record<string, string | number>): string => {
     let text = translations[language]?.[key] || translations['ca']?.[key] || key;
     
+    // Replace hardcoded "2026" or "2027" with the active year
+    text = text.replace(/2026/g, activeYear);
+    text = text.replace(/2027/g, activeYear);
+
     // Automatically replace "El Tast 2026" or "Comparses 2026" or edit references with the single source of truth
     const evName = localStorage.getItem('tast_nom_esdeveniment') || '';
     if (evName) {
-      text = text.replace(/El Tast 2026/g, evName);
-      text = text.replace(/Comparses 2026/g, evName);
-      text = text.replace(/l'edició 2026/g, evName);
-      text = text.replace(/la edición 2026/g, evName);
+      const activeEvName = evName.replace(/2026/g, activeYear).replace(/2027/g, activeYear);
+      text = text.replace(/El Tast 2026/g, activeEvName);
+      text = text.replace(/Comparses 2026/g, activeEvName);
+      text = text.replace(/l'edició 2026/g, activeEvName);
+      text = text.replace(/la edición 2026/g, activeEvName);
     }
 
     if (replacements) {

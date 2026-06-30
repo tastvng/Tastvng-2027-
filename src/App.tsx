@@ -35,6 +35,7 @@ import {
 } from './data';
 
 import { useLanguage } from './LanguageContext';
+import { useActiveYear } from './hooks/useActiveYear';
 import { useToast } from './hooks/useToast';
 import { saveLogger } from './services/SaveLogger';
 
@@ -65,6 +66,7 @@ import {
 
 export default function App() {
   const { language, setLanguage, t } = useLanguage();
+  const activeYear = useActiveYear();
   const { toasts, showToast, removeToast } = useToast();
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
@@ -832,7 +834,7 @@ export default function App() {
   const logoText = config.logoText || 'T';
   const titolPrincipal = config.titolPrincipal || 'EL TAST';
   const titolSecundari = config.titolSecundari || 'VILANOVA';
-  const subtitol = config.subtitol || 'Vilanova i la Geltrú 2026';
+  const subtitol = config.subtitol || `Vilanova i la Geltrú ${activeYear}`;
   const logoColor = config.logoColor || '#ff0090';
 
   if (isLoading) {
@@ -1115,8 +1117,8 @@ export default function App() {
         </p>
         <p className="text-[10px] text-zinc-500 font-mono mt-1 uppercase tracking-wider">
           {language === 'ca' 
-            ? 'disseny del quadre de comandament i formulari integral 2026' 
-            : 'diseño del cuadro de mando y formulario integral 2026'}
+            ? `disseny del quadre de comandament i formulari integral ${activeYear}` 
+            : `diseño del cuadro de mando y formulario integral ${activeYear}`}
         </p>
       </footer>
 

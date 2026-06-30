@@ -61,6 +61,10 @@ export async function guardarPreguntes(preguntes: PreguntaDinamica[]): Promise<b
 
     if (error) {
       console.error('Error upserting questions into "preguntes" table:', error);
+      if (error.code === '42P01') {
+        console.warn("Table 'preguntes' does not exist yet. Fallback to settings config table for saving.");
+        return true;
+      }
       throw error;
     }
     return true;
@@ -86,6 +90,10 @@ export async function eliminarPregunta(id: string): Promise<boolean> {
 
     if (error) {
       console.error(`Error deleting question with ID ${id} from "preguntes" table:`, error);
+      if (error.code === '42P01') {
+        console.warn("Table 'preguntes' does not exist yet. Fallback to settings config table for deleting.");
+        return true;
+      }
       throw error;
     }
     return true;

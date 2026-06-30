@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useLanguage } from '../LanguageContext';
+import { useActiveYear } from '../hooks/useActiveYear';
 import { useToast } from '../hooks/useToast';
 import { saveLogger } from '../services/SaveLogger';
 import { 
@@ -81,6 +82,7 @@ export default function AdminDashboard({
   onSaveInscripcio
 }: AdminDashboardProps) {
   const { language, t } = useLanguage();
+  const activeYear = useActiveYear();
   const { showToast } = useToast();
   
   // Admin Tabs Navigation State
@@ -231,7 +233,9 @@ export default function AdminDashboard({
         return;
       }
 
-      const evName = localStorage.getItem('tast_nom_esdeveniment') || 'Carnaval 2027';
+      const activeYearLocal = localStorage.getItem('tast_any_edicio') || '2026';
+      const evNameRaw = localStorage.getItem('tast_nom_esdeveniment') || 'Carnaval 2026';
+      const evName = evNameRaw.replace(/2026/g, activeYearLocal).replace(/2027/g, activeYearLocal);
       const evAddr = localStorage.getItem('tast_direccio_esdeveniment') || 'Plaça Soler i Carbonell, 28, Vilanova i la Geltrú';
       const evHoursCa = localStorage.getItem('tast_secretaria_hours_ca') || "Dimecres i divendres, de 18:00h a 21:30h.";
       const evHoursEs = localStorage.getItem('tast_secretaria_hours_es') || "Miércoles y viernes, de 18:00h a 21:30h.";
@@ -571,7 +575,7 @@ export default function AdminDashboard({
               <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 30px; border: 1px solid #e1e1e6; border-radius: 20px; background-color: #ffffff;">
                 <div style="text-align: center; margin-bottom: 20px;">
                   <span style="background-color: #ff0090; color: #ffffff; padding: 10px 20px; font-size: 14px; font-weight: bold; border-radius: 12px; letter-spacing: 1px; display: inline-block; text-transform: uppercase;">
-                    El Tast 2026
+                    El Tast ${activeYear}
                   </span>
                 </div>
                 <h2 style="color: #111115; font-size: 22px; font-weight: 800; text-align: center; margin-top: 15px; text-transform: uppercase;">
@@ -1122,7 +1126,7 @@ export default function AdminDashboard({
 
     // Create workbook and worksheet
     const workbook = new ExcelJS.Workbook();
-    const ws = workbook.addWorksheet("COMPARSA 2026");
+    const ws = workbook.addWorksheet(`COMPARSA ${activeYear}`);
 
     // Define headers in Valencian / Catalan
     const headers = [
@@ -1595,8 +1599,8 @@ export default function AdminDashboard({
             </div>
             <p className="text-zinc-500 text-xs">
               {language === 'ca' 
-                ? `Gestió i validació d'inscripcions - ${localStorage.getItem('tast_nom_esdeveniment') || 'Carnaval 2027'}` 
-                : `Gestión y validación de inscripciones - ${localStorage.getItem('tast_nom_esdeveniment') || 'Carnaval 2027'}`}
+                ? `Gestió i validació d'inscripcions - ${(localStorage.getItem('tast_nom_esdeveniment') || 'Carnaval 2026').replace(/2026/g, activeYear).replace(/2027/g, activeYear)}` 
+                : `Gestión y validación de inscripciones - ${(localStorage.getItem('tast_nom_esdeveniment') || 'Carnaval 2026').replace(/2026/g, activeYear).replace(/2027/g, activeYear)}`}
             </p>
           </div>
         </div>
@@ -2633,7 +2637,7 @@ export default function AdminDashboard({
                     className="w-full bg-white border border-zinc-200 focus:border-fuchsia-500 rounded-2xl px-3.5 py-2.5 text-xs text-zinc-850 focus:outline-none transition cursor-pointer"
                   >
                     <option value="caramels">{language === 'ca' ? "🍬 Caramels i dolços de Vilanova" : "🍬 Caramelos y dulces de Vilanova"}</option>
-                    <option value="armilles">{language === 'ca' ? "🎀 Armilles de Comparsa 2026" : "🎀 Chalecos de Comparsa 2026"}</option>
+                    <option value="armilles">{language === 'ca' ? `🎀 Armilles de Comparsa ${activeYear}` : `🎀 Chalecos de Comparsa ${activeYear}`}</option>
                     <option value="placa">{language === 'ca' ? "💃 Salt de Comparsa a la Plaça" : "💃 Salto de Comparsa en la Plaza"}</option>
                     <option value="platja">{language === 'ca' ? "⛱️ Platja de Ribes Roges" : "⛱️ Playa de Ribes Roges"}</option>
                   </select>
@@ -2918,7 +2922,7 @@ export default function AdminDashboard({
                 <h3 className="font-sans font-black text-lg text-zinc-900 flex items-center gap-1.5 uppercase tracking-wide">
                   <Plus size={20} className="text-[#ff0090]" /> Registre Manual de Parella
                 </h3>
-                <p className="text-xs text-zinc-500 font-mono">Secretaria de l'Associació El Tast • 2026</p>
+                <p className="text-xs text-zinc-500 font-mono">Secretaria de l'Associació El Tast • {activeYear}</p>
               </div>
               <button 
                 type="button" 
@@ -3423,7 +3427,7 @@ export default function AdminDashboard({
                       Llistat de Personal ({staffList.length})
                     </h4>
                     <span className="text-[9px] bg-zinc-100 text-zinc-500 font-mono font-bold px-2 py-0.5 rounded">
-                      2026 ACTIVE SHEETS
+                      {activeYear} ACTIVE SHEETS
                     </span>
                   </div>
                   <div className="h-px bg-zinc-100" />
@@ -3514,7 +3518,7 @@ export default function AdminDashboard({
             {/* Footer */}
             <div className="p-4 bg-zinc-950 border-t border-zinc-900 flex justify-between items-center text-[10px] text-zinc-400 font-mono">
               <span>Nota: Els usuaris afegits es poden fer servir instantàniament des de la pantalla de login.</span>
-              <span>Associació Cultural El Tast • Vilanova 2026</span>
+              <span>Associació Cultural El Tast • Vilanova {activeYear}</span>
             </div>
 
           </div>

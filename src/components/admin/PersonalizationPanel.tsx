@@ -50,8 +50,17 @@ export const PERSONALIZATION_SCHEMA = {
         type: 'text',
         description: 'Nom visible a tota l\'aplicació / Nombre visible en toda la aplicación',
         required: true,
-        placeholder: 'Ej: Carnaval 2027',
-        default: 'Carnaval 2027'
+        placeholder: 'Ej: Carnaval 2026',
+        default: 'Carnaval 2026'
+      },
+      {
+        id: 'any_edicio',
+        label: 'Any de l\'Edició / Año de la Edición',
+        type: 'text',
+        description: 'Any de referència central (ex: 2026) / Año de referencia central (ej: 2026)',
+        required: true,
+        placeholder: 'Ej: 2026',
+        default: '2026'
       },
       {
         id: 'descripcion',
@@ -238,6 +247,7 @@ export default function PersonalizationPanel({ onAddLog }: PersonalizationPanelP
 
         // Load individual live/legacy values from database to ensure high-fidelity overrides
         const legacyName = await getSupabaseSetting<string>('tast_nom_esdeveniment', '');
+        const legacyAny = await getSupabaseSetting<string>('tast_any_edicio', '2026');
         const legacyDir = await getSupabaseSetting<string>('tast_direccio_esdeveniment', '');
         const legacyLogo = await getSupabaseSetting<string>('tast_email_logo', '');
         const legacySubCa = await getSupabaseSetting<string>('tast_email_subject_ca', '');
@@ -262,6 +272,10 @@ export default function PersonalizationPanel({ onAddLog }: PersonalizationPanelP
 
         // Override with legacy settings to guarantee consistency across all active app views
         if (legacyName) mergedConfig.evento.nombre = legacyName;
+        if (legacyAny) {
+          mergedConfig.evento.any_edicio = legacyAny;
+          localStorage.setItem('tast_any_edicio', legacyAny);
+        }
         if (legacyDir) mergedConfig.evento.direccio = legacyDir;
         if (legacyLogo) mergedConfig.medios.logo = legacyLogo;
         if (legacySubCa) mergedConfig.correu.subject_ca = legacySubCa;
@@ -280,6 +294,7 @@ export default function PersonalizationPanel({ onAddLog }: PersonalizationPanelP
         } else {
           // Individual legacy items fallback
           const localName = localStorage.getItem('tast_nom_esdeveniment');
+          const localAny = localStorage.getItem('tast_any_edicio');
           const localDir = localStorage.getItem('tast_direccio_esdeveniment');
           const localLogo = localStorage.getItem('tast_email_logo');
           const localSubCa = localStorage.getItem('tast_email_subject_ca');
@@ -290,6 +305,7 @@ export default function PersonalizationPanel({ onAddLog }: PersonalizationPanelP
           const localHrsEs = localStorage.getItem('tast_secretaria_hours_es');
 
           if (localName) defaults.evento.nombre = localName;
+          if (localAny) defaults.evento.any_edicio = localAny;
           if (localDir) defaults.evento.direccio = localDir;
           if (localLogo) defaults.medios.logo = localLogo;
           if (localSubCa) defaults.correu.subject_ca = localSubCa;
@@ -360,6 +376,7 @@ export default function PersonalizationPanel({ onAddLog }: PersonalizationPanelP
       // Store in local storage for instantaneous client-side fallback/HMR updates
       localStorage.setItem('personalizacion', JSON.stringify(config));
       localStorage.setItem('tast_nom_esdeveniment', config.evento?.nombre || '');
+      localStorage.setItem('tast_any_edicio', config.evento?.any_edicio || '2026');
       localStorage.setItem('tast_direccio_esdeveniment', config.evento?.direccio || '');
       localStorage.setItem('tast_email_logo', config.medios?.logo || '');
       localStorage.setItem('tast_email_subject_ca', config.correu?.subject_ca || '');
@@ -377,6 +394,7 @@ export default function PersonalizationPanel({ onAddLog }: PersonalizationPanelP
 
         // 2. Save legacy keys individually to maintain 100% retro-compatibility with App.tsx, Confirmation.tsx, etc.
         await saveSupabaseSetting('tast_nom_esdeveniment', config.evento?.nombre || '');
+        await saveSupabaseSetting('tast_any_edicio', config.evento?.any_edicio || '2026');
         await saveSupabaseSetting('tast_direccio_esdeveniment', config.evento?.direccio || '');
         await saveSupabaseSetting('tast_email_logo', config.medios?.logo || '');
         await saveSupabaseSetting('tast_email_subject_ca', config.correu?.subject_ca || '');

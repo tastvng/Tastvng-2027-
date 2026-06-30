@@ -13,7 +13,7 @@ export default function PreviewBox({ config }: PreviewBoxProps) {
   const logoUrl = config.medios?.logo || '';
   const bannerUrl = config.medios?.banner || '';
   
-  const nombreEvento = config.evento?.nombre || 'Carnaval 2027';
+  const nombreEvento = config.evento?.nombre || 'Carnaval 2026';
   const descripcionEvento = config.evento?.descripcion || 'Inscripcions oficials per a la Comparsa El Tast';
   const emailContacto = config.evento?.email || 'info@tastvng.cat';
   const direccioEvento = config.evento?.direccio || 'Plaça Soler i Carbonell, 28, Vilanova i la Geltrú';
@@ -39,7 +39,7 @@ export default function PreviewBox({ config }: PreviewBoxProps) {
             <img src={bannerUrl} alt="Banner" className="w-full h-full object-cover" />
           ) : (
             <div className="absolute inset-0 bg-gradient-to-r from-zinc-900 to-zinc-700 flex items-center justify-center opacity-90">
-              <span className="text-white/20 font-bold text-2xl font-sans tracking-wider uppercase">El Tast 2026</span>
+              <span className="text-white/20 font-bold text-2xl font-sans tracking-wider uppercase">El Tast {config.evento?.any_edicio || '2026'}</span>
             </div>
           )}
           

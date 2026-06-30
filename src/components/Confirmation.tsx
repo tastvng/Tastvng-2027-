@@ -21,7 +21,11 @@ export default function Confirmation({ registration, onClear, onUpdate }: Confir
   const [smtpStatus, setSmtpStatus] = useState<'idle' | 'sending' | 'success' | 'error' | 'not_configured'>('idle');
   const [smtpError, setSmtpError] = useState('');
 
-  const [nomEsdeveniment, setNomEsdeveniment] = useState(() => localStorage.getItem('tast_nom_esdeveniment') || 'Carnaval 2027');
+  const [nomEsdeveniment, setNomEsdeveniment] = useState(() => {
+    const activeYear = localStorage.getItem('tast_any_edicio') || '2026';
+    const rawName = localStorage.getItem('tast_nom_esdeveniment') || 'Carnaval 2026';
+    return rawName.replace(/2026/g, activeYear).replace(/2027/g, activeYear);
+  });
   const [direccioEsdeveniment, setDireccioEsdeveniment] = useState(() => localStorage.getItem('tast_direccio_esdeveniment') || 'Plaça Soler i Carbonell, 28, Vilanova i la Geltrú');
 
   const [subSubjectCa, setSubSubjectCa] = useState(() => localStorage.getItem('tast_email_subject_ca') || `🎟️ El Tast ${nomEsdeveniment} - Confirmació d'Inscripció`);
@@ -36,7 +40,9 @@ export default function Confirmation({ registration, onClear, onUpdate }: Confir
   useEffect(() => {
     // 1. Initial load from local cache if pre-existing
     const loadCustomTemplates = () => {
-      const activeEvName = localStorage.getItem('tast_nom_esdeveniment') || 'Carnaval 2027';
+      const activeYear = localStorage.getItem('tast_any_edicio') || '2026';
+      const rawName = localStorage.getItem('tast_nom_esdeveniment') || 'Carnaval 2026';
+      const activeEvName = rawName.replace(/2026/g, activeYear).replace(/2027/g, activeYear);
       const activeEvDir = localStorage.getItem('tast_direccio_esdeveniment') || 'Plaça Soler i Carbonell, 28, Vilanova i la Geltrú';
       
       setNomEsdeveniment(activeEvName);
@@ -58,12 +64,17 @@ export default function Confirmation({ registration, onClear, onUpdate }: Confir
       try {
         const { getSupabaseSetting, isSupabaseConfigured } = await import('../supabaseClient');
         if (isSupabaseConfigured) {
-          const liveEvName = await getSupabaseSetting<string>('tast_nom_esdeveniment', 'Carnaval 2027');
+          const liveEvNameRaw = await getSupabaseSetting<string>('tast_nom_esdeveniment', 'Carnaval 2026');
+          const liveEvYear = await getSupabaseSetting<string>('tast_any_edicio', '2026');
+          const liveEvName = liveEvNameRaw.replace(/2026/g, liveEvYear).replace(/2027/g, liveEvYear);
           const liveEvDir = await getSupabaseSetting<string>('tast_direccio_esdeveniment', 'Plaça Soler i Carbonell, 28, Vilanova i la Geltrú');
           
           if (liveEvName) {
             setNomEsdeveniment(liveEvName);
             localStorage.setItem('tast_nom_esdeveniment', liveEvName);
+          }
+          if (liveEvYear) {
+            localStorage.setItem('tast_any_edicio', liveEvYear);
           }
           if (liveEvDir) {
             setDireccioEsdeveniment(liveEvDir);
@@ -78,7 +89,7 @@ export default function Confirmation({ registration, onClear, onUpdate }: Confir
           const liveHoursCa = await getSupabaseSetting<string>('tast_secretaria_hours_ca', '');
           const liveHoursEs = await getSupabaseSetting<string>('tast_secretaria_hours_es', '');
 
-          const activeName = liveEvName || 'Carnaval 2027';
+          const activeName = liveEvName || `Carnaval ${liveEvYear}`;
 
           if (liveSubjectCa) {
             setSubSubjectCa(liveSubjectCa);
