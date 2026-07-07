@@ -21,6 +21,7 @@ import { useActiveYear } from '../hooks/useActiveYear';
 import TranslatedText, { TranslatedOption } from './TranslatedText';
 import { ComparserCard } from './publicForm/ComparserCard';
 import { CameraModal } from './publicForm/CameraModal';
+import { CodigoVestimentaModal } from './CodigoVestimentaModal';
 
 interface PublicFormProps {
   config: SistemaConfig;
@@ -31,6 +32,25 @@ interface PublicFormProps {
 export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicFormProps) {
   const { language, t } = useLanguage();
   const activeYear = useActiveYear();
+
+  const [youtubeUrl, setYoutubeUrl] = useState('https://www.youtube.com/embed/dcY7s1F3jo0');
+
+  useEffect(() => {
+    const fetchYoutubeUrl = async () => {
+      try {
+        const { getSupabaseSetting, isSupabaseConfigured } = await import('../supabaseClient');
+        if (isSupabaseConfigured) {
+          const storedUrl = await getSupabaseSetting<string>('codigo_vestimenta_url', 'https://www.youtube.com/embed/dcY7s1F3jo0');
+          if (storedUrl) {
+            setYoutubeUrl(storedUrl);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching youtube URL:', error);
+      }
+    };
+    fetchYoutubeUrl();
+  }, []);
 
   // Form fields state
   const [categoria, setCategoria] = useState<CategoriaParella>(CategoriaParella.ADULT);
@@ -1114,6 +1134,11 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
               )}
             </div>
           </div>
+        </div>
+
+        {/* Código de Vestimenta Button / Modal */}
+        <div className="max-w-md mx-auto sm:max-w-none">
+          <CodigoVestimentaModal youtubeUrl={youtubeUrl} />
         </div>
 
         {/* Floating/Bottom Action price breakdown bar */}

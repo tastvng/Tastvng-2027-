@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { saveLogger, SaveLog } from '../services/SaveLogger';
 import { useLanguage } from '../LanguageContext';
 import { Settings, Trash2, Play, Pause, RefreshCw, CheckCircle, AlertCircle, X } from 'lucide-react';
+import { singularPlural } from '../utils/singularPlural';
 
 interface AdminStatusPanelProps {
   isAdmin: boolean;
@@ -12,6 +13,11 @@ export const AdminStatusPanel: React.FC<AdminStatusPanelProps> = ({ isAdmin }) =
   const [isOpen, setIsOpen] = useState(false);
   const [logs, setLogs] = useState<SaveLog[]>([]);
   const [autoRefresh, setAutoRefresh] = useState(true);
+
+  // Real-time counter states
+  const [totalInscrits, setTotalInscrits] = useState(0);
+  const [numPreguntes, setNumPreguntes] = useState(0);
+  const [numRespuestas, setNumRespuestas] = useState(0);
 
   const loadLogs = () => {
     setLogs(saveLogger.getRecentLogs(20));
@@ -39,12 +45,63 @@ export const AdminStatusPanel: React.FC<AdminStatusPanelProps> = ({ isAdmin }) =
     };
   }, [isAdmin, autoRefresh]);
 
+  // Load real-time counters
+  useEffect(() => {
+    if (!isAdmin || !isOpen) return;
+
+    const fetchStats = async () => {
+      try {
+        const { getSupabaseInscripciones, isSupabaseConfigured } = await import('../supabaseClient');
+        const { cargarPreguntes } = await import('../api/questionnaireApi');
+
+        let inscritsCount = 0;
+        let preguntesCount = 0;
+        let respuestasCount = 0;
+
+        if (isSupabaseConfigured) {
+          const inscritsData = await getSupabaseInscripciones();
+          inscritsCount = inscritsData.length;
+
+          const preguntesData = await cargarPreguntes();
+          preguntesCount = preguntesData ? preguntesData.length : 0;
+
+          // Count completed questionnaires / responses
+          respuestasCount = inscritsData.filter(i => i.respostesCuestionari && Object.keys(i.respostesCuestionari).length > 0).length;
+        } else {
+          // Local fallback
+          const localInscrits = localStorage.getItem('tast_inscripciones');
+          const inscritsArray = localInscrits ? JSON.parse(localInscrits) : [];
+          inscritsCount = inscritsArray.length;
+
+          const localPreguntes = localStorage.getItem('tast_preguntes');
+          const preguntesArray = localPreguntes ? JSON.parse(localPreguntes) : [];
+          preguntesCount = preguntesArray.length;
+
+          respuestasCount = inscritsArray.filter((i: any) => i.respostesCuestionari && Object.keys(i.respostesCuestionari).length > 0).length;
+        }
+
+        setTotalInscrits(inscritsCount);
+        setNumPreguntes(preguntesCount);
+        setNumRespuestas(respuestasCount);
+      } catch (err) {
+        console.error('Error fetching stats for AdminStatusPanel:', err);
+      }
+    };
+
+    fetchStats();
+    
+    // Also update stats when logs update or on interval
+    const statsInterval = setInterval(fetchStats, 4000);
+    return () => clearInterval(statsInterval);
+  }, [isAdmin, isOpen, logs]);
+
   if (!isAdmin) return null;
 
   const handleClear = () => {
     saveLogger.clearLogs();
     loadLogs();
   };
+
 
   return (
     <div className="fixed bottom-4 left-4 z-[9999] font-sans">
@@ -97,6 +154,34 @@ export const AdminStatusPanel: React.FC<AdminStatusPanelProps> = ({ isAdmin }) =
             >
               <X className="w-4 h-4" />
             </button>
+          </div>
+
+          {/* Counters Section */}
+          <div className="px-4 py-2.5 bg-zinc-900/10 border-b border-zinc-800/50 grid grid-cols-3 gap-2 shrink-0">
+            <div className="bg-zinc-950/40 border border-zinc-900 p-2 rounded-xl text-center">
+              <span className="text-[9px] font-mono font-bold text-zinc-500 uppercase tracking-wider block">
+                {language === 'ca' ? 'Inscrits' : 'Inscritos'}
+              </span>
+              <p className="text-xs font-black text-purple-400 mt-0.5">
+                {totalInscrits} {singularPlural(totalInscrits, 'inscrit', 'inscrits')}
+              </p>
+            </div>
+            <div className="bg-zinc-950/40 border border-zinc-900 p-2 rounded-xl text-center">
+              <span className="text-[9px] font-mono font-bold text-zinc-500 uppercase tracking-wider block">
+                {language === 'ca' ? 'Preguntes' : 'Preguntas'}
+              </span>
+              <p className="text-xs font-black text-purple-400 mt-0.5">
+                {numPreguntes} {singularPlural(numPreguntes, 'pregunta', 'preguntes')}
+              </p>
+            </div>
+            <div className="bg-zinc-950/40 border border-zinc-900 p-2 rounded-xl text-center">
+              <span className="text-[9px] font-mono font-bold text-zinc-500 uppercase tracking-wider block">
+                {language === 'ca' ? 'Respostes' : 'Respuestas'}
+              </span>
+              <p className="text-xs font-black text-purple-400 mt-0.5">
+                {numRespuestas} {singularPlural(numRespuestas, 'respuesta', 'respuestas')}
+              </p>
+            </div>
           </div>
 
           {/* Controls Bar */}
