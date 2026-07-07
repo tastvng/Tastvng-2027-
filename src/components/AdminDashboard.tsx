@@ -1665,12 +1665,14 @@ export default function AdminDashboard({
           </div>
           <div>
             <p className="text-zinc-400 text-[10px] font-mono font-bold uppercase tracking-wider">{t('parelles_inscrites_label')}</p>
-            <h3 className="font-sans font-black text-2xl text-zinc-900 mt-0.5">{totalInscrites} {t('parelles_unit')}</h3>
+            <h3 className="font-sans font-black text-2xl text-zinc-900 mt-0.5">
+              {totalInscrites} {totalInscrites === 1 ? t('parella_unit') : t('parelles_unit')}
+            </h3>
             <p className="text-[10px] text-zinc-500 mt-1">
               {language === 'ca' ? "Adults" : "Adultos"}: <span className="font-bold">{adultCount}</span> • {t('juvenils_label')}: <span className="font-bold">{juvenilCount}</span>
               {esperaCount > 0 && (
-                <span className="text-amber-600 font-extrabold ml-1 px-1 py-0.2 bg-amber-500/10 rounded font-sans inline-block" title="Parella en llista d'espera">
-                  • {esperaCount} {language === 'ca' ? "espera" : "espera"}
+                <span className="text-amber-600 font-extrabold ml-1 px-1 py-0.2 bg-amber-500/10 rounded font-sans inline-block" title={language === 'ca' ? "Parella en llista d'espera" : "Pareja en lista de espera"}>
+                  • {esperaCount} {language === 'ca' ? "en llista d'espera" : "en lista de espera"}
                 </span>
               )}
             </p>
@@ -1704,13 +1706,26 @@ export default function AdminDashboard({
           </div>
           <div>
             <p className="text-zinc-400 text-[10px] font-mono font-bold uppercase tracking-wider">{t('dnis_revisats_label')}</p>
-            <h3 className="font-sans font-black text-2xl text-zinc-900 mt-0.5">{dnisValidads} {language === 'ca' ? 'validats' : 'validados'}</h3>
+            <h3 className="font-sans font-black text-2xl text-zinc-900 mt-0.5">
+              {dnisValidads} {language === 'ca' ? (dnisValidads === 1 ? 'validat' : 'validats') : (dnisValidads === 1 ? 'validado' : 'validados')}
+            </h3>
             <p className="text-[10px] text-zinc-500 mt-1">
-              {language === 'ca' ? (
-                <>Pendents: <span className="font-bold text-amber-600">{inscripcions.filter(i => i.estatDni === EstatVerificacio.PENDENT).length}</span> per revisar</>
-              ) : (
-                <>Pendientes: <span className="font-bold text-amber-600">{inscripcions.filter(i => i.estatDni === EstatVerificacio.PENDENT).length}</span> por revisar</>
-              )}
+              {(() => {
+                const pendingCount = inscripcions.filter(i => i.estatDni === EstatVerificacio.PENDENT).length;
+                if (language === 'ca') {
+                  return pendingCount === 1 ? (
+                    <>Pendent: <span className="font-bold text-amber-600">1</span> per revisar</>
+                  ) : (
+                    <>Pendents: <span className="font-bold text-amber-600">{pendingCount}</span> per revisar</>
+                  );
+                } else {
+                  return pendingCount === 1 ? (
+                    <>Pendiente: <span className="font-bold text-amber-600">1</span> por revisar</>
+                  ) : (
+                    <>Pendientes: <span className="font-bold text-amber-600">{pendingCount}</span> por revisar</>
+                  );
+                }
+              })()}
             </p>
           </div>
           <div className="absolute top-0 right-0 h-full w-2 bg-zinc-800" />
@@ -2797,7 +2812,15 @@ export default function AdminDashboard({
                 <div>
                   <h4 className="text-[9px] text-emerald-800 font-mono font-bold uppercase tracking-wider">{language === 'ca' ? "RITME MITJÀ DE INSCRIPCIÓ" : "RITMO MEDIO DE INSCRIPCIÓN"}</h4>
                   <p className="font-sans font-black text-base text-emerald-950 mt-0.5">
-                    {(inscripcions.length / Math.max(1, calculateDailySummaries(inscripcions).length)).toFixed(1)} {language === 'ca' ? "parelles / dia" : "parejas / día"}
+                    {(() => {
+                      const avgParelles = inscripcions.length / Math.max(1, calculateDailySummaries(inscripcions).length);
+                      const formattedAvg = avgParelles.toFixed(1);
+                      const isSingular = formattedAvg === "1.0" || avgParelles === 1;
+                      const suffix = language === 'ca'
+                        ? (isSingular ? "parella / dia" : "parelles / dia")
+                        : (isSingular ? "pareja / día" : "parejas / día");
+                      return `${formattedAvg} ${suffix}`;
+                    })()}
                   </p>
                 </div>
               </div>
@@ -2815,7 +2838,14 @@ export default function AdminDashboard({
                 <div>
                   <h4 className="text-[9px] text-zinc-500 font-mono font-bold uppercase tracking-wider">{language === 'ca' ? "DIES REGISTRATS AMB ACTIVITAT" : "DÍAS REGISTRADOS CON ACTIVIDAD"}</h4>
                   <p className="font-sans font-black text-base text-zinc-800 mt-0.5">
-                    {calculateDailySummaries(inscripcions).length} {language === 'ca' ? "dies actius" : "días activos"}
+                    {(() => {
+                      const activeDaysCount = calculateDailySummaries(inscripcions).length;
+                      if (language === 'ca') {
+                        return activeDaysCount === 1 ? "1 dia actiu" : `${activeDaysCount} dies actius`;
+                      } else {
+                        return activeDaysCount === 1 ? "1 día activo" : `${activeDaysCount} días activos`;
+                      }
+                    })()}
                   </p>
                 </div>
               </div>
@@ -3290,13 +3320,29 @@ export default function AdminDashboard({
                 <Trash2 size={24} />
               </div>
               <div>
-                <h3 className="font-sans font-black text-sm text-zinc-900 tracking-tight">Esborrar seleccionats</h3>
-                <p className="text-[10px] text-red-500 font-mono font-bold uppercase tracking-wider">Acció Massiva</p>
+                <h3 className="font-sans font-black text-sm text-zinc-900 tracking-tight">
+                  {language === 'ca' ? "Esborrar seleccionats" : "Borrar seleccionados"}
+                </h3>
+                <p className="text-[10px] text-red-500 font-mono font-bold uppercase tracking-wider">
+                  {language === 'ca' ? "Acció Massiva" : "Acción Masiva"}
+                </p>
               </div>
             </div>
 
             <p className="text-xs text-zinc-650 leading-relaxed font-sans">
-              Estàs segur que vols esborrar les <strong>{selectedIds.length}</strong> parelles seleccionades? Aquesta acció no es pot desfer.
+              {language === 'ca' ? (
+                selectedIds.length === 1 ? (
+                  <>Estàs segur que vols esborrar la parella seleccionada? Aquesta acció no es pot desfer.</>
+                ) : (
+                  <>Estàs segur que vols esborrar les <strong>{selectedIds.length}</strong> parelles seleccionades? Aquesta acció no es pot desfer.</>
+                )
+              ) : (
+                selectedIds.length === 1 ? (
+                  <>¿Estás seguro de que quieres borrar la pareja seleccionada? Esta acción no se puede deshacer.</>
+                ) : (
+                  <>¿Estás seguro de que quieres borrar las <strong>{selectedIds.length}</strong> parejas seleccionadas? Esta acción no se puede deshacer.</>
+                )
+              )}
             </p>
 
             <div className="flex gap-2.5 pt-2">
@@ -3305,14 +3351,14 @@ export default function AdminDashboard({
                 onClick={() => setShowBulkDeleteConfirmModal(false)}
                 className="flex-1 py-2.5 px-4 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold text-xs rounded-xl transition"
               >
-                No, cancel·lar
+                {language === 'ca' ? "No, cancel·lar" : "No, cancelar"}
               </button>
               <button
                 type="button"
                 onClick={handleBulkDelete}
                 className="flex-1 py-1 px-4 bg-red-650 text-white hover:bg-red-700 font-bold text-xs rounded-xl transition"
               >
-                Sí, esborrar seleccionats
+                {language === 'ca' ? "Sí, esborrar seleccionats" : "Sí, borrar seleccionados"}
               </button>
             </div>
           </div>
