@@ -386,7 +386,7 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
         console.warn("Could not fetch questions from Supabase (this is normal if table 'preguntes' doesn't exist yet):", err);
       }
     }
-    loadQuestionsFromSupabase();
+    loadQuestionsFromSupabase().catch(err => console.error("Unhandled error in loadQuestionsFromSupabase:", err));
   }, []);
 
   const handleBlurTranslate = async (

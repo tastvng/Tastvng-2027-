@@ -62,7 +62,7 @@ export default function MobileRemoteScanner({
 
   useEffect(() => {
     if (activeTab === 'camera') {
-      startCamera();
+      startCamera().catch(err => console.error("Unhandled error in startCamera:", err));
     } else {
       stopCamera();
     }

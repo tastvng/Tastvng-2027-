@@ -136,7 +136,7 @@ export default function Confirmation({ registration, onClear, onUpdate }: Confir
         console.error("Error loading live Supabase templates inside Confirmation.tsx:", err);
       }
     }
-    loadLiveSupabaseTemplates();
+    loadLiveSupabaseTemplates().catch(err => console.error("Unhandled error in loadLiveSupabaseTemplates:", err));
 
     window.addEventListener('localStorage', loadCustomTemplates);
     window.addEventListener('hoursConfigChanged', loadCustomTemplates);
@@ -411,7 +411,7 @@ export default function Confirmation({ registration, onClear, onUpdate }: Confir
   };
 
   useEffect(() => {
-    sendRealEmail();
+    sendRealEmail().catch(err => console.error("Unhandled error in sendRealEmail:", err));
   }, [registration.id]);
 
   const handlePrint = () => {

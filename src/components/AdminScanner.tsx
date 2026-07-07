@@ -127,7 +127,7 @@ export default function AdminScanner({
           console.warn("Could not lazy-load detailed DNI for scanned record:", err);
         }
       }
-      loadFull();
+      loadFull().catch(err => console.error("Unhandled error in loadFull inside AdminScanner:", err));
       return () => {
         active = false;
       };

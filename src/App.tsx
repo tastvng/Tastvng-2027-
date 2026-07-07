@@ -374,7 +374,7 @@ export default function App() {
       }
     }
 
-    loadInscripcions();
+    loadInscripcions().catch(err => console.error("Unhandled error in loadInscripcions:", err));
   }, [isAdminLoggedIn]);
 
   // Route authenticated admins automatically

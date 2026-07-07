@@ -144,7 +144,7 @@ export default function AdminPortada({ onAddLog }: AdminPortadaProps) {
         console.error("Error fetching admin config from Supabase:", e);
       }
     }
-    loadConfig();
+    loadConfig().catch(err => console.error("Unhandled error in loadConfig inside AdminPortada:", err));
   }, []);
 
   const [activeLangTab, setActiveLangTab] = useState<'ca' | 'es'>('ca');
