@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { useLanguage } from '../LanguageContext';
 
@@ -7,10 +7,40 @@ interface CodigoVestimentaModalProps {
 }
 
 export const CodigoVestimentaModal: React.FC<CodigoVestimentaModalProps> = ({ 
-  youtubeUrl = 'https://www.youtube.com/embed/dcY7s1F3jo0' 
+  youtubeUrl
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const { language } = useLanguage();
+  const [videoUrl, setVideoUrl] = useState('');
+
+  useEffect(() => {
+    const fetchVideoUrl = async () => {
+      try {
+        const { getSupabaseSetting, isSupabaseConfigured } = await import('../supabaseClient');
+        if (isSupabaseConfigured) {
+          const storedUrl = await getSupabaseSetting<string>('codigo_vestimenta_url', 'https://player.vimeo.com/video/1207785599');
+          setVideoUrl(storedUrl || 'https://player.vimeo.com/video/1207785599');
+        } else {
+          const localUrl = typeof localStorage !== 'undefined' ? localStorage.getItem('codigo_vestimenta_url') : null;
+          setVideoUrl(localUrl || 'https://player.vimeo.com/video/1207785599');
+        }
+      } catch (error) {
+        console.error('Error fetching video URL from Supabase:', error);
+        setVideoUrl('https://player.vimeo.com/video/1207785599');
+      }
+    };
+    fetchVideoUrl().catch(err => {
+      console.error("Unhandled error in fetchVideoUrl:", err);
+      setVideoUrl('https://player.vimeo.com/video/1207785599');
+    });
+  }, []);
+
+  // Ensure live previews from the admin customization panel keep updating in real-time
+  useEffect(() => {
+    if (youtubeUrl) {
+      setVideoUrl(youtubeUrl);
+    }
+  }, [youtubeUrl]);
 
   const buttonText = language === 'ca' ? "👕 Codi de Vestimenta" : "👕 Código de Vestimenta";
   const modalTitle = language === 'ca' ? "Codi de Vestimenta" : "Código de Vestimenta";
@@ -47,10 +77,9 @@ export const CodigoVestimentaModal: React.FC<CodigoVestimentaModalProps> = ({
             {/* Video Container - Aspect 9:16 */}
             <div className="bg-black flex-1 flex items-center justify-center" style={{ aspectRatio: '9/16' }}>
               <iframe
+                src={videoUrl}
                 width="100%"
-                height="100%"
-                src={youtubeUrl}
-                title={modalTitle}
+                height="600"
                 frameBorder="0"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                 allowFullScreen
