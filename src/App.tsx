@@ -305,7 +305,7 @@ export default function App() {
       setIsLoading(false);
     }
 
-    loadAllFromDatabase();
+    loadAllFromDatabase().catch(err => console.error("Unhandled error in loadAllFromDatabase:", err));
   }, []);
 
   // Maintain session via Supabase Auth

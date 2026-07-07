@@ -88,10 +88,12 @@ export const AdminStatusPanel: React.FC<AdminStatusPanelProps> = ({ isAdmin }) =
       }
     };
 
-    fetchStats();
+    fetchStats().catch(err => console.error('Error on initial fetchStats:', err));
     
     // Also update stats when logs update or on interval
-    const statsInterval = setInterval(fetchStats, 4000);
+    const statsInterval = setInterval(() => {
+      fetchStats().catch(err => console.error('Error on interval fetchStats:', err));
+    }, 4000);
     return () => clearInterval(statsInterval);
   }, [isAdmin, isOpen, logs]);
 

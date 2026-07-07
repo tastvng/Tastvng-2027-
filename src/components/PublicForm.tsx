@@ -49,7 +49,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
         console.error('Error fetching youtube URL:', error);
       }
     };
-    fetchYoutubeUrl();
+    fetchYoutubeUrl().catch(err => console.error("Error in fetchYoutubeUrl:", err));
   }, []);
 
   // Form fields state

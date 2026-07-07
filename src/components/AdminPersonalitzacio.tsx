@@ -36,7 +36,7 @@ export default function AdminPersonalitzacio({ onAddLog }: AdminPersonalitzacioP
         console.error('Error reading dress code url:', err);
       }
     };
-    fetchUrl();
+    fetchUrl().catch(err => console.error("Error in fetchUrl:", err));
   }, []);
 
   const saveCodigoVestimentaUrl = async () => {
