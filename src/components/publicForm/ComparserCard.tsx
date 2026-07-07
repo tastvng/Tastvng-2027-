@@ -364,14 +364,14 @@ export const ComparserCard: React.FC<ComparserCardProps> = ({
                 </label>
                 {(linia.preu || linia.preuLloguer) ? (
                   <div className="flex gap-1.5 flex-wrap justify-end">
-                    {linia.preu && (!tipusVal || tipusVal === 'compra') ? (
-                      <span className="text-[10px] font-mono text-fuchsia-600 bg-fuchsia-50 rounded px-1.5 py-0.5 border border-fuchsia-100 font-bold tracking-tight">
-                        +{linia.preu}€ (compra)
+                    {linia.preu ? (
+                      <span className="text-[10px] font-mono text-fuchsia-600 bg-fuchsia-50 rounded px-2 py-0.5 border border-fuchsia-100 font-bold tracking-tight uppercase">
+                        PREU (COMPRA): {linia.preu}€
                       </span>
                     ) : null}
-                    {linia.preuLloguer && tipusVal === 'lloguer' ? (
-                      <span className="text-[10px] font-mono text-sky-600 bg-sky-50 rounded px-1.5 py-0.5 border border-sky-100 font-bold tracking-tight">
-                        +{linia.preuLloguer}€ {language === 'ca' ? '(lloguer)' : '(alquiler)'}
+                    {linia.preuLloguer ? (
+                      <span className="text-[10px] font-mono text-sky-600 bg-sky-50 rounded px-2 py-0.5 border border-sky-100 font-bold tracking-tight uppercase">
+                        PREU (LLOGUER): {linia.preuLloguer}€
                       </span>
                     ) : null}
                   </div>
@@ -486,7 +486,7 @@ export const ComparserCard: React.FC<ComparserCardProps> = ({
                          className={`flex justify-between items-center bg-zinc-50 border rounded-xl p-3 cursor-pointer transition-colors ${isChecked ? 'border-[#ff0090] bg-fuchsia-50/50' : 'border-zinc-200 hover:border-zinc-300'}`}>
                       <div>
                         <span className="block text-xs font-bold text-zinc-800">{extr.nom}</span>
-                        <span className="block text-[10px] text-zinc-500 font-mono">+{extr.valor}€</span>
+                        <span className="block text-[10px] text-fuchsia-600 font-mono font-bold uppercase">PREU (COMPRA): {extr.valor}€</span>
                       </div>
                       <div className="flex items-center">
                         <div className={`w-6 h-6 rounded border flex items-center justify-center transition-colors ${isChecked ? 'bg-[#ff0090] border-[#ff0090]' : 'bg-white border-zinc-300'}`}>
