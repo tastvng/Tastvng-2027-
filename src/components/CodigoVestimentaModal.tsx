@@ -92,7 +92,7 @@ export const CodigoVestimentaModal: React.FC<CodigoVestimentaModalProps> = ({
               <button
                 onClick={() => setIsOpen(false)}
                 type="button"
-                className="bg-zinc-200 hover:bg-zinc-300 text-zinc-850 font-bold py-2 px-6 rounded-xl transition cursor-pointer text-xs uppercase font-sans tracking-wide"
+                className="bg-[#ff0090] hover:bg-[#d40078] text-white font-black py-3 px-8 rounded-xl cursor-pointer text-xs uppercase font-sans tracking-widest transition-all duration-300 hover:scale-[1.03] active:scale-[0.97] ease-out shadow-md hover:shadow-lg flex items-center justify-center"
               >
                 {closeText}
               </button>
