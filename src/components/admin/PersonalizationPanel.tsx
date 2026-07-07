@@ -175,6 +175,29 @@ export const PERSONALIZATION_SCHEMA = {
         default: ''
       }
     ]
+  },
+  accesorios: {
+    title: 'Accesoris / Accesorios',
+    icon: '🌸',
+    description: 'Preus dels accessoris de vestir / Precios de los accesorios de vestir',
+    fields: [
+      {
+        id: 'clavells',
+        label: 'Preu Clavells / Precio Claveles (€)',
+        type: 'text',
+        description: 'Preu dels clavells per defecte (ej: 8) / Precio de los claveles por defecto (ej: 8)',
+        required: true,
+        default: '8'
+      },
+      {
+        id: 'corbati',
+        label: 'Preu Corbatí / Precio Corbatín (€)',
+        type: 'text',
+        description: 'Preu del corbatí per defecte (ej: 10) / Precio del corbatín por defecto (ej: 10)',
+        required: true,
+        default: '10'
+      }
+    ]
   }
 };
 

@@ -45,6 +45,7 @@ interface ComparserCardProps {
   // Errors and Config
   errors: Record<string, string>;
   config: SistemaConfig;
+  accessoryPrices?: { clavells: number; corbati: number };
 
   // File Upload and Camera callbacks
   handleFileUpload: (e: React.ChangeEvent<HTMLInputElement>, owner: 'c1' | 'c2') => void;
@@ -86,6 +87,7 @@ export const ComparserCard: React.FC<ComparserCardProps> = ({
   isPhoneDuplicate,
   errors,
   config,
+  accessoryPrices,
   handleFileUpload,
   startCamera,
 }) => {
@@ -480,13 +482,19 @@ export const ComparserCard: React.FC<ComparserCardProps> = ({
               <div className="space-y-3">
                 {extrasForThisComparser.map(extr => {
                   const isChecked = (extrasSeleccionats[extr.id] || 0) > 0;
+                  let finalPrice = extr.valor;
+                  if (/clavell|clavel/i.test(extr.nom)) {
+                    finalPrice = accessoryPrices?.clavells ?? extr.valor;
+                  } else if (/corbat/i.test(extr.nom)) {
+                    finalPrice = accessoryPrices?.corbati ?? extr.valor;
+                  }
                   return (
                     <div key={extr.id} 
                          onClick={() => setExtrasSeleccionats(prev => ({ ...prev, [extr.id]: isChecked ? 0 : 1 }))}
                          className={`flex justify-between items-center bg-zinc-50 border rounded-xl p-3 cursor-pointer transition-colors ${isChecked ? 'border-[#ff0090] bg-fuchsia-50/50' : 'border-zinc-200 hover:border-zinc-300'}`}>
                       <div>
                         <span className="block text-xs font-bold text-zinc-800">{extr.nom}</span>
-                        <span className="block text-[10px] text-fuchsia-600 font-mono font-bold uppercase">PREU (COMPRA): {extr.valor}€</span>
+                        <span className="block text-[10px] text-fuchsia-600 font-mono font-bold uppercase">PREU (COMPRA): {finalPrice}€</span>
                       </div>
                       <div className="flex items-center">
                         <div className={`w-6 h-6 rounded border flex items-center justify-center transition-colors ${isChecked ? 'bg-[#ff0090] border-[#ff0090]' : 'bg-white border-zinc-300'}`}>

@@ -62,17 +62,17 @@ async function checkKeyColumnExists(): Promise<boolean> {
  * Supports adaptive schema formats where columns are named 'id' or 'key' 
  * and payloads are named 'value', 'config' or 'settings'.
  */
-export async function getSupabaseSetting<T>(key: string, defaultValue: T): Promise<T> {
+export async function getSupabaseSetting<T>(key: string, defaultValue: T, bypassCache: boolean = false): Promise<T> {
   if (!supabase) {
     return defaultValue;
   }
 
   // Check memory cache first to completely eliminate redundant fetches
-  if (settingCache.has(key)) {
+  if (settingCache.has(key) && !bypassCache) {
     return settingCache.get(key) as T;
   }
 
-  if (isSettingCacheInitialized) {
+  if (isSettingCacheInitialized && !bypassCache) {
     // Cache has been initialized and the key was not found. Cache and return default.
     settingCache.set(key, defaultValue);
     return defaultValue;
@@ -114,14 +114,18 @@ export async function getSupabaseSetting<T>(key: string, defaultValue: T): Promi
       }
     }
 
-    isSettingCacheInitialized = true;
+    if (!bypassCache) {
+      isSettingCacheInitialized = true;
+    }
 
     if (settingCache.has(key)) {
       return settingCache.get(key) as T;
     }
     
     // Cache the default value if the key does not exist yet to prevent repeated DB misses
-    settingCache.set(key, defaultValue);
+    if (!bypassCache) {
+      settingCache.set(key, defaultValue);
+    }
     return defaultValue;
   } catch (err) {
     console.warn(`Exception fetching settings from Supabase/Settings for key [${key}]:`, err);

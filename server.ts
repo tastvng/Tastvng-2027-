@@ -193,9 +193,10 @@ async function startServer() {
 
   app.post("/api/translate", async (req, res) => {
     try {
-      const { text, source, target } = req.body;
+      const { text: bodyText, source, target, q } = req.body;
+      const text = bodyText || q || "";
       if (!text || !source || !target) {
-        return res.status(400).json({ error: "Falten paràmetres 'text', 'source' o 'target'" });
+        return res.status(400).json({ error: "Falten paràmetres 'text' o 'q', 'source' i 'target'" });
       }
 
       if (!text.trim()) {

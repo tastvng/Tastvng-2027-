@@ -74,7 +74,7 @@ export async function translateText(
   }
   
   try {
-    const response = await fetch('https://libretranslate.de/translate', {
+    const response = await fetch('/api/translate', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

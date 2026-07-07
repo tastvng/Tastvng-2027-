@@ -57,17 +57,17 @@ export const CodigoVestimentaModal: React.FC<CodigoVestimentaModalProps> = ({
       </button>
 
       {isOpen && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[999] p-4 backdrop-blur-xs animate-fade-in">
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden flex flex-col max-h-[90vh]">
+        <div className="fixed inset-0 bg-black/90 flex items-center justify-center z-[999] p-4 backdrop-blur-sm animate-fade-in">
+          <div className="relative bg-zinc-950 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden flex flex-col max-h-[95vh] border border-zinc-800">
             {/* Header */}
-            <div className="flex justify-between items-center p-4 border-b border-zinc-100 bg-zinc-50">
-              <h3 className="text-sm font-mono font-bold text-zinc-900 uppercase tracking-wider flex items-center gap-2">
+            <div className="flex justify-between items-center p-4 border-b border-zinc-800 bg-zinc-900">
+              <h3 className="text-xs font-mono font-bold text-zinc-100 uppercase tracking-wider flex items-center gap-2">
                 <span>👕</span> {modalTitle}
               </h3>
               <button
                 onClick={() => setIsOpen(false)}
                 type="button"
-                className="text-zinc-400 hover:text-zinc-650 p-1.5 rounded-lg hover:bg-zinc-100 transition cursor-pointer"
+                className="text-zinc-400 hover:text-white p-1.5 rounded-lg hover:bg-zinc-800 transition cursor-pointer"
                 aria-label="Cerrar"
               >
                 <X size={18} />
@@ -75,26 +75,26 @@ export const CodigoVestimentaModal: React.FC<CodigoVestimentaModalProps> = ({
             </div>
 
             {/* Video Container - Aspect 9:16 */}
-            <div className="bg-black flex-1 flex items-center justify-center" style={{ aspectRatio: '9/16' }}>
+            <div className="bg-black flex-1 flex items-center justify-center relative" style={{ aspectRatio: '9/16' }}>
               <iframe
                 src={videoUrl}
                 width="100%"
-                height="600"
+                height="100%"
                 frameBorder="0"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                 allowFullScreen
-                className="w-full h-full"
+                className="w-full h-full object-cover"
               ></iframe>
             </div>
 
             {/* Footer */}
-            <div className="p-4 border-t border-zinc-100 bg-zinc-50 flex justify-end gap-2 shrink-0">
+            <div className="p-4 border-t border-zinc-800 bg-zinc-900 flex justify-center shrink-0">
               <button
                 onClick={() => setIsOpen(false)}
                 type="button"
-                className="bg-[#ff0090] hover:bg-[#d40078] text-white font-black py-3 px-8 rounded-xl cursor-pointer text-xs uppercase font-sans tracking-widest transition-all duration-300 hover:scale-[1.03] active:scale-[0.97] ease-out shadow-md hover:shadow-lg flex items-center justify-center"
+                className="w-full bg-[#ff0090] hover:bg-[#d40078] text-white font-extrabold py-3 px-6 rounded-xl cursor-pointer text-xs uppercase font-mono tracking-wider transition-all duration-300 hover:scale-[1.02] active:scale-[0.98] shadow-md hover:shadow-lg flex items-center justify-center gap-2"
               >
-                {closeText}
+                <span>{closeText.toUpperCase()} ✕</span>
               </button>
             </div>
           </div>

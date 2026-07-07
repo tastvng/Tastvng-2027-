@@ -143,6 +143,34 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
     }
   }, []);
 
+  // Fetch dynamic accessory prices from 'personalizacion' settings row (bypass cache to always get fresh config on load)
+  const [accessoryPrices, setAccessoryPrices] = useState({ clavells: 8, corbati: 10 });
+  useEffect(() => {
+    let active = true;
+    const loadDynamicPrices = async () => {
+      try {
+        const { getSupabaseSetting, isSupabaseConfigured } = await import('../supabaseClient');
+        if (isSupabaseConfigured) {
+          const personalConfig = await getSupabaseSetting<any>('personalizacion', null, true);
+          if (active && personalConfig && personalConfig.accesorios) {
+            const clavellsPrice = parseFloat(personalConfig.accesorios.clavells);
+            const corbatiPrice = parseFloat(personalConfig.accesorios.corbati);
+            setAccessoryPrices({
+              clavells: isNaN(clavellsPrice) ? 8 : clavellsPrice,
+              corbati: isNaN(corbatiPrice) ? 10 : corbatiPrice
+            });
+          }
+        }
+      } catch (err) {
+        console.error("Error loading dynamic accessory prices:", err);
+      }
+    };
+    loadDynamicPrices();
+    return () => {
+      active = false;
+    };
+  }, []);
+
   // Live duplicate check flags for Comparser 1 & 2
   const isC1NameDuplicate = useMemo(() => {
     if (!c1Nom.trim() || !c1Cognoms.trim()) return false;
@@ -231,12 +259,26 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
 
   const c1ExtrasCost = Object.entries(c1ExtrasSeleccionats).reduce((total, [id, qty]) => {
     const extra = (config.tarifesDinamiques || []).find(t => t.id === id);
-    return total + (extra ? extra.valor * Number(qty) : 0);
+    if (!extra) return total;
+    let price = extra.valor;
+    if (/clavell|clavel/i.test(extra.nom)) {
+      price = accessoryPrices.clavells;
+    } else if (/corbat/i.test(extra.nom)) {
+      price = accessoryPrices.corbati;
+    }
+    return total + price * Number(qty);
   }, 0);
 
   const c2ExtrasCost = Object.entries(c2ExtrasSeleccionats).reduce((total, [id, qty]) => {
     const extra = (config.tarifesDinamiques || []).find(t => t.id === id);
-    return total + (extra ? extra.valor * Number(qty) : 0);
+    if (!extra) return total;
+    let price = extra.valor;
+    if (/clavell|clavel/i.test(extra.nom)) {
+      price = accessoryPrices.clavells;
+    } else if (/corbat/i.test(extra.nom)) {
+      price = accessoryPrices.corbati;
+    }
+    return total + price * Number(qty);
   }, 0);
 
   const uniformesCost = (config.liniisUniforme || []).reduce((sum, linia) => {
@@ -943,6 +985,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
             isPhoneDuplicate={isC1PhoneDuplicate}
             errors={errors}
             config={config}
+            accessoryPrices={accessoryPrices}
             handleFileUpload={handleFileUpload}
             startCamera={startCamera}
           />
@@ -982,6 +1025,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
             isPhoneDuplicate={isC2PhoneDuplicate}
             errors={errors}
             config={config}
+            accessoryPrices={accessoryPrices}
             handleFileUpload={handleFileUpload}
             startCamera={startCamera}
           />
