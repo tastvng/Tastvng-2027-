@@ -258,25 +258,41 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
     .reduce((sum, t) => sum + (genericExtrasQty[t.id] || 0) * t.valor, 0);
 
   const c1ExtrasCost = Object.entries(c1ExtrasSeleccionats).reduce((total, [id, qty]) => {
+    let price = 0;
     const extra = (config.tarifesDinamiques || []).find(t => t.id === id);
-    if (!extra) return total;
-    let price = extra.valor;
-    if (/clavell|clavel/i.test(extra.nom)) {
+    if (extra) {
+      price = extra.valor;
+      if (/clavell|clavel/i.test(extra.nom)) {
+        price = accessoryPrices.clavells;
+      } else if (/corbat/i.test(extra.nom)) {
+        price = accessoryPrices.corbati;
+      }
+    } else if (id === 'clavells') {
       price = accessoryPrices.clavells;
-    } else if (/corbat/i.test(extra.nom)) {
+    } else if (id === 'corbati') {
       price = accessoryPrices.corbati;
+    } else {
+      return total;
     }
     return total + price * Number(qty);
   }, 0);
 
   const c2ExtrasCost = Object.entries(c2ExtrasSeleccionats).reduce((total, [id, qty]) => {
+    let price = 0;
     const extra = (config.tarifesDinamiques || []).find(t => t.id === id);
-    if (!extra) return total;
-    let price = extra.valor;
-    if (/clavell|clavel/i.test(extra.nom)) {
+    if (extra) {
+      price = extra.valor;
+      if (/clavell|clavel/i.test(extra.nom)) {
+        price = accessoryPrices.clavells;
+      } else if (/corbat/i.test(extra.nom)) {
+        price = accessoryPrices.corbati;
+      }
+    } else if (id === 'clavells') {
       price = accessoryPrices.clavells;
-    } else if (/corbat/i.test(extra.nom)) {
+    } else if (id === 'corbati') {
       price = accessoryPrices.corbati;
+    } else {
+      return total;
     }
     return total + price * Number(qty);
   }, 0);
@@ -637,7 +653,17 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
         if (Number(qty) > 0) {
           const extraDef = (config.tarifesDinamiques || []).find((t: any) => t.id === id);
           if (extraDef) {
-            extresGuardats.push({ id, nom: extraDef.nom, quantitat: Number(qty), preuUnitari: extraDef.valor });
+            let finalPrice = extraDef.valor;
+            if (/clavell|clavel/i.test(extraDef.nom)) {
+              finalPrice = accessoryPrices.clavells;
+            } else if (/corbat/i.test(extraDef.nom)) {
+              finalPrice = accessoryPrices.corbati;
+            }
+            extresGuardats.push({ id, nom: extraDef.nom, quantitat: Number(qty), preuUnitari: finalPrice });
+          } else if (id === 'clavells') {
+            extresGuardats.push({ id, nom: language === 'ca' ? 'Clavellis' : 'Claveles', quantitat: Number(qty), preuUnitari: accessoryPrices.clavells });
+          } else if (id === 'corbati') {
+            extresGuardats.push({ id, nom: language === 'ca' ? 'Corbatí' : 'Corbatín', quantitat: Number(qty), preuUnitari: accessoryPrices.corbati });
           }
         }
       });
@@ -645,7 +671,17 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
         if (Number(qty) > 0) {
           const extraDef = (config.tarifesDinamiques || []).find((t: any) => t.id === id);
           if (extraDef) {
-            extresGuardats.push({ id, nom: extraDef.nom, quantitat: Number(qty), preuUnitari: extraDef.valor });
+            let finalPrice = extraDef.valor;
+            if (/clavell|clavel/i.test(extraDef.nom)) {
+              finalPrice = accessoryPrices.clavells;
+            } else if (/corbat/i.test(extraDef.nom)) {
+              finalPrice = accessoryPrices.corbati;
+            }
+            extresGuardats.push({ id, nom: extraDef.nom, quantitat: Number(qty), preuUnitari: finalPrice });
+          } else if (id === 'clavells') {
+            extresGuardats.push({ id, nom: language === 'ca' ? 'Clavellis' : 'Claveles', quantitat: Number(qty), preuUnitari: accessoryPrices.clavells });
+          } else if (id === 'corbati') {
+            extresGuardats.push({ id, nom: language === 'ca' ? 'Corbatí' : 'Corbatín', quantitat: Number(qty), preuUnitari: accessoryPrices.corbati });
           }
         }
       });

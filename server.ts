@@ -193,20 +193,50 @@ async function startServer() {
 
   app.post("/api/translate", async (req, res) => {
     try {
-      const { text: bodyText, source, target, q } = req.body;
-      const text = bodyText || q || "";
-      if (!text || !source || !target) {
-        return res.status(400).json({ error: "Falten paràmetres 'text' o 'q', 'source' i 'target'" });
-      }
+      const { text, target_language, q, source, target } = req.body;
+      const textToTranslate = text || q || "";
+      const targetLang = target_language || target || "es";
+      const sourceLang = source || "ca";
 
-      if (!text.trim()) {
+      if (!textToTranslate.trim()) {
         return res.json({ translatedText: "" });
       }
 
+      // Try calling LibreTranslate first
+      try {
+        console.log(`[Translation Proxy] Forwarding to LibreTranslate: "${textToTranslate.substring(0, 30)}..." (${sourceLang} -> ${targetLang})`);
+        const response = await fetch('https://libretranslate.de/translate', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            q: textToTranslate,
+            source: sourceLang,
+            target: targetLang,
+            format: 'text'
+          }),
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data && data.translatedText) {
+            console.log(`[Translation Proxy] LibreTranslate success: "${data.translatedText.substring(0, 30)}..."`);
+            return res.json({ translatedText: data.translatedText });
+          }
+        } else {
+          const errorText = await response.text();
+          console.warn(`[Translation Proxy] LibreTranslate failed (Status ${response.status}):`, errorText);
+        }
+      } catch (e) {
+        console.warn("[Translation Proxy] LibreTranslate fetch error, trying Gemini fallback:", e);
+      }
+
+      // Fallback to Gemini if LibreTranslate fails
       const apiKey = process.env.GEMINI_API_KEY;
       if (!apiKey) {
-        console.warn("GEMINI_API_KEY no està definit, pre-retornem text original.");
-        return res.json({ translatedText: text }); 
+        console.warn("[Translation Proxy] GEMINI_API_KEY no està definit, retornem text original.");
+        return res.json({ translatedText: textToTranslate }); 
       }
 
       if (!aiClient) {
@@ -221,10 +251,10 @@ async function startServer() {
         });
       }
 
-      const targetName = target === 'ca' ? 'Catalan' : 'Spanish';
+      const targetName = targetLang === 'ca' ? 'Catalan' : 'Spanish';
 
       let prompt = '';
-      if (source === 'auto') {
+      if (sourceLang === 'auto') {
         prompt = `You are a professional Catalan-Spanish bilingual translator.
 Analyze the following text and determine its language (Catalan or Spanish).
 - If the text is already in ${targetName}, return it exactly as is.
@@ -232,15 +262,15 @@ Analyze the following text and determine its language (Catalan or Spanish).
 Ensure you preserve any formatting, capitalizations, emoji, or style.
 CRITICAL MANDATE: Never translate the word "Tast" or "El Tast". Keep the proper name "Tast" or "El Tast" exactly as is in the output text, without converting it to any other word.
 Return ONLY the clean text, without preamble, thoughts, warnings, explanations, quotes, or markdown tags unless they were in the original.
-Text: "${text}"`;
+Text: "${textToTranslate}"`;
       } else {
-        const sourceName = source === 'ca' ? 'Catalan' : 'Spanish';
+        const sourceName = sourceLang === 'ca' ? 'Catalan' : 'Spanish';
         prompt = `You are a professional Catalan-Spanish bilingual translator.
 Translate the following text from ${sourceName} into ${targetName}.
 Ensure you preserve any formatting, capitalizations, emoji, or style.
 CRITICAL MANDATE: Never translate the word "Tast" or "El Tast". Keep the proper name "Tast" or "El Tast" exactly as is in the output text, without converting it to any other word.
 Return ONLY the clean translated text, without preamble, thoughts, warnings, explanations, quotes, or markdown tags unless they were in the original.
-Text: "${text}"`;
+Text: "${textToTranslate}"`;
       }
 
       const response = await aiClient.models.generateContent({
@@ -253,27 +283,28 @@ Text: "${text}"`;
 
       let translatedText = response.text || "";
       translatedText = translatedText.trim();
-      if (translatedText.startsWith('"') && translatedText.endsWith('"') && !text.startsWith('"')) {
+      if (translatedText.startsWith('"') && translatedText.endsWith('"') && !textToTranslate.startsWith('"')) {
         translatedText = translatedText.substring(1, translatedText.length - 1);
       }
 
+      console.log(`[Translation Proxy] Gemini success: "${translatedText.substring(0, 30)}..."`);
       return res.json({ translatedText: translatedText.trim() });
     } catch (error: any) {
       const errMsg = error?.message || String(error);
       const isQuota = errMsg.includes("429") || errMsg.includes("503") || errMsg.includes("quota") || errMsg.includes("RESOURCE_EXHAUSTED") || errMsg.includes("UNAVAILABLE");
       
       if (isQuota) {
-        console.warn("Translation API quota exceeded (free tier limit reached). Bypassing translations gracefully.");
+        console.warn("[Translation Proxy] Gemini quota exceeded. Bypassing translations gracefully.");
         return res.status(429).json({ 
           error: "quota_exceeded", 
-          translatedText: req.body.text || "" 
+          translatedText: req.body.text || req.body.q || "" 
         });
       }
       
-      console.error("Error in translation API:", error);
+      console.error("[Translation Proxy] Error in translation API:", error);
       return res.status(500).json({ 
         error: "translation_failed", 
-        translatedText: req.body.text || "" 
+        translatedText: req.body.text || req.body.q || "" 
       });
     }
   });

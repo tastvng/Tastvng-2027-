@@ -472,7 +472,31 @@ export const ComparserCard: React.FC<ComparserCardProps> = ({
 
         {/* Extras per Comparser */}
         {(() => {
-          const extrasForThisComparser = (config.tarifesDinamiques || []).filter(t => t.actiu && t.tipus === 'extra_generic');
+          const dbExtras = (config.tarifesDinamiques || []).filter(t => t.actiu && t.tipus === 'extra_generic');
+          const extrasForThisComparser = [...dbExtras];
+          
+          const hasClavells = extrasForThisComparser.some(t => /clavell|clavel/i.test(t.nom));
+          if (!hasClavells) {
+            extrasForThisComparser.push({
+              id: 'clavells',
+              nom: language === 'ca' ? 'Clavellis' : 'Claveles',
+              valor: accessoryPrices?.clavells ?? 8,
+              actiu: true,
+              tipus: 'extra_generic'
+            });
+          }
+          
+          const hasCorbati = extrasForThisComparser.some(t => /corbat/i.test(t.nom));
+          if (!hasCorbati) {
+            extrasForThisComparser.push({
+              id: 'corbati',
+              nom: language === 'ca' ? 'Corbatí' : 'Corbatín',
+              valor: accessoryPrices?.corbati ?? 10,
+              actiu: true,
+              tipus: 'extra_generic'
+            });
+          }
+
           if (extrasForThisComparser.length === 0) return null;
           return (
             <div className="pt-4 border-t border-zinc-200/60 pb-2">
