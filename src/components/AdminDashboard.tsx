@@ -661,55 +661,88 @@ export default function AdminDashboard({
 
     setIsConnecting(true);
 
-    setTimeout(() => {
-      setIsConnecting(false);
+    setTimeout(async () => {
       const target = showConnectModal;
-      if (target === 'instagram') {
-        setScInstagramConnected(true);
-        setScInstagramHandle(connectUsername);
-        localStorage.setItem('tast_sc_instagram_connected', 'true');
-        localStorage.setItem('tast_sc_instagram_handle', connectUsername);
-      } else if (target === 'facebook') {
-        setScFacebookConnected(true);
-        setScFacebookHandle(connectUsername);
-        localStorage.setItem('tast_sc_facebook_connected', 'true');
-        localStorage.setItem('tast_sc_facebook_handle', connectUsername);
-      } else if (target === 'tiktok') {
-        setScTikTokConnected(true);
-        setScTikTokHandle(connectUsername);
-        localStorage.setItem('tast_sc_tiktok_connected', 'true');
-        localStorage.setItem('tast_sc_tiktok_handle', connectUsername);
-      }
+      try {
+        const { isSupabaseConfigured, saveSupabaseSetting } = await import('../supabaseClient');
 
-      if (onAddLog) {
-        onAddLog(language === 'ca'
-          ? `🔗 Canal ${target?.toUpperCase()} connectat correctament: ${connectUsername}`
-          : `🔗 Canal ${target?.toUpperCase()} conectado correctamente: ${connectUsername}`
-        );
-      }
+        if (target === 'instagram') {
+          setScInstagramConnected(true);
+          setScInstagramHandle(connectUsername);
+          localStorage.setItem('tast_sc_instagram_connected', 'true');
+          localStorage.setItem('tast_sc_instagram_handle', connectUsername);
+          if (isSupabaseConfigured) {
+            await saveSupabaseSetting('tast_sc_instagram_connected', 'true');
+            await saveSupabaseSetting('tast_sc_instagram_handle', connectUsername);
+          }
+        } else if (target === 'facebook') {
+          setScFacebookConnected(true);
+          setScFacebookHandle(connectUsername);
+          localStorage.setItem('tast_sc_facebook_connected', 'true');
+          localStorage.setItem('tast_sc_facebook_handle', connectUsername);
+          if (isSupabaseConfigured) {
+            await saveSupabaseSetting('tast_sc_facebook_connected', 'true');
+            await saveSupabaseSetting('tast_sc_facebook_handle', connectUsername);
+          }
+        } else if (target === 'tiktok') {
+          setScTikTokConnected(true);
+          setScTikTokHandle(connectUsername);
+          localStorage.setItem('tast_sc_tiktok_connected', 'true');
+          localStorage.setItem('tast_sc_tiktok_handle', connectUsername);
+          if (isSupabaseConfigured) {
+            await saveSupabaseSetting('tast_sc_tiktok_connected', 'true');
+            await saveSupabaseSetting('tast_sc_tiktok_handle', connectUsername);
+          }
+        }
 
-      setShowConnectModal(null);
+        if (onAddLog) {
+          onAddLog(language === 'ca'
+            ? `🔗 Canal ${target?.toUpperCase()} connectat correctament: ${connectUsername}`
+            : `🔗 Canal ${target?.toUpperCase()} conectado correctamente: ${connectUsername}`
+          );
+        }
+      } catch (err) {
+        console.error("Error saving social connection to Supabase:", err);
+      } finally {
+        setIsConnecting(false);
+        setShowConnectModal(null);
+      }
     }, 1500);
   };
 
   // Disconnect social channel
-  const handleDisconnectSocial = (platform: string) => {
-    if (platform === 'instagram') {
-      setScInstagramConnected(false);
-      localStorage.setItem('tast_sc_instagram_connected', 'false');
-    } else if (platform === 'facebook') {
-      setScFacebookConnected(false);
-      localStorage.setItem('tast_sc_facebook_connected', 'false');
-    } else if (platform === 'tiktok') {
-      setScTikTokConnected(false);
-      localStorage.setItem('tast_sc_tiktok_connected', 'false');
-    }
+  const handleDisconnectSocial = async (platform: string) => {
+    try {
+      const { isSupabaseConfigured, saveSupabaseSetting } = await import('../supabaseClient');
 
-    if (onAddLog) {
-      onAddLog(language === 'ca'
-        ? `🔌 Canal ${platform.toUpperCase()} desconnectat.`
-        : `🔌 Canal ${platform.toUpperCase()} desconectado.`
-      );
+      if (platform === 'instagram') {
+        setScInstagramConnected(false);
+        localStorage.setItem('tast_sc_instagram_connected', 'false');
+        if (isSupabaseConfigured) {
+          await saveSupabaseSetting('tast_sc_instagram_connected', 'false');
+        }
+      } else if (platform === 'facebook') {
+        setScFacebookConnected(false);
+        localStorage.setItem('tast_sc_facebook_connected', 'false');
+        if (isSupabaseConfigured) {
+          await saveSupabaseSetting('tast_sc_facebook_connected', 'false');
+        }
+      } else if (platform === 'tiktok') {
+        setScTikTokConnected(false);
+        localStorage.setItem('tast_sc_tiktok_connected', 'false');
+        if (isSupabaseConfigured) {
+          await saveSupabaseSetting('tast_sc_tiktok_connected', 'false');
+        }
+      }
+
+      if (onAddLog) {
+        onAddLog(language === 'ca'
+          ? `🔌 Canal ${platform.toUpperCase()} desconnectat.`
+          : `🔌 Canal ${platform.toUpperCase()} desconectado.`
+        );
+      }
+    } catch (err) {
+      console.error("Error disconnecting social channel from Supabase:", err);
     }
   };
 
