@@ -23,45 +23,7 @@ export default async function handler(req, res) {
     return res.status(200).json({ translatedText: "" });
   }
 
-  // 1. Try LibreTranslate first
-  try {
-    const response = await fetch('https://libretranslate.de/translate', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        q: textToTranslate,
-        source: sourceLang === 'auto' ? 'auto' : sourceLang,
-        target: targetLang,
-        format: 'text'
-      }),
-    });
-
-    if (response.ok) {
-      const contentType = response.headers.get("content-type") || "";
-      if (contentType.includes("application/json")) {
-        try {
-          const data = await response.json();
-          if (data && data.translatedText) {
-            return res.status(200).json({ translatedText: data.translatedText });
-          }
-        } catch (jsonErr) {
-          console.warn("Failed to parse LibreTranslate JSON response on Vercel proxy, falling back to Gemini:", jsonErr);
-        }
-      } else {
-        const textResponse = await response.text();
-        console.warn(`LibreTranslate returned non-JSON content on Vercel proxy (Type: ${contentType}), falling back to Gemini. Body snippet:`, textResponse.substring(0, 150));
-      }
-    } else {
-      const errorText = await response.text();
-      console.warn("LibreTranslate API failed on Vercel proxy, falling back to Gemini:", errorText.substring(0, 150));
-    }
-  } catch (err) {
-    console.warn("LibreTranslate fetch error on Vercel proxy, falling back to Gemini:", err.message || err);
-  }
-
-  // 2. Fallback to Gemini if LibreTranslate fails
+  // Bypass LibreTranslate and go straight to Gemini if API Key is available
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
     console.warn("GEMINI_API_KEY is not defined. Returning original text as final fallback.");
