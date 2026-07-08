@@ -39,13 +39,23 @@ export default async function handler(req, res) {
     });
 
     if (response.ok) {
-      const data = await response.json();
-      if (data && data.translatedText) {
-        return res.status(200).json({ translatedText: data.translatedText });
+      const contentType = response.headers.get("content-type") || "";
+      if (contentType.includes("application/json")) {
+        try {
+          const data = await response.json();
+          if (data && data.translatedText) {
+            return res.status(200).json({ translatedText: data.translatedText });
+          }
+        } catch (jsonErr) {
+          console.warn("Failed to parse LibreTranslate JSON response on Vercel proxy, falling back to Gemini:", jsonErr);
+        }
+      } else {
+        const textResponse = await response.text();
+        console.warn(`LibreTranslate returned non-JSON content on Vercel proxy (Type: ${contentType}), falling back to Gemini. Body snippet:`, textResponse.substring(0, 150));
       }
     } else {
       const errorText = await response.text();
-      console.warn("LibreTranslate API failed on Vercel proxy, falling back to Gemini:", errorText);
+      console.warn("LibreTranslate API failed on Vercel proxy, falling back to Gemini:", errorText.substring(0, 150));
     }
   } catch (err) {
     console.warn("LibreTranslate fetch error on Vercel proxy, falling back to Gemini:", err.message || err);

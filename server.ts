@@ -219,14 +219,24 @@ async function startServer() {
         });
 
         if (response.ok) {
-          const data = await response.json();
-          if (data && data.translatedText) {
-            console.log(`[Translation Proxy] LibreTranslate success: "${data.translatedText.substring(0, 30)}..."`);
-            return res.json({ translatedText: data.translatedText });
+          const contentType = response.headers.get("content-type") || "";
+          if (contentType.includes("application/json")) {
+            try {
+              const data = await response.json();
+              if (data && data.translatedText) {
+                console.log(`[Translation Proxy] LibreTranslate success: "${data.translatedText.substring(0, 30)}..."`);
+                return res.json({ translatedText: data.translatedText });
+              }
+            } catch (jsonErr) {
+              console.warn("[Translation Proxy] Failed to parse LibreTranslate JSON response, falling back to Gemini:", jsonErr);
+            }
+          } else {
+            const textResponse = await response.text();
+            console.warn(`[Translation Proxy] LibreTranslate returned non-JSON content (Type: ${contentType}), falling back to Gemini. Body snippet:`, textResponse.substring(0, 150));
           }
         } else {
           const errorText = await response.text();
-          console.warn(`[Translation Proxy] LibreTranslate failed (Status ${response.status}):`, errorText);
+          console.warn(`[Translation Proxy] LibreTranslate failed (Status ${response.status}):`, errorText.substring(0, 150));
         }
       } catch (e) {
         console.warn("[Translation Proxy] LibreTranslate fetch error, trying Gemini fallback:", e);
