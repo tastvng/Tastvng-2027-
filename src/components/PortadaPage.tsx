@@ -2,7 +2,7 @@ import React from 'react';
 import { motion } from 'motion/react';
 import { useLanguage } from '../LanguageContext';
 import { useActiveYear } from '../hooks/useActiveYear';
-import TranslatedText from './TranslatedText';
+import TranslatedText, { useTranslatedText } from './TranslatedText';
 import { Play, Image, Sparkles, ChevronRight, VolumeX, Mail, FileText, Compass, ExternalLink, Instagram, Heart, Star, Zap, Bell } from 'lucide-react';
 
 export interface PortadaConfig {
@@ -182,17 +182,34 @@ export default function PortadaPage({
     }
   };
 
-  const titol = (language === 'ca' ? config.titolCA : config.titolES) || (language === 'ca' ? config.titolES : config.titolCA) || '';
-  const subtitol = (language === 'ca' ? config.subtitolCA : config.subtitolES) || (language === 'ca' ? config.subtitolES : config.subtitolCA) || '';
-  const descripcio = (language === 'ca' ? config.descripcioCA : config.descripcioES) || (language === 'ca' ? config.descripcioES : config.descripcioCA) || '';
-  const botoText = (language === 'ca' ? config.botoTextCA : config.botoTextES) || (language === 'ca' ? config.botoTextES : config.botoTextCA) || '';
+  const rawTitol = (language === 'ca' ? config.titolCA : config.titolES) || (language === 'ca' ? config.titolES : config.titolCA) || '';
+  const rawSubtitol = (language === 'ca' ? config.subtitolCA : config.subtitolES) || (language === 'ca' ? config.subtitolES : config.subtitolCA) || '';
+  const rawDescripcio = (language === 'ca' ? config.descripcioCA : config.descripcioES) || (language === 'ca' ? config.descripcioES : config.descripcioCA) || '';
+  const rawBotoText = (language === 'ca' ? config.botoTextCA : config.botoTextES) || (language === 'ca' ? config.botoTextES : config.botoTextCA) || '';
 
-  const footerTextRaw = (language === 'ca' ? config.footerTextCA : config.footerTextES) || (language === 'ca' ? config.footerTextES : config.footerTextCA) || `© ${activeYear} ASSOCIACIÓ COMPARSES EL TAST • VILANOVA`;
+  const titol = useTranslatedText(rawTitol);
+  const subtitol = useTranslatedText(rawSubtitol);
+  const descripcio = useTranslatedText(rawDescripcio);
+  const botoText = useTranslatedText(rawBotoText);
+
+  const rawBadgeText = globalEstatInscripcions === 'tancades'
+    ? (language === 'ca' ? 'Inscripcions Tancades' : 'Inscripciones Cerradas')
+    : globalEstatInscripcions === 'espera'
+      ? (language === 'ca' ? `Llista d'Espera ${activeYear}` : `Lista de Espera ${activeYear}`)
+      : (language === 'ca' 
+          ? (config.badgeTextCA || `Inscripcions Obertes ${activeYear}`) 
+          : (config.badgeTextES || `Inscripciones Abiertas ${activeYear}`));
+  const badgeText = useTranslatedText(rawBadgeText);
+
+  const rawFooterText = (language === 'ca' ? config.footerTextCA : config.footerTextES) || (language === 'ca' ? config.footerTextES : config.footerTextCA) || `© ${activeYear} ASSOCIACIÓ COMPARSES EL TAST • VILANOVA`;
+  const footerTextRaw = useTranslatedText(rawFooterText);
   const footerText = footerTextRaw.replace(/2026/g, activeYear).replace(/2027/g, activeYear);
 
-  const footerLink1Label = (language === 'ca' ? config.footerLink1LabelCA : config.footerLink1LabelES) || (language === 'ca' ? config.footerLink1LabelES : config.footerLink1LabelCA) || 'Normativa';
+  const rawFooterLink1Label = (language === 'ca' ? config.footerLink1LabelCA : config.footerLink1LabelES) || (language === 'ca' ? config.footerLink1LabelES : config.footerLink1LabelCA) || 'Normativa';
+  const footerLink1Label = useTranslatedText(rawFooterLink1Label);
 
-  const footerLink2Label = (language === 'ca' ? config.footerLink2LabelCA : config.footerLink2LabelES) || (language === 'ca' ? config.footerLink2LabelES : config.footerLink2LabelCA) || 'secretaria@eltast.cat';
+  const rawFooterLink2Label = (language === 'ca' ? config.footerLink2LabelCA : config.footerLink2LabelES) || (language === 'ca' ? config.footerLink2LabelES : config.footerLink2LabelCA) || 'secretaria@eltast.cat';
+  const footerLink2Label = useTranslatedText(rawFooterLink2Label);
 
   const footerLink1Url = config.footerLink1Url || '#';
   const footerLink2Url = config.footerLink2Url || 'mailto:secretaria@eltast.cat';
@@ -420,15 +437,6 @@ export default function PortadaPage({
         <div className="lg:col-span-7 space-y-5 text-left">
           <div className="flex flex-wrap gap-3 items-center">
             {(() => {
-              // Determine active badge text based on the registration state
-              const badgeText = globalEstatInscripcions === 'tancades'
-                ? (language === 'ca' ? 'Inscripcions Tancades' : 'Inscripciones Cerradas')
-                : globalEstatInscripcions === 'espera'
-                  ? (language === 'ca' ? `Llista d'Espera ${activeYear}` : `Lista de Espera ${activeYear}`)
-                  : (language === 'ca' 
-                      ? (config.badgeTextCA || `Inscripcions Obertes ${activeYear}`) 
-                      : (config.badgeTextES || `Inscripciones Abiertas ${activeYear}`));
-              
               const badgeStyleType = config.badgeStyle || 'custom';
               const badgeBg = config.badgeBgColor || accentColor;
               const badgeTxtColor = config.badgeTextColor || '#ffffff';
