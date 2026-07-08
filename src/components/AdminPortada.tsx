@@ -89,7 +89,17 @@ export const PORTADA_CONFIG_DEFAULTS: PortadaConfig = {
   footerBorderTopColor: 'rgba(255, 255, 255, 0.1)',
   footerFontMono: true,
   footerShadowEnabled: false,
-  cuestionariActiu: true
+  cuestionariActiu: true,
+  ca: {
+    heading: "Inscripcions Comparses El Tast 2027",
+    welcome: "Benvingut a l'espai de registre oficial del Tast",
+    description: "Enguany us presentem un qüestionari àgil i integrat amb el nostre sistema de secretaria digital de l'Associació Cultural El Tast. Prepara el teu DNI, escolleix la teva talla d'armilla o samarreta, i obtén el teu QR instantani per recollir el mocador oficial sense cues a la seu social!"
+  },
+  es: {
+    heading: "Inscripciones Comparses El Tast 2027",
+    welcome: "Bienvenido al espacio de registro oficial del Tast",
+    description: "Este año os presentamos un cuestionario ágil e integrado con nuestro sistema de secretaría digital de la Asociación Cultural El Tast. ¡Prepara tu DNI, elige tu talla de chaleco o camiseta, y obtén tu QR instantáneo para recoger el pañuelo oficial sin colas en la sede social!"
+  }
 };
 
 interface AdminPortadaProps {

@@ -86,6 +86,22 @@ export interface PortadaConfig {
   footerFontMono?: boolean;
   footerShadowEnabled?: boolean;
   cuestionariActiu?: boolean;
+  ca?: {
+    heading?: string;
+    welcome?: string;
+    description?: string;
+    buttonText?: string;
+    badgeText?: string;
+    footerText?: string;
+  };
+  es?: {
+    heading?: string;
+    welcome?: string;
+    description?: string;
+    buttonText?: string;
+    badgeText?: string;
+    footerText?: string;
+  };
 }
 
 interface PortadaPageProps {
@@ -182,10 +198,13 @@ export default function PortadaPage({
     }
   };
 
-  const rawTitol = (language === 'ca' ? config.titolCA : config.titolES) || (language === 'ca' ? config.titolES : config.titolCA) || '';
-  const rawSubtitol = (language === 'ca' ? config.subtitolCA : config.subtitolES) || (language === 'ca' ? config.subtitolES : config.subtitolCA) || '';
-  const rawDescripcio = (language === 'ca' ? config.descripcioCA : config.descripcioES) || (language === 'ca' ? config.descripcioES : config.descripcioCA) || '';
-  const rawBotoText = (language === 'ca' ? config.botoTextCA : config.botoTextES) || (language === 'ca' ? config.botoTextES : config.botoTextCA) || '';
+  const caConfig = config?.ca || {};
+  const esConfig = config?.es || {};
+
+  const rawTitol = (language === 'ca' ? (caConfig.heading || config.titolCA) : (esConfig.heading || config.titolES)) || (language === 'ca' ? (esConfig.heading || config.titolES) : (caConfig.heading || config.titolCA)) || '';
+  const rawSubtitol = (language === 'ca' ? (caConfig.welcome || config.subtitolCA) : (esConfig.welcome || config.subtitolES)) || (language === 'ca' ? (esConfig.welcome || config.subtitolES) : (caConfig.welcome || config.subtitolCA)) || '';
+  const rawDescripcio = (language === 'ca' ? (caConfig.description || config.descripcioCA) : (esConfig.description || config.descripcioES)) || (language === 'ca' ? (esConfig.description || config.descripcioES) : (caConfig.description || config.descripcioCA)) || '';
+  const rawBotoText = (language === 'ca' ? (caConfig.buttonText || config.botoTextCA) : (esConfig.buttonText || config.botoTextES)) || (language === 'ca' ? (esConfig.buttonText || config.botoTextES) : (caConfig.buttonText || config.botoTextCA)) || '';
 
   const titol = useTranslatedText(rawTitol);
   const subtitol = useTranslatedText(rawSubtitol);
@@ -197,11 +216,11 @@ export default function PortadaPage({
     : globalEstatInscripcions === 'espera'
       ? (language === 'ca' ? `Llista d'Espera ${activeYear}` : `Lista de Espera ${activeYear}`)
       : (language === 'ca' 
-          ? (config.badgeTextCA || `Inscripcions Obertes ${activeYear}`) 
-          : (config.badgeTextES || `Inscripciones Abiertas ${activeYear}`));
+          ? (caConfig.badgeText || config.badgeTextCA || `Inscripcions Obertes ${activeYear}`) 
+          : (esConfig.badgeText || config.badgeTextES || `Inscripciones Abiertas ${activeYear}`));
   const badgeText = useTranslatedText(rawBadgeText);
 
-  const rawFooterText = (language === 'ca' ? config.footerTextCA : config.footerTextES) || (language === 'ca' ? config.footerTextES : config.footerTextCA) || `© ${activeYear} ASSOCIACIÓ COMPARSES EL TAST • VILANOVA`;
+  const rawFooterText = (language === 'ca' ? (caConfig.footerText || config.footerTextCA) : (esConfig.footerText || config.footerTextES)) || (language === 'ca' ? (esConfig.footerText || config.footerTextES) : (caConfig.footerText || config.footerTextCA)) || `© ${activeYear} ASSOCIACIÓ COMPARSES EL TAST • VILANOVA`;
   const footerTextRaw = useTranslatedText(rawFooterText);
   const footerText = footerTextRaw.replace(/2026/g, activeYear).replace(/2027/g, activeYear);
 
