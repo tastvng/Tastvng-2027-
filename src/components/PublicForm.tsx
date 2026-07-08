@@ -165,9 +165,19 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
         console.error("Error loading dynamic accessory prices:", err);
       }
     };
+    
     loadDynamicPrices();
+    
+    // Refresh prices automatically on event triggers
+    window.addEventListener('hoursConfigChanged', loadDynamicPrices);
+    window.addEventListener('eventDataChanged', loadDynamicPrices);
+    window.addEventListener('localStorage', loadDynamicPrices);
+    
     return () => {
       active = false;
+      window.removeEventListener('hoursConfigChanged', loadDynamicPrices);
+      window.removeEventListener('eventDataChanged', loadDynamicPrices);
+      window.removeEventListener('localStorage', loadDynamicPrices);
     };
   }, []);
 

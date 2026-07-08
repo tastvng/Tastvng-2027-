@@ -81,8 +81,11 @@ export async function translateText(
       },
       body: JSON.stringify({
         q: clean,
+        text: clean,
         source: srcLang,
+        source_language: srcLang,
         target: target,
+        target_language: target,
         format: 'text'
       }),
     });
