@@ -4,6 +4,7 @@ import { useLanguage } from '../LanguageContext';
 import { useActiveYear } from '../hooks/useActiveYear';
 import TranslatedText, { useTranslatedText } from './TranslatedText';
 import { Play, Image, Sparkles, ChevronRight, VolumeX, Mail, FileText, Compass, ExternalLink, Instagram, Heart, Star, Zap, Bell } from 'lucide-react';
+import { ensureValidPortadaConfig, DEFAULT_PORTADA_DATA, PORTADA_CONFIG_DEFAULTS } from './AdminPortada';
 
 export interface PortadaConfig {
   activa: boolean;
@@ -128,21 +129,33 @@ export default function PortadaPage({
   const { language, setLanguage } = useLanguage();
   const activeYear = useActiveYear();
 
+  const [liveConfig, setLiveConfig] = React.useState<PortadaConfig>(() => ensureValidPortadaConfig(config, activeYear));
   const [customLogo, setCustomLogo] = React.useState(() => localStorage.getItem('tast_email_logo') || "");
 
   const [hoverFooter1, setHoverFooter1] = React.useState(false);
   const [hoverFooter2, setHoverFooter2] = React.useState(false);
 
+  // Keep liveConfig synchronized when config prop changes
   React.useEffect(() => {
-    const loadLogo = () => {
-      setCustomLogo(localStorage.getItem('tast_email_logo') || "");
-    };
-    loadLogo();
+    setLiveConfig(ensureValidPortadaConfig(config, activeYear));
+  }, [config, activeYear]);
 
-    // Remedy 3: Ask Supabase directly for live values at mount time to populate empty incognito caches
+  React.useEffect(() => {
+    const loadAssets = () => {
+      setCustomLogo(localStorage.getItem('tast_email_logo') || "");
+      try {
+        const savedPortada = localStorage.getItem('tast_portada_config_2026');
+        if (savedPortada) {
+          setLiveConfig(ensureValidPortadaConfig(JSON.parse(savedPortada), activeYear));
+        }
+      } catch (e) {}
+    };
+    loadAssets();
+
+    // Ask Supabase directly for live values at mount time to populate empty incognito caches & heal DB structure
     async function loadLiveSupabaseAssets() {
       try {
-        const { getSupabaseSetting, isSupabaseConfigured } = await import('../supabaseClient');
+        const { getSupabaseSetting, saveSupabaseSetting, isSupabaseConfigured } = await import('../supabaseClient');
         if (isSupabaseConfigured) {
           const liveLogo = await getSupabaseSetting<string>('tast_email_logo', '');
           if (liveLogo) {
@@ -151,10 +164,18 @@ export default function PortadaPage({
             window.dispatchEvent(new Event('hoursConfigChanged'));
           }
 
-          const livePortada = await getSupabaseSetting<any>('tast_portada_config_2026', null);
-          if (livePortada) {
-            localStorage.setItem('tast_portada_config_2026', JSON.stringify(livePortada));
-            window.dispatchEvent(new Event('portadaConfigChanged'));
+          const rawPortada = await getSupabaseSetting<any>('tast_portada_config_2026', null);
+          if (rawPortada) {
+            const validated = ensureValidPortadaConfig(rawPortada, activeYear);
+            setLiveConfig(validated);
+            localStorage.setItem('tast_portada_config_2026', JSON.stringify(validated));
+            
+            // If the rawPortada had missing ca/es or corrupt texts, heal it in Supabase
+            const caHeading = rawPortada?.ca?.heading || rawPortada?.titolCA || '';
+            const isCorrupted = !rawPortada.ca || !rawPortada.es || caHeading.toLowerCase().startsWith('inscripciones');
+            if (isCorrupted) {
+              await saveSupabaseSetting('tast_portada_config_2026', validated);
+            }
           }
         }
       } catch (err) {
@@ -165,22 +186,22 @@ export default function PortadaPage({
       console.warn("Handled error in loadLiveSupabaseAssets:", err);
     });
 
-    window.addEventListener('storage', loadLogo);
-    window.addEventListener('hoursConfigChanged', loadLogo);
-    window.addEventListener('localStorage', loadLogo);
+    window.addEventListener('storage', loadAssets);
+    window.addEventListener('portadaConfigChanged', loadAssets);
+    window.addEventListener('hoursConfigChanged', loadAssets);
     return () => {
-      window.removeEventListener('storage', loadLogo);
-      window.removeEventListener('hoursConfigChanged', loadLogo);
-      window.removeEventListener('localStorage', loadLogo);
+      window.removeEventListener('storage', loadAssets);
+      window.removeEventListener('portadaConfigChanged', loadAssets);
+      window.removeEventListener('hoursConfigChanged', loadAssets);
     };
-  }, []);
+  }, [activeYear]);
 
-  const accentColor = config.accentColor || '#ff0090';
-  const titolColor = config.titolColor || '#ffffff';
-  const subtitolColor = config.subtitolColor || '#a1a1aa';
-  const descripcioColor = config.descripcioColor || '#d4d4d8';
-  const botoBgColor = config.botoBgColor || accentColor;
-  const botoTextColor = config.botoTextColor || '#ffffff';
+  const accentColor = liveConfig.accentColor || '#ff0090';
+  const titolColor = liveConfig.titolColor || '#ffffff';
+  const subtitolColor = liveConfig.subtitolColor || '#a1a1aa';
+  const descripcioColor = liveConfig.descripcioColor || '#d4d4d8';
+  const botoBgColor = liveConfig.botoBgColor || accentColor;
+  const botoTextColor = liveConfig.botoTextColor || '#ffffff';
 
   const hexToRgba = (hex: string, alpha: number) => {
     try {
@@ -200,57 +221,79 @@ export default function PortadaPage({
     }
   };
 
-  const rawTitol = language === 'ca'
-    ? (config?.ca?.heading || config?.titolCA || 'Inscripcions Comparses El Tast 2027')
-    : (config?.es?.heading || config?.titolES || 'Inscripciones Comparses El Tast 2027');
-  const titol = rawTitol.replace(/2026/g, activeYear).replace(/2027/g, activeYear);
+  // Resolve current active language data with 100% strict synchronization
+  const currentLang = (language === 'es' ? 'es' : 'ca') as 'ca' | 'es';
+  const langData = liveConfig[currentLang] || (currentLang === 'ca' ? DEFAULT_PORTADA_DATA.ca : DEFAULT_PORTADA_DATA.es);
 
-  const rawSubtitol = language === 'ca'
-    ? (config?.ca?.welcome || config?.subtitolCA || "Benvingut a l'espai de registre oficial del Tast")
-    : (config?.es?.welcome || config?.subtitolES || "Bienvenido al espacio de registro oficial del Tast");
+  // 1. Heading (always in currentLang)
+  let rawHeading = currentLang === 'ca'
+    ? (langData?.heading || liveConfig.titolCA || DEFAULT_PORTADA_DATA.ca.heading)
+    : (langData?.heading || liveConfig.titolES || DEFAULT_PORTADA_DATA.es.heading);
+  if (currentLang === 'ca' && rawHeading.toLowerCase().startsWith('inscripciones')) {
+    rawHeading = DEFAULT_PORTADA_DATA.ca.heading;
+  } else if (currentLang === 'es' && rawHeading.toLowerCase().startsWith('inscripcions')) {
+    rawHeading = DEFAULT_PORTADA_DATA.es.heading;
+  }
+  const titol = rawHeading.replace(/2026/g, activeYear).replace(/2027/g, activeYear);
+
+  // 2. Subtitle / Welcome (always in currentLang)
+  let rawSubtitol = currentLang === 'ca'
+    ? (langData?.welcome || liveConfig.subtitolCA || DEFAULT_PORTADA_DATA.ca.welcome)
+    : (langData?.welcome || liveConfig.subtitolES || DEFAULT_PORTADA_DATA.es.welcome);
+  if (currentLang === 'ca' && (rawSubtitol.toLowerCase().includes('bienvenido') || rawSubtitol.toLowerCase().includes('bienvenidos'))) {
+    rawSubtitol = DEFAULT_PORTADA_DATA.ca.welcome;
+  } else if (currentLang === 'es' && (rawSubtitol.toLowerCase().includes('benvingut') || rawSubtitol.toLowerCase().includes('benvinguts'))) {
+    rawSubtitol = DEFAULT_PORTADA_DATA.es.welcome;
+  }
   const subtitol = rawSubtitol.replace(/2026/g, activeYear).replace(/2027/g, activeYear);
 
-  const rawDescripcio = language === 'ca'
-    ? (config?.ca?.description || config?.descripcioCA || "Enguany us presentem un qüestionari àgil i integrat amb el nostre sistema de secretaria digital de l'Associació Cultural El Tast. Prepara el teu DNI, escolleix la teva talla d'armilla o samarreta, i obtén el teu QR instantani per recollir el mocador oficial sense cues a la seu social!")
-    : (config?.es?.description || config?.descripcioES || "Este año os presentamos un cuestionario ágil e integrado con nuestro sistema de secretaría digital de la Asociación Cultural El Tast. ¡Prepara tu DNI, elige tu talla de chaleco o camiseta, y obtén tu QR instantáneo para recoger el pañuelo oficial sin colas en la sede social!");
+  // 3. Description (always in currentLang)
+  let rawDescripcio = currentLang === 'ca'
+    ? (langData?.description || liveConfig.descripcioCA || DEFAULT_PORTADA_DATA.ca.description)
+    : (langData?.description || liveConfig.descripcioES || DEFAULT_PORTADA_DATA.es.description);
+  if (currentLang === 'ca' && (rawDescripcio.toLowerCase().includes('este año') || rawDescripcio.toLowerCase().includes('asociación'))) {
+    rawDescripcio = DEFAULT_PORTADA_DATA.ca.description;
+  } else if (currentLang === 'es' && (rawDescripcio.toLowerCase().includes('enguany') || rawDescripcio.toLowerCase().includes('associació'))) {
+    rawDescripcio = DEFAULT_PORTADA_DATA.es.description;
+  }
   const descripcio = rawDescripcio.replace(/2026/g, activeYear).replace(/2027/g, activeYear);
 
-  const rawBotoText = language === 'ca'
-    ? (config?.ca?.buttonText || config?.botoTextCA || 'Inscripció en línia')
-    : (config?.es?.buttonText || config?.botoTextES || 'Inscripción en línea');
+  // 4. Button Text (always in currentLang)
+  let rawBotoText = currentLang === 'ca'
+    ? (langData?.buttonText || liveConfig.botoTextCA || DEFAULT_PORTADA_DATA.ca.buttonText)
+    : (langData?.buttonText || liveConfig.botoTextES || DEFAULT_PORTADA_DATA.es.buttonText);
   const botoText = rawBotoText.replace(/2026/g, activeYear).replace(/2027/g, activeYear);
 
+  // 5. Badge Text (always in currentLang)
   const rawBadgeText = globalEstatInscripcions === 'tancades'
-    ? (language === 'ca' ? 'Inscripcions Tancades' : 'Inscripciones Cerradas')
+    ? (currentLang === 'ca' ? 'Inscripcions Tancades' : 'Inscripciones Cerradas')
     : globalEstatInscripcions === 'espera'
-      ? (language === 'ca' ? `Llista d'Espera ${activeYear}` : `Lista de Espera ${activeYear}`)
-      : (language === 'ca' 
-          ? (config?.ca?.badgeText || config?.badgeTextCA || `Inscripcions Obertes ${activeYear}`) 
-          : (config?.es?.badgeText || config?.badgeTextES || `Inscripciones Abiertas ${activeYear}`));
+      ? (currentLang === 'ca' ? `Llista d'Espera ${activeYear}` : `Lista de Espera ${activeYear}`)
+      : (langData?.badgeText || (currentLang === 'ca' ? liveConfig.badgeTextCA : liveConfig.badgeTextES) || DEFAULT_PORTADA_DATA[currentLang].badgeText);
   const badgeText = rawBadgeText.replace(/2026/g, activeYear).replace(/2027/g, activeYear);
 
-  const rawFooterText = language === 'ca'
-    ? (config?.ca?.footerText || config?.footerTextCA || `© ${activeYear} ASSOCIACIÓ COMPARSES EL TAST • VILANOVA`)
-    : (config?.es?.footerText || config?.footerTextES || `© ${activeYear} ASOCIACIÓN COMPARSAS EL TAST • VILANOVA`);
+  // 6. Footer Text (always in currentLang)
+  const rawFooterText = langData?.footerText || (currentLang === 'ca' ? liveConfig.footerTextCA : liveConfig.footerTextES) || DEFAULT_PORTADA_DATA[currentLang].footerText;
   const footerText = rawFooterText.replace(/2026/g, activeYear).replace(/2027/g, activeYear);
 
-  const footerLink1Label = language === 'ca'
-    ? (config?.footerLink1LabelCA || 'Normativa')
-    : (config?.footerLink1LabelES || 'Normativa');
+  // 7. Footer Links
+  const footerLink1Label = currentLang === 'ca'
+    ? (liveConfig?.footerLink1LabelCA || DEFAULT_PORTADA_DATA.ca.footerLink1Label)
+    : (liveConfig?.footerLink1LabelES || DEFAULT_PORTADA_DATA.es.footerLink1Label);
 
-  const footerLink2Label = language === 'ca'
-    ? (config?.footerLink2LabelCA || 'secretaria@eltast.cat')
-    : (config?.footerLink2LabelES || 'secretaria@eltast.cat');
+  const footerLink2Label = currentLang === 'ca'
+    ? (liveConfig?.footerLink2LabelCA || DEFAULT_PORTADA_DATA.ca.footerLink2Label)
+    : (liveConfig?.footerLink2LabelES || DEFAULT_PORTADA_DATA.es.footerLink2Label);
 
-  const footerLink1Url = config.footerLink1Url || '#';
-  const footerLink2Url = config.footerLink2Url || 'mailto:secretaria@eltast.cat';
-  const footerTextColor = config.footerTextColor || '#71717a';
+  const footerLink1Url = liveConfig.footerLink1Url || '#';
+  const footerLink2Url = liveConfig.footerLink2Url || 'mailto:secretaria@eltast.cat';
+  const footerTextColor = liveConfig.footerTextColor || '#71717a';
 
   // Button Custom styling resolver
-  const botoTextSize = config.botoTextSize || 'text-xs md:text-sm';
-  const botoFontWeight = config.botoFontWeight || 'font-black';
-  const botoLetterSpacing = config.botoLetterSpacing || 'tracking-wider';
-  const botoUppercase = config.botoUppercase !== false;
+  const botoTextSize = liveConfig.botoTextSize || 'text-xs md:text-sm';
+  const botoFontWeight = liveConfig.botoFontWeight || 'font-black';
+  const botoLetterSpacing = liveConfig.botoLetterSpacing || 'tracking-wider';
+  const botoUppercase = liveConfig.botoUppercase !== false;
 
   const botoClassName = `group flex items-center justify-center gap-2.5 hover:scale-[1.02] active:scale-[0.97] transition-all duration-300 ease-out cursor-pointer relative overflow-hidden px-6 py-4
     ${botoTextSize}
@@ -262,33 +305,33 @@ export default function PortadaPage({
   const botoStyle: React.CSSProperties = {
     backgroundColor: botoBgColor,
     color: botoTextColor,
-    borderRadius: config.botoRounded === 'rounded-none' ? '0px'
-                : config.botoRounded === 'rounded-sm' ? '0.125rem'
-                : config.botoRounded === 'rounded' ? '0.25rem'
-                : config.botoRounded === 'rounded-md' ? '0.375rem'
-                : config.botoRounded === 'rounded-lg' ? '0.5rem'
-                : config.botoRounded === 'rounded-xl' ? '0.75rem'
-                : config.botoRounded === 'rounded-2xl' ? '1rem'
-                : config.botoRounded === 'rounded-3xl' ? '1.5rem'
-                : config.botoRounded === 'rounded-full' ? '9999px'
+    borderRadius: liveConfig.botoRounded === 'rounded-none' ? '0px'
+                : liveConfig.botoRounded === 'rounded-sm' ? '0.125rem'
+                : liveConfig.botoRounded === 'rounded' ? '0.25rem'
+                : liveConfig.botoRounded === 'rounded-md' ? '0.375rem'
+                : liveConfig.botoRounded === 'rounded-lg' ? '0.5rem'
+                : liveConfig.botoRounded === 'rounded-xl' ? '0.75rem'
+                : liveConfig.botoRounded === 'rounded-2xl' ? '1rem'
+                : liveConfig.botoRounded === 'rounded-3xl' ? '1.5rem'
+                : liveConfig.botoRounded === 'rounded-full' ? '9999px'
                 : '1rem', // Default: 2xl (1rem)
-    borderWidth: config.botoBorderWidth !== undefined ? `${config.botoBorderWidth}px` : '0px',
-    borderColor: config.botoBorderColor || 'transparent',
-    borderStyle: config.botoBorderWidth ? 'solid' : 'none',
+    borderWidth: liveConfig.botoBorderWidth !== undefined ? `${liveConfig.botoBorderWidth}px` : '0px',
+    borderColor: liveConfig.botoBorderColor || 'transparent',
+    borderStyle: liveConfig.botoBorderWidth ? 'solid' : 'none',
   };
 
-  const shadowColor = config.botoShadowColor || botoBgColor;
-  if (config.botoShadowSize && config.botoShadowSize !== 'shadow-none') {
+  const shadowColor = liveConfig.botoShadowColor || botoBgColor;
+  if (liveConfig.botoShadowSize && liveConfig.botoShadowSize !== 'shadow-none') {
     const rgba = hexToRgba(shadowColor, 0.35);
-    const shadowVal = config.botoShadowSize === 'shadow-sm' ? `0 2px 4px ${rgba}`
-                    : config.botoShadowSize === 'shadow' ? `0 4px 6px ${rgba}`
-                    : config.botoShadowSize === 'shadow-md' ? `0 6px 12px ${rgba}`
-                    : config.botoShadowSize === 'shadow-lg' ? `0 8px 18px ${rgba}`
-                    : config.botoShadowSize === 'shadow-xl' ? `0 12px 24px ${rgba}`
-                    : config.botoShadowSize === 'shadow-2xl' ? `0 20px 35px ${rgba}`
+    const shadowVal = liveConfig.botoShadowSize === 'shadow-sm' ? `0 2px 4px ${rgba}`
+                    : liveConfig.botoShadowSize === 'shadow' ? `0 4px 6px ${rgba}`
+                    : liveConfig.botoShadowSize === 'shadow-md' ? `0 6px 12px ${rgba}`
+                    : liveConfig.botoShadowSize === 'shadow-lg' ? `0 8px 18px ${rgba}`
+                    : liveConfig.botoShadowSize === 'shadow-xl' ? `0 12px 24px ${rgba}`
+                    : liveConfig.botoShadowSize === 'shadow-2xl' ? `0 20px 35px ${rgba}`
                     : `0 8px 24px ${rgba}`;
     botoStyle.boxShadow = shadowVal;
-  } else if (config.botoShadowSize === 'shadow-none') {
+  } else if (liveConfig.botoShadowSize === 'shadow-none') {
     botoStyle.boxShadow = 'none';
   } else {
     // Default soft shadow
@@ -296,24 +339,24 @@ export default function PortadaPage({
   }
 
   // Footer styling resolver
-  const footerLinkHoverColor = config.footerLinkHoverColor || accentColor;
+  const footerLinkHoverColor = liveConfig.footerLinkHoverColor || accentColor;
 
   const footerTextStyle: React.CSSProperties = {
-    fontSize: config.footerTextSize === 'text-[9px]' ? '9px'
-            : config.footerTextSize === 'text-[10px]' ? '10px'
-            : config.footerTextSize === 'text-xs' ? '12px'
-            : config.footerTextSize === 'text-sm' ? '14px'
+    fontSize: liveConfig.footerTextSize === 'text-[9px]' ? '9px'
+            : liveConfig.footerTextSize === 'text-[10px]' ? '10px'
+            : liveConfig.footerTextSize === 'text-xs' ? '12px'
+            : liveConfig.footerTextSize === 'text-sm' ? '14px'
             : undefined, // defaults to tailwind class
-    fontWeight: config.footerFontWeight === 'font-medium' ? 500
-              : config.footerFontWeight === 'font-bold' ? 700
+    fontWeight: liveConfig.footerFontWeight === 'font-medium' ? 500
+              : liveConfig.footerFontWeight === 'font-bold' ? 700
               : undefined, // defaults to tailwind style
-    textTransform: config.footerUppercase === false ? 'none' : 'uppercase',
-    letterSpacing: config.footerLetterSpacing === 'tracking-normal' ? 'normal'
-                 : config.footerLetterSpacing === 'tracking-wide' ? '0.025em'
-                 : config.footerLetterSpacing === 'tracking-wider' ? '0.05em'
-                 : config.footerLetterSpacing === 'tracking-widest' ? '0.1em'
+    textTransform: liveConfig.footerUppercase === false ? 'none' : 'uppercase',
+    letterSpacing: liveConfig.footerLetterSpacing === 'tracking-normal' ? 'normal'
+                 : liveConfig.footerLetterSpacing === 'tracking-wide' ? '0.025em'
+                 : liveConfig.footerLetterSpacing === 'tracking-wider' ? '0.05em'
+                 : liveConfig.footerLetterSpacing === 'tracking-widest' ? '0.1em'
                  : undefined, // defaults to tailwind tracking-wider
-    textShadow: config.footerShadowEnabled ? '1px 1px 3px rgba(0,0,0,0.85)' : undefined
+    textShadow: liveConfig.footerShadowEnabled ? '1px 1px 3px rgba(0,0,0,0.85)' : undefined
   };
 
   // Video embed helper for YouTube backgrounds
@@ -346,38 +389,38 @@ export default function PortadaPage({
     }
   };
 
-  const isBgYoutubeState = config.bgTipus === 'video' && (config.bgVideoUrl.includes('youtube.com') || config.bgVideoUrl.includes('youtu.be'));
-  const isContentYoutubeState = config.contingutTipus === 'video' && (config.contingutVideoUrl.includes('youtube.com') || config.contingutVideoUrl.includes('youtu.be'));
+  const isBgYoutubeState = liveConfig.bgTipus === 'video' && (liveConfig.bgVideoUrl.includes('youtube.com') || liveConfig.bgVideoUrl.includes('youtu.be'));
+  const isContentYoutubeState = liveConfig.contingutTipus === 'video' && (liveConfig.contingutVideoUrl.includes('youtube.com') || liveConfig.contingutVideoUrl.includes('youtu.be'));
 
   return (
     <div 
       className="min-h-[85vh] relative rounded-3xl overflow-hidden border border-white/10 shadow-2xl flex flex-col justify-between p-6 md:p-12 text-white before:content-[''] before:absolute before:inset-0 before:bg-gradient-to-t before:from-black/90 before:via-black/75 before:to-black/40 before:z-5"
       style={{
-        backgroundColor: config.bgTipus === 'color' ? config.bgColor : '#0c0c0e',
+        backgroundColor: liveConfig.bgTipus === 'color' ? liveConfig.bgColor : '#0c0c0e',
       }}
       id="portada-landing-viewport"
     >
       {/* Immersive Background element */}
-      {config.bgTipus === 'imatge' && config.bgImatgeUrl && (
+      {liveConfig.bgTipus === 'imatge' && liveConfig.bgImatgeUrl && (
         <img 
-          src={config.bgImatgeUrl} 
+          src={liveConfig.bgImatgeUrl} 
           alt="Portada Background" 
           className="absolute inset-0 w-full h-full z-0 transition-all duration-700"
           style={{
-            objectPosition: `${config.bgImatgeX ?? 50}% ${config.bgImatgeY ?? 50}%`,
-            objectFit: config.bgImatgeScale || 'cover',
-            opacity: (config.bgImatgeOpacity ?? 40) / 100,
-            filter: `saturate(${config.bgImatgeSaturacio ?? 100}%) brightness(${config.bgImatgeBrightness ?? 100}%)`
+            objectPosition: `${liveConfig.bgImatgeX ?? 50}% ${liveConfig.bgImatgeY ?? 50}%`,
+            objectFit: liveConfig.bgImatgeScale || 'cover',
+            opacity: (liveConfig.bgImatgeOpacity ?? 40) / 100,
+            filter: `saturate(${liveConfig.bgImatgeSaturacio ?? 100}%) brightness(${liveConfig.bgImatgeBrightness ?? 100}%)`
           }}
           referrerPolicy="no-referrer"
         />
       )}
 
-      {config.bgTipus === 'video' && config.bgVideoUrl && (
+      {liveConfig.bgTipus === 'video' && liveConfig.bgVideoUrl && (
         <div className="absolute inset-0 w-full h-full overflow-hidden z-0">
           {isBgYoutubeState ? (
             <iframe
-              src={getYoutubeEmbedUrl(config.bgVideoUrl, true)}
+              src={getYoutubeEmbedUrl(liveConfig.bgVideoUrl, true)}
               title="Youtube Ambient Background"
               className="absolute top-1/2 left-1/2 w-[300%] h-[300%] -translate-x-1/2 -translate-y-1/2 pointer-events-none opacity-20 scale-105"
               frameBorder="0"
@@ -386,7 +429,7 @@ export default function PortadaPage({
             />
           ) : (
             <video
-              src={config.bgVideoUrl}
+              src={liveConfig.bgVideoUrl}
               autoPlay
               loop
               muted
@@ -445,6 +488,7 @@ export default function PortadaPage({
                 : 'text-zinc-400 hover:text-white'
             }`}
             style={language === 'ca' ? { backgroundColor: accentColor } : {}}
+            id="btn-portada-lang-cat"
           >
             CAT
           </button>
@@ -456,6 +500,7 @@ export default function PortadaPage({
                 : 'text-zinc-400 hover:text-white'
             }`}
             style={language === 'es' ? { backgroundColor: accentColor } : {}}
+            id="btn-portada-lang-esp"
           >
             ESP
           </button>
@@ -464,14 +509,14 @@ export default function PortadaPage({
 
       {/* Main content grid */}
       <div className="relative z-10 flex-1 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center py-8 md:py-12">
-          {/* Texts side */}
+        {/* Texts side */}
         <div className="lg:col-span-7 space-y-5 text-left">
           <div className="flex flex-wrap gap-3 items-center">
             {(() => {
-              const badgeStyleType = config.badgeStyle || 'custom';
-              const badgeBg = config.badgeBgColor || accentColor;
-              const badgeTxtColor = config.badgeTextColor || '#ffffff';
-              const badgeBrdColor = config.badgeBorderColor || `${accentColor}40`;
+              const badgeStyleType = liveConfig.badgeStyle || 'custom';
+              const badgeBg = liveConfig.badgeBgColor || accentColor;
+              const badgeTxtColor = liveConfig.badgeTextColor || '#ffffff';
+              const badgeBrdColor = liveConfig.badgeBorderColor || `${accentColor}40`;
 
               let badgeClasses = "inline-flex items-center gap-1.5 px-3 py-1.5 font-mono text-[9px] uppercase tracking-widest font-black transition-all duration-300 shadow-sm ";
               let badgeStyles: React.CSSProperties = {};
@@ -602,7 +647,7 @@ export default function PortadaPage({
         </div>
 
         {/* Media Side (Optional illustration card) */}
-        {config.contingutTipus !== 'none' && (
+        {liveConfig.contingutTipus !== 'none' && (
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -611,30 +656,30 @@ export default function PortadaPage({
           >
             <div className="bg-zinc-950/85 backdrop-blur-md p-3.5 rounded-3xl border border-white/10 shadow-2xl w-full max-w-md overflow-hidden relative group">
               <div className="absolute top-3 left-3 bg-black/60 backdrop-blur-md border border-white/10 px-2.5 py-1 rounded-lg text-[9px] font-mono font-bold tracking-wider uppercase z-20 text-zinc-300 flex items-center gap-1.5">
-                {config.contingutTipus === 'video' ? <Play size={10} style={{ color: accentColor }} className="animate-pulse" /> : <Image size={10} style={{ color: accentColor }} />}
+                {liveConfig.contingutTipus === 'video' ? <Play size={10} style={{ color: accentColor }} className="animate-pulse" /> : <Image size={10} style={{ color: accentColor }} />}
                 {language === 'ca' ? 'Destacat' : 'Destacado'}
               </div>
 
-              {config.contingutTipus === 'imatge' && config.contingutImatgeUrl && (
+              {liveConfig.contingutTipus === 'imatge' && liveConfig.contingutImatgeUrl && (
                 <div className="aspect-[4/3] rounded-2xl overflow-hidden bg-zinc-900 border border-white/5">
                   <img 
-                    src={config.contingutImatgeUrl} 
+                    src={liveConfig.contingutImatgeUrl} 
                     alt="Portada Spotlight content" 
                     className="w-full h-full group-hover:scale-103 transition duration-1000"
                     style={{
-                      objectPosition: `${config.contingutImatgeX ?? 50}% ${config.contingutImatgeY ?? 50}%`,
-                      objectFit: config.contingutImatgeScale || 'cover'
+                      objectPosition: `${liveConfig.contingutImatgeX ?? 50}% ${liveConfig.contingutImatgeY ?? 50}%`,
+                      objectFit: liveConfig.contingutImatgeScale || 'cover'
                     }}
                     referrerPolicy="no-referrer"
                   />
                 </div>
               )}
 
-              {config.contingutTipus === 'video' && config.contingutVideoUrl && (
+              {liveConfig.contingutTipus === 'video' && liveConfig.contingutVideoUrl && (
                 <div className="aspect-[4/3] rounded-2xl overflow-hidden bg-zinc-900 border border-white/5 relative">
                   {isContentYoutubeState ? (
                     <iframe
-                      src={getYoutubeEmbedUrl(config.contingutVideoUrl)}
+                      src={getYoutubeEmbedUrl(liveConfig.contingutVideoUrl)}
                       title="Youtube Spotlight Video"
                       className="w-full h-full"
                       frameBorder="0"
@@ -643,7 +688,7 @@ export default function PortadaPage({
                     />
                   ) : (
                     <video
-                      src={config.contingutVideoUrl}
+                      src={liveConfig.contingutVideoUrl}
                       controls
                       playsInline
                       className="w-full h-full object-cover"
@@ -658,10 +703,10 @@ export default function PortadaPage({
 
       {/* Simple footer with legal link simulation/regulations info */}
       <div 
-        className={`relative z-10 w-full pt-4 border-t flex flex-col sm:flex-row justify-between items-center gap-3 text-[10px] tracking-wider ${config.footerFontMono !== false ? 'font-mono' : 'font-sans'}`}
+        className={`relative z-10 w-full pt-4 border-t flex flex-col sm:flex-row justify-between items-center gap-3 text-[10px] tracking-wider ${liveConfig.footerFontMono !== false ? 'font-mono' : 'font-sans'}`}
         style={{ 
           color: footerTextColor,
-          borderTopColor: config.footerBorderTopColor || 'rgba(255, 255, 255, 0.1)',
+          borderTopColor: liveConfig.footerBorderTopColor || 'rgba(255, 255, 255, 0.1)',
           ...footerTextStyle 
         }}
         id="portada-landing-footer"

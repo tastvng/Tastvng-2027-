@@ -7,12 +7,39 @@ import { useToast } from '../hooks/useToast';
 import { saveLogger } from '../services/SaveLogger';
 import { useActiveYear } from '../hooks/useActiveYear';
 
+export const DEFAULT_PORTADA_DATA = {
+  ca: {
+    heading: "Inscripcions Comparses El Tast 2027",
+    welcome: "BENVINGUTS AL ESPAI DE REGISTRE OFICIAL DEL TAST",
+    description: "Enguany us presentem un qüestionari àgil i integrat amb el nostre sistema de secretaria digital de l'Associació Cultural El Tast. Prepara el teu DNI, escolleix la teva talla d'armilla o samarreta, i obtén el teu QR instantani per recollir el mocador oficial sense cues a la seu social!",
+    buttonText: "Inscripció en línia",
+    badgeText: "Inscripcions Obertes 2027",
+    footerText: "© 2027 ASSOCIACIÓ COMPARSES EL TAST • VILANOVA",
+    footerLink1Label: "Normativa",
+    footerLink2Label: "secretaria@eltast.cat",
+    adminBtn: "Accés Secretaria",
+    destacat: "Destacat"
+  },
+  es: {
+    heading: "Inscripciones Comparses El Tast 2027",
+    welcome: "BIENVENIDOS AL ESPACIO DE REGISTRO OFICIAL DEL TAST",
+    description: "Este año os presentamos un cuestionario ágil e integrado con nuestro sistema de secretaría digital de la Asociación Cultural El Tast. ¡Prepara tu DNI, elige tu talla de chaleco o camiseta, y obtén tu QR instantáneo para recoger el pañuelo oficial sin colas en la sede social!",
+    buttonText: "Inscripción en línea",
+    badgeText: "Inscripciones Abiertas 2027",
+    footerText: "© 2027 ASOCIACIÓN COMPARSAS EL TAST • VILANOVA",
+    footerLink1Label: "Normativa",
+    footerLink2Label: "secretaria@eltast.cat",
+    adminBtn: "Acceso Secretaría",
+    destacat: "Destacado"
+  }
+};
+
 export const PORTADA_CONFIG_DEFAULTS: PortadaConfig = {
   activa: true,
   titolCA: 'Inscripcions Comparses El Tast 2027',
   titolES: 'Inscripciones Comparses El Tast 2027',
-  subtitolCA: "Benvingut a l'espai de registre oficial del Tast",
-  subtitolES: 'Bienvenido al espacio de registro oficial del Tast',
+  subtitolCA: "BENVINGUTS AL ESPAI DE REGISTRE OFICIAL DEL TAST",
+  subtitolES: "BIENVENIDOS AL ESPACIO DE REGISTRO OFICIAL DEL TAST",
   descripcioCA: "Enguany us presentem un qüestionari àgil i integrat amb el nostre sistema de secretaria digital de l'Associació Cultural El Tast. Prepara el teu DNI, escolleix la teva talla d'armilla o samarreta, i obtén el teu QR instantani per recollir el mocador oficial sense cues a la seu social!",
   descripcioES: 'Este año os presentamos un cuestionario ágil e integrado con nuestro sistema de secretaría digital de la Asociación Cultural El Tast. ¡Prepara tu DNI, elige tu talla de chaleco o camiseta, y obtén tu QR instantáneo para recoger el pañuelo oficial sin colas en la sede social!',
   
@@ -49,8 +76,8 @@ export const PORTADA_CONFIG_DEFAULTS: PortadaConfig = {
   botoTextColor: '#ffffff',
 
   // Badge customization defaults
-  badgeTextCA: 'Inscripcions Obertes 2026',
-  badgeTextES: 'Inscripciones Abiertas 2026',
+  badgeTextCA: 'Inscripcions Obertes 2027',
+  badgeTextES: 'Inscripciones Abiertas 2027',
   badgeIcon: 'compass',
   badgeStyle: 'custom',
   badgeBgColor: '#ff0090',
@@ -59,8 +86,8 @@ export const PORTADA_CONFIG_DEFAULTS: PortadaConfig = {
   badgeSpinIcon: true,
 
   // Footer customization defaults
-  footerTextCA: '© 2026 ASSOCIACIÓ COMPARSES EL TAST • VILANOVA',
-  footerTextES: '© 2026 ASOCIACIÓN COMPARSAS EL TAST • VILANOVA',
+  footerTextCA: '© 2027 ASSOCIACIÓ COMPARSES EL TAST • VILANOVA',
+  footerTextES: '© 2027 ASOCIACIÓN COMPARSAS EL TAST • VILANOVA',
   footerLink1LabelCA: 'Normativa',
   footerLink1LabelES: 'Normativa',
   footerLink1Url: '#',
@@ -92,15 +119,102 @@ export const PORTADA_CONFIG_DEFAULTS: PortadaConfig = {
   cuestionariActiu: true,
   ca: {
     heading: "Inscripcions Comparses El Tast 2027",
-    welcome: "Benvingut a l'espai de registre oficial del Tast",
-    description: "Enguany us presentem un qüestionari àgil i integrat amb el nostre sistema de secretaria digital de l'Associació Cultural El Tast. Prepara el teu DNI, escolleix la teva talla d'armilla o samarreta, i obtén el teu QR instantani per recollir el mocador oficial sense cues a la seu social!"
+    welcome: "BENVINGUTS AL ESPAI DE REGISTRE OFICIAL DEL TAST",
+    description: "Enguany us presentem un qüestionari àgil i integrat amb el nostre sistema de secretaria digital de l'Associació Cultural El Tast. Prepara el teu DNI, escolleix la teva talla d'armilla o samarreta, i obtén el teu QR instantani per recollir el mocador oficial sense cues a la seu social!",
+    buttonText: "Inscripció en línia",
+    badgeText: "Inscripcions Obertes 2027",
+    footerText: "© 2027 ASSOCIACIÓ COMPARSES EL TAST • VILANOVA"
   },
   es: {
     heading: "Inscripciones Comparses El Tast 2027",
-    welcome: "Bienvenido al espacio de registro oficial del Tast",
-    description: "Este año os presentamos un cuestionario ágil e integrado con nuestro sistema de secretaría digital de la Asociación Cultural El Tast. ¡Prepara tu DNI, elige tu talla de chaleco o camiseta, y obtén tu QR instantáneo para recoger el pañuelo oficial sin colas en la sede social!"
+    welcome: "BIENVENIDOS AL ESPACIO DE REGISTRO OFICIAL DEL TAST",
+    description: "Este año os presentamos un cuestionario ágil e integrado con nuestro sistema de secretaría digital de la Asociación Cultural El Tast. ¡Prepara tu DNI, elige tu talla de chaleco o camiseta, y obtén tu QR instantáneo para recoger el pañuelo oficial sin colas en la sede social!",
+    buttonText: "Inscripción en línea",
+    badgeText: "Inscripciones Abiertas 2027",
+    footerText: "© 2027 ASOCIACIÓN COMPARSAS EL TAST • VILANOVA"
   }
 };
+
+export function ensureValidPortadaConfig(raw: any, activeYear: string = '2027'): PortadaConfig {
+  const base = { ...PORTADA_CONFIG_DEFAULTS, ...(raw || {}) };
+  
+  // 1. Process Catalan heading
+  let caHeading = raw?.ca?.heading || raw?.titolCA || '';
+  if (!caHeading || caHeading.trim().toLowerCase().startsWith('inscripciones')) {
+    caHeading = `Inscripcions Comparses El Tast ${activeYear}`;
+  }
+
+  // 2. Process Catalan welcome
+  let caWelcome = raw?.ca?.welcome || raw?.subtitolCA || '';
+  if (!caWelcome || caWelcome.trim().toLowerCase().includes('bienvenido')) {
+    caWelcome = "BENVINGUTS AL ESPAI DE REGISTRE OFICIAL DEL TAST";
+  }
+
+  // 3. Process Catalan description
+  let caDesc = raw?.ca?.description || raw?.descripcioCA || '';
+  if (!caDesc || caDesc.trim().toLowerCase().includes('este año') || caDesc.trim().toLowerCase().includes('asociación')) {
+    caDesc = "Enguany us presentem un qüestionari àgil i integrat amb el nostre sistema de secretaria digital de l'Associació Cultural El Tast. Prepara el teu DNI, escolleix la teva talla d'armilla o samarreta, i obtén el teu QR instantani per recollir el mocador oficial sense cues a la seu social!";
+  }
+
+  // 4. Process Spanish heading
+  let esHeading = raw?.es?.heading || raw?.titolES || '';
+  if (!esHeading || esHeading.trim().toLowerCase().startsWith('inscripcions')) {
+    esHeading = `Inscripciones Comparses El Tast ${activeYear}`;
+  }
+
+  // 5. Process Spanish welcome
+  let esWelcome = raw?.es?.welcome || raw?.subtitolES || '';
+  if (!esWelcome || esWelcome.trim().toLowerCase().includes('benvingut')) {
+    esWelcome = "BIENVENIDOS AL ESPACIO DE REGISTRO OFICIAL DEL TAST";
+  }
+
+  // 6. Process Spanish description
+  let esDesc = raw?.es?.description || raw?.descripcioES || '';
+  if (!esDesc || esDesc.trim().toLowerCase().includes('enguany') || esDesc.trim().toLowerCase().includes('associació')) {
+    esDesc = "Este año os presentamos un cuestionario ágil e integrado con nuestro sistema de secretaría digital de la Asociación Cultural El Tast. ¡Prepara tu DNI, elige tu talla de chaleco o camiseta, y obtén tu QR instantáneo para recoger el pañuelo oficial sin colas en la sede social!";
+  }
+
+  const caBtn = raw?.ca?.buttonText || raw?.botoTextCA || 'Inscripció en línia';
+  const esBtn = raw?.es?.buttonText || raw?.botoTextES || 'Inscripción en línea';
+
+  const caBadge = raw?.ca?.badgeText || raw?.badgeTextCA || `Inscripcions Obertes ${activeYear}`;
+  const esBadge = raw?.es?.badgeText || raw?.badgeTextES || `Inscripciones Abiertas ${activeYear}`;
+
+  const caFooter = raw?.ca?.footerText || raw?.footerTextCA || `© ${activeYear} ASSOCIACIÓ COMPARSES EL TAST • VILANOVA`;
+  const esFooter = raw?.es?.footerText || raw?.footerTextES || `© ${activeYear} ASOCIACIÓN COMPARSAS EL TAST • VILANOVA`;
+
+  return {
+    ...base,
+    titolCA: caHeading,
+    titolES: esHeading,
+    subtitolCA: caWelcome,
+    subtitolES: esWelcome,
+    descripcioCA: caDesc,
+    descripcioES: esDesc,
+    botoTextCA: caBtn,
+    botoTextES: esBtn,
+    badgeTextCA: caBadge,
+    badgeTextES: esBadge,
+    footerTextCA: caFooter,
+    footerTextES: esFooter,
+    ca: {
+      heading: caHeading,
+      welcome: caWelcome,
+      description: caDesc,
+      buttonText: caBtn,
+      badgeText: caBadge,
+      footerText: caFooter
+    },
+    es: {
+      heading: esHeading,
+      welcome: esWelcome,
+      description: esDesc,
+      buttonText: esBtn,
+      badgeText: esBadge,
+      footerText: esFooter
+    }
+  };
+}
 
 interface AdminPortadaProps {
   language?: 'ca' | 'es';
@@ -142,7 +256,8 @@ export default function AdminPortada({ onAddLog }: AdminPortadaProps) {
       try {
         const dbConfig = await getSupabaseSettings();
         if (dbConfig) {
-          setConfig({ ...PORTADA_CONFIG_DEFAULTS, ...dbConfig });
+          const validated = ensureValidPortadaConfig(dbConfig, activeYear);
+          setConfig(validated);
         }
         
         const { getSupabaseSetting } = await import('../supabaseClient');
@@ -255,8 +370,11 @@ export default function AdminPortada({ onAddLog }: AdminPortadaProps) {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    const configToSave = ensureValidPortadaConfig(config, activeYear);
+    setConfig(configToSave);
+
     // Save to localStorage as a fast local copy fallback
-    localStorage.setItem('tast_portada_config_2026', JSON.stringify(config));
+    localStorage.setItem('tast_portada_config_2026', JSON.stringify(configToSave));
     localStorage.setItem('estat_inscripcio_global', estatInscripcions);
     
     const scJson = localStorage.getItem('tast_config_2026');
@@ -272,7 +390,7 @@ export default function AdminPortada({ onAddLog }: AdminPortadaProps) {
       // Save to Supabase using settings table
       let synced = false;
       if (isSupabaseConfigured) {
-        synced = await saveSupabaseSettings(config);
+        synced = await saveSupabaseSettings(configToSave);
         
         const { getSupabaseSetting, saveSupabaseSetting } = await import('../supabaseClient');
         const sc = await getSupabaseSetting('tast_config_2026', null);

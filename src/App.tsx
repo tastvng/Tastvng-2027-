@@ -51,7 +51,7 @@ import AdminScanner from './components/AdminScanner';
 import NotificationFeed from './components/NotificationFeed';
 import MobileRemoteScanner from './components/MobileRemoteScanner';
 import PortadaPage, { PortadaConfig } from './components/PortadaPage';
-import { PORTADA_CONFIG_DEFAULTS } from './components/AdminPortada';
+import { PORTADA_CONFIG_DEFAULTS, ensureValidPortadaConfig } from './components/AdminPortada';
 import { 
   supabase,
   isSupabaseConfigured, 
@@ -75,10 +75,10 @@ export default function App() {
     try {
       const saved = localStorage.getItem('tast_portada_config_2026');
       if (saved) {
-        return { ...PORTADA_CONFIG_DEFAULTS, ...JSON.parse(saved) };
+        return ensureValidPortadaConfig(JSON.parse(saved), activeYear);
       }
     } catch (e) {}
-    return PORTADA_CONFIG_DEFAULTS;
+    return ensureValidPortadaConfig(PORTADA_CONFIG_DEFAULTS, activeYear);
   });
 
   // Navigation Routing States
@@ -104,10 +104,10 @@ export default function App() {
       try {
         const dbConfig = await getSupabaseSetting<PortadaConfig | null>('tast_portada_config_2026', null);
         if (dbConfig) {
-          const merged = { ...PORTADA_CONFIG_DEFAULTS, ...dbConfig };
-          setPortadaConfig(merged);
+          const validated = ensureValidPortadaConfig(dbConfig, activeYear);
+          setPortadaConfig(validated);
           // Auto route to public if the loaded Supabase landing page is set to inactive
-          if (merged.activa === false && view === 'portada') {
+          if (validated.activa === false && view === 'portada') {
             setView('public');
           }
         }
@@ -116,7 +116,7 @@ export default function App() {
       }
     }
     loadConfigFromSupabase();
-  }, [view]);
+  }, [view, activeYear]);
 
   // Sync Portada state dynamically with localStorage & Supabase changes
   useEffect(() => {
@@ -126,14 +126,16 @@ export default function App() {
           if (isSupabaseConfigured) {
             const dbConfig = await getSupabaseSetting<PortadaConfig | null>('tast_portada_config_2026', null);
             if (dbConfig) {
-              setPortadaConfig({ ...PORTADA_CONFIG_DEFAULTS, ...dbConfig });
+              const validated = ensureValidPortadaConfig(dbConfig, activeYear);
+              setPortadaConfig(validated);
               return;
             }
           }
           
           const saved = localStorage.getItem('tast_portada_config_2026');
           if (saved) {
-            setPortadaConfig({ ...PORTADA_CONFIG_DEFAULTS, ...JSON.parse(saved) });
+            const validated = ensureValidPortadaConfig(JSON.parse(saved), activeYear);
+            setPortadaConfig(validated);
           }
         } catch (e) {
           console.warn("Handled error in handlePortadaChange:", e);
@@ -250,9 +252,9 @@ export default function App() {
           // 4. Fetch extra customization settings
           const dbPortada = await getSupabaseSetting<PortadaConfig | null>('tast_portada_config_2026', null);
           if (dbPortada) {
-            const merged = { ...PORTADA_CONFIG_DEFAULTS, ...dbPortada };
-            setPortadaConfig(merged);
-            localStorage.setItem('tast_portada_config_2026', JSON.stringify(merged));
+            const validated = ensureValidPortadaConfig(dbPortada, activeYear);
+            setPortadaConfig(validated);
+            localStorage.setItem('tast_portada_config_2026', JSON.stringify(validated));
           }
 
           const lg = await getSupabaseSetting('tast_email_logo', '');
