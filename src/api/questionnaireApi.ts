@@ -12,27 +12,32 @@ import { PreguntaDinamica } from '../types';
  */
 export async function cargarPreguntes(): Promise<PreguntaDinamica[]> {
   if (!isSupabaseConfigured || !supabase) {
-    throw new Error('Supabase client is not configured');
+    return [];
   }
 
-  const { data, error } = await supabase
-    .from('preguntes')
-    .select('*')
-    .order('ordre', { ascending: true });
+  try {
+    const { data, error } = await supabase
+      .from('preguntes')
+      .select('*')
+      .order('ordre', { ascending: true });
 
-  if (error) {
-    console.error('Error fetching questions from Supabase table "preguntes":', error);
-    throw error;
+    if (error) {
+      console.warn('Warning fetching questions from Supabase table "preguntes":', error.message || error);
+      return [];
+    }
+
+    return (data || []).map((row: any) => ({
+      id: String(row.id),
+      titol: row.titol,
+      tipus: row.tipus as 'text' | 'select' | 'boolean',
+      opcions: Array.isArray(row.opcions) ? row.opcions : undefined,
+      requerit: !!row.requerit,
+      activa: !!row.activa
+    }));
+  } catch (err) {
+    console.warn('Exception in cargarPreguntes:', err);
+    return [];
   }
-
-  return (data || []).map((row: any) => ({
-    id: String(row.id),
-    titol: row.titol,
-    tipus: row.tipus as 'text' | 'select' | 'boolean',
-    opcions: Array.isArray(row.opcions) ? row.opcions : undefined,
-    requerit: !!row.requerit,
-    activa: !!row.activa
-  }));
 }
 
 /**

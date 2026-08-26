@@ -120,23 +120,25 @@ export default function App() {
 
   // Sync Portada state dynamically with localStorage & Supabase changes
   useEffect(() => {
-    const handlePortadaChange = async () => {
-      try {
-        if (isSupabaseConfigured) {
-          const dbConfig = await getSupabaseSetting<PortadaConfig | null>('tast_portada_config_2026', null);
-          if (dbConfig) {
-            setPortadaConfig({ ...PORTADA_CONFIG_DEFAULTS, ...dbConfig });
-            return;
+    const handlePortadaChange = () => {
+      (async () => {
+        try {
+          if (isSupabaseConfigured) {
+            const dbConfig = await getSupabaseSetting<PortadaConfig | null>('tast_portada_config_2026', null);
+            if (dbConfig) {
+              setPortadaConfig({ ...PORTADA_CONFIG_DEFAULTS, ...dbConfig });
+              return;
+            }
           }
+          
+          const saved = localStorage.getItem('tast_portada_config_2026');
+          if (saved) {
+            setPortadaConfig({ ...PORTADA_CONFIG_DEFAULTS, ...JSON.parse(saved) });
+          }
+        } catch (e) {
+          console.warn("Handled error in handlePortadaChange:", e);
         }
-        
-        const saved = localStorage.getItem('tast_portada_config_2026');
-        if (saved) {
-          setPortadaConfig({ ...PORTADA_CONFIG_DEFAULTS, ...JSON.parse(saved) });
-        }
-      } catch (e) {
-        console.error(e);
-      }
+      })().catch(err => console.warn("Unhandled promise catch in handlePortadaChange:", err));
     };
     window.addEventListener('portadaConfigChanged', handlePortadaChange);
     return () => {

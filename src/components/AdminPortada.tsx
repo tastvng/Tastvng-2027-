@@ -9,10 +9,10 @@ import { useActiveYear } from '../hooks/useActiveYear';
 
 export const PORTADA_CONFIG_DEFAULTS: PortadaConfig = {
   activa: true,
-  titolCA: 'Inscripcions Comparses El Tast 2026',
-  titolES: 'Inscripciones Comparses El Tast 2026',
-  subtitolCA: "Benvinguts a l'espai de registre oficial de la parella saltadora",
-  subtitolES: 'Bienvenidos al espacio de registro oficial de la pareja saltadora',
+  titolCA: 'Inscripcions Comparses El Tast 2027',
+  titolES: 'Inscripciones Comparses El Tast 2027',
+  subtitolCA: "Benvingut a l'espai de registre oficial del Tast",
+  subtitolES: 'Bienvenido al espacio de registro oficial del Tast',
   descripcioCA: "Enguany us presentem un qüestionari àgil i integrat amb el nostre sistema de secretaria digital de l'Associació Cultural El Tast. Prepara el teu DNI, escolleix la teva talla d'armilla o samarreta, i obtén el teu QR instantani per recollir el mocador oficial sense cues a la seu social!",
   descripcioES: 'Este año os presentamos un cuestionario ágil e integrado con nuestro sistema de secretaría digital de la Asociación Cultural El Tast. ¡Prepara tu DNI, elige tu talla de chaleco o camiseta, y obtén tu QR instantáneo para recoger el pañuelo oficial sin colas en la sede social!',
   
@@ -381,7 +381,22 @@ export default function AdminPortada({ onAddLog }: AdminPortadaProps) {
   };
 
   const updateField = <K extends keyof PortadaConfig>(field: K, value: PortadaConfig[K]) => {
-    setConfig(prev => ({ ...prev, [field]: value }));
+    setConfig(prev => {
+      const next = { ...prev, [field]: value };
+      if (field === 'titolCA') next.ca = { ...next.ca, heading: value as string };
+      if (field === 'titolES') next.es = { ...next.es, heading: value as string };
+      if (field === 'subtitolCA') next.ca = { ...next.ca, welcome: value as string };
+      if (field === 'subtitolES') next.es = { ...next.es, welcome: value as string };
+      if (field === 'descripcioCA') next.ca = { ...next.ca, description: value as string };
+      if (field === 'descripcioES') next.es = { ...next.es, description: value as string };
+      if (field === 'botoTextCA') next.ca = { ...next.ca, buttonText: value as string };
+      if (field === 'botoTextES') next.es = { ...next.es, buttonText: value as string };
+      if (field === 'badgeTextCA') next.ca = { ...next.ca, badgeText: value as string };
+      if (field === 'badgeTextES') next.es = { ...next.es, badgeText: value as string };
+      if (field === 'footerTextCA') next.ca = { ...next.ca, footerText: value as string };
+      if (field === 'footerTextES') next.es = { ...next.es, footerText: value as string };
+      return next;
+    });
   };
 
   const [autoTranslate, setAutoTranslate] = useState(true);

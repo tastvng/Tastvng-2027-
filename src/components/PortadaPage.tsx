@@ -161,7 +161,9 @@ export default function PortadaPage({
         console.error("Error doing live mount fetch on PortadaPage:", err);
       }
     }
-    loadLiveSupabaseAssets();
+    loadLiveSupabaseAssets().catch(err => {
+      console.warn("Handled error in loadLiveSupabaseAssets:", err);
+    });
 
     window.addEventListener('storage', loadLogo);
     window.addEventListener('hoursConfigChanged', loadLogo);
@@ -198,37 +200,47 @@ export default function PortadaPage({
     }
   };
 
-  const caConfig = config?.ca || {};
-  const esConfig = config?.es || {};
+  const rawTitol = language === 'ca'
+    ? (config?.ca?.heading || config?.titolCA || 'Inscripcions Comparses El Tast 2027')
+    : (config?.es?.heading || config?.titolES || 'Inscripciones Comparses El Tast 2027');
+  const titol = rawTitol.replace(/2026/g, activeYear).replace(/2027/g, activeYear);
 
-  const rawTitol = (language === 'ca' ? (caConfig.heading || config.titolCA) : (esConfig.heading || config.titolES)) || (language === 'ca' ? (esConfig.heading || config.titolES) : (caConfig.heading || config.titolCA)) || '';
-  const rawSubtitol = (language === 'ca' ? (caConfig.welcome || config.subtitolCA) : (esConfig.welcome || config.subtitolES)) || (language === 'ca' ? (esConfig.welcome || config.subtitolES) : (caConfig.welcome || config.subtitolCA)) || '';
-  const rawDescripcio = (language === 'ca' ? (caConfig.description || config.descripcioCA) : (esConfig.description || config.descripcioES)) || (language === 'ca' ? (esConfig.description || config.descripcioES) : (caConfig.description || config.descripcioCA)) || '';
-  const rawBotoText = (language === 'ca' ? (caConfig.buttonText || config.botoTextCA) : (esConfig.buttonText || config.botoTextES)) || (language === 'ca' ? (esConfig.buttonText || config.botoTextES) : (caConfig.buttonText || config.botoTextCA)) || '';
+  const rawSubtitol = language === 'ca'
+    ? (config?.ca?.welcome || config?.subtitolCA || "Benvingut a l'espai de registre oficial del Tast")
+    : (config?.es?.welcome || config?.subtitolES || "Bienvenido al espacio de registro oficial del Tast");
+  const subtitol = rawSubtitol.replace(/2026/g, activeYear).replace(/2027/g, activeYear);
 
-  const titol = useTranslatedText(rawTitol);
-  const subtitol = useTranslatedText(rawSubtitol);
-  const descripcio = useTranslatedText(rawDescripcio);
-  const botoText = useTranslatedText(rawBotoText);
+  const rawDescripcio = language === 'ca'
+    ? (config?.ca?.description || config?.descripcioCA || "Enguany us presentem un qüestionari àgil i integrat amb el nostre sistema de secretaria digital de l'Associació Cultural El Tast. Prepara el teu DNI, escolleix la teva talla d'armilla o samarreta, i obtén el teu QR instantani per recollir el mocador oficial sense cues a la seu social!")
+    : (config?.es?.description || config?.descripcioES || "Este año os presentamos un cuestionario ágil e integrado con nuestro sistema de secretaría digital de la Asociación Cultural El Tast. ¡Prepara tu DNI, elige tu talla de chaleco o camiseta, y obtén tu QR instantáneo para recoger el pañuelo oficial sin colas en la sede social!");
+  const descripcio = rawDescripcio.replace(/2026/g, activeYear).replace(/2027/g, activeYear);
+
+  const rawBotoText = language === 'ca'
+    ? (config?.ca?.buttonText || config?.botoTextCA || 'Inscripció en línia')
+    : (config?.es?.buttonText || config?.botoTextES || 'Inscripción en línea');
+  const botoText = rawBotoText.replace(/2026/g, activeYear).replace(/2027/g, activeYear);
 
   const rawBadgeText = globalEstatInscripcions === 'tancades'
     ? (language === 'ca' ? 'Inscripcions Tancades' : 'Inscripciones Cerradas')
     : globalEstatInscripcions === 'espera'
       ? (language === 'ca' ? `Llista d'Espera ${activeYear}` : `Lista de Espera ${activeYear}`)
       : (language === 'ca' 
-          ? (caConfig.badgeText || config.badgeTextCA || `Inscripcions Obertes ${activeYear}`) 
-          : (esConfig.badgeText || config.badgeTextES || `Inscripciones Abiertas ${activeYear}`));
-  const badgeText = useTranslatedText(rawBadgeText);
+          ? (config?.ca?.badgeText || config?.badgeTextCA || `Inscripcions Obertes ${activeYear}`) 
+          : (config?.es?.badgeText || config?.badgeTextES || `Inscripciones Abiertas ${activeYear}`));
+  const badgeText = rawBadgeText.replace(/2026/g, activeYear).replace(/2027/g, activeYear);
 
-  const rawFooterText = (language === 'ca' ? (caConfig.footerText || config.footerTextCA) : (esConfig.footerText || config.footerTextES)) || (language === 'ca' ? (esConfig.footerText || config.footerTextES) : (caConfig.footerText || config.footerTextCA)) || `© ${activeYear} ASSOCIACIÓ COMPARSES EL TAST • VILANOVA`;
-  const footerTextRaw = useTranslatedText(rawFooterText);
-  const footerText = footerTextRaw.replace(/2026/g, activeYear).replace(/2027/g, activeYear);
+  const rawFooterText = language === 'ca'
+    ? (config?.ca?.footerText || config?.footerTextCA || `© ${activeYear} ASSOCIACIÓ COMPARSES EL TAST • VILANOVA`)
+    : (config?.es?.footerText || config?.footerTextES || `© ${activeYear} ASOCIACIÓN COMPARSAS EL TAST • VILANOVA`);
+  const footerText = rawFooterText.replace(/2026/g, activeYear).replace(/2027/g, activeYear);
 
-  const rawFooterLink1Label = (language === 'ca' ? config.footerLink1LabelCA : config.footerLink1LabelES) || (language === 'ca' ? config.footerLink1LabelES : config.footerLink1LabelCA) || 'Normativa';
-  const footerLink1Label = useTranslatedText(rawFooterLink1Label);
+  const footerLink1Label = language === 'ca'
+    ? (config?.footerLink1LabelCA || 'Normativa')
+    : (config?.footerLink1LabelES || 'Normativa');
 
-  const rawFooterLink2Label = (language === 'ca' ? config.footerLink2LabelCA : config.footerLink2LabelES) || (language === 'ca' ? config.footerLink2LabelES : config.footerLink2LabelCA) || 'secretaria@eltast.cat';
-  const footerLink2Label = useTranslatedText(rawFooterLink2Label);
+  const footerLink2Label = language === 'ca'
+    ? (config?.footerLink2LabelCA || 'secretaria@eltast.cat')
+    : (config?.footerLink2LabelES || 'secretaria@eltast.cat');
 
   const footerLink1Url = config.footerLink1Url || '#';
   const footerLink2Url = config.footerLink2Url || 'mailto:secretaria@eltast.cat';

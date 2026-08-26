@@ -166,18 +166,22 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
       }
     };
     
-    loadDynamicPrices();
+    const handleEvent = () => {
+      loadDynamicPrices().catch(err => console.warn("Handled error in loadDynamicPrices:", err));
+    };
+
+    handleEvent();
     
     // Refresh prices automatically on event triggers
-    window.addEventListener('hoursConfigChanged', loadDynamicPrices);
-    window.addEventListener('eventDataChanged', loadDynamicPrices);
-    window.addEventListener('localStorage', loadDynamicPrices);
+    window.addEventListener('hoursConfigChanged', handleEvent);
+    window.addEventListener('eventDataChanged', handleEvent);
+    window.addEventListener('localStorage', handleEvent);
     
     return () => {
       active = false;
-      window.removeEventListener('hoursConfigChanged', loadDynamicPrices);
-      window.removeEventListener('eventDataChanged', loadDynamicPrices);
-      window.removeEventListener('localStorage', loadDynamicPrices);
+      window.removeEventListener('hoursConfigChanged', handleEvent);
+      window.removeEventListener('eventDataChanged', handleEvent);
+      window.removeEventListener('localStorage', handleEvent);
     };
   }, []);
 

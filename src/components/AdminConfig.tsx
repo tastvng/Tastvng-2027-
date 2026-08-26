@@ -806,8 +806,15 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                       <button
                         type="button"
                         onClick={() => {
-                          navigator.clipboard.writeText(appsScriptCode);
-                          alert(language === 'ca' ? "Codi d'Apps Script copiat!" : "¡Código de Apps Script copiado!");
+                          if (navigator.clipboard && navigator.clipboard.writeText) {
+                            navigator.clipboard.writeText(appsScriptCode).then(() => {
+                              alert(language === 'ca' ? "Codi d'Apps Script copiat!" : "¡Código de Apps Script copiado!");
+                            }).catch(() => {
+                              alert(language === 'ca' ? "Seleccioneu i copieu el text manualment." : "Seleccione y copie el texto manualmente.");
+                            });
+                          } else {
+                            alert(language === 'ca' ? "Seleccioneu i copieu el text manualment." : "Seleccione y copie el texto manualmente.");
+                          }
                         }}
                         className="absolute right-2.5 top-2.5 bg-white/15 hover:bg-white/20 active:scale-95 text-white py-1 px-2 rounded-lg text-[9px] uppercase font-sans font-black transition cursor-pointer select-none"
                       >

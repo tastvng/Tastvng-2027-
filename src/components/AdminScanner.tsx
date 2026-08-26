@@ -1573,9 +1573,18 @@ export default function AdminScanner({
                 type="button"
                 onClick={() => {
                   const url = `${window.location.origin}${window.location.pathname}?mode=mobile-scanner&syncKey=${syncKey}`;
-                  navigator.clipboard.writeText(url);
-                  setCopiedLink(true);
-                  setTimeout(() => setCopiedLink(false), 2000);
+                  if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(url).then(() => {
+                      setCopiedLink(true);
+                      setTimeout(() => setCopiedLink(false), 2000);
+                    }).catch(() => {
+                      setCopiedLink(true);
+                      setTimeout(() => setCopiedLink(false), 2000);
+                    });
+                  } else {
+                    setCopiedLink(true);
+                    setTimeout(() => setCopiedLink(false), 2000);
+                  }
                 }}
                 className="w-full py-2.5 px-4 bg-zinc-800 hover:bg-zinc-750 text-white font-bold text-xs rounded-xl transition flex items-center justify-center gap-1.5 border border-white/5 cursor-pointer"
               >
