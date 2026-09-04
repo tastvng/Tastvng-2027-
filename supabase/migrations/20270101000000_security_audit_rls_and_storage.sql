@@ -147,3 +147,16 @@ CREATE POLICY auth_manage_dnis ON storage.objects
   FOR ALL TO authenticated
   USING (bucket_id = 'dnis')
   WITH CHECK (bucket_id = 'dnis');
+
+-- 4. ALTERNATIVE TABLE 'INSCRIPCIONS' (IF PRESENT IN SUPABASE)
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'inscripcions') THEN
+    EXECUTE 'ALTER TABLE public.inscripcions ENABLE ROW LEVEL SECURITY;';
+    EXECUTE 'DROP POLICY IF EXISTS "anon_insert_inscripcions" ON public.inscripcions;';
+    EXECUTE 'DROP POLICY IF EXISTS "auth_all_inscripcions" ON public.inscripcions;';
+    EXECUTE 'CREATE POLICY anon_insert_inscripcions ON public.inscripcions FOR INSERT TO anon WITH CHECK (true);';
+    EXECUTE 'CREATE POLICY auth_all_inscripcions ON public.inscripcions FOR ALL TO authenticated USING (true) WITH CHECK (true);';
+  END IF;
+END $$;
+

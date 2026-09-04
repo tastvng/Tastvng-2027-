@@ -277,7 +277,9 @@ export default function App() {
           const hrEs = await getSupabaseSetting('tast_secretaria_hours_es', '');
           const evName = await getSupabaseSetting('tast_nom_esdeveniment', '');
           const evAddr = await getSupabaseSetting('tast_direccio_esdeveniment', '');
-          const smpUsr = await getSupabaseSetting('tast_smtp_usuari', '');
+
+          // Proactively purge any obsolete SMTP keys from client storage
+          ['tast_smtp_host', 'tast_smtp_port', 'tast_smtp_usuari', 'tast_smtp_contrasenya', 'tast_smtp_from'].forEach(k => localStorage.removeItem(k));
 
           if (lg) {
             localStorage.setItem('tast_email_logo', lg);
@@ -287,7 +289,6 @@ export default function App() {
           if (hrEs) localStorage.setItem('tast_secretaria_hours_es', hrEs);
           if (evName) localStorage.setItem('tast_nom_esdeveniment', evName);
           if (evAddr) localStorage.setItem('tast_direccio_esdeveniment', evAddr);
-          if (smpUsr) localStorage.setItem('tast_smtp_usuari', smpUsr);
 
           if (hrCa || hrEs) {
             setHoursConfig({

@@ -332,11 +332,13 @@ export default function Confirmation({ registration, onClear, onUpdate }: Confir
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
+            codiSeguiment: registration.codiSeguiment,
             emailData: {
               to: emailTo,
               subject: emailSubject,
               html: emailHtml,
-              attachments: emailAttachments
+              attachments: emailAttachments,
+              codiSeguiment: registration.codiSeguiment
             }
           })
         }).catch(err => {
@@ -725,7 +727,7 @@ export default function Confirmation({ registration, onClear, onUpdate }: Confir
 
         {/* Real-time micro details */}
         <div className="mt-3 space-y-1 font-mono text-[10px] text-zinc-400">
-          <p><span className="text-zinc-600 font-bold">DE:</span> <span className="text-fuchsia-400 font-bold">{localStorage.getItem('tast_smtp_usuari') || 'tastvng@gmail.com'}</span> <span className="text-[8px] bg-white/5 border border-white/10 px-1 py-0.5 rounded text-zinc-300 uppercase ml-1 uppercase">Live Connection</span></p>
+          <p><span className="text-zinc-600 font-bold">DE:</span> <span className="text-fuchsia-400 font-bold">secretaria@eltast.cat</span> <span className="text-[8px] bg-white/5 border border-white/10 px-1 py-0.5 rounded text-zinc-300 uppercase ml-1 uppercase">Live Connection</span></p>
           <p><span className="text-zinc-600 font-bold">A:</span> <span className="text-zinc-200 font-bold">{registration.c1Email}</span>, <span className="text-zinc-200 font-bold">{registration.c2Email}</span></p>
           <p><span className="text-zinc-600 font-bold">ASSUMPTE / ASUNTO:</span> <span className="text-zinc-200 font-sans">{language === 'ca' ? `${subSubjectCa} ${registration.codiSeguiment}` : `${subSubjectEs} ${registration.codiSeguiment}`}</span></p>
           
@@ -842,7 +844,7 @@ export default function Confirmation({ registration, onClear, onUpdate }: Confir
                 <div className="text-center text-[8px] text-zinc-400 pt-3 border-t border-zinc-100 leading-normal space-y-0.5">
                   <p className="font-bold">Secretaria General d'Associació Cultural El Tast de Vilanova</p>
                   <p>{direccioEsdeveniment}</p>
-                  <p className="font-bold text-fuchsia-650">{localStorage.getItem('tast_smtp_usuari') || 'tastvng@gmail.com'}</p>
+                  <p className="font-bold text-fuchsia-650">secretaria@eltast.cat</p>
                 </div>
               </div>
             </div>

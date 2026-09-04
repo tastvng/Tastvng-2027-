@@ -1,6 +1,6 @@
 {
-  "name": "Inscripcions El Tast",
-  "description": "Gestió d'inscripcions i control de pagaments de les comparses de l'entitat El Tast de Vilanova i la Geltrú",
+  "name": "Inscripcions El Tast 2027",
+  "description": "Registre i gestió d'inscripcions oficials de la parella saltadora per al Tast i les Comparses de Vilanova i la Geltrú 2027.",
   "requestFramePermissions": ["camera"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
