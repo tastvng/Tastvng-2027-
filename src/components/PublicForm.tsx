@@ -22,6 +22,7 @@ import TranslatedText, { TranslatedOption } from './TranslatedText';
 import { ComparserCard } from './publicForm/ComparserCard';
 import { CameraModal } from './publicForm/CameraModal';
 import { CodigoVestimentaModal } from './CodigoVestimentaModal';
+import { DEFAULT_CATEGORIA_DESCRIPTIONS } from '../data';
 
 interface PublicFormProps {
   config: SistemaConfig;
@@ -182,6 +183,85 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
       window.removeEventListener('hoursConfigChanged', handleEvent);
       window.removeEventListener('eventDataChanged', handleEvent);
       window.removeEventListener('localStorage', handleEvent);
+    };
+  }, []);
+
+  // Category descriptions (Parella Adulta & Parella Juvenil) loaded from Supabase settings
+  const [categoriaDesc, setCategoriaDesc] = useState(() => {
+    try {
+      const caAdulta = localStorage.getItem('categoria_adulta_desc_ca');
+      const esAdulta = localStorage.getItem('categoria_adulta_desc_es');
+      const caJuvenil = localStorage.getItem('categoria_juvenil_desc_ca');
+      const esJuvenil = localStorage.getItem('categoria_juvenil_desc_es');
+      return {
+        categoria_adulta_desc_ca: caAdulta || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_adulta_desc_ca,
+        categoria_adulta_desc_es: esAdulta || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_adulta_desc_es,
+        categoria_juvenil_desc_ca: caJuvenil || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_juvenil_desc_ca,
+        categoria_juvenil_desc_es: esJuvenil || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_juvenil_desc_es,
+      };
+    } catch {
+      return DEFAULT_CATEGORIA_DESCRIPTIONS;
+    }
+  });
+
+  useEffect(() => {
+    let active = true;
+    const loadCategoryDescriptions = async () => {
+      try {
+        const { getSupabaseSetting, isSupabaseConfigured } = await import('../supabaseClient');
+        if (isSupabaseConfigured) {
+          const [adultaCa, adultaEs, juvenilCa, juvenilEs] = await Promise.all([
+            getSupabaseSetting<string>('categoria_adulta_desc_ca', DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_adulta_desc_ca, true),
+            getSupabaseSetting<string>('categoria_adulta_desc_es', DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_adulta_desc_es, true),
+            getSupabaseSetting<string>('categoria_juvenil_desc_ca', DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_juvenil_desc_ca, true),
+            getSupabaseSetting<string>('categoria_juvenil_desc_es', DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_juvenil_desc_es, true),
+          ]);
+          if (active) {
+            const resolved = {
+              categoria_adulta_desc_ca: adultaCa || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_adulta_desc_ca,
+              categoria_adulta_desc_es: adultaEs || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_adulta_desc_es,
+              categoria_juvenil_desc_ca: juvenilCa || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_juvenil_desc_ca,
+              categoria_juvenil_desc_es: juvenilEs || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_juvenil_desc_es,
+            };
+            setCategoriaDesc(resolved);
+            try {
+              localStorage.setItem('categoria_adulta_desc_ca', resolved.categoria_adulta_desc_ca);
+              localStorage.setItem('categoria_adulta_desc_es', resolved.categoria_adulta_desc_es);
+              localStorage.setItem('categoria_juvenil_desc_ca', resolved.categoria_juvenil_desc_ca);
+              localStorage.setItem('categoria_juvenil_desc_es', resolved.categoria_juvenil_desc_es);
+            } catch {}
+          }
+        }
+      } catch (err) {
+        console.error("Error loading category descriptions in PublicForm:", err);
+      }
+    };
+
+    const handleUpdate = () => {
+      try {
+        const caAdulta = localStorage.getItem('categoria_adulta_desc_ca');
+        const esAdulta = localStorage.getItem('categoria_adulta_desc_es');
+        const caJuvenil = localStorage.getItem('categoria_juvenil_desc_ca');
+        const esJuvenil = localStorage.getItem('categoria_juvenil_desc_es');
+        setCategoriaDesc(prev => ({
+          categoria_adulta_desc_ca: caAdulta || prev.categoria_adulta_desc_ca,
+          categoria_adulta_desc_es: esAdulta || prev.categoria_adulta_desc_es,
+          categoria_juvenil_desc_ca: caJuvenil || prev.categoria_juvenil_desc_ca,
+          categoria_juvenil_desc_es: esJuvenil || prev.categoria_juvenil_desc_es,
+        }));
+      } catch {}
+      loadCategoryDescriptions().catch(err => console.warn("Error reloading category descriptions:", err));
+    };
+
+    loadCategoryDescriptions().catch(err => console.warn("Error loading category descriptions:", err));
+
+    window.addEventListener('categoriaDescChanged', handleUpdate);
+    window.addEventListener('storage', handleUpdate);
+
+    return () => {
+      active = false;
+      window.removeEventListener('categoriaDescChanged', handleUpdate);
+      window.removeEventListener('storage', handleUpdate);
     };
   }, []);
 
@@ -926,8 +1006,8 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
                   </h4>
                   <p className="text-zinc-400 text-xs mt-1 leading-relaxed">
                     {language === 'ca' 
-                      ? 'Recomanada per a participants de 16 anys o més. Inclou samarretes exclusives de la collada i puros dolços.'
-                      : 'Recomendada para participantes de 16 años o más. Incluye camisetas exclusivas de la colla y puros dulces.'}
+                      ? (categoriaDesc.categoria_adulta_desc_ca || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_adulta_desc_ca)
+                      : (categoriaDesc.categoria_adulta_desc_es || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_adulta_desc_es)}
                   </p>
                   <div className="text-right mt-3">
                     <span className="font-sans font-extrabold text-2xl text-fuchsia-500">{adultTarifaObj.valor}€</span>
@@ -968,8 +1048,8 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
                   </h4>
                   <p className="text-zinc-400 text-xs mt-1 leading-relaxed">
                     {language === 'ca' 
-                      ? 'Ideal per a parelles joves de fins a 15 anys d\'edat. Inclou fulard petit de color fúcsia.'
-                      : 'Ideal para parejas jóvenes de hasta 15 años de edad. Incluye pañuelo pequeño de color fucsia.'}
+                      ? (categoriaDesc.categoria_juvenil_desc_ca || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_juvenil_desc_ca)
+                      : (categoriaDesc.categoria_juvenil_desc_es || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_juvenil_desc_es)}
                   </p>
                   <div className="text-right mt-3">
                     <span className="font-sans font-extrabold text-2xl text-fuchsia-500">{juvenilTarifaObj.valor}€</span>

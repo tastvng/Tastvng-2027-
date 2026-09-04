@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Compass, Sparkles, CheckCircle2, RotateCcw, Image, Video, Palette, Play, Eye, FileText, LayoutTemplate, Sliders, Upload, Trash2 } from 'lucide-react';
+import { Compass, Sparkles, CheckCircle2, RotateCcw, Image, Video, Palette, Play, Eye, FileText, LayoutTemplate, Sliders, Upload, Trash2, Users } from 'lucide-react';
 import { PortadaConfig } from './PortadaPage';
-import { saveSupabaseSettings, getSupabaseSettings, isSupabaseConfigured } from '../supabaseClient';
+import { saveSupabaseSettings, getSupabaseSettings, isSupabaseConfigured, getSupabaseSetting, saveSupabaseSetting } from '../supabaseClient';
 import { useLanguage } from '../LanguageContext';
 import { useToast } from '../hooks/useToast';
 import { saveLogger } from '../services/SaveLogger';
 import { useActiveYear } from '../hooks/useActiveYear';
+import { DEFAULT_CATEGORIA_DESCRIPTIONS } from '../data';
 
 export const DEFAULT_PORTADA_DATA = {
   ca: {
@@ -271,6 +272,170 @@ export default function AdminPortada({ onAddLog }: AdminPortadaProps) {
     }
     loadConfig().catch(err => console.error("Unhandled error in loadConfig inside AdminPortada:", err));
   }, []);
+
+  // Category Descriptions (Adulta & Juvenil) state
+  const [catDesc, setCatDesc] = useState(() => {
+    try {
+      const c1 = localStorage.getItem('categoria_adulta_desc_ca');
+      const c2 = localStorage.getItem('categoria_adulta_desc_es');
+      const c3 = localStorage.getItem('categoria_juvenil_desc_ca');
+      const c4 = localStorage.getItem('categoria_juvenil_desc_es');
+      return {
+        categoria_adulta_desc_ca: c1 || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_adulta_desc_ca,
+        categoria_adulta_desc_es: c2 || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_adulta_desc_es,
+        categoria_juvenil_desc_ca: c3 || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_juvenil_desc_ca,
+        categoria_juvenil_desc_es: c4 || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_juvenil_desc_es,
+      };
+    } catch {
+      return DEFAULT_CATEGORIA_DESCRIPTIONS;
+    }
+  });
+
+  const [savingCatDesc, setSavingCatDesc] = useState(false);
+  const [catDescSavedSuccess, setCatDescSavedSuccess] = useState(false);
+  const [catDescError, setCatDescError] = useState<string | null>(null);
+
+  // Fetch categoria descriptions from Supabase settings table on mount
+  useEffect(() => {
+    async function loadCategoriaDescriptions() {
+      // 1. Check localStorage first
+      try {
+        const c1 = localStorage.getItem('categoria_adulta_desc_ca');
+        const c2 = localStorage.getItem('categoria_adulta_desc_es');
+        const c3 = localStorage.getItem('categoria_juvenil_desc_ca');
+        const c4 = localStorage.getItem('categoria_juvenil_desc_es');
+        if (c1 || c2 || c3 || c4) {
+          setCatDesc({
+            categoria_adulta_desc_ca: c1 || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_adulta_desc_ca,
+            categoria_adulta_desc_es: c2 || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_adulta_desc_es,
+            categoria_juvenil_desc_ca: c3 || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_juvenil_desc_ca,
+            categoria_juvenil_desc_es: c4 || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_juvenil_desc_es,
+          });
+        }
+      } catch (e) {}
+
+      // 2. Fetch from Supabase
+      if (isSupabaseConfigured) {
+        try {
+          const [dbCaAdulta, dbEsAdulta, dbCaJuvenil, dbEsJuvenil] = await Promise.all([
+            getSupabaseSetting<string | null>('categoria_adulta_desc_ca', null, true),
+            getSupabaseSetting<string | null>('categoria_adulta_desc_es', null, true),
+            getSupabaseSetting<string | null>('categoria_juvenil_desc_ca', null, true),
+            getSupabaseSetting<string | null>('categoria_juvenil_desc_es', null, true),
+          ]);
+
+          const resolved = {
+            categoria_adulta_desc_ca: dbCaAdulta || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_adulta_desc_ca,
+            categoria_adulta_desc_es: dbEsAdulta || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_adulta_desc_es,
+            categoria_juvenil_desc_ca: dbCaJuvenil || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_juvenil_desc_ca,
+            categoria_juvenil_desc_es: dbEsJuvenil || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_juvenil_desc_es,
+          };
+
+          setCatDesc(resolved);
+
+          try {
+            localStorage.setItem('categoria_adulta_desc_ca', resolved.categoria_adulta_desc_ca);
+            localStorage.setItem('categoria_adulta_desc_es', resolved.categoria_adulta_desc_es);
+            localStorage.setItem('categoria_juvenil_desc_ca', resolved.categoria_juvenil_desc_ca);
+            localStorage.setItem('categoria_juvenil_desc_es', resolved.categoria_juvenil_desc_es);
+          } catch {}
+
+          // Ensure settings records exist in Supabase by inserting defaults if missing
+          if (!dbCaAdulta) await saveSupabaseSetting('categoria_adulta_desc_ca', resolved.categoria_adulta_desc_ca);
+          if (!dbEsAdulta) await saveSupabaseSetting('categoria_adulta_desc_es', resolved.categoria_adulta_desc_es);
+          if (!dbCaJuvenil) await saveSupabaseSetting('categoria_juvenil_desc_ca', resolved.categoria_juvenil_desc_ca);
+          if (!dbEsJuvenil) await saveSupabaseSetting('categoria_juvenil_desc_es', resolved.categoria_juvenil_desc_es);
+        } catch (err) {
+          console.error("Error loading category descriptions in AdminPortada:", err);
+        }
+      }
+    }
+
+    loadCategoriaDescriptions().catch(err => console.error("Unhandled error in loadCategoriaDescriptions:", err));
+  }, []);
+
+  const handleSaveCategoriaDescriptions = async () => {
+    setSavingCatDesc(true);
+    setCatDescError(null);
+    setCatDescSavedSuccess(false);
+
+    try {
+      // 1. Save to LocalStorage immediately
+      localStorage.setItem('categoria_adulta_desc_ca', catDesc.categoria_adulta_desc_ca);
+      localStorage.setItem('categoria_adulta_desc_es', catDesc.categoria_adulta_desc_es);
+      localStorage.setItem('categoria_juvenil_desc_ca', catDesc.categoria_juvenil_desc_ca);
+      localStorage.setItem('categoria_juvenil_desc_es', catDesc.categoria_juvenil_desc_es);
+
+      // 2. Save to Supabase settings table
+      if (isSupabaseConfigured) {
+        await Promise.all([
+          saveSupabaseSetting('categoria_adulta_desc_ca', catDesc.categoria_adulta_desc_ca),
+          saveSupabaseSetting('categoria_adulta_desc_es', catDesc.categoria_adulta_desc_es),
+          saveSupabaseSetting('categoria_juvenil_desc_ca', catDesc.categoria_juvenil_desc_ca),
+          saveSupabaseSetting('categoria_juvenil_desc_es', catDesc.categoria_juvenil_desc_es),
+        ]);
+      }
+
+      // 3. Dispatch events to notify PublicForm and other open components/tabs
+      window.dispatchEvent(new Event('categoriaDescChanged'));
+      window.dispatchEvent(new Event('storage'));
+
+      setCatDescSavedSuccess(true);
+      setTimeout(() => setCatDescSavedSuccess(false), 4000);
+
+      showToast(
+        language === 'ca'
+          ? "✓ Descripcions de categories desades correctament a Supabase"
+          : "✓ Descripciones de categorías guardadas correctamente en Supabase",
+        'success'
+      );
+
+      saveLogger.log(
+        'Admin Portada',
+        language === 'ca' ? 'Descripcions de categories actualitzades' : 'Descripciones de categorías actualizadas',
+        'success',
+        language === 'ca' ? 'Sincronitzat amb Supabase (4 registres de categories)' : 'Sincronizado con Supabase (4 registros de categorías)'
+      );
+
+      if (onAddLog) {
+        onAddLog(
+          language === 'ca'
+            ? "S'han desat les descripcions de les modalitats Adulta i Juvenil a Supabase."
+            : "Se han guardado las descripciones de las modalidades Adulta y Juvenil en Supabase."
+        );
+      }
+    } catch (err: any) {
+      console.error("Error saving category descriptions to Supabase:", err);
+      setCatDescError(err.message || String(err));
+      showToast(
+        language === 'ca'
+          ? "Error en desar les descripcions a Supabase"
+          : "Error al guardar las descripciones en Supabase",
+        'error'
+      );
+    } finally {
+      setSavingCatDesc(false);
+    }
+  };
+
+  const handleResetCategoriaDescriptions = () => {
+    if (window.confirm(language === 'ca'
+      ? "Voleu restaurar les descripcions per defecte de les categories?"
+      : "¿Desea restaurar las descripciones por defecto de las categorías?")) {
+      setCatDesc({
+        categoria_adulta_desc_ca: DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_adulta_desc_ca,
+        categoria_adulta_desc_es: DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_adulta_desc_es,
+        categoria_juvenil_desc_ca: DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_juvenil_desc_ca,
+        categoria_juvenil_desc_es: DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_juvenil_desc_es,
+      });
+      showToast(
+        language === 'ca'
+          ? "Valors restaurats. Recordeu fer clic a 'Guardar Descripcions'."
+          : "Valores restaurados. Recuerde hacer clic en 'Guardar Descripciones'.",
+        'info'
+      );
+    }
+  };
 
   const [activeLangTab, setActiveLangTab] = useState<'ca' | 'es'>('ca');
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -727,7 +892,8 @@ export default function AdminPortada({ onAddLog }: AdminPortadaProps) {
   };
 
   return (
-    <div className="bg-white rounded-3xl border border-zinc-200 shadow-md p-6 sm:p-8 space-y-8 animate-fade-in" id="panel-view-portada">
+    <div className="space-y-8 animate-fade-in">
+      <div className="bg-white rounded-3xl border border-zinc-200 shadow-md p-6 sm:p-8 space-y-8" id="panel-view-portada">
       
       {/* Title block */}
       <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 pb-5 border-b border-zinc-100">
@@ -2620,5 +2786,250 @@ export default function AdminPortada({ onAddLog }: AdminPortadaProps) {
 
       </form>
     </div>
+
+    {/* SECCIÓ: Descripcions de Categories (Adulta i Juvenil) */}
+    <div className="bg-white rounded-3xl border border-zinc-200 shadow-md p-6 sm:p-8 space-y-6" id="panel-categoria-descriptions">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pb-5 border-b border-zinc-100">
+        <div className="flex items-start gap-4">
+          <div className="p-3 bg-fuchsia-50 text-[#ff0090] rounded-2xl shrink-0">
+            <Users size={24} />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="font-sans font-black text-lg text-zinc-900 uppercase tracking-tight">
+                {language === 'ca' ? "Descripcions de Categories" : "Descripciones de Categorías"}
+              </h3>
+              <span className="bg-fuchsia-100 text-[#ff0090] text-[10px] font-mono font-bold px-2 py-0.5 rounded-full uppercase">
+                {language === 'ca' ? "Formulari Públic" : "Formulario Público"}
+              </span>
+            </div>
+            <p className="text-xs text-zinc-500 mt-0.5">
+              {language === 'ca'
+                ? "Edita els textos descriptius que acompanyen les opcions de Parella Adulta i Parella Juvenil al formulari d'inscripció."
+                : "Edita los textos descriptivos que acompañan las opciones de Pareja Adulta y Pareja Juvenil en el formulario de inscripción."}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex gap-2 w-full sm:w-auto">
+          <button
+            type="button"
+            onClick={handleResetCategoriaDescriptions}
+            className="flex-1 sm:flex-none px-3.5 py-2 bg-white hover:bg-zinc-100 border border-zinc-200 text-zinc-700 font-bold rounded-xl transition text-[11px] flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+            title={language === 'ca' ? "Restaurar textos per defecte" : "Restaurar textos por defecto"}
+          >
+            <RotateCcw size={13} className="text-[#ff0090]" />
+            <span>{language === 'ca' ? "Restaurar Defecte" : "Restaurar Defectos"}</span>
+          </button>
+          <button
+            type="button"
+            onClick={handleSaveCategoriaDescriptions}
+            disabled={savingCatDesc}
+            id="btn-guardar-categoria-desc"
+            className="flex-1 sm:flex-none px-4 py-2 bg-[#ff0090] hover:bg-[#ff0090]/90 disabled:opacity-50 text-white font-bold rounded-xl transition text-[11px] flex items-center justify-center gap-1.5 shadow-md shadow-fuchsia-100 uppercase tracking-widest cursor-pointer"
+          >
+            {savingCatDesc ? (
+              <>
+                <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                <span>{language === 'ca' ? "Desant..." : "Guardando..."}</span>
+              </>
+            ) : (
+              <>
+                <CheckCircle2 size={14} />
+                <span>{language === 'ca' ? "Guardar Descripcions" : "Guardar Descripciones"}</span>
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+
+      {/* Banner if error */}
+      {catDescError && (
+        <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs flex items-center gap-2">
+          <span className="font-bold">Error:</span> {catDescError}
+        </div>
+      )}
+
+      {/* Banner if success */}
+      {catDescSavedSuccess && (
+        <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-semibold flex items-center gap-2 animate-fade-in">
+          <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
+          <span>
+            {language === 'ca'
+              ? "✓ S'han desat correctament les descripcions a la base de dades de Supabase!"
+              : "✓ ¡Se han guardado correctamente las descripciones en la base de datos de Supabase!"}
+          </span>
+        </div>
+      )}
+
+      {/* Two Category Cards */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Card 1: Parella Adulta */}
+        <div className="bg-zinc-50 border border-zinc-200 rounded-2xl p-5 space-y-4 hover:border-zinc-300 transition-colors shadow-2xs">
+          <div className="flex items-center justify-between border-b border-zinc-200/80 pb-3">
+            <div className="flex items-center gap-2">
+              <div className="w-2.5 h-2.5 rounded-full bg-[#ff0090]" />
+              <h4 className="font-sans font-bold text-sm text-zinc-900">
+                {language === 'ca' ? "Parella Adulta" : "Pareja Adulta"}
+              </h4>
+            </div>
+            <span className="text-[10px] font-mono bg-zinc-200/70 text-zinc-600 px-2 py-0.5 rounded-full font-bold">
+              {language === 'ca' ? "16+ anys" : "16+ años"}
+            </span>
+          </div>
+
+          {/* CA Textarea */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-zinc-700 flex items-center gap-1.5" htmlFor="cat-adulta-desc-ca">
+                <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" />
+                <span>{language === 'ca' ? "Descripció en Català (CA)" : "Descripción en Catalán (CA)"}</span>
+              </label>
+              <span className="text-[10px] text-zinc-400 font-mono">
+                {catDesc.categoria_adulta_desc_ca.length} {language === 'ca' ? "caràcters" : "caracteres"}
+              </span>
+            </div>
+            <textarea
+              id="cat-adulta-desc-ca"
+              rows={3}
+              value={catDesc.categoria_adulta_desc_ca}
+              onChange={(e) => setCatDesc(prev => ({ ...prev, categoria_adulta_desc_ca: e.target.value }))}
+              placeholder={DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_adulta_desc_ca}
+              className="w-full bg-white border border-zinc-250 focus:border-[#ff0090] focus:ring-2 focus:ring-[#ff0090]/20 rounded-xl p-3 text-xs text-zinc-800 transition outline-none resize-y leading-relaxed shadow-2xs"
+            />
+          </div>
+
+          {/* ES Textarea */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-zinc-700 flex items-center gap-1.5" htmlFor="cat-adulta-desc-es">
+                <span className="w-2 h-2 rounded-full bg-sky-500 inline-block" />
+                <span>{language === 'ca' ? "Descripció en Castellà (ES)" : "Descripción en Español (ES)"}</span>
+              </label>
+              <span className="text-[10px] text-zinc-400 font-mono">
+                {catDesc.categoria_adulta_desc_es.length} {language === 'ca' ? "caràcters" : "caracteres"}
+              </span>
+            </div>
+            <textarea
+              id="cat-adulta-desc-es"
+              rows={3}
+              value={catDesc.categoria_adulta_desc_es}
+              onChange={(e) => setCatDesc(prev => ({ ...prev, categoria_adulta_desc_es: e.target.value }))}
+              placeholder={DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_adulta_desc_es}
+              className="w-full bg-white border border-zinc-250 focus:border-[#ff0090] focus:ring-2 focus:ring-[#ff0090]/20 rounded-xl p-3 text-xs text-zinc-800 transition outline-none resize-y leading-relaxed shadow-2xs"
+            />
+          </div>
+
+          {/* Live card preview snippet */}
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-left">
+            <div className="flex justify-between items-center text-[10px] font-mono text-zinc-500 pb-1 mb-1 border-b border-zinc-800">
+              <span>{language === 'ca' ? "PREVISUALITZACIÓ TARGETA (PÚBLICA)" : "PREVISUALIZACIÓN TARJETA (PÚBLICA)"}</span>
+              <span className="text-[#ff0090] font-bold">{language === 'ca' ? "VISTA CA" : "VISTA ES"}</span>
+            </div>
+            <p className="text-zinc-300 text-xs leading-relaxed italic">
+              "{language === 'ca' ? (catDesc.categoria_adulta_desc_ca || '...') : (catDesc.categoria_adulta_desc_es || '...')}"
+            </p>
+          </div>
+        </div>
+
+        {/* Card 2: Parella Juvenil */}
+        <div className="bg-zinc-50 border border-zinc-200 rounded-2xl p-5 space-y-4 hover:border-zinc-300 transition-colors shadow-2xs">
+          <div className="flex items-center justify-between border-b border-zinc-200/80 pb-3">
+            <div className="flex items-center gap-2">
+              <div className="w-2.5 h-2.5 rounded-full bg-fuchsia-500" />
+              <h4 className="font-sans font-bold text-sm text-zinc-900">
+                {language === 'ca' ? "Parella Juvenil" : "Pareja Juvenil"}
+              </h4>
+            </div>
+            <span className="text-[10px] font-mono bg-zinc-200/70 text-zinc-600 px-2 py-0.5 rounded-full font-bold">
+              {language === 'ca' ? "Fins a 15 anys" : "Hasta 15 años"}
+            </span>
+          </div>
+
+          {/* CA Textarea */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-zinc-700 flex items-center gap-1.5" htmlFor="cat-juvenil-desc-ca">
+                <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" />
+                <span>{language === 'ca' ? "Descripció en Català (CA)" : "Descripción en Catalán (CA)"}</span>
+              </label>
+              <span className="text-[10px] text-zinc-400 font-mono">
+                {catDesc.categoria_juvenil_desc_ca.length} {language === 'ca' ? "caràcters" : "caracteres"}
+              </span>
+            </div>
+            <textarea
+              id="cat-juvenil-desc-ca"
+              rows={3}
+              value={catDesc.categoria_juvenil_desc_ca}
+              onChange={(e) => setCatDesc(prev => ({ ...prev, categoria_juvenil_desc_ca: e.target.value }))}
+              placeholder={DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_juvenil_desc_ca}
+              className="w-full bg-white border border-zinc-250 focus:border-[#ff0090] focus:ring-2 focus:ring-[#ff0090]/20 rounded-xl p-3 text-xs text-zinc-800 transition outline-none resize-y leading-relaxed shadow-2xs"
+            />
+          </div>
+
+          {/* ES Textarea */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-zinc-700 flex items-center gap-1.5" htmlFor="cat-juvenil-desc-es">
+                <span className="w-2 h-2 rounded-full bg-sky-500 inline-block" />
+                <span>{language === 'ca' ? "Descripció en Castellà (ES)" : "Descripción en Español (ES)"}</span>
+              </label>
+              <span className="text-[10px] text-zinc-400 font-mono">
+                {catDesc.categoria_juvenil_desc_es.length} {language === 'ca' ? "caràcters" : "caracteres"}
+              </span>
+            </div>
+            <textarea
+              id="cat-juvenil-desc-es"
+              rows={3}
+              value={catDesc.categoria_juvenil_desc_es}
+              onChange={(e) => setCatDesc(prev => ({ ...prev, categoria_juvenil_desc_es: e.target.value }))}
+              placeholder={DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_juvenil_desc_es}
+              className="w-full bg-white border border-zinc-250 focus:border-[#ff0090] focus:ring-2 focus:ring-[#ff0090]/20 rounded-xl p-3 text-xs text-zinc-800 transition outline-none resize-y leading-relaxed shadow-2xs"
+            />
+          </div>
+
+          {/* Live card preview snippet */}
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-left">
+            <div className="flex justify-between items-center text-[10px] font-mono text-zinc-500 pb-1 mb-1 border-b border-zinc-800">
+              <span>{language === 'ca' ? "PREVISUALITZACIÓ TARGETA (PÚBLICA)" : "PREVISUALIZACIÓN TARJETA (PÚBLICA)"}</span>
+              <span className="text-[#ff0090] font-bold">{language === 'ca' ? "VISTA CA" : "VISTA ES"}</span>
+            </div>
+            <p className="text-zinc-300 text-xs leading-relaxed italic">
+              "{language === 'ca' ? (catDesc.categoria_juvenil_desc_ca || '...') : (catDesc.categoria_juvenil_desc_es || '...')}"
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* Bottom save bar */}
+      <div className="flex flex-col sm:flex-row justify-between items-center gap-3 pt-4 border-t border-zinc-100">
+        <span className="text-xs text-zinc-500">
+          {language === 'ca' 
+            ? "Els canvis es sincronitzen automàticament amb la taula 'settings' de Supabase i s'apliquen al formulari públic." 
+            : "Los cambios se sincronizan automáticamente con la tabla 'settings' de Supabase y se aplican al formulario público."}
+        </span>
+        <button
+          type="button"
+          onClick={handleSaveCategoriaDescriptions}
+          disabled={savingCatDesc}
+          id="btn-bottom-guardar-categoria-desc"
+          className="w-full sm:w-auto px-6 py-2.5 bg-[#ff0090] hover:bg-[#ff0090]/90 disabled:opacity-50 text-white font-bold rounded-xl transition text-xs flex items-center justify-center gap-2 shadow-md shadow-fuchsia-100 uppercase tracking-wider cursor-pointer"
+        >
+          {savingCatDesc ? (
+            <>
+              <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              <span>{language === 'ca' ? "Desant a Supabase..." : "Guardando en Supabase..."}</span>
+            </>
+          ) : (
+            <>
+              <CheckCircle2 size={16} />
+              <span>{language === 'ca' ? "Guardar Descripcions" : "Guardar Descripciones"}</span>
+            </>
+          )}
+        </button>
+      </div>
+    </div>
+  </div>
   );
 }
