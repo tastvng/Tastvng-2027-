@@ -31,7 +31,7 @@ export async function syncToGoogleSheet(
 
     syncTimeout = setTimeout(async () => {
       try {
-        const activeYear = localStorage.getItem('tast_any_edicio') || '2026';
+        const activeYear = localStorage.getItem('tast_any_edicio') || '2027';
         const formattedData = inscripcions.map((i) => ({
           anyEdicio: activeYear,
           codiSeguiment: i.codiSeguiment,

@@ -85,6 +85,13 @@ export default function App() {
   // 'portada' | 'public' | 'confirmacio' | 'login' | 'admin-dashboard' | 'admin-ficha' | 'admin-config' | 'admin-scanner' | 'mobile-scanner'
   const [view, setView] = useState<string>(() => {
     try {
+      if (typeof window !== 'undefined') {
+        const hash = window.location.hash;
+        const path = window.location.pathname;
+        if (hash === '#admin' || path === '/admin' || window.location.search.includes('admin=true')) {
+          return 'login';
+        }
+      }
       const saved = localStorage.getItem('tast_portada_config_2026');
       if (saved) {
         const parsed = JSON.parse(saved);
@@ -96,6 +103,14 @@ export default function App() {
     return 'portada';
   });
   const [mobileScannerSyncKey, setMobileScannerSyncKey] = useState<string | null>(null);
+
+  // Security cleanup on boot: purge any sensitive legacy tokens from localStorage
+  useEffect(() => {
+    localStorage.removeItem('tast_saved_password');
+    localStorage.removeItem('tast_admin_session_2026');
+    sessionStorage.removeItem('tast_admin_session_2026');
+    localStorage.removeItem('tast_inscripcions_2026');
+  }, []);
 
   // Load from Supabase on component mount
   useEffect(() => {
@@ -328,10 +343,14 @@ export default function App() {
         const loggedIn = !!session;
         setIsAdminLoggedIn(loggedIn);
         if (loggedIn) {
-          setView('admin-dashboard');
+          if (view === 'login') {
+            setView('admin-dashboard');
+          }
         } else {
-          // Send to portada or public depending on the landing page status
-          setView(portadaConfig.activa === false ? 'public' : 'portada');
+          // If unauthenticated or session expired while on an admin route, send to login
+          if (['admin-dashboard', 'admin-ficha', 'admin-config', 'admin-scanner'].includes(view)) {
+            setView('login');
+          }
         }
       });
 
@@ -339,9 +358,9 @@ export default function App() {
         subscription.unsubscribe();
       };
     }
-  }, [portadaConfig.activa]);
+  }, [view, portadaConfig.activa]);
 
-  // Lazy-load inscriptions ONLY when logged in
+  // Lazy-load inscriptions ONLY when logged in to protect participant privacy
   useEffect(() => {
     async function loadInscripcions() {
       if (!isAdminLoggedIn) {
@@ -354,32 +373,27 @@ export default function App() {
           const dbInscripcions = await getSupabaseInscripciones();
           if (dbInscripcions && dbInscripcions.length > 0) {
             setInscripcions(dbInscripcions);
-            localStorage.setItem('tast_inscripcions_2026', JSON.stringify(dbInscripcions));
           } else {
             setInscripcions([]);
-            localStorage.setItem('tast_inscripcions_2026', JSON.stringify([]));
           }
         } catch (e) {
           console.error("Error loading inscriptions dynamically for session:", e);
           setInscripcions([]);
         }
       } else {
-        // Traditional LocalStorage loading fallback if logged in for custom layouts
-        try {
-          const savedInscripcions = localStorage.getItem('tast_inscripcions_2026');
-          if (savedInscripcions) {
-            setInscripcions(JSON.parse(savedInscripcions));
-          } else {
-            setInscripcions([]);
-          }
-        } catch (e) {
-          setInscripcions([]);
-        }
+        setInscripcions([]);
       }
     }
 
     loadInscripcions().catch(err => console.error("Unhandled error in loadInscripcions:", err));
   }, [isAdminLoggedIn]);
+
+  // Route guard: Prevent direct unauthorized access to admin views
+  useEffect(() => {
+    if (!isAdminLoggedIn && ['admin-dashboard', 'admin-ficha', 'admin-config', 'admin-scanner'].includes(view)) {
+      setView('login');
+    }
+  }, [isAdminLoggedIn, view]);
 
   // Route authenticated admins automatically
   useEffect(() => {
@@ -541,14 +555,15 @@ export default function App() {
     }, 0);
     newReg.posicioGlobal = maxPos > 0 ? maxPos + 1 : (latestInscripcions.length + 1);
 
-    // Calculate sequential category code
+    // Calculate collision-resistant tracking code
     const countCategory = latestInscripcions.filter(ins => ins.categoria === newReg.categoria).length;
     const prefix = newReg.categoria === CategoriaParella.ADULT ? 'A' : 'J';
-    newReg.codiSeguiment = `${prefix}-${countCategory + 1}`;
+    const randomSuffix = Math.random().toString(36).substring(2, 6).toUpperCase();
+    const seqNum = String(countCategory + 1).padStart(4, '0');
+    newReg.codiSeguiment = `TAST-2027-${prefix}${seqNum}-${randomSuffix}`;
 
     const updated = [newReg, ...inscripcions];
     setInscripcions(updated);
-    localStorage.setItem('tast_inscripcions_2026', JSON.stringify(updated));
     syncWithGoogle(updated);
     setActiveRegistration(newReg);
     setView('confirmacio');
@@ -796,14 +811,13 @@ export default function App() {
       }
     }
     setIsAdminLoggedIn(false);
-    localStorage.setItem('tast_admin_session_2026', 'false');
-    sessionStorage.setItem('tast_admin_session_2026', 'false');
+    setInscripcions([]);
     setView(portadaConfig.activa ? 'portada' : 'public');
     addLog("Sessió de secretaria tancada de manera segura.");
   };
 
   // Dynamic Staff state to update header visual dynamically
-  const [staffCount, setStaffCount] = useState<number>(3);
+  const [staffCount, setStaffCount] = useState<number>(4);
   useEffect(() => {
     const updateCount = () => {
       try {
@@ -814,10 +828,10 @@ export default function App() {
         } else {
           // Initialize defaults
           const defaults = [
-            { id: 'st-0', nom: 'Secretaria General', usuari: 'secretaria', rol: 'Secretaria', contrasenya: 'eltast2026', creadoEn: '01/01/2026', actiu: true },
-            { id: 'st-1', nom: 'Tast VNG (Admin)', usuari: 'tastvng@gmail.com', rol: 'SuperAdministrador', contrasenya: 'eltast2026', creadoEn: '01/01/2026', actiu: true },
-            { id: 'st-2', nom: 'Jordi Altiplà', usuari: 'jordia', rol: 'Coordinador', contrasenya: 'jordia123', creadoEn: '02/02/2026', actiu: true },
-            { id: 'st-3', nom: 'Mireia VNG', usuari: 'mireiav', rol: 'Mesa d\'Entrega', contrasenya: 'mireia99', creadoEn: '15/03/2026', actiu: true }
+            { id: 'st-0', nom: 'Secretaria General', usuari: 'secretaria@eltast.cat', rol: 'Secretaria', creadoEn: '01/01/2027', actiu: true },
+            { id: 'st-1', nom: 'Tast VNG (Admin)', usuari: 'tastvng@gmail.com', rol: 'SuperAdministrador', creadoEn: '01/01/2027', actiu: true },
+            { id: 'st-2', nom: 'Jordi Altiplà', usuari: 'jordia@eltast.cat', rol: 'Coordinador', creadoEn: '02/02/2027', actiu: true },
+            { id: 'st-3', nom: 'Mireia VNG', usuari: 'mireiav@eltast.cat', rol: 'Mesa d\'Entrega', creadoEn: '15/03/2027', actiu: true }
           ];
           localStorage.setItem('tast_staff_2026', JSON.stringify(defaults));
           setStaffCount(4);

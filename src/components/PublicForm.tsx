@@ -720,14 +720,15 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
       });
     }, 150);
 
-    setTimeout(() => {
+    setTimeout(async () => {
       clearInterval(interval);
       setSubmitProgress(100);
 
-      // Generate a dynamic tracking code
+      // Generate a collision-resistant unique tracking code
       const prefix = categoria === CategoriaParella.ADULT ? 'A' : 'J';
       const randomId = 'ins-' + Math.random().toString(36).substr(2, 9);
-      const codiSeguiment = `${prefix}-TEMP-${Math.floor(1000 + Math.random() * 9000)}`;
+      const randomSuffix = Math.random().toString(36).substring(2, 6).toUpperCase();
+      const codiSeguiment = `TAST-2027-${prefix}${Date.now().toString().slice(-4)}-${randomSuffix}`;
 
       const finalRespostes: Record<string, string> = {
         ...respostesCuestionari as Record<string, string>
@@ -822,6 +823,35 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
         creadoEn: new Date().toISOString(),
         actualizadoEn: new Date().toISOString()
       };
+
+      // Server-side validation check
+      try {
+        const valRes = await fetch('/api/validate-inscription', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            c1Nom,
+            c1Cognoms,
+            c1Email,
+            c1Telefon,
+            c2Nom,
+            c2Cognoms,
+            c2Email,
+            c2Telefon,
+            categoria,
+            preuTotal: totalCalculat
+          })
+        });
+        if (valRes.ok) {
+          const valData = await valRes.json();
+          if (valData.canonicalPrice && typeof valData.canonicalPrice === 'number') {
+            novaInscripcio.preuCalculat = valData.canonicalPrice;
+          }
+        }
+      } catch (e) {
+        // Resilient fallback if server route is offline
+        console.warn("Server validation endpoint offline, proceeding with client verification:", e);
+      }
 
       setIsSubmitting(false);
       onSubmit(novaInscripcio);

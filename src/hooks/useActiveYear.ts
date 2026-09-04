@@ -3,16 +3,16 @@ import { useState, useEffect } from 'react';
 export function useActiveYear(): string {
   const [year, setYear] = useState(() => {
     try {
-      return localStorage.getItem('tast_any_edicio') || '2026';
+      return localStorage.getItem('tast_any_edicio') || '2027';
     } catch (e) {
-      return '2026';
+      return '2027';
     }
   });
 
   useEffect(() => {
     const handleChanged = () => {
       try {
-        setYear(localStorage.getItem('tast_any_edicio') || '2026');
+        setYear(localStorage.getItem('tast_any_edicio') || '2027');
       } catch (e) {
         // Safe fallback
       }

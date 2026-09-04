@@ -166,7 +166,7 @@ export interface StaffMember {
   nom: string;
   usuari: string;
   rol: 'SuperAdministrador' | 'Secretaria' | 'Mesa d\'Entrega' | 'Coordinador';
-  contrasenya: string;
+  contrasenya?: string;
   creadoEn: string;
   actiu: boolean;
 }

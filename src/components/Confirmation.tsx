@@ -22,8 +22,8 @@ export default function Confirmation({ registration, onClear, onUpdate }: Confir
   const [smtpError, setSmtpError] = useState('');
 
   const [nomEsdeveniment, setNomEsdeveniment] = useState(() => {
-    const activeYear = localStorage.getItem('tast_any_edicio') || '2026';
-    const rawName = localStorage.getItem('tast_nom_esdeveniment') || 'Carnaval 2026';
+    const activeYear = localStorage.getItem('tast_any_edicio') || '2027';
+    const rawName = localStorage.getItem('tast_nom_esdeveniment') || 'Carnaval 2027';
     return rawName.replace(/2026/g, activeYear).replace(/2027/g, activeYear);
   });
   const [direccioEsdeveniment, setDireccioEsdeveniment] = useState(() => localStorage.getItem('tast_direccio_esdeveniment') || 'Plaça Soler i Carbonell, 28, Vilanova i la Geltrú');
@@ -40,8 +40,8 @@ export default function Confirmation({ registration, onClear, onUpdate }: Confir
   useEffect(() => {
     // 1. Initial load from local cache if pre-existing
     const loadCustomTemplates = () => {
-      const activeYear = localStorage.getItem('tast_any_edicio') || '2026';
-      const rawName = localStorage.getItem('tast_nom_esdeveniment') || 'Carnaval 2026';
+      const activeYear = localStorage.getItem('tast_any_edicio') || '2027';
+      const rawName = localStorage.getItem('tast_nom_esdeveniment') || 'Carnaval 2027';
       const activeEvName = rawName.replace(/2026/g, activeYear).replace(/2027/g, activeYear);
       const activeEvDir = localStorage.getItem('tast_direccio_esdeveniment') || 'Plaça Soler i Carbonell, 28, Vilanova i la Geltrú';
       
@@ -64,8 +64,8 @@ export default function Confirmation({ registration, onClear, onUpdate }: Confir
       try {
         const { getSupabaseSetting, isSupabaseConfigured } = await import('../supabaseClient');
         if (isSupabaseConfigured) {
-          const liveEvNameRaw = await getSupabaseSetting<string>('tast_nom_esdeveniment', 'Carnaval 2026');
-          const liveEvYear = await getSupabaseSetting<string>('tast_any_edicio', '2026');
+          const liveEvNameRaw = await getSupabaseSetting<string>('tast_nom_esdeveniment', 'Carnaval 2027');
+          const liveEvYear = await getSupabaseSetting<string>('tast_any_edicio', '2027');
           const liveEvName = liveEvNameRaw.replace(/2026/g, liveEvYear).replace(/2027/g, liveEvYear);
           const liveEvDir = await getSupabaseSetting<string>('tast_direccio_esdeveniment', 'Plaça Soler i Carbonell, 28, Vilanova i la Geltrú');
           

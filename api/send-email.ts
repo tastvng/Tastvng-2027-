@@ -1,15 +1,50 @@
-import { createClient } from "@supabase/supabase-js";
 import nodemailer from "nodemailer";
 
+// In-memory rate limiting map for serverless environment
+const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
+const checkRateLimit = (ip: string, maxRequests: number, windowMs: number): boolean => {
+  const now = Date.now();
+  const current = rateLimitMap.get(ip);
+  if (!current || now > current.resetTime) {
+    rateLimitMap.set(ip, { count: 1, resetTime: now + windowMs });
+    return true;
+  }
+  if (current.count >= maxRequests) {
+    return false;
+  }
+  current.count += 1;
+  return true;
+};
+
+const ALLOWED_ORIGIN_PATTERNS = [
+  /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/,
+  /^https:\/\/[\w-]+\.vercel\.app$/,
+  /^https:\/\/[\w-]+\.run\.app$/
+];
+
 export default async function handler(req: any, res: any) {
-  // CORS configuration
+  // CORS configuration with origin validation
+  const origin = req.headers.origin;
+  if (origin) {
+    const isAllowed = 
+      origin === process.env.APP_URL ||
+      ALLOWED_ORIGIN_PATTERNS.some(pattern => pattern.test(origin)) ||
+      origin === `http://${req.headers.host}` ||
+      origin === `https://${req.headers.host}`;
+
+    if (isAllowed) {
+      res.setHeader("Access-Control-Allow-Origin", origin);
+    }
+  }
+
   res.setHeader("Access-Control-Allow-Credentials", "true");
-  res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET,OPTIONS,PATCH,DELETE,POST,PUT");
   res.setHeader(
     "Access-Control-Allow-Headers",
-    "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version"
+    "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization"
   );
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "SAMEORIGIN");
 
   if (req.method === "OPTIONS") {
     return res.status(200).end();
@@ -20,62 +55,27 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
+    const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0] || req.socket?.remoteAddress || 'unknown';
+    if (!checkRateLimit(clientIp, 10, 60 * 1000)) {
+      return res.status(429).json({ error: "S'ha superat el límit d'enviaments per minut. Si us plau, espereu un moment." });
+    }
+
     const body = req.body || {};
 
-    // Initialize Supabase client
-    const supabaseUrl = process.env.VITE_SUPABASE_URL || '';
-    const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || '';
-    const supabase = (supabaseUrl && supabaseAnonKey) ? createClient(supabaseUrl, supabaseAnonKey) : null;
+    // Load SMTP credentials STRICTLY from process.env (never from client or database settings)
+    const smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
+    const smtpPort = process.env.SMTP_PORT || '587';
+    const smtpUser = process.env.SMTP_USER || '';
+    const smtpPassword = process.env.SMTP_PASSWORD || '';
+    const smtpFrom = process.env.SMTP_FROM || process.env.SMTP_USER || '';
 
-    // Helper to read setting from Supabase with fallback to process.env or defaults
-    const getSupabaseSetting = async (key: string, defaultValue: string): Promise<string> => {
-      if (!supabase) return defaultValue;
-      try {
-        const { data, error } = await supabase
-          .from('settings')
-          .select('*');
-        if (error || !data) return defaultValue;
-
-        const row = data.find((r: any) => (r.key === key || r.id === key));
-        if (row) {
-          let val = row.value !== undefined ? row.value : row.config !== undefined ? row.config : row.settings !== undefined ? row.settings : row;
-          if (typeof val === 'string') {
-            try {
-              val = JSON.parse(val);
-            } catch (e) {}
-          }
-          return String(val);
-        }
-      } catch (err) {
-        console.error(`Error reading setting ${key} from Supabase:`, err);
-      }
-      return defaultValue;
-    };
-
-    // Load SMTP credentials from Supabase settings (with fallback to env/defaults)
-    const smtpHost = await getSupabaseSetting('tast_smtp_host', process.env.SMTP_HOST || 'smtp.gmail.com');
-    const smtpPort = await getSupabaseSetting('tast_smtp_port', process.env.SMTP_PORT || '587');
-    const smtpUser = await getSupabaseSetting('tast_smtp_usuari', process.env.SMTP_USER || 'tastvng@gmail.com');
-    const smtpPassword = await getSupabaseSetting('tast_smtp_contrasenya', process.env.SMTP_PASSWORD || '');
-    const smtpFrom = await getSupabaseSetting('tast_smtp_from', process.env.SMTP_USER || 'tastvng@gmail.com');
-
-    // DEBUG: Verify SMTP variables
-    console.log('=== DEBUG: Nodemailer SMTP Config ===');
-    console.log('Host:', smtpHost);
-    console.log('Port:', smtpPort);
-    console.log('User:', smtpUser);
-    console.log('From:', smtpFrom);
-    console.log('Password set:', !!smtpPassword);
-    console.log('=== FIN DEBUG ===');
-
-    if (!smtpPassword) {
-      console.error("[Nodemailer Error] SMTP password is empty or not defined.");
-      return res.status(500).json({ error: "La contrasenya de l'SMTP no està configurada al servidor." });
+    if (!smtpPassword || !smtpUser) {
+      return res.status(500).json({ error: "La configuració SMTP del servidor no està completa (SMTP_USER / SMTP_PASSWORD absents en entorn)." });
     }
 
     // Extract values based on payload format
     let to = "";
-    let subject = "Confirmació d'inscripció - El Tast 2026";
+    let subject = "Confirmació d'inscripció - El Tast 2027";
     let html = "";
     let attachments: any[] = [];
 
@@ -93,7 +93,7 @@ export default async function handler(req: any, res: any) {
         html = `
           <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
             <h2>Hola ${nombre},</h2>
-            <p>La teva inscripció s'ha realitzat correctament.</p>
+            <p>La teva inscripció s'ha realitzat correctament per a l'edició 2027.</p>
             <p>Aquí tens el teu codi QR de confirmació:</p>
             <div style="margin: 20px 0;">
               <img src="${body.qrCode}" alt="Codi QR" style="width: 200px; height: 200px;" />
@@ -105,8 +105,13 @@ export default async function handler(req: any, res: any) {
     }
 
     if (!to || !html) {
-      console.error("[Nodemailer Error] Missing required fields (to, html).");
       return res.status(400).json({ error: "Falten camps obligatoris (destinatari o contingut HTML)" });
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(to.trim())) {
+      return res.status(400).json({ error: "L'adreça de correu de destinació no té un format vàlid." });
     }
 
     // Process attachments for Nodemailer
@@ -133,18 +138,16 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    // Create Nodemailer Transporter
+    // Create Nodemailer Transporter with secure TLS enforcement
+    const isPort465 = smtpPort === '465';
     const transporter = nodemailer.createTransport({
       host: smtpHost,
       port: parseInt(smtpPort, 10),
-      secure: smtpPort === '465', // true for 465, false for 587 or other ports
+      secure: isPort465,
       auth: {
         user: smtpUser,
         pass: smtpPassword,
       },
-      tls: {
-        rejectUnauthorized: false
-      }
     });
 
     const mailOptions = {
@@ -155,9 +158,7 @@ export default async function handler(req: any, res: any) {
       attachments: mailAttachments.length > 0 ? mailAttachments : undefined,
     };
 
-    // Send email using Nodemailer
     const info = await transporter.sendMail(mailOptions);
-    console.log("Email sent successfully through Nodemailer SMTP:", info.messageId);
 
     return res.status(200).json({
       success: true,
@@ -165,7 +166,7 @@ export default async function handler(req: any, res: any) {
       messageId: info.messageId
     });
   } catch (error: any) {
-    console.error("Error sending email via Nodemailer SMTP:", error);
+    console.error("Error sending email via Nodemailer SMTP (Serverless):", error?.message || error);
     return res.status(500).json({
       error: error.message || "Error al enviar el correo a través de SMTP."
     });

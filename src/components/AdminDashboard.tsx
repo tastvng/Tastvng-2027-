@@ -159,10 +159,10 @@ export default function AdminDashboard({
       console.error(e);
     }
     const defaults: StaffMember[] = [
-      { id: 'st-0', nom: 'Secretaria General', usuari: 'secretaria', rol: 'Secretaria', contrasenya: 'eltast2026', creadoEn: '01/01/2026', actiu: true },
-      { id: 'st-1', nom: 'Tast VNG (Admin)', usuari: 'tastvng@gmail.com', rol: 'SuperAdministrador', contrasenya: 'eltast2026', creadoEn: '01/01/2026', actiu: true },
-      { id: 'st-2', nom: 'Jordi Altiplà', usuari: 'jordia', rol: 'Coordinador', contrasenya: 'jordia123', creadoEn: '02/02/2026', actiu: true },
-      { id: 'st-3', nom: 'Mireia VNG', usuari: 'mireiav', rol: 'Mesa d\'Entrega', contrasenya: 'mireia99', creadoEn: '15/03/2026', actiu: true }
+      { id: 'st-0', nom: 'Secretaria General', usuari: 'secretaria@eltast.cat', rol: 'Secretaria', creadoEn: '01/01/2027', actiu: true },
+      { id: 'st-1', nom: 'Tast VNG (Admin)', usuari: 'tastvng@gmail.com', rol: 'SuperAdministrador', creadoEn: '01/01/2027', actiu: true },
+      { id: 'st-2', nom: 'Jordi Altiplà', usuari: 'jordia@eltast.cat', rol: 'Coordinador', creadoEn: '02/02/2027', actiu: true },
+      { id: 'st-3', nom: 'Mireia VNG', usuari: 'mireiav@eltast.cat', rol: 'Mesa d\'Entrega', creadoEn: '15/03/2027', actiu: true }
     ];
     localStorage.setItem('tast_staff_2026', JSON.stringify(defaults));
     return defaults;
@@ -171,7 +171,6 @@ export default function AdminDashboard({
   // Manual staff member introduction state
   const [newStaffNom, setNewStaffNom] = useState('');
   const [newStaffUsuari, setNewStaffUsuari] = useState('');
-  const [newStaffContrasenya, setNewStaffContrasenya] = useState('');
   const [newStaffRol, setNewStaffRol] = useState<'SuperAdministrador' | 'Secretaria' | 'Mesa d\'Entrega' | 'Coordinador'>('Secretaria');
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [inscriptionDeleteConfirmId, setInscriptionDeleteConfirmId] = useState<string | null>(null);
@@ -861,8 +860,8 @@ export default function AdminDashboard({
 
   const handleAddStaffMember = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newStaffNom.trim() || !newStaffUsuari.trim() || !newStaffContrasenya.trim()) {
-      alert("Si us plau, omple tots els camps d’identificació manuals per al membre del staff.");
+    if (!newStaffNom.trim() || !newStaffUsuari.trim()) {
+      alert("Si us plau, omple el nom i el correu d’identificació per al membre del staff.");
       return;
     }
 
@@ -871,7 +870,6 @@ export default function AdminDashboard({
       nom: newStaffNom.trim(),
       usuari: newStaffUsuari.trim().toLowerCase(),
       rol: newStaffRol,
-      contrasenya: newStaffContrasenya.trim(),
       creadoEn: new Date().toLocaleDateString('ca-ES'),
       actiu: true
     };
@@ -911,13 +909,12 @@ export default function AdminDashboard({
     );
 
     if (onAddLog) {
-      onAddLog(`S'ha afegit ${newStaffNom} (${newStaffRol}) al personal d'administració i s'ha desat al núvol.`);
+      onAddLog(`S'ha afegit ${newStaffNom} (${newStaffRol}) al personal d'administració.`);
     }
 
     // Reset fields
     setNewStaffNom('');
     setNewStaffUsuari('');
-    setNewStaffContrasenya('');
     setNewStaffRol('Secretaria');
   };
 
@@ -3464,23 +3461,6 @@ export default function AdminDashboard({
                     </div>
 
                     <div>
-                      <label className="block text-[10px] text-zinc-500 uppercase font-mono mb-1 font-bold">Contrasenya *</label>
-                      <div className="relative">
-                        <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-zinc-400 pointer-events-none">
-                          <Key size={12} />
-                        </span>
-                        <input 
-                          type="text" 
-                          required
-                          value={newStaffContrasenya}
-                          onChange={(e) => setNewStaffContrasenya(e.target.value)}
-                          placeholder="Clau ràpida format privat"
-                          className="w-full bg-zinc-50 text-zinc-900 border border-zinc-200 focus:border-[#ff0090] focus:bg-white rounded-xl pl-8 pr-3 py-2 text-xs focus:outline-none transition-all font-mono"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
                       <label className="block text-[10px] text-zinc-500 uppercase font-mono mb-1 font-bold">Seleccionar Categoria (SuperAdministrador o Staff) *</label>
                       <select
                         value={newStaffRol}
@@ -3493,6 +3473,12 @@ export default function AdminDashboard({
                         <option value="Coordinador">👥 Staff / Coordinador Tècnic de Taula</option>
                       </select>
                     </div>
+
+                    <p className="text-[10px] text-zinc-400 font-sans italic">
+                      {language === 'ca'
+                        ? 'Nota de seguretat: L’autenticació del personal es gestiona mitjançant Supabase Auth oficial.'
+                        : 'Nota de seguridad: La autenticación del personal se gestiona mediante Supabase Auth oficial.'}
+                    </p>
 
                     <button
                       type="submit"
@@ -3542,7 +3528,7 @@ export default function AdminDashboard({
                             </div>
                             <div className="flex items-center gap-3 text-[10px] text-zinc-500 font-mono">
                               <span>usuari: <strong className="text-zinc-650">@{st.usuari}</strong></span>
-                              <span>clau: <strong className="text-zinc-650">{st.contrasenya}</strong></span>
+                              <span>estat: <strong className="text-zinc-650">{st.actiu ? 'Actiu' : 'Inactiu'}</strong></span>
                             </div>
                           </div>
 

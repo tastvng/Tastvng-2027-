@@ -17,76 +17,149 @@ async function startServer() {
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-  // CORS and OPTIONS request preflight handling for routing compatibility
+  // Security Headers
+  app.use((_req, res, next) => {
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("X-Frame-Options", "SAMEORIGIN");
+    res.setHeader("X-XSS-Protection", "1; mode=block");
+    res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+    next();
+  });
+
+  // CORS handling with origin validation
+  const ALLOWED_ORIGIN_PATTERNS = [
+    /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/,
+    /^https:\/\/[\w-]+\.vercel\.app$/,
+    /^https:\/\/[\w-]+\.run\.app$/
+  ];
+
   app.use((req, res, next) => {
-    res.setHeader("Access-Control-Allow-Origin", "*");
+    const origin = req.headers.origin;
+    if (origin) {
+      const isAllowed = 
+        origin === process.env.APP_URL ||
+        ALLOWED_ORIGIN_PATTERNS.some(pattern => pattern.test(origin)) ||
+        origin === `http://${req.headers.host}` ||
+        origin === `https://${req.headers.host}`;
+
+      if (isAllowed) {
+        res.setHeader("Access-Control-Allow-Origin", origin);
+      }
+    }
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, PATCH, DELETE");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
+    res.setHeader("Access-Control-Allow-Credentials", "true");
     if (req.method === "OPTIONS") {
       return res.sendStatus(200);
     }
     next();
   });
 
-  // API Route to send a real SMTP email (Now via Nodemailer)
+  // In-memory rate limiting map for sensitive endpoints
+  const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
+  const checkRateLimit = (ip: string, maxRequests: number, windowMs: number): boolean => {
+    const now = Date.now();
+    const current = rateLimitMap.get(ip);
+    if (!current || now > current.resetTime) {
+      rateLimitMap.set(ip, { count: 1, resetTime: now + windowMs });
+      return true;
+    }
+    if (current.count >= maxRequests) {
+      return false;
+    }
+    current.count += 1;
+    return true;
+  };
+
+  // Status check for SMTP (NEVER returns passwords or secrets)
+  app.get("/api/smtp-status", (_req, res) => {
+    const host = process.env.SMTP_HOST || 'smtp.gmail.com';
+    const port = process.env.SMTP_PORT || '587';
+    const user = process.env.SMTP_USER || '';
+    const from = process.env.SMTP_FROM || process.env.SMTP_USER || '';
+    const configured = !!(process.env.SMTP_PASSWORD && process.env.SMTP_USER);
+
+    res.json({
+      configured,
+      host,
+      port,
+      user: user ? user.replace(/^(.{2})(.*)(@.*)$/, '$1***$3') : '',
+      from: from ? from.replace(/^(.{2})(.*)(@.*)$/, '$1***$3') : '',
+      provider: 'Server Environment Variables (Secure)'
+    });
+  });
+
+  // Authoritative server-side validation & price calculation for inscriptions
+  app.post("/api/validate-inscription", (req, res) => {
+    try {
+      const data = req.body || {};
+      const { categoria, teDomasBalco, teMocadorsExtra, c1Nom, c1Cognoms, c1Email, c1Telefon, c2Nom, c2Cognoms, c2Email, c2Telefon, c1EsMenor, c2EsMenor, c1TutorDni, c2TutorDni } = data;
+
+      // Basic presence validation
+      if (!c1Nom?.trim() || !c1Cognoms?.trim() || !c1Email?.trim() || !c1Telefon?.trim() ||
+          !c2Nom?.trim() || !c2Cognoms?.trim() || !c2Email?.trim() || !c2Telefon?.trim()) {
+        return res.status(400).json({ error: "Falten dades obligatòries dels participants." });
+      }
+
+      // Email format validation
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(c1Email.trim()) || !emailRegex.test(c2Email.trim())) {
+        return res.status(400).json({ error: "El format del correu electrònic no és vàlid." });
+      }
+
+      // Minor validation
+      if (c1EsMenor && !c1TutorDni?.trim()) {
+        return res.status(400).json({ error: "Cal el DNI del tutor/a legal per al primer participant menor d'edat." });
+      }
+      if (c2EsMenor && !c2TutorDni?.trim()) {
+        return res.status(400).json({ error: "Cal el DNI del tutor/a legal per al segon participant menor d'edat." });
+      }
+
+      // Authoritative official price calculation
+      // Standard prices: Adult = 40€, Juvenil = 30€ (or configured defaults)
+      const basePrice = (categoria === 'JUVENIL') ? 30 : 40;
+      const domasPrice = teDomasBalco ? 15 : 0;
+      const mocadorQty = Math.max(0, parseInt(String(teMocadorsExtra || 0), 10) || 0);
+      const mocadorsPrice = mocadorQty * 5;
+      const calculatedTotal = basePrice + domasPrice + mocadorsPrice;
+
+      return res.json({
+        valid: true,
+        basePrice,
+        domasPrice,
+        mocadorQty,
+        mocadorsPrice,
+        total: calculatedTotal
+      });
+    } catch (e: any) {
+      return res.status(500).json({ error: e?.message || "Error en la validació al servidor." });
+    }
+  });
+
+  // API Route to send a real SMTP email (Strictly Server-Side Environment Variables)
   app.post("/api/send-email", async (req, res) => {
     try {
+      const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0] || req.socket.remoteAddress || 'unknown';
+      if (!checkRateLimit(clientIp, 10, 60 * 1000)) {
+        return res.status(429).json({ error: "S'ha superat el límit d'enviaments per minut. Si us plau, espereu un moment." });
+      }
+
       const body = req.body || {};
 
-      // Initialize Supabase client
-      const supabaseUrl = process.env.VITE_SUPABASE_URL || '';
-      const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || '';
-      const supabase = (supabaseUrl && supabaseAnonKey) ? createClient(supabaseUrl, supabaseAnonKey) : null;
+      // Load SMTP credentials STRICTLY from process.env (never from client or database settings)
+      const smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
+      const smtpPort = process.env.SMTP_PORT || '587';
+      const smtpUser = process.env.SMTP_USER || '';
+      const smtpPassword = process.env.SMTP_PASSWORD || '';
+      const smtpFrom = process.env.SMTP_FROM || process.env.SMTP_USER || '';
 
-      // Helper to read setting from Supabase with fallback to process.env or defaults
-      const getSupabaseSetting = async (key: string, defaultValue: string): Promise<string> => {
-        if (!supabase) return defaultValue;
-        try {
-          const { data, error } = await supabase
-            .from('settings')
-            .select('*');
-          if (error || !data) return defaultValue;
-
-          const row = data.find((r: any) => (r.key === key || r.id === key));
-          if (row) {
-            let val = row.value !== undefined ? row.value : row.config !== undefined ? row.config : row.settings !== undefined ? row.settings : row;
-            if (typeof val === 'string') {
-              try {
-                val = JSON.parse(val);
-              } catch (e) {}
-            }
-            return String(val);
-          }
-        } catch (err) {
-          console.error(`Error reading setting ${key} from Supabase:`, err);
-        }
-        return defaultValue;
-      };
-
-      // Load SMTP credentials from Supabase settings (with fallback to env/defaults)
-      const smtpHost = await getSupabaseSetting('tast_smtp_host', process.env.SMTP_HOST || 'smtp.gmail.com');
-      const smtpPort = await getSupabaseSetting('tast_smtp_port', process.env.SMTP_PORT || '587');
-      const smtpUser = await getSupabaseSetting('tast_smtp_usuari', process.env.SMTP_USER || 'tastvng@gmail.com');
-      const smtpPassword = await getSupabaseSetting('tast_smtp_contrasenya', process.env.SMTP_PASSWORD || '');
-      const smtpFrom = await getSupabaseSetting('tast_smtp_from', process.env.SMTP_USER || 'tastvng@gmail.com');
-
-      // DEBUG: Verify SMTP variables
-      console.log('=== DEBUG (Express Server): Nodemailer SMTP Config ===');
-      console.log('Host:', smtpHost);
-      console.log('Port:', smtpPort);
-      console.log('User:', smtpUser);
-      console.log('From:', smtpFrom);
-      console.log('Password set:', !!smtpPassword);
-      console.log('=== FIN DEBUG ===');
-
-      if (!smtpPassword) {
-        console.error("[Nodemailer Server Error] SMTP password is empty or not defined.");
-        return res.status(500).json({ error: "La contrasenya de l'SMTP no està configurada al servidor." });
+      if (!smtpPassword || !smtpUser) {
+        return res.status(500).json({ error: "La configuració SMTP del servidor no està completa (SMTP_USER / SMTP_PASSWORD absents en entorn)." });
       }
 
       // Extract values based on payload format
       let to = "";
-      let subject = "Confirmació d'inscripció - El Tast 2026";
+      let subject = "Confirmació d'inscripció - El Tast 2027";
       let html = "";
       let attachments: any[] = [];
 
@@ -104,7 +177,7 @@ async function startServer() {
           html = `
             <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
               <h2>Hola ${nombre},</h2>
-              <p>La teva inscripció s'ha realitzat correctament.</p>
+              <p>La teva inscripció s'ha realitzat correctament per a l'edició 2027.</p>
               <p>Aquí tens el teu codi QR de confirmació:</p>
               <div style="margin: 20px 0;">
                 <img src="${body.qrCode}" alt="Codi QR" style="width: 200px; height: 200px;" />
@@ -116,8 +189,13 @@ async function startServer() {
       }
 
       if (!to || !html) {
-        console.error("[Nodemailer Server Error] Missing required fields (to, html).");
         return res.status(400).json({ error: "Falten camps obligatoris (destinatari o contingut HTML)" });
+      }
+
+      // Validate email format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(to.trim())) {
+        return res.status(400).json({ error: "L'adreça de correu de destinació no té un format vàlid." });
       }
 
       // Process attachments for Nodemailer
@@ -144,18 +222,16 @@ async function startServer() {
         });
       }
 
-      // Create Nodemailer Transporter
+      // Create Nodemailer Transporter with secure TLS enforcement
+      const isPort465 = smtpPort === '465';
       const transporter = nodemailer.createTransport({
         host: smtpHost,
         port: parseInt(smtpPort, 10),
-        secure: smtpPort === '465', // true for 465, false for 587 or other ports
+        secure: isPort465,
         auth: {
           user: smtpUser,
           pass: smtpPassword,
         },
-        tls: {
-          rejectUnauthorized: false
-        }
       });
 
       const mailOptions = {
@@ -166,9 +242,7 @@ async function startServer() {
         attachments: mailAttachments.length > 0 ? mailAttachments : undefined,
       };
 
-      // Send email using Nodemailer
       const info = await transporter.sendMail(mailOptions);
-      console.log("Email sent successfully through Nodemailer SMTP:", info.messageId);
 
       return res.json({
         success: true,
@@ -176,7 +250,7 @@ async function startServer() {
         messageId: info.messageId
       });
     } catch (error: any) {
-      console.error("Error sending email via Nodemailer SMTP (Express):", error);
+      console.error("Error sending email via Nodemailer SMTP (Express):", error?.message || error);
       return res.status(500).json({
         error: error.message || "Error al enviar el correo a través de SMTP."
       });
@@ -193,6 +267,11 @@ async function startServer() {
 
   app.post("/api/translate", async (req, res) => {
     try {
+      const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0] || req.socket.remoteAddress || 'unknown';
+      if (!checkRateLimit(`trans_${clientIp}`, 30, 60 * 1000)) {
+        return res.status(429).json({ error: "Límit de traduccions excedit. Espereu uns segons." });
+      }
+
       const { text, target_language, q, source, target } = req.body;
       const textToTranslate = text || q || "";
       const targetLang = target_language || target || "es";
@@ -200,6 +279,10 @@ async function startServer() {
 
       if (!textToTranslate.trim()) {
         return res.json({ translatedText: "" });
+      }
+
+      if (textToTranslate.length > 5000) {
+        return res.status(400).json({ error: "El text supera el límit màxim permès de 5000 caràcters." });
       }
 
       // Bypass LibreTranslate and go straight to Gemini for high-speed, reliable translations
@@ -244,7 +327,7 @@ Text: "${textToTranslate}"`;
       }
 
       const response = await aiClient.models.generateContent({
-        model: "gemini-3.5-flash",
+        model: "gemini-2.5-flash",
         contents: prompt,
         config: {
           temperature: 0.1,

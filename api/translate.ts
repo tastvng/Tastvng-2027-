@@ -1,11 +1,46 @@
 import { GoogleGenAI } from "@google/genai";
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 
+const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
+const checkRateLimit = (ip: string, maxRequests: number, windowMs: number): boolean => {
+  const now = Date.now();
+  const current = rateLimitMap.get(ip);
+  if (!current || now > current.resetTime) {
+    rateLimitMap.set(ip, { count: 1, resetTime: now + windowMs });
+    return true;
+  }
+  if (current.count >= maxRequests) {
+    return false;
+  }
+  current.count += 1;
+  return true;
+};
+
+const ALLOWED_ORIGIN_PATTERNS = [
+  /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/,
+  /^https:\/\/[\w-]+\.vercel\.app$/,
+  /^https:\/\/[\w-]+\.run\.app$/
+];
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // CORS configuration
-  res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, PATCH, DELETE");
+  const origin = req.headers.origin as string;
+  if (origin) {
+    const isAllowed = 
+      origin === process.env.APP_URL ||
+      ALLOWED_ORIGIN_PATTERNS.some(pattern => pattern.test(origin)) ||
+      origin === `http://${req.headers.host}` ||
+      origin === `https://${req.headers.host}`;
+
+    if (isAllowed) {
+      res.setHeader("Access-Control-Allow-Origin", origin);
+    }
+  }
+
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+  res.setHeader("Access-Control-Allow-Methods", "POST,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "SAMEORIGIN");
 
   if (req.method === "OPTIONS") {
     return res.status(200).end();
@@ -13,6 +48,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (req.method !== 'POST') {
     return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  const clientIp = (req.headers['x-forwarded-for'] as string)?.split(',')[0] || req.socket?.remoteAddress || 'unknown';
+  if (!checkRateLimit(clientIp, 30, 60 * 1000)) {
+    return res.status(429).json({ error: "Límit de peticions assolit per minut." });
   }
 
   const body = req.body || {};
@@ -25,8 +65,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({ translatedText: "" });
   }
 
-  // 1. Try Google Gemini API if API key is present
-  const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
+  if (textToTranslate.length > 5000) {
+    return res.status(400).json({ error: "Text exceeds maximum 5000 character limit" });
+  }
+
+  // 1. Try Google Gemini API strictly via server secret
+  const apiKey = process.env.GEMINI_API_KEY;
   if (apiKey) {
     try {
       const ai = new GoogleGenAI({
@@ -76,37 +120,10 @@ Text: "${textToTranslate}"`;
 
       return res.status(200).json({ translatedText: translatedText.trim() });
     } catch (geminiError) {
-      console.warn("[Translate API] Gemini translation failed, attempting LibreTranslate fallback:", geminiError);
+      console.warn("[Translate API] Gemini translation failed, attempting fallback:", geminiError);
     }
   }
 
-  // 2. Fallback to LibreTranslate
-  try {
-    const libreResponse = await fetch("https://libretranslate.de/translate", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        q: textToTranslate,
-        source: sourceLang === 'auto' ? 'auto' : sourceLang,
-        target: targetLang,
-        format: "text"
-      }),
-      signal: AbortSignal.timeout(4000)
-    });
-
-    if (libreResponse.ok) {
-      const data = await libreResponse.json();
-      if (data.translatedText) {
-        return res.status(200).json({ translatedText: data.translatedText });
-      }
-    }
-  } catch (libreError) {
-    console.warn("[Translate API] LibreTranslate fallback failed:", libreError);
-  }
-
-  // 3. Final Fallback: Return original text gracefully
+  // 2. Safe Fallback
   return res.status(200).json({ translatedText: textToTranslate });
 }
-

@@ -10,7 +10,7 @@ import { useLanguage } from '../LanguageContext';
 import { supabase, isSupabaseConfigured } from '../supabaseClient';
 
 interface AdminLoginProps {
-  onLoginSuccess: (rememberMe: boolean) => void;
+  onLoginSuccess: () => void;
   onBackToPublic: () => void;
 }
 
@@ -25,22 +25,22 @@ export default function AdminLogin({ onLoginSuccess, onBackToPublic }: AdminLogi
     const r = localStorage.getItem('tast_remember_me_enabled') === 'true';
     return r ? (localStorage.getItem('tast_saved_username') || '') : '';
   });
-  const [password, setPassword] = useState(() => {
-    const r = localStorage.getItem('tast_remember_me_enabled') === 'true';
-    return r ? (localStorage.getItem('tast_saved_password') || '') : '';
-  });
+  const [password, setPassword] = useState('');
 
   const [errorError, setErrorError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
 
+  // Security cleanup: Remove any legacy plaintext passwords stored in localStorage
   useEffect(() => {
+    localStorage.removeItem('tast_saved_password');
+    localStorage.removeItem('tast_admin_session_2026');
+    sessionStorage.removeItem('tast_admin_session_2026');
+
     const isEnabled = localStorage.getItem('tast_remember_me_enabled') === 'true';
     if (isEnabled) {
       const savedUser = localStorage.getItem('tast_saved_username') || '';
-      const savedPass = localStorage.getItem('tast_saved_password') || '';
       if (savedUser && !username) setUsername(savedUser);
-      if (savedPass && !password) setPassword(savedPass);
     }
   }, []);
 
@@ -64,24 +64,36 @@ export default function AdminLogin({ onLoginSuccess, onBackToPublic }: AdminLogi
         });
 
         if (error) {
+          setIsVerifying(false);
           setErrorError(language === 'ca'
             ? `Error d'autenticació: ${error.message === 'Invalid login credentials' ? 'Credencials no vàlides' : error.message}`
             : `Error de autenticación: ${error.message === 'Invalid login credentials' ? 'Credenciales no válidas' : error.message}`);
-          setIsVerifying(false);
           return;
         }
 
-        setIsVerifying(false);
-        onLoginSuccess(rememberMe);
+        if (data.session) {
+          if (rememberMe) {
+            localStorage.setItem('tast_remember_me_enabled', 'true');
+            localStorage.setItem('tast_saved_username', username.trim());
+          } else {
+            localStorage.removeItem('tast_remember_me_enabled');
+            localStorage.removeItem('tast_saved_username');
+          }
+          // Explicitly ensure no password is ever saved
+          localStorage.removeItem('tast_saved_password');
+
+          setIsVerifying(false);
+          onLoginSuccess();
+        }
       } else {
         setIsVerifying(false);
         setErrorError(language === 'ca'
-          ? "Supabase no està configurat en aquest entorn."
-          : "Supabase no está configurado en este entorno.");
+          ? "Supabase Auth no està configurat en aquest entorn."
+          : "Supabase Auth no está configurado en este entorno.");
       }
     } catch (err: any) {
       setIsVerifying(false);
-      setErrorError(err.message || String(err));
+      setErrorError(err?.message || String(err));
     }
   };
 
@@ -131,11 +143,12 @@ export default function AdminLogin({ onLoginSuccess, onBackToPublic }: AdminLogi
                 <User size={16} />
               </span>
               <input 
-                type="text" 
+                type="email" 
                 value={username} 
                 onChange={(e) => setUsername(e.target.value)}
+                autoComplete="email"
                 className="w-full bg-zinc-900/60 border border-zinc-800 focus:border-fuchsia-500 focus:bg-zinc-900 rounded-xl pl-10 pr-4 py-3 text-sm focus:outline-none transition-all placeholder-zinc-600 font-sans text-white text-left"
-                placeholder={language === 'ca' ? "Introduïu el vostre usuari corporatiu" : "Introduzca su usuario corporativo"}
+                placeholder={language === 'ca' ? "secretaria@eltast.cat" : "secretaria@eltast.cat"}
                 id="input-login-username"
               />
             </div>
@@ -153,21 +166,22 @@ export default function AdminLogin({ onLoginSuccess, onBackToPublic }: AdminLogi
                 type={showPassword ? 'text' : 'password'} 
                 value={password} 
                 onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
                 className="w-full bg-zinc-900/60 border border-zinc-800 focus:border-fuchsia-500 focus:bg-zinc-900 rounded-xl pl-10 pr-10 py-3 text-sm focus:outline-none transition-all placeholder-zinc-600 font-sans text-white text-left"
-                placeholder={language === 'ca' ? "Introduïu la vostra clau secreta" : "Introduzca su clave secreta"}
+                placeholder={language === 'ca' ? "Introduïu la contrasenya" : "Introduzca la contraseña"}
                 id="input-login-password"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-zinc-500 hover:text-zinc-300"
+                className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-zinc-500 hover:text-zinc-300 cursor-pointer"
               >
                 {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
           </div>
 
-          {/* Remember me toggle */}
+          {/* Remember email toggle */}
           <div className="flex items-center">
             <label className="flex items-center gap-2.5 text-xs text-zinc-400 select-none cursor-pointer group">
               <input
@@ -178,7 +192,7 @@ export default function AdminLogin({ onLoginSuccess, onBackToPublic }: AdminLogi
                 id="remember_me_checkbox"
               />
               <span className="group-hover:text-zinc-200 transition-colors">
-                {language === 'ca' ? "Recorda'm en aquest dispositiu" : "Recuérdame en este dispositivo"}
+                {language === 'ca' ? "Recorda el meu correu en aquest dispositiu" : "Recordar mi correo en este dispositivo"}
               </span>
             </label>
           </div>
@@ -192,7 +206,7 @@ export default function AdminLogin({ onLoginSuccess, onBackToPublic }: AdminLogi
             {isVerifying ? (
               <span className="flex items-center gap-2">
                 <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-                {language === 'ca' ? 'Sincronitzant credencials...' : 'Sincronizando credenciales...'}
+                {language === 'ca' ? 'Verificant credencials...' : 'Verificando credenciales...'}
               </span>
             ) : (
               language === 'ca' ? "Inicia Sessió" : "Iniciar Sesión"
