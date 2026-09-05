@@ -19,7 +19,14 @@ CREATE TABLE IF NOT EXISTS public.profiles (
 -- Ensure the role column exists and enforces allowed values if table already existed
 DO $$
 BEGIN
-  IF NOT EXISTS (
+  IF EXISTS (
+    SELECT 1 
+    FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'public' 
+      AND c.relname = 'profiles' 
+      AND c.relkind IN ('r', 'p')
+  ) AND NOT EXISTS (
     SELECT 1 FROM information_schema.columns 
     WHERE table_schema = 'public' AND table_name = 'profiles' AND column_name = 'role'
   ) THEN
@@ -27,8 +34,20 @@ BEGIN
   END IF;
 END $$;
 
--- Enable Row Level Security (RLS) on public.profiles
-ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+-- Enable Row Level Security (RLS) on public.profiles (only if it is a table)
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 
+    FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'public' 
+      AND c.relname = 'profiles' 
+      AND c.relkind IN ('r', 'p')
+  ) THEN
+    ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+  END IF;
+END $$;
 
 -- ------------------------------------------------------------------------------
 -- 2. STRICT public.is_admin() FUNCTION (EXCLUSIVELY ROLE-BASED)
@@ -53,34 +72,43 @@ $$;
 REVOKE EXECUTE ON FUNCTION public.is_admin() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.is_admin() TO authenticated;
 
--- Audit and clean up policies on public.profiles via pg_policies
+-- Audit and set policies on public.profiles safely
 DO $$
 DECLARE
   pol RECORD;
 BEGIN
-  FOR pol IN 
-    SELECT policyname 
-    FROM pg_policies 
-    WHERE schemaname = 'public' 
-      AND tablename = 'profiles'
-      AND policyname NOT IN ('profiles_select_own', 'profiles_admin_all')
-  LOOP
-    EXECUTE format('DROP POLICY IF EXISTS %I ON public.profiles;', pol.policyname);
-  END LOOP;
+  IF EXISTS (
+    SELECT 1 
+    FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'public' 
+      AND c.relname = 'profiles' 
+      AND c.relkind IN ('r', 'p')
+  ) THEN
+    FOR pol IN 
+      SELECT policyname 
+      FROM pg_policies 
+      WHERE schemaname = 'public' 
+        AND tablename = 'profiles'
+        AND policyname NOT IN ('profiles_select_own', 'profiles_admin_all')
+    LOOP
+      EXECUTE format('DROP POLICY IF EXISTS %I ON public.profiles;', pol.policyname);
+    END LOOP;
+
+    -- Policy: Authenticated users can ONLY view their own profile
+    DROP POLICY IF EXISTS "profiles_select_own" ON public.profiles;
+    CREATE POLICY "profiles_select_own" ON public.profiles
+      FOR SELECT TO authenticated
+      USING (id = auth.uid());
+
+    -- Policy: Only verified administrators can perform administrative operations on profiles
+    DROP POLICY IF EXISTS "profiles_admin_all" ON public.profiles;
+    CREATE POLICY "profiles_admin_all" ON public.profiles
+      FOR ALL TO authenticated
+      USING (public.is_admin())
+      WITH CHECK (public.is_admin());
+  END IF;
 END $$;
-
--- Policy: Authenticated users can ONLY view their own profile
-DROP POLICY IF EXISTS "profiles_select_own" ON public.profiles;
-CREATE POLICY "profiles_select_own" ON public.profiles
-  FOR SELECT TO authenticated
-  USING (id = auth.uid());
-
--- Policy: Only verified administrators can perform administrative operations on profiles
-DROP POLICY IF EXISTS "profiles_admin_all" ON public.profiles;
-CREATE POLICY "profiles_admin_all" ON public.profiles
-  FOR ALL TO authenticated
-  USING (public.is_admin())
-  WITH CHECK (public.is_admin());
 
 -- ------------------------------------------------------------------------------
 -- 3. TRIGGER FOR NEW USERS & SAFE BACKFILL (ALL DEFAULT TO 'user')
@@ -116,12 +144,19 @@ ON CONFLICT (id) DO NOTHING;
 -- 4. HARDEN RLS ON INSCRIPCIONES (AND INSCRIPCIONS IF PRESENT)
 -- ------------------------------------------------------------------------------
 
--- Table: public.inscripciones (checked dynamically via information_schema)
+-- Table: public.inscripciones (checked via pg_class.relkind to ensure it is a real table)
 DO $$
 DECLARE
   pol RECORD;
 BEGIN
-  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'inscripciones') THEN
+  IF EXISTS (
+    SELECT 1 
+    FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'public' 
+      AND c.relname = 'inscripciones' 
+      AND c.relkind IN ('r', 'p')
+  ) THEN
     ALTER TABLE public.inscripciones ENABLE ROW LEVEL SECURITY;
 
     -- Audit and remove any policy not matching the strict approved policy set
@@ -149,12 +184,22 @@ BEGIN
   END IF;
 END $$;
 
--- Alternative Table: public.inscripcions (checked dynamically via information_schema)
+-- Alternative: public.inscripcions
+-- NOTE: In some environments public.inscripcions exists as a VIEW (relkind = 'v')
+-- rather than a table. PostgreSQL does not support ENABLE ROW LEVEL SECURITY on views.
+-- We strictly check relkind IN ('r', 'p') so views are safely skipped without error.
 DO $$
 DECLARE
   pol RECORD;
 BEGIN
-  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'inscripcions') THEN
+  IF EXISTS (
+    SELECT 1 
+    FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'public' 
+      AND c.relname = 'inscripcions' 
+      AND c.relkind IN ('r', 'p')
+  ) THEN
     ALTER TABLE public.inscripcions ENABLE ROW LEVEL SECURITY;
 
     -- Audit and remove any policy not matching the strict approved policy set
@@ -189,7 +234,14 @@ DO $$
 DECLARE
   pol RECORD;
 BEGIN
-  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'settings') THEN
+  IF EXISTS (
+    SELECT 1 
+    FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'public' 
+      AND c.relname = 'settings' 
+      AND c.relkind IN ('r', 'p')
+  ) THEN
     ALTER TABLE public.settings ENABLE ROW LEVEL SECURITY;
 
     -- Audit and remove any policy not matching the strict approved policy set
@@ -239,7 +291,14 @@ DO $$
 DECLARE
   pol RECORD;
 BEGIN
-  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'preguntes') THEN
+  IF EXISTS (
+    SELECT 1 
+    FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'public' 
+      AND c.relname = 'preguntes' 
+      AND c.relkind IN ('r', 'p')
+  ) THEN
     ALTER TABLE public.preguntes ENABLE ROW LEVEL SECURITY;
 
     -- Audit and remove any policy not matching the strict approved policy set
@@ -273,7 +332,14 @@ END $$;
 -- Ensure the 'dnis' bucket is strictly private and limited to valid document types
 DO $$
 BEGIN
-  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'storage' AND table_name = 'buckets') THEN
+  IF EXISTS (
+    SELECT 1 
+    FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'storage' 
+      AND c.relname = 'buckets' 
+      AND c.relkind IN ('r', 'p')
+  ) THEN
     INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
     VALUES (
       'dnis',
@@ -294,7 +360,14 @@ DO $$
 DECLARE
   pol RECORD;
 BEGIN
-  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'storage' AND table_name = 'objects') THEN
+  IF EXISTS (
+    SELECT 1 
+    FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'storage' 
+      AND c.relname = 'objects' 
+      AND c.relkind IN ('r', 'p')
+  ) THEN
     -- Dynamically drop any policies on storage.objects targeting dnis that are not dnis_admin_all
     FOR pol IN 
       SELECT policyname 
