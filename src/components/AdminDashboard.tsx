@@ -177,13 +177,13 @@ export default function AdminDashboard({
   useEffect(() => {
     // Check server SMTP configuration status securely
     fetch('/api/smtp-status')
-      .then(r => r.json())
+      .then(r => (r.ok ? r.json() : { configured: false }))
       .then(d => {
-        setSmtpServerConfigured(!!d.configured);
-        if (d.host) setSmtpHost(d.host);
-        if (d.port) setSmtpPort(d.port);
-        if (d.user) setSmtpUsuari(d.user);
-        if (d.from) setSmtpFrom(d.from);
+        setSmtpServerConfigured(!!d?.configured);
+        if (d?.host) setSmtpHost(d.host);
+        if (d?.port) setSmtpPort(d.port);
+        if (d?.user) setSmtpUsuari(d.user);
+        if (d?.from) setSmtpFrom(d.from);
       })
       .catch(() => setSmtpServerConfigured(false));
 

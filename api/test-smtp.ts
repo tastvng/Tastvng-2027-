@@ -1,5 +1,6 @@
 import nodemailer from "nodemailer";
-import { applyCorsHeaders, verifySupabaseAdminToken } from "./_cors";
+import { applyCorsHeaders } from "./_cors";
+import { verifySupabaseAdminToken } from "./_supabase-auth";
 
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
 const checkRateLimit = (ip: string, maxRequests: number, windowMs: number): boolean => {

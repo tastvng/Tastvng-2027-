@@ -1,7 +1,6 @@
 import nodemailer from "nodemailer";
-import { createClient } from "@supabase/supabase-js";
-
-import { applyCorsHeaders, verifySupabaseAdminToken } from "./_cors";
+import { applyCorsHeaders } from "./_cors";
+import { verifySupabaseAdminToken } from "./_supabase-auth";
 
 // In-memory rate limiting map for serverless environment
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();

@@ -3,7 +3,8 @@ import path from "path";
 import nodemailer from "nodemailer";
 import { createClient } from "@supabase/supabase-js";
 import dotenv from "dotenv";
-import { applyCorsHeaders, verifySupabaseAdminToken } from "./api/_cors";
+import { applyCorsHeaders } from "./api/_cors";
+import { verifySupabaseAdminToken } from "./api/_supabase-auth";
 import uploadDniHandler from "./api/upload-dni";
 
 dotenv.config();
