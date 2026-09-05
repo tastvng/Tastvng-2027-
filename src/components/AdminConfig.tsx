@@ -27,6 +27,7 @@ import {
 } from 'lucide-react';
 import { SistemaConfig, PreguntaDinamica, NoticiaXarxes, TarifaConcept, LiniaUniforme } from '../types';
 import { cargarPreguntes, guardarPreguntes, eliminarPregunta } from '../api/questionnaireApi';
+import { fetchSistemaConfig, saveSistemaConfigItem } from '../supabaseClient';
 
 interface AdminConfigProps {
   config: SistemaConfig;
@@ -241,10 +242,54 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
         nom: config.nomUniforme || 'Talla de Samarreta',
         nomES: config.nomUniformeES || 'Talla de Camiseta',
         opcions: config.opcionsUniforme || ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'],
-        requeixQuantitat: false
+        requeixQuantitat: false,
+        opcional: config.armilla_opcional !== undefined ? config.armilla_opcional : true,
+        armilla_opcional: config.armilla_opcional !== undefined ? config.armilla_opcional : true
       }
     ]
   );
+
+  // Parella descriptions (JSONB in sistema_config)
+  const [descripcioAdultaCA, setDescripcioAdultaCA] = useState(
+    () => localStorage.getItem('descripcio_parella_adulta_ca') || "Especialista para a partir de 16 anys o més. Inclou samarretres exclusives de la collada i purs dolços."
+  );
+  const [descripcioAdultaES, setDescripcioAdultaES] = useState(
+    () => localStorage.getItem('descripcio_parella_adulta_es') || "Especial para a partir de 16 años o más. Incluye camisetas exclusivas de la colla y puros dulces."
+  );
+  const [descripcioJuvenilCA, setDescripcioJuvenilCA] = useState(
+    () => localStorage.getItem('descripcio_parella_juvenil_ca') || "Ideal per a parelles de 5 a 15 anys d'edat. Inclou fulard petit de color fucsia."
+  );
+  const [descripcioJuvenilES, setDescripcioJuvenilES] = useState(
+    () => localStorage.getItem('descripcio_parella_juvenil_es') || "Ideal para parejas de 5 a 15 años de edad. Incluye pañuelo pequeño de color fucsia."
+  );
+  const [armillaOpcional, setArmillaOpcional] = useState(
+    () => config.armilla_opcional !== undefined ? config.armilla_opcional : (localStorage.getItem('armilla_opcional') !== 'false')
+  );
+
+  useEffect(() => {
+    let active = true;
+    const loadConfigDesc = async () => {
+      try {
+        const items = await fetchSistemaConfig();
+        if (!active) return;
+        const dAdultCA = items.find(i => i.clau === 'descripcio_parella_adulta_ca')?.valor?.text;
+        const dAdultES = items.find(i => i.clau === 'descripcio_parella_adulta_es')?.valor?.text;
+        const dJuvCA = items.find(i => i.clau === 'descripcio_parella_juvenil_ca')?.valor?.text;
+        const dJuvES = items.find(i => i.clau === 'descripcio_parella_juvenil_es')?.valor?.text;
+        const armOpc = items.find(i => i.clau === 'armilla_opcional')?.valor?.opcional;
+
+        if (dAdultCA) setDescripcioAdultaCA(dAdultCA);
+        if (dAdultES) setDescripcioAdultaES(dAdultES);
+        if (dJuvCA) setDescripcioJuvenilCA(dJuvCA);
+        if (dJuvES) setDescripcioJuvenilES(dJuvES);
+        if (armOpc !== undefined) setArmillaOpcional(armOpc);
+      } catch (err) {
+        console.warn("Could not load sistema_config in AdminConfig:", err);
+      }
+    };
+    loadConfigDesc();
+    return () => { active = false; };
+  }, []);
 
   // Questionnaire questions state
   const [preguntes, setPreguntes] = useState<PreguntaDinamica[]>(config.preguntesFormulari);
@@ -600,8 +645,34 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
       estatInscripcions: estatInscripcions,
       googleSheetSyncUrl: googleSheetSyncUrl.trim(),
       googleSheetSyncActive: googleSheetSyncActive,
-      cuestionariActiu: cuestionariActiu
+      cuestionariActiu: cuestionariActiu,
+      armilla_opcional: armillaOpcional
     };
+
+    // Save parella descriptions and armilla_opcional to sistema_config
+    try {
+      await Promise.all([
+        saveSistemaConfigItem('descripcio_parella_adulta_ca', { text: descripcioAdultaCA }),
+        saveSistemaConfigItem('descripcio_parella_adulta_es', { text: descripcioAdultaES }),
+        saveSistemaConfigItem('descripcio_parella_juvenil_ca', { text: descripcioJuvenilCA }),
+        saveSistemaConfigItem('descripcio_parella_juvenil_es', { text: descripcioJuvenilES }),
+        saveSistemaConfigItem('armilla_opcional', { opcional: armillaOpcional }),
+      ]);
+      localStorage.setItem('descripcio_parella_adulta_ca', descripcioAdultaCA);
+      localStorage.setItem('descripcio_parella_adulta_es', descripcioAdultaES);
+      localStorage.setItem('descripcio_parella_juvenil_ca', descripcioJuvenilCA);
+      localStorage.setItem('descripcio_parella_juvenil_es', descripcioJuvenilES);
+      localStorage.setItem('categoria_adulta_desc_ca', descripcioAdultaCA);
+      localStorage.setItem('categoria_adulta_desc_es', descripcioAdultaES);
+      localStorage.setItem('categoria_juvenil_desc_ca', descripcioJuvenilCA);
+      localStorage.setItem('categoria_juvenil_desc_es', descripcioJuvenilES);
+      localStorage.setItem('armilla_opcional', String(armillaOpcional));
+
+      window.dispatchEvent(new Event('categoriaDescChanged'));
+      window.dispatchEvent(new Event('sistemaConfigChanged'));
+    } catch (err) {
+      console.error("Error saving sistema_config descriptions:", err);
+    }
 
     // Persist questions inside the dedicated 'preguntes' table in Supabase
     try {
@@ -929,6 +1000,66 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                         : (language === 'ca' ? 'Inactiva' : 'Inactiva')}
                     </button>
                   </div>
+
+                  {/* Descriptions for Parella Adulta */}
+                  {(tf.tipus === 'categoria_adult' || tf.id === 'adults') && (
+                    <div className="pt-2.5 border-t border-zinc-200/70 space-y-2 mt-2">
+                      <div className="space-y-1">
+                        <label className="block text-[10px] text-zinc-500 font-mono font-bold uppercase">
+                          {language === 'ca' ? "Descripció Parella Adulta (Català)" : "Descripción Pareja Adulta (Catalán)"}
+                        </label>
+                        <textarea
+                          rows={2}
+                          value={descripcioAdultaCA}
+                          onChange={(e) => setDescripcioAdultaCA(e.target.value)}
+                          className="w-full bg-white border border-zinc-250 focus:border-fuchsia-500 rounded-xl p-2 text-xs font-medium text-zinc-800 focus:outline-none"
+                          placeholder="Descripció per a parella adulta en català..."
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="block text-[10px] text-zinc-500 font-mono font-bold uppercase">
+                          {language === 'ca' ? "Descripció Parella Adulta (Castellà)" : "Descripción Pareja Adulta (Castellano)"}
+                        </label>
+                        <textarea
+                          rows={2}
+                          value={descripcioAdultaES}
+                          onChange={(e) => setDescripcioAdultaES(e.target.value)}
+                          className="w-full bg-white border border-zinc-250 focus:border-fuchsia-500 rounded-xl p-2 text-xs font-medium text-zinc-800 focus:outline-none"
+                          placeholder="Descripción para pareja adulta en castellano..."
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Descriptions for Parella Juvenil */}
+                  {(tf.tipus === 'categoria_juvenil' || tf.id === 'juvenils') && (
+                    <div className="pt-2.5 border-t border-zinc-200/70 space-y-2 mt-2">
+                      <div className="space-y-1">
+                        <label className="block text-[10px] text-zinc-500 font-mono font-bold uppercase">
+                          {language === 'ca' ? "Descripció Parella Juvenil (Català)" : "Descripción Pareja Juvenil (Catalán)"}
+                        </label>
+                        <textarea
+                          rows={2}
+                          value={descripcioJuvenilCA}
+                          onChange={(e) => setDescripcioJuvenilCA(e.target.value)}
+                          className="w-full bg-white border border-zinc-250 focus:border-fuchsia-500 rounded-xl p-2 text-xs font-medium text-zinc-800 focus:outline-none"
+                          placeholder="Descripció per a parella juvenil en català..."
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="block text-[10px] text-zinc-500 font-mono font-bold uppercase">
+                          {language === 'ca' ? "Descripció Parella Juvenil (Castellà)" : "Descripción Pareja Juvenil (Castellano)"}
+                        </label>
+                        <textarea
+                          rows={2}
+                          value={descripcioJuvenilES}
+                          onChange={(e) => setDescripcioJuvenilES(e.target.value)}
+                          className="w-full bg-white border border-zinc-250 focus:border-fuchsia-500 rounded-xl p-2 text-xs font-medium text-zinc-800 focus:outline-none"
+                          placeholder="Descripción para pareja juvenil en castellano..."
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -1574,6 +1705,25 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                         {language === 'ca' 
                           ? "Permet escollir quantitat de marxandatge/material" 
                           : "Permitir elegir cantidad de merchandising/material"}
+                      </label>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <input 
+                        type="checkbox"
+                        id={`check-opcional-${linia.id}`}
+                        checked={linia.opcional !== undefined ? !!linia.opcional : (linia.armilla_opcional !== undefined ? !!linia.armilla_opcional : !!armillaOpcional)}
+                        onChange={(e) => {
+                          const isChecked = e.target.checked;
+                          handleUpdateLiniaUniforme(linia.id, { opcional: isChecked, armilla_opcional: isChecked });
+                          setArmillaOpcional(isChecked);
+                        }}
+                        className="rounded text-fuchsia-600 focus:ring-fuchsia-500 h-4 w-4 border-zinc-300 cursor-pointer"
+                      />
+                      <label htmlFor={`check-opcional-${linia.id}`} className="text-zinc-700 text-xs font-bold select-none cursor-pointer">
+                        {language === 'ca' 
+                          ? "¿Permetre que l'usuari triï si vol aquest producte?" 
+                          : "¿Permitir que el usuario elija si quiere este producto?"}
                       </label>
                     </div>
 

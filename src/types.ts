@@ -114,6 +114,13 @@ export interface LiniaUniforme {
   requeixQuantitat?: boolean;
   preu?: number;
   preuLloguer?: number;
+  opcional?: boolean;
+  armilla_opcional?: boolean;
+}
+
+export interface SistemaConfigItem {
+  clau: string;
+  valor: any;
 }
 
 export interface SistemaConfig {
@@ -144,6 +151,7 @@ export interface SistemaConfig {
   googleSheetSyncUrl?: string;
   googleSheetSyncActive?: boolean;
   cuestionariActiu?: boolean;
+  armilla_opcional?: boolean;
 }
 
 export interface NoticiaXarxes {

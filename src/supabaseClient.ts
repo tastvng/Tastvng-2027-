@@ -680,3 +680,104 @@ export async function getDniSignedUrl(pathOrUrl: string): Promise<string> {
   return pathOrUrl;
 }
 
+export interface SistemaConfigItem {
+  clau: string;
+  valor: any;
+}
+
+/**
+ * Fetches all configuration records from the 'sistema_config' table.
+ * Falls back to local storage and default entries.
+ */
+export async function fetchSistemaConfig(): Promise<SistemaConfigItem[]> {
+  const defaults: SistemaConfigItem[] = [
+    { 
+      clau: 'descripcio_parella_adulta_ca', 
+      valor: { text: localStorage.getItem('descripcio_parella_adulta_ca') || "Especialista para a partir de 16 anys o més. Inclou samarretres exclusives de la collada i purs dolços." } 
+    },
+    { 
+      clau: 'descripcio_parella_adulta_es', 
+      valor: { text: localStorage.getItem('descripcio_parella_adulta_es') || "Especial para a partir de 16 años o más. Incluye camisetas exclusivas de la colla y puros dulces." } 
+    },
+    { 
+      clau: 'descripcio_parella_juvenil_ca', 
+      valor: { text: localStorage.getItem('descripcio_parella_juvenil_ca') || "Ideal per a parelles de 5 a 15 anys d'edat. Inclou fulard petit de color fucsia." } 
+    },
+    { 
+      clau: 'descripcio_parella_juvenil_es', 
+      valor: { text: localStorage.getItem('descripcio_parella_juvenil_es') || "Ideal para parejas de 5 a 15 años de edad. Incluye pañuelo pequeño de color fucsia." } 
+    },
+    { 
+      clau: 'armilla_opcional', 
+      valor: { opcional: localStorage.getItem('armilla_opcional') === 'true' } 
+    },
+  ];
+
+  if (!supabase) {
+    return defaults;
+  }
+
+  try {
+    const { data, error } = await supabase.from('sistema_config').select('*');
+    if (!error && data && data.length > 0) {
+      const items: SistemaConfigItem[] = data.map((row: any) => {
+        const clau = row.clau || row.key;
+        let valor = row.valor !== undefined ? row.valor : row.value;
+        if (typeof valor === 'string') {
+          try { valor = JSON.parse(valor); } catch {}
+        }
+        return { clau, valor };
+      });
+      return items;
+    }
+  } catch (err) {
+    console.warn("Could not fetch sistema_config directly:", err);
+  }
+
+  return defaults;
+}
+
+/**
+ * Saves a single configuration record to 'sistema_config' (and synchronizes with 'settings' and localStorage).
+ */
+export async function saveSistemaConfigItem(clau: string, valor: any): Promise<boolean> {
+  try {
+    if (typeof valor === 'object' && valor !== null && valor.text) {
+      localStorage.setItem(clau, valor.text);
+    } else if (typeof valor === 'object' && valor !== null && valor.opcional !== undefined) {
+      localStorage.setItem(clau, String(valor.opcional));
+    } else if (typeof valor === 'string') {
+      localStorage.setItem(clau, valor);
+    }
+
+    if (!supabase) return true;
+
+    const payload = {
+      clau,
+      valor,
+      key: clau,
+      value: valor
+    };
+
+    const { error } = await supabase
+      .from('sistema_config')
+      .upsert(payload, { onConflict: 'clau' });
+
+    if (error) {
+      const { error: err2 } = await supabase
+        .from('sistema_config')
+        .upsert({ clau, valor }, { onConflict: 'clau' });
+      if (err2) {
+        console.warn(`Direct upsert to sistema_config failed for [${clau}]:`, err2.message);
+      }
+    }
+
+    // Also synchronize to settings table for backward compatibility
+    await saveSupabaseSetting(clau, typeof valor === 'object' ? JSON.stringify(valor) : valor);
+    return true;
+  } catch (e) {
+    console.warn(`Exception saving sistema_config item [${clau}]:`, e);
+    return false;
+  }
+}
+

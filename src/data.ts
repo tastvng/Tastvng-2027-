@@ -53,10 +53,10 @@ export const COMPARTIDES_XARXES: NoticiaXarxes[] = [
 ];
 
 export const DEFAULT_CATEGORIA_DESCRIPTIONS = {
-  categoria_adulta_desc_ca: "Recomanada per a participants de 16 anys o més. Inclou samarretes exclusives de la collada i puros dolços.",
-  categoria_adulta_desc_es: "Recomendada para participantes de 16 años o más. Incluye camisetas exclusivas de la colla y puros dulces.",
-  categoria_juvenil_desc_ca: "Ideal per a parelles joves de fins a 15 anys d'edat. Inclou fulard petit de color fúcsia.",
-  categoria_juvenil_desc_es: "Ideal para parejas jóvenes de hasta 15 años de edad. Incluye pañuelo pequeño de color fucsia."
+  categoria_adulta_desc_ca: "Especialista para a partir de 16 anys o més. Inclou samarretres exclusives de la collada i purs dolços.",
+  categoria_adulta_desc_es: "Especial para a partir de 16 años o más. Incluye camisetas exclusivas de la colla y puros dulces.",
+  categoria_juvenil_desc_ca: "Ideal per a parelles de 5 a 15 anys d'edat. Inclou fulard petit de color fucsia.",
+  categoria_juvenil_desc_es: "Ideal para parejas de 5 a 15 años de edad. Incluye pañuelo pequeño de color fucsia."
 };
 
 export const CONFIG_INICIAL: SistemaConfig = {
@@ -65,6 +65,7 @@ export const CONFIG_INICIAL: SistemaConfig = {
   preuDomasBalco: 15.00,
   preuMocadorExtra: 6.00,
   estatInscripcions: 'obertes',
+  armilla_opcional: true,
   titolSeccioTarifes: 'Tarifes i Cànons 2026',
   tarifesDinamiques: [
     { id: 'adults', nom: 'Preu Parella Adulta (€)', valor: 90.00, actiu: true, tipus: 'categoria_adult' },

@@ -15,7 +15,8 @@ import {
   Sparkle,
   Database
 } from 'lucide-react';
-import { CategoriaParella, SistemaConfig, Inscripcio, EstatPagament, EstatVerificacio, EstatInscripcio } from '../types';
+import { CategoriaParella, SistemaConfig, Inscripcio, EstatPagament, EstatVerificacio, EstatInscripcio, SistemaConfigItem } from '../types';
+import { fetchSistemaConfig } from '../supabaseClient';
 import { useLanguage } from '../LanguageContext';
 import { useActiveYear } from '../hooks/useActiveYear';
 import TranslatedText, { TranslatedOption } from './TranslatedText';
@@ -186,13 +187,31 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
     };
   }, []);
 
+  // sistema_config data state for category descriptions and settings
+  const [configData, setConfigData] = useState<SistemaConfigItem[]>(() => {
+    try {
+      const caAdulta = localStorage.getItem('descripcio_parella_adulta_ca') || localStorage.getItem('categoria_adulta_desc_ca') || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_adulta_desc_ca;
+      const esAdulta = localStorage.getItem('descripcio_parella_adulta_es') || localStorage.getItem('categoria_adulta_desc_es') || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_adulta_desc_es;
+      const caJuvenil = localStorage.getItem('descripcio_parella_juvenil_ca') || localStorage.getItem('categoria_juvenil_desc_ca') || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_juvenil_desc_ca;
+      const esJuvenil = localStorage.getItem('descripcio_parella_juvenil_es') || localStorage.getItem('categoria_juvenil_desc_es') || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_juvenil_desc_es;
+      return [
+        { clau: 'descripcio_parella_adulta_ca', valor: { text: caAdulta } },
+        { clau: 'descripcio_parella_adulta_es', valor: { text: esAdulta } },
+        { clau: 'descripcio_parella_juvenil_ca', valor: { text: caJuvenil } },
+        { clau: 'descripcio_parella_juvenil_es', valor: { text: esJuvenil } },
+      ];
+    } catch {
+      return [];
+    }
+  });
+
   // Category descriptions (Parella Adulta & Parella Juvenil) loaded from Supabase settings
   const [categoriaDesc, setCategoriaDesc] = useState(() => {
     try {
-      const caAdulta = localStorage.getItem('categoria_adulta_desc_ca');
-      const esAdulta = localStorage.getItem('categoria_adulta_desc_es');
-      const caJuvenil = localStorage.getItem('categoria_juvenil_desc_ca');
-      const esJuvenil = localStorage.getItem('categoria_juvenil_desc_es');
+      const caAdulta = localStorage.getItem('descripcio_parella_adulta_ca') || localStorage.getItem('categoria_adulta_desc_ca');
+      const esAdulta = localStorage.getItem('descripcio_parella_adulta_es') || localStorage.getItem('categoria_adulta_desc_es');
+      const caJuvenil = localStorage.getItem('descripcio_parella_juvenil_ca') || localStorage.getItem('categoria_juvenil_desc_ca');
+      const esJuvenil = localStorage.getItem('descripcio_parella_juvenil_es') || localStorage.getItem('categoria_juvenil_desc_es');
       return {
         categoria_adulta_desc_ca: caAdulta || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_adulta_desc_ca,
         categoria_adulta_desc_es: esAdulta || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_adulta_desc_es,
@@ -208,7 +227,13 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
     let active = true;
     const loadCategoryDescriptions = async () => {
       try {
-        const { getSupabaseSetting, isSupabaseConfigured } = await import('../supabaseClient');
+        const [items, { getSupabaseSetting, isSupabaseConfigured }] = await Promise.all([
+          fetchSistemaConfig(),
+          import('../supabaseClient')
+        ]);
+        if (active && items && items.length > 0) {
+          setConfigData(items);
+        }
         if (isSupabaseConfigured) {
           const [adultaCa, adultaEs, juvenilCa, juvenilEs] = await Promise.all([
             getSupabaseSetting<string>('categoria_adulta_desc_ca', DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_adulta_desc_ca, true),
@@ -224,12 +249,6 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
               categoria_juvenil_desc_es: juvenilEs || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_juvenil_desc_es,
             };
             setCategoriaDesc(resolved);
-            try {
-              localStorage.setItem('categoria_adulta_desc_ca', resolved.categoria_adulta_desc_ca);
-              localStorage.setItem('categoria_adulta_desc_es', resolved.categoria_adulta_desc_es);
-              localStorage.setItem('categoria_juvenil_desc_ca', resolved.categoria_juvenil_desc_ca);
-              localStorage.setItem('categoria_juvenil_desc_es', resolved.categoria_juvenil_desc_es);
-            } catch {}
           }
         }
       } catch (err) {
@@ -239,16 +258,22 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
 
     const handleUpdate = () => {
       try {
-        const caAdulta = localStorage.getItem('categoria_adulta_desc_ca');
-        const esAdulta = localStorage.getItem('categoria_adulta_desc_es');
-        const caJuvenil = localStorage.getItem('categoria_juvenil_desc_ca');
-        const esJuvenil = localStorage.getItem('categoria_juvenil_desc_es');
-        setCategoriaDesc(prev => ({
-          categoria_adulta_desc_ca: caAdulta || prev.categoria_adulta_desc_ca,
-          categoria_adulta_desc_es: esAdulta || prev.categoria_adulta_desc_es,
-          categoria_juvenil_desc_ca: caJuvenil || prev.categoria_juvenil_desc_ca,
-          categoria_juvenil_desc_es: esJuvenil || prev.categoria_juvenil_desc_es,
-        }));
+        const caAdulta = localStorage.getItem('descripcio_parella_adulta_ca') || localStorage.getItem('categoria_adulta_desc_ca') || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_adulta_desc_ca;
+        const esAdulta = localStorage.getItem('descripcio_parella_adulta_es') || localStorage.getItem('categoria_adulta_desc_es') || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_adulta_desc_es;
+        const caJuvenil = localStorage.getItem('descripcio_parella_juvenil_ca') || localStorage.getItem('categoria_juvenil_desc_ca') || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_juvenil_desc_ca;
+        const esJuvenil = localStorage.getItem('descripcio_parella_juvenil_es') || localStorage.getItem('categoria_juvenil_desc_es') || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_juvenil_desc_es;
+        setConfigData([
+          { clau: 'descripcio_parella_adulta_ca', valor: { text: caAdulta } },
+          { clau: 'descripcio_parella_adulta_es', valor: { text: esAdulta } },
+          { clau: 'descripcio_parella_juvenil_ca', valor: { text: caJuvenil } },
+          { clau: 'descripcio_parella_juvenil_es', valor: { text: esJuvenil } },
+        ]);
+        setCategoriaDesc({
+          categoria_adulta_desc_ca: caAdulta,
+          categoria_adulta_desc_es: esAdulta,
+          categoria_juvenil_desc_ca: caJuvenil,
+          categoria_juvenil_desc_es: esJuvenil,
+        });
       } catch {}
       loadCategoryDescriptions().catch(err => console.warn("Error reloading category descriptions:", err));
     };
@@ -264,6 +289,12 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
       window.removeEventListener('storage', handleUpdate);
     };
   }, []);
+
+  // Descriptions from sistema_config with fallbacks
+  const descripcioDultaCA = configData.find(c => c.clau === 'descripcio_parella_adulta_ca')?.valor?.text || categoriaDesc.categoria_adulta_desc_ca || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_adulta_desc_ca;
+  const descripcioDultaES = configData.find(c => c.clau === 'descripcio_parella_adulta_es')?.valor?.text || categoriaDesc.categoria_adulta_desc_es || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_adulta_desc_es;
+  const descripcioJuvenilCA = configData.find(c => c.clau === 'descripcio_parella_juvenil_ca')?.valor?.text || categoriaDesc.categoria_juvenil_desc_ca || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_juvenil_desc_ca;
+  const descripcioJuvenilES = configData.find(c => c.clau === 'descripcio_parella_juvenil_es')?.valor?.text || categoriaDesc.categoria_juvenil_desc_es || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_juvenil_desc_es;
 
   // Live duplicate check flags for Comparser 1 & 2
   const isC1NameDuplicate = useMemo(() => {
@@ -393,24 +424,33 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
 
   const uniformesCost = (config.liniisUniforme || []).reduce((sum, linia) => {
     let cost = 0;
+    const isOptional = !!(linia.opcional || linia.armilla_opcional || config.armilla_opcional);
     const sel = seleccionsUniforme[linia.id];
     
     if (sel) {
-      const p1 = sel.c1Tipus === 'lloguer' ? (linia.preuLloguer || 0) : (linia.preu || 0);
-      if (sel.c1Quantitat) {
-        cost += p1 * sel.c1Quantitat;
-      } else if (!linia.requeixQuantitat) {
-        cost += p1;
+      const c1Wants = isOptional ? sel.c1Vol !== false : true;
+      if (c1Wants) {
+        const p1 = sel.c1Tipus === 'lloguer' ? (linia.preuLloguer || 0) : (linia.preu || 0);
+        if (sel.c1Quantitat) {
+          cost += p1 * sel.c1Quantitat;
+        } else if (!linia.requeixQuantitat) {
+          cost += p1;
+        }
       }
       
-      const p2 = sel.c2Tipus === 'lloguer' ? (linia.preuLloguer || 0) : (linia.preu || 0);
-      if (sel.c2Quantitat) {
-        cost += p2 * sel.c2Quantitat;
-      } else if (!linia.requeixQuantitat) {
-        cost += p2;
+      const c2Wants = isOptional ? sel.c2Vol !== false : true;
+      if (c2Wants) {
+        const p2 = sel.c2Tipus === 'lloguer' ? (linia.preuLloguer || 0) : (linia.preu || 0);
+        if (sel.c2Quantitat) {
+          cost += p2 * sel.c2Quantitat;
+        } else if (!linia.requeixQuantitat) {
+          cost += p2;
+        }
       }
     } else {
-      cost += (linia.preu || 0) * 2;
+      if (!isOptional) {
+        cost += (linia.preu || 0) * 2;
+      }
     }
     return sum + cost;
   }, 0);
@@ -1083,9 +1123,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
                     {language === 'ca' ? 'Parella Adulta' : 'Pareja Adulta'}
                   </h4>
                   <p className="text-zinc-400 text-xs mt-1 leading-relaxed">
-                    {language === 'ca' 
-                      ? (categoriaDesc.categoria_adulta_desc_ca || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_adulta_desc_ca)
-                      : (categoriaDesc.categoria_adulta_desc_es || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_adulta_desc_es)}
+                    {language === 'ca' ? descripcioDultaCA : descripcioDultaES}
                   </p>
                   <div className="text-right mt-3">
                     <span className="font-sans font-extrabold text-2xl text-fuchsia-500">{adultTarifaObj.valor}€</span>
@@ -1125,9 +1163,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
                     {language === 'ca' ? 'Parella Juvenil' : 'Pareja Juvenil'}
                   </h4>
                   <p className="text-zinc-400 text-xs mt-1 leading-relaxed">
-                    {language === 'ca' 
-                      ? (categoriaDesc.categoria_juvenil_desc_ca || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_juvenil_desc_ca)
-                      : (categoriaDesc.categoria_juvenil_desc_es || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_juvenil_desc_es)}
+                    {language === 'ca' ? descripcioJuvenilCA : descripcioJuvenilES}
                   </p>
                   <div className="text-right mt-3">
                     <span className="font-sans font-extrabold text-2xl text-fuchsia-500">{juvenilTarifaObj.valor}€</span>

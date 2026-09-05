@@ -91,7 +91,7 @@ export const ComparserCard: React.FC<ComparserCardProps> = ({
   handleFileUpload,
   startCamera,
 }) => {
-  const { language } = useLanguage();
+  const { language, t } = useLanguage();
   const prefix = `c${num}`;
 
   // Keys for uniform line selection based on participant number
@@ -353,16 +353,23 @@ export const ComparserCard: React.FC<ComparserCardProps> = ({
             requeixQuantitat: false
           }
         ]).map((linia) => {
-          const sel = seleccionsUniforme[linia.id] || { [keyTalla]: linia.opcions[0] || 'M', [keyQuantitat]: 1, [keyTipus]: 'compra' };
+          const isOptional = !!(linia.opcional || linia.armilla_opcional || config.armilla_opcional);
+          const keyVol = num === 1 ? 'c1Vol' : 'c2Vol';
+          const sel = seleccionsUniforme[linia.id] || { [keyTalla]: linia.opcions[0] || 'M', [keyQuantitat]: 1, [keyTipus]: 'compra', [keyVol]: true };
           const tallaVal = sel[keyTalla] || linia.opcions[0] || 'M';
           const quantitatVal = sel[keyQuantitat] || 1;
           const tipusVal = sel[keyTipus] || 'compra';
+          const volProducte = sel[keyVol] !== undefined ? !!sel[keyVol] : true;
+
+          const displayNom = language === 'ca' 
+            ? linia.nom.replace(/armilla/gi, t('armilla')) 
+            : linia.nomES.replace(/chaleco/gi, t('armilla'));
 
           return (
-            <div key={linia.id} className="space-y-2 p-4 bg-zinc-50 border border-zinc-200 rounded-2xl">
-              <div className="flex justify-between items-center mb-1 bg-white px-3 py-1.5 rounded-lg border border-zinc-100 shadow-sm">
+            <div key={linia.id} className="space-y-3 p-4 bg-zinc-50 border border-zinc-200 rounded-2xl">
+              <div className="flex justify-between items-center bg-white px-3 py-1.5 rounded-lg border border-zinc-100 shadow-sm">
                 <label className="block text-xs font-bold text-zinc-800 tracking-tight">
-                  {language === 'ca' ? linia.nom : linia.nomES} *
+                  {displayNom} {isOptional ? '' : '*'}
                 </label>
                 {(linia.preu || linia.preuLloguer) ? (
                   <div className="flex gap-1.5 flex-wrap justify-end">
@@ -380,92 +387,123 @@ export const ComparserCard: React.FC<ComparserCardProps> = ({
                 ) : null}
               </div>
 
-              <div className="flex gap-2.5">
-                <select 
-                  value={tallaVal}
-                  onChange={(e) => {
-                    const newSel = { ...sel, [keyTalla]: e.target.value };
-                    setSeleccionsUniforme({
-                      ...seleccionsUniforme,
-                      [linia.id]: newSel
-                    });
-                    
-                    const firstId = (config.liniisUniforme && config.liniisUniforme[0]?.id) || 'lin-1';
-                    if (linia.id === firstId && setTallaBackwards) {
-                      setTallaBackwards(e.target.value);
-                    }
-                  }}
-                  className="flex-1 bg-white border border-zinc-200 focus:border-fuchsia-500 rounded-xl px-4 py-2.5 text-xs font-bold focus:outline-none cursor-pointer"
-                >
-                  {linia.opcions.map(opt => (
-                    <option key={opt} value={opt}>{opt}</option>
-                  ))}
-                </select>
+              {/* Optional selection checkbox for armilla/product */}
+              {isOptional && (
+                <div className="flex items-center gap-2.5 p-2.5 bg-white rounded-xl border border-zinc-200 shadow-2xs">
+                  <input
+                    type="checkbox"
+                    id={`check-vol-${linia.id}-${num}`}
+                    checked={volProducte}
+                    onChange={(e) => {
+                      const newSel = { ...sel, [keyVol]: e.target.checked };
+                      setSeleccionsUniforme({
+                        ...seleccionsUniforme,
+                        [linia.id]: newSel
+                      });
+                    }}
+                    className="rounded text-fuchsia-600 focus:ring-fuchsia-500 h-4 w-4 border-zinc-300 cursor-pointer"
+                  />
+                  <label htmlFor={`check-vol-${linia.id}-${num}`} className="text-xs font-bold text-zinc-850 cursor-pointer select-none">
+                    {language === 'ca' ? `Vols ${t('armilla').toLowerCase()}?` : `¿Deseas ${t('armilla').toLowerCase()}?`}
+                  </label>
+                </div>
+              )}
 
-                {linia.requeixQuantitat && (
-                  <div className="flex items-center gap-2 bg-white border border-zinc-200 rounded-xl px-3 py-1 text-xs shrink-0">
-                    <span className="text-[10px] text-zinc-400 font-mono font-bold uppercase">Cant.</span>
-                    <select
-                      value={quantitatVal}
+              {/* Size and Acquisition controls - hidden/disabled when optional is unchecked */}
+              {(!isOptional || volProducte) ? (
+                <>
+                  <div className="flex gap-2.5">
+                    <select 
+                      value={tallaVal}
                       onChange={(e) => {
-                        const newSel = { ...sel, [keyQuantitat]: Math.max(1, Number(e.target.value)) };
+                        const newSel = { ...sel, [keyTalla]: e.target.value };
                         setSeleccionsUniforme({
                           ...seleccionsUniforme,
                           [linia.id]: newSel
                         });
+                        
+                        const firstId = (config.liniisUniforme && config.liniisUniforme[0]?.id) || 'lin-1';
+                        if (linia.id === firstId && setTallaBackwards) {
+                          setTallaBackwards(e.target.value);
+                        }
                       }}
-                      className="bg-transparent border-none text-xs font-bold text-zinc-800 focus:ring-0 focus:outline-none cursor-pointer"
+                      className="flex-1 bg-white border border-zinc-200 focus:border-fuchsia-500 rounded-xl px-4 py-2.5 text-xs font-bold focus:outline-none cursor-pointer"
                     >
-                      {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => (
-                        <option key={n} value={n}>{n}</option>
+                      {linia.opcions.map(opt => (
+                        <option key={opt} value={opt}>{opt}</option>
                       ))}
                     </select>
-                  </div>
-                )}
-              </div>
 
-              {/* Venda / Lloguer selectors */}
-              <div className="mt-2 text-left pt-2 border-t border-zinc-200/50 flex items-center justify-between gap-3">
-                <span className="text-[10px] font-bold text-zinc-500 uppercase font-mono tracking-tight">
-                  {language === 'ca' ? "Tipus d'Adquisició:" : "Tipo de Adquisición:"}
-                </span>
-                <div className="flex bg-white rounded-lg overflow-hidden border border-zinc-200 p-0.5 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const newSel = { ...sel, [keyTipus]: 'compra' as const };
-                      setSeleccionsUniforme({
-                        ...seleccionsUniforme,
-                        [linia.id]: newSel
-                      });
-                      const firstId = (config.liniisUniforme && config.liniisUniforme[0]?.id) || 'lin-1';
-                      if (linia.id === firstId && setUniformeTipusBackwards) {
-                        setUniformeTipusBackwards('compra');
-                      }
-                    }}
-                    className={`text-[10px] px-2.5 py-1 font-bold rounded-md transition-all cursor-pointer ${(!tipusVal || tipusVal === 'compra') ? 'bg-fuchsia-100 text-fuchsia-700 shadow-sm' : 'text-zinc-550 hover:text-zinc-855'}`}
-                  >
-                    Compra
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const newSel = { ...sel, [keyTipus]: 'lloguer' as const };
-                      setSeleccionsUniforme({
-                        ...seleccionsUniforme,
-                        [linia.id]: newSel
-                      });
-                      const firstId = (config.liniisUniforme && config.liniisUniforme[0]?.id) || 'lin-1';
-                      if (linia.id === firstId && setUniformeTipusBackwards) {
-                        setUniformeTipusBackwards('lloguer');
-                      }
-                    }}
-                    className={`text-[10px] px-2.5 py-1 font-bold rounded-md transition-all cursor-pointer ${tipusVal === 'lloguer' ? 'bg-fuchsia-600 text-white shadow-sm' : 'text-zinc-550 hover:text-zinc-855'}`}
-                  >
-                    {language === 'ca' ? "Lloguer" : "Alquiler"}
-                  </button>
-                </div>
-              </div>
+                    {linia.requeixQuantitat && (
+                      <div className="flex items-center gap-2 bg-white border border-zinc-200 rounded-xl px-3 py-1 text-xs shrink-0">
+                        <span className="text-[10px] text-zinc-400 font-mono font-bold uppercase">Cant.</span>
+                        <select
+                          value={quantitatVal}
+                          onChange={(e) => {
+                            const newSel = { ...sel, [keyQuantitat]: Math.max(1, Number(e.target.value)) };
+                            setSeleccionsUniforme({
+                              ...seleccionsUniforme,
+                              [linia.id]: newSel
+                            });
+                          }}
+                          className="bg-transparent border-none text-xs font-bold text-zinc-800 focus:ring-0 focus:outline-none cursor-pointer"
+                        >
+                          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(n => (
+                            <option key={n} value={n}>{n}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Venda / Lloguer selectors */}
+                  <div className="text-left pt-2 border-t border-zinc-200/50 flex items-center justify-between gap-3">
+                    <span className="text-[10px] font-bold text-zinc-500 uppercase font-mono tracking-tight">
+                      {language === 'ca' ? "Tipus d'Adquisició:" : "Tipo de Adquisición:"}
+                    </span>
+                    <div className="flex bg-white rounded-lg overflow-hidden border border-zinc-200 p-0.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newSel = { ...sel, [keyTipus]: 'compra' as const };
+                          setSeleccionsUniforme({
+                            ...seleccionsUniforme,
+                            [linia.id]: newSel
+                          });
+                          const firstId = (config.liniisUniforme && config.liniisUniforme[0]?.id) || 'lin-1';
+                          if (linia.id === firstId && setUniformeTipusBackwards) {
+                            setUniformeTipusBackwards('compra');
+                          }
+                        }}
+                        className={`text-[10px] px-2.5 py-1 font-bold rounded-md transition-all cursor-pointer ${(!tipusVal || tipusVal === 'compra') ? 'bg-fuchsia-100 text-fuchsia-700 shadow-sm' : 'text-zinc-550 hover:text-zinc-855'}`}
+                      >
+                        Compra
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newSel = { ...sel, [keyTipus]: 'lloguer' as const };
+                          setSeleccionsUniforme({
+                            ...seleccionsUniforme,
+                            [linia.id]: newSel
+                          });
+                          const firstId = (config.liniisUniforme && config.liniisUniforme[0]?.id) || 'lin-1';
+                          if (linia.id === firstId && setUniformeTipusBackwards) {
+                            setUniformeTipusBackwards('lloguer');
+                          }
+                        }}
+                        className={`text-[10px] px-2.5 py-1 font-bold rounded-md transition-all cursor-pointer ${tipusVal === 'lloguer' ? 'bg-fuchsia-600 text-white shadow-sm' : 'text-zinc-550 hover:text-zinc-855'}`}
+                      >
+                        {language === 'ca' ? "Lloguer" : "Alquiler"}
+                      </button>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <p className="text-[11px] text-zinc-400 italic px-1">
+                  {language === 'ca' ? `Has escollit no sol·licitar ${t('armilla').toLowerCase()} per a aquest participant.` : `Has elegido no solicitar ${t('armilla').toLowerCase()} para este participante.`}
+                </p>
+              )}
             </div>
           );
         })}
