@@ -8,7 +8,7 @@
 -- 1. PUBLIC.PROFILES TABLE (NO HARDCODED ADMINS)
 -- ------------------------------------------------------------------------------
 
--- Create public.profiles table if it does not exist
+-- Create public.profiles table if it does not already exist
 CREATE TABLE IF NOT EXISTS public.profiles (
   id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   role text NOT NULL DEFAULT 'user' CHECK (role IN ('admin', 'user')),
@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   updated_at timestamptz DEFAULT now()
 );
 
--- Ensure the role column exists and enforces allowed values
+-- Ensure the role column exists and enforces allowed values if table already existed
 DO $$
 BEGIN
   IF NOT EXISTS (
@@ -30,18 +30,10 @@ END $$;
 -- Enable Row Level Security (RLS) on public.profiles
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
--- Drop legacy or insecure policies on profiles
-DROP POLICY IF EXISTS "profiles_select_own" ON public.profiles;
-DROP POLICY IF EXISTS "profiles_admin_select" ON public.profiles;
-DROP POLICY IF EXISTS "profiles_admin_update" ON public.profiles;
-DROP POLICY IF EXISTS "profiles_admin_all" ON public.profiles;
-DROP POLICY IF EXISTS "allow_all_profiles" ON public.profiles;
-DROP POLICY IF EXISTS "auth_all_profiles" ON public.profiles;
-
 -- ------------------------------------------------------------------------------
 -- 2. STRICT public.is_admin() FUNCTION (EXCLUSIVELY ROLE-BASED)
 -- ------------------------------------------------------------------------------
--- Validates that the caller is authenticated AND has role = 'admin' in public.profiles.
+-- Validates that caller is authenticated AND has role = 'admin' in public.profiles.
 -- Zero hardcoded emails, zero JWT fallbacks, zero username or domain checks.
 CREATE OR REPLACE FUNCTION public.is_admin()
 RETURNS boolean
@@ -57,17 +49,34 @@ AS $$
   );
 $$;
 
--- Secure function execution
+-- Secure function execution permissions
 REVOKE EXECUTE ON FUNCTION public.is_admin() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.is_admin() TO authenticated;
 
--- Policies for public.profiles:
--- Authenticated user can ONLY view their own profile
+-- Audit and clean up policies on public.profiles via pg_policies
+DO $$
+DECLARE
+  pol RECORD;
+BEGIN
+  FOR pol IN 
+    SELECT policyname 
+    FROM pg_policies 
+    WHERE schemaname = 'public' 
+      AND tablename = 'profiles'
+      AND policyname NOT IN ('profiles_select_own', 'profiles_admin_all')
+  LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON public.profiles;', pol.policyname);
+  END LOOP;
+END $$;
+
+-- Policy: Authenticated users can ONLY view their own profile
+DROP POLICY IF EXISTS "profiles_select_own" ON public.profiles;
 CREATE POLICY "profiles_select_own" ON public.profiles
   FOR SELECT TO authenticated
   USING (id = auth.uid());
 
--- Real administrator can perform all operations on profiles
+-- Policy: Only verified administrators can perform administrative operations on profiles
+DROP POLICY IF EXISTS "profiles_admin_all" ON public.profiles;
 CREATE POLICY "profiles_admin_all" ON public.profiles
   FOR ALL TO authenticated
   USING (public.is_admin())
@@ -107,40 +116,68 @@ ON CONFLICT (id) DO NOTHING;
 -- 4. HARDEN RLS ON INSCRIPCIONES (AND INSCRIPCIONS IF PRESENT)
 -- ------------------------------------------------------------------------------
 
-ALTER TABLE public.inscripciones ENABLE ROW LEVEL SECURITY;
-
--- Drop all legacy or insecure policies
-DROP POLICY IF EXISTS "anon_all" ON public.inscripciones;
-DROP POLICY IF EXISTS "anon_select" ON public.inscripciones;
-DROP POLICY IF EXISTS "anon_select_inscripciones" ON public.inscripciones;
-DROP POLICY IF EXISTS "auth_all_inscripciones" ON public.inscripciones;
-DROP POLICY IF EXISTS "admin_all_inscripciones" ON public.inscripciones;
-DROP POLICY IF EXISTS "allow_all" ON public.inscripciones;
-
--- Ensure public anonymous registration insert policy exists
-DROP POLICY IF EXISTS "anon_insert_inscripciones" ON public.inscripciones;
-CREATE POLICY "anon_insert_inscripciones" ON public.inscripciones
-  FOR INSERT TO anon
-  WITH CHECK (true);
-
--- Only verified administrators can view, modify, or delete registrations
-CREATE POLICY "admin_all_inscripciones" ON public.inscripciones
-  FOR ALL TO authenticated
-  USING (public.is_admin())
-  WITH CHECK (public.is_admin());
-
--- Also audit alternative table 'inscripcions' if it exists in Supabase
+-- Table: public.inscripciones (checked dynamically via information_schema)
 DO $$
+DECLARE
+  pol RECORD;
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'inscripciones') THEN
+    ALTER TABLE public.inscripciones ENABLE ROW LEVEL SECURITY;
+
+    -- Audit and remove any policy not matching the strict approved policy set
+    FOR pol IN 
+      SELECT policyname 
+      FROM pg_policies 
+      WHERE schemaname = 'public' 
+        AND tablename = 'inscripciones'
+        AND policyname NOT IN ('anon_insert_inscripciones', 'admin_all_inscripciones')
+    LOOP
+      EXECUTE format('DROP POLICY IF EXISTS %I ON public.inscripciones;', pol.policyname);
+    END LOOP;
+
+    -- Re-create / ensure strictly defined policies
+    DROP POLICY IF EXISTS "anon_insert_inscripciones" ON public.inscripciones;
+    CREATE POLICY "anon_insert_inscripciones" ON public.inscripciones
+      FOR INSERT TO anon
+      WITH CHECK (true);
+
+    DROP POLICY IF EXISTS "admin_all_inscripciones" ON public.inscripciones;
+    CREATE POLICY "admin_all_inscripciones" ON public.inscripciones
+      FOR ALL TO authenticated
+      USING (public.is_admin())
+      WITH CHECK (public.is_admin());
+  END IF;
+END $$;
+
+-- Alternative Table: public.inscripcions (checked dynamically via information_schema)
+DO $$
+DECLARE
+  pol RECORD;
 BEGIN
   IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'inscripcions') THEN
-    EXECUTE 'ALTER TABLE public.inscripcions ENABLE ROW LEVEL SECURITY;';
-    EXECUTE 'DROP POLICY IF EXISTS "anon_all" ON public.inscripcions;';
-    EXECUTE 'DROP POLICY IF EXISTS "anon_select" ON public.inscripcions;';
-    EXECUTE 'DROP POLICY IF EXISTS "anon_insert_inscripcions" ON public.inscripcions;';
-    EXECUTE 'DROP POLICY IF EXISTS "auth_all_inscripcions" ON public.inscripcions;';
-    EXECUTE 'DROP POLICY IF EXISTS "admin_all_inscripcions" ON public.inscripcions;';
-    EXECUTE 'CREATE POLICY anon_insert_inscripcions ON public.inscripcions FOR INSERT TO anon WITH CHECK (true);';
-    EXECUTE 'CREATE POLICY admin_all_inscripcions ON public.inscripcions FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());';
+    ALTER TABLE public.inscripcions ENABLE ROW LEVEL SECURITY;
+
+    -- Audit and remove any policy not matching the strict approved policy set
+    FOR pol IN 
+      SELECT policyname 
+      FROM pg_policies 
+      WHERE schemaname = 'public' 
+        AND tablename = 'inscripcions'
+        AND policyname NOT IN ('anon_insert_inscripcions', 'admin_all_inscripcions')
+    LOOP
+      EXECUTE format('DROP POLICY IF EXISTS %I ON public.inscripcions;', pol.policyname);
+    END LOOP;
+
+    DROP POLICY IF EXISTS "anon_insert_inscripcions" ON public.inscripcions;
+    CREATE POLICY "anon_insert_inscripcions" ON public.inscripcions
+      FOR INSERT TO anon
+      WITH CHECK (true);
+
+    DROP POLICY IF EXISTS "admin_all_inscripcions" ON public.inscripcions;
+    CREATE POLICY "admin_all_inscripcions" ON public.inscripcions
+      FOR ALL TO authenticated
+      USING (public.is_admin())
+      WITH CHECK (public.is_admin());
   END IF;
 END $$;
 
@@ -148,52 +185,84 @@ END $$;
 -- 5. HARDEN RLS ON SETTINGS
 -- ------------------------------------------------------------------------------
 
-ALTER TABLE public.settings ENABLE ROW LEVEL SECURITY;
+DO $$
+DECLARE
+  pol RECORD;
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'settings') THEN
+    ALTER TABLE public.settings ENABLE ROW LEVEL SECURITY;
 
--- Drop legacy or insecure policies
-DROP POLICY IF EXISTS "auth_all_settings" ON public.settings;
-DROP POLICY IF EXISTS "admin_all_settings" ON public.settings;
-DROP POLICY IF EXISTS "allow_all_settings" ON public.settings;
+    -- Audit and remove any policy not matching the strict approved policy set
+    FOR pol IN 
+      SELECT policyname 
+      FROM pg_policies 
+      WHERE schemaname = 'public' 
+        AND tablename = 'settings'
+        AND policyname NOT IN ('anon_select_public_settings', 'admin_all_settings')
+    LOOP
+      EXECUTE format('DROP POLICY IF EXISTS %I ON public.settings;', pol.policyname);
+    END LOOP;
 
--- Public anon can ONLY select non-sensitive configuration keys
-DROP POLICY IF EXISTS "anon_select_public_settings" ON public.settings;
-DROP POLICY IF EXISTS "anon_select_settings" ON public.settings;
-CREATE POLICY "anon_select_public_settings" ON public.settings
-  FOR SELECT TO anon
-  USING (
-    key LIKE 'tast_portada_config_%' OR
-    key LIKE 'tast_config_%' OR
-    key LIKE 'categoria_%' OR
-    key LIKE 'tast_noticies_%' OR
-    key LIKE 'codigo_vestimenta_%' OR
-    key LIKE 'tast_secretaria_hours_%' OR
-    key LIKE 'tast_nom_esdeveniment%' OR
-    key LIKE 'tast_any_edicio%' OR
-    key LIKE 'tast_direccio_esdeveniment%' OR
-    key LIKE 'tast_email_subject_%' OR
-    key LIKE 'tast_email_body_%' OR
-    key LIKE 'tast_email_logo%'
-  );
+    -- Anon policy: only non-sensitive configuration keys (never SMTP, secrets, or passwords)
+    DROP POLICY IF EXISTS "anon_select_public_settings" ON public.settings;
+    CREATE POLICY "anon_select_public_settings" ON public.settings
+      FOR SELECT TO anon
+      USING (
+        key LIKE 'tast_portada_config_%' OR
+        key LIKE 'tast_config_%' OR
+        key LIKE 'categoria_%' OR
+        key LIKE 'tast_noticies_%' OR
+        key LIKE 'codigo_vestimenta_%' OR
+        key LIKE 'tast_secretaria_hours_%' OR
+        key LIKE 'tast_nom_esdeveniment%' OR
+        key LIKE 'tast_any_edicio%' OR
+        key LIKE 'tast_direccio_esdeveniment%' OR
+        key LIKE 'tast_email_subject_%' OR
+        key LIKE 'tast_email_body_%' OR
+        key LIKE 'tast_email_logo%'
+      );
 
--- Only verified administrators can manage sensitive settings (SMTP, credentials, staff, etc.)
-CREATE POLICY "admin_all_settings" ON public.settings
-  FOR ALL TO authenticated
-  USING (public.is_admin())
-  WITH CHECK (public.is_admin());
+    -- Admin policy: administrators manage all settings via public.is_admin()
+    DROP POLICY IF EXISTS "admin_all_settings" ON public.settings;
+    CREATE POLICY "admin_all_settings" ON public.settings
+      FOR ALL TO authenticated
+      USING (public.is_admin())
+      WITH CHECK (public.is_admin());
+  END IF;
+END $$;
 
 -- ------------------------------------------------------------------------------
 -- 6. HARDEN RLS ON PREGUNTES
 -- ------------------------------------------------------------------------------
 
 DO $$
+DECLARE
+  pol RECORD;
 BEGIN
   IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'preguntes') THEN
-    EXECUTE 'ALTER TABLE public.preguntes ENABLE ROW LEVEL SECURITY;';
-    EXECUTE 'DROP POLICY IF EXISTS "auth_all_preguntes" ON public.preguntes;';
-    EXECUTE 'DROP POLICY IF EXISTS "admin_all_preguntes" ON public.preguntes;';
-    EXECUTE 'DROP POLICY IF EXISTS "anon_select_preguntes" ON public.preguntes;';
-    EXECUTE 'CREATE POLICY anon_select_preguntes ON public.preguntes FOR SELECT TO anon USING (true);';
-    EXECUTE 'CREATE POLICY admin_all_preguntes ON public.preguntes FOR ALL TO authenticated USING (public.is_admin()) WITH CHECK (public.is_admin());';
+    ALTER TABLE public.preguntes ENABLE ROW LEVEL SECURITY;
+
+    -- Audit and remove any policy not matching the strict approved policy set
+    FOR pol IN 
+      SELECT policyname 
+      FROM pg_policies 
+      WHERE schemaname = 'public' 
+        AND tablename = 'preguntes'
+        AND policyname NOT IN ('anon_select_preguntes', 'admin_all_preguntes')
+    LOOP
+      EXECUTE format('DROP POLICY IF EXISTS %I ON public.preguntes;', pol.policyname);
+    END LOOP;
+
+    DROP POLICY IF EXISTS "anon_select_preguntes" ON public.preguntes;
+    CREATE POLICY "anon_select_preguntes" ON public.preguntes
+      FOR SELECT TO anon
+      USING (true);
+
+    DROP POLICY IF EXISTS "admin_all_preguntes" ON public.preguntes;
+    CREATE POLICY "admin_all_preguntes" ON public.preguntes
+      FOR ALL TO authenticated
+      USING (public.is_admin())
+      WITH CHECK (public.is_admin());
   END IF;
 END $$;
 
@@ -201,37 +270,55 @@ END $$;
 -- 7. STRICT DNI STORAGE SECURITY (REVOKE ANONYMOUS BUCKET UPLOAD)
 -- ------------------------------------------------------------------------------
 
--- Ensure the bucket exists and is PRIVATE
-INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-VALUES (
-  'dnis',
-  'dnis',
-  false,
-  10485760, -- 10MB
-  ARRAY['image/jpeg', 'image/png', 'image/webp', 'application/pdf']
-)
-ON CONFLICT (id) DO UPDATE SET
-  public = false,
-  file_size_limit = 10485760,
-  allowed_mime_types = ARRAY['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+-- Ensure the 'dnis' bucket is strictly private and limited to valid document types
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'storage' AND table_name = 'buckets') THEN
+    INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+    VALUES (
+      'dnis',
+      'dnis',
+      false,
+      10485760, -- 10MB
+      ARRAY['image/jpeg', 'image/png', 'image/webp', 'application/pdf']
+    )
+    ON CONFLICT (id) DO UPDATE SET
+      public = false,
+      file_size_limit = 10485760,
+      allowed_mime_types = ARRAY['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+  END IF;
+END $$;
 
--- REVOKE all insecure anonymous and general authenticated policies on storage.objects
-DROP POLICY IF EXISTS "anon_upload_dni" ON storage.objects;
-DROP POLICY IF EXISTS "anon_insert_dni" ON storage.objects;
-DROP POLICY IF EXISTS "anon_select_dni" ON storage.objects;
-DROP POLICY IF EXISTS "public_upload_dni" ON storage.objects;
-DROP POLICY IF EXISTS "public_read_dnis" ON storage.objects;
-DROP POLICY IF EXISTS "auth_manage_dnis" ON storage.objects;
-DROP POLICY IF EXISTS "dnis_public_read" ON storage.objects;
-DROP POLICY IF EXISTS "dnis_public_insert" ON storage.objects;
-DROP POLICY IF EXISTS "dnis_authenticated_all" ON storage.objects;
-DROP POLICY IF EXISTS "dnis_admin_all" ON storage.objects;
+-- Audit and remove all insecure anonymous and general authenticated policies on storage.objects for dnis
+DO $$
+DECLARE
+  pol RECORD;
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'storage' AND table_name = 'objects') THEN
+    -- Dynamically drop any policies on storage.objects targeting dnis that are not dnis_admin_all
+    FOR pol IN 
+      SELECT policyname 
+      FROM pg_policies 
+      WHERE schemaname = 'storage' 
+        AND tablename = 'objects'
+        AND (
+          policyname ILIKE '%dni%' 
+          OR coalesce(qual, '') ILIKE '%dnis%' 
+          OR coalesce(with_check, '') ILIKE '%dnis%'
+        )
+        AND policyname != 'dnis_admin_all'
+    LOOP
+      EXECUTE format('DROP POLICY IF EXISTS %I ON storage.objects;', pol.policyname);
+    END LOOP;
 
--- ONLY verified administrators can access, read, update, or delete DNI files directly
-CREATE POLICY "dnis_admin_all" ON storage.objects
-  FOR ALL TO authenticated
-  USING (bucket_id = 'dnis' AND public.is_admin())
-  WITH CHECK (bucket_id = 'dnis' AND public.is_admin());
+    -- Re-create / ensure strictly defined admin-only policy on storage.objects for bucket 'dnis'
+    DROP POLICY IF EXISTS "dnis_admin_all" ON storage.objects;
+    CREATE POLICY "dnis_admin_all" ON storage.objects
+      FOR ALL TO authenticated
+      USING (bucket_id = 'dnis' AND public.is_admin())
+      WITH CHECK (bucket_id = 'dnis' AND public.is_admin());
+  END IF;
+END $$;
 
 -- NOTE: Public DNI uploads do NOT have direct access to storage.objects.
 -- They must be routed through the secure backend endpoint (/api/upload-dni),
