@@ -1,6 +1,8 @@
 import nodemailer from "nodemailer";
 import { createClient } from "@supabase/supabase-js";
 
+import { applyCorsHeaders, verifySupabaseAdminToken } from "./_cors";
+
 // In-memory rate limiting map for serverless environment
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
 const checkRateLimit = (ip: string, maxRequests: number, windowMs: number): boolean => {
@@ -17,48 +19,9 @@ const checkRateLimit = (ip: string, maxRequests: number, windowMs: number): bool
   return true;
 };
 
-const ALLOWED_ORIGINS = [
-  'https://tastvng-2027.vercel.app',
-  'https://tastvng-2027-.vercel.app',
-  'http://localhost:3000',
-  'http://127.0.0.1:3000',
-  'http://localhost:5173',
-  'http://127.0.0.1:5173'
-];
-
-async function verifySupabaseAdminToken(token: string): Promise<boolean> {
-  const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-  const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
-  if (!supabaseUrl || !supabaseAnonKey || !token) return false;
-  try {
-    const supabase = createClient(supabaseUrl, supabaseAnonKey);
-    const { data: { user }, error } = await supabase.auth.getUser(token);
-    return !error && !!user;
-  } catch {
-    return false;
-  }
-}
-
 export default async function handler(req: any, res: any) {
-  // CORS configuration with strict origin validation (NEVER "*")
-  const origin = req.headers.origin;
-  if (origin) {
-    const isAllowed = 
-      ALLOWED_ORIGINS.includes(origin) ||
-      origin === process.env.APP_URL ||
-      origin === `http://${req.headers.host}` ||
-      origin === `https://${req.headers.host}`;
-
-    if (isAllowed) {
-      res.setHeader("Access-Control-Allow-Origin", origin);
-    }
-  }
-
-  res.setHeader("Access-Control-Allow-Credentials", "true");
-  res.setHeader("Access-Control-Allow-Methods", "POST,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
-  res.setHeader("X-Content-Type-Options", "nosniff");
-  res.setHeader("X-Frame-Options", "SAMEORIGIN");
+  // CORS configuration with strict origin validation
+  applyCorsHeaders(req, res, "POST, OPTIONS");
 
   if (req.method === "OPTIONS") {
     return res.status(200).end();
@@ -76,7 +39,8 @@ export default async function handler(req: any, res: any) {
 
     const authHeader = req.headers.authorization || '';
     const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
-    const isAdmin = token ? await verifySupabaseAdminToken(token) : false;
+    const adminAuth = token ? await verifySupabaseAdminToken(token) : { valid: false };
+    const isAdmin = adminAuth.valid;
 
     const body = req.body || {};
 

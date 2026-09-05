@@ -66,26 +66,52 @@ export default function AdminFicha({ registration, config, onBack, onSave }: Adm
   React.useEffect(() => {
     let active = true;
     const recordId = registration.id;
+
+    async function resolveDniSigned(url: string): Promise<string> {
+      if (!url) return '';
+      if (url.startsWith('data:') || url.startsWith('http')) return url;
+      try {
+        const { getDniSignedUrl } = await import('../supabaseClient');
+        return await getDniSignedUrl(url);
+      } catch {
+        return url;
+      }
+    }
+
     async function loadFullDni() {
       try {
         const { getSupabaseInscripcionById } = await import('../supabaseClient');
         const full = await getSupabaseInscripcionById(recordId);
         if (full && active) {
-          if (full.c1DniUrl) setC1DniUrl(full.c1DniUrl);
-          if (full.c2DniUrl) setC2DniUrl(full.c2DniUrl);
+          if (full.c1DniUrl) {
+            const resolved = await resolveDniSigned(full.c1DniUrl);
+            if (active) setC1DniUrl(resolved);
+          }
+          if (full.c2DniUrl) {
+            const resolved = await resolveDniSigned(full.c2DniUrl);
+            if (active) setC2DniUrl(resolved);
+          }
         }
       } catch (err) {
         console.warn("Could not lazy-load DNI images from Supabase:", err);
       }
     }
     
-    if (!registration.c1DniUrl || !registration.c2DniUrl || registration.c1DniUrl.length < 50) {
+    // Resolve initial if it is a protected storage path
+    if (registration.c1DniUrl && !registration.c1DniUrl.startsWith('data:') && !registration.c1DniUrl.startsWith('http')) {
+      resolveDniSigned(registration.c1DniUrl).then(u => { if (active) setC1DniUrl(u); });
+    }
+    if (registration.c2DniUrl && !registration.c2DniUrl.startsWith('data:') && !registration.c2DniUrl.startsWith('http')) {
+      resolveDniSigned(registration.c2DniUrl).then(u => { if (active) setC2DniUrl(u); });
+    }
+
+    if (!registration.c1DniUrl || !registration.c2DniUrl || (!registration.c1DniUrl.startsWith('dnis/') && registration.c1DniUrl.length < 50)) {
       loadFullDni();
     }
     return () => {
       active = false;
     };
-  }, [registration.id]);
+  }, [registration.id, registration.c1DniUrl, registration.c2DniUrl]);
 
   // Participant Editable configurations
   const [c1Nom, setC1Nom] = useState(registration.c1Nom);

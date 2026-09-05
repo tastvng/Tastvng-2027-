@@ -61,7 +61,8 @@ import {
   saveSupabaseInscripcion, 
   deleteSupabaseInscripcion, 
   deleteMultipleSupabaseInscripciones, 
-  clearAllSupabaseInscripciones 
+  clearAllSupabaseInscripciones,
+  checkCurrentUserIsAdmin
 } from './supabaseClient';
 
 export default function App() {
@@ -328,27 +329,43 @@ export default function App() {
     loadAllFromDatabase().catch(err => console.error("Unhandled error in loadAllFromDatabase:", err));
   }, []);
 
-  // Maintain session via Supabase Auth
+  // Maintain session via Supabase Auth with strict Role verification
   useEffect(() => {
     if (isSupabaseConfigured && supabase) {
-      // Check current session
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        setIsAdminLoggedIn(!!session);
+      // Check current session and verify admin role in public.profiles
+      supabase.auth.getSession().then(async ({ data: { session } }) => {
+        if (!session) {
+          setIsAdminLoggedIn(false);
+          return;
+        }
+        const isAdmin = await checkCurrentUserIsAdmin(session.user?.id);
+        setIsAdminLoggedIn(isAdmin);
+        if (!isAdmin && ['admin-dashboard', 'admin-ficha', 'admin-config', 'admin-scanner'].includes(view)) {
+          setView('login');
+        }
       }).catch(err => {
         console.warn("Failed to get Supabase session:", err);
         setIsAdminLoggedIn(false);
       });
 
       // Listen to auth changes
-      const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-        const loggedIn = !!session;
-        setIsAdminLoggedIn(loggedIn);
-        if (loggedIn) {
+      const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+        if (!session) {
+          setIsAdminLoggedIn(false);
+          if (['admin-dashboard', 'admin-ficha', 'admin-config', 'admin-scanner'].includes(view)) {
+            setView('login');
+          }
+          return;
+        }
+
+        const isAdmin = await checkCurrentUserIsAdmin(session.user?.id);
+        setIsAdminLoggedIn(isAdmin);
+        if (isAdmin) {
           if (view === 'login') {
             setView('admin-dashboard');
           }
         } else {
-          // If unauthenticated or session expired while on an admin route, send to login
+          // Authenticated but NOT admin
           if (['admin-dashboard', 'admin-ficha', 'admin-config', 'admin-scanner'].includes(view)) {
             setView('login');
           }

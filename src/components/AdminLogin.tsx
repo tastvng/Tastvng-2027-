@@ -7,7 +7,7 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Lock, User, AlertCircle, ArrowLeft, Eye, EyeOff, Sparkle } from 'lucide-react';
 import { useLanguage } from '../LanguageContext';
-import { supabase, isSupabaseConfigured } from '../supabaseClient';
+import { supabase, isSupabaseConfigured, checkCurrentUserIsAdmin } from '../supabaseClient';
 
 interface AdminLoginProps {
   onLoginSuccess: () => void;
@@ -72,6 +72,16 @@ export default function AdminLogin({ onLoginSuccess, onBackToPublic }: AdminLogi
         }
 
         if (data.session) {
+          const isAdmin = await checkCurrentUserIsAdmin(data.user?.id);
+          if (!isAdmin) {
+            await supabase.auth.signOut();
+            setIsVerifying(false);
+            setErrorError(language === 'ca'
+              ? "Accés denegat: El teu compte d'usuari no té privilegis d'administrador."
+              : "Acceso denegado: Tu cuenta de usuario no tiene privilegios de administrador.");
+            return;
+          }
+
           if (rememberMe) {
             localStorage.setItem('tast_remember_me_enabled', 'true');
             localStorage.setItem('tast_saved_username', username.trim());

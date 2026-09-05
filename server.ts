@@ -3,36 +3,18 @@ import path from "path";
 import nodemailer from "nodemailer";
 import { createClient } from "@supabase/supabase-js";
 import dotenv from "dotenv";
+import { applyCorsHeaders, verifySupabaseAdminToken } from "./api/_cors";
+import uploadDniHandler from "./api/upload-dni";
 
 dotenv.config();
-
-const ALLOWED_ORIGIN_PATTERNS = [
-  /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/,
-  /^https:\/\/tastvng-2027(-[\w-]+)?\.vercel\.app$/,
-  /^https:\/\/[\w-]+\.europe-west2\.run\.app$/,
-  /^https:\/\/[\w-]+\.run\.app$/
-];
-
-async function verifySupabaseAdminToken(token: string): Promise<boolean> {
-  const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-  const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
-  if (!supabaseUrl || !supabaseAnonKey || !token) return false;
-  try {
-    const supabase = createClient(supabaseUrl, supabaseAnonKey);
-    const { data: { user }, error } = await supabase.auth.getUser(token);
-    return !error && !!user;
-  } catch {
-    return false;
-  }
-}
 
 async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  // Body parser with safe limit (5MB to allow reasonable attachments, reject oversized payloads)
-  app.use(express.json({ limit: '5mb' }));
-  app.use(express.urlencoded({ extended: true, limit: '5mb' }));
+  // Body parser with safe limit (15MB to support up to 10MB Base64 DNI document uploads)
+  app.use(express.json({ limit: '15mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 
   // Security Headers
   app.use((_req, res, next) => {
@@ -43,23 +25,9 @@ async function startServer() {
     next();
   });
 
-  // CORS handling with strict origin validation (NEVER "*")
+  // CORS handling with strict origin validation
   app.use((req, res, next) => {
-    const origin = req.headers.origin;
-    if (origin) {
-      const isAllowed = 
-        origin === process.env.APP_URL ||
-        ALLOWED_ORIGIN_PATTERNS.some(pattern => pattern.test(origin)) ||
-        origin === `http://${req.headers.host}` ||
-        origin === `https://${req.headers.host}`;
-
-      if (isAllowed) {
-        res.setHeader("Access-Control-Allow-Origin", origin);
-      }
-    }
-    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS, PUT, PATCH, DELETE");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
-    res.setHeader("Access-Control-Allow-Credentials", "true");
+    applyCorsHeaders(req as any, res as any, "GET, POST, OPTIONS");
     if (req.method === "OPTIONS") {
       return res.sendStatus(200);
     }
@@ -154,6 +122,9 @@ async function startServer() {
     }
   });
 
+  // Secure DNI upload endpoint (strict binary inspection & rate-limiting)
+  app.post("/api/upload-dni", uploadDniHandler);
+
   // Secure Nodemailer SMTP sending endpoint with strict anti-relay and TLS
   app.post("/api/send-email", async (req, res) => {
     try {
@@ -164,7 +135,8 @@ async function startServer() {
 
       const authHeader = req.headers.authorization || '';
       const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
-      const isAdmin = token ? await verifySupabaseAdminToken(token) : false;
+      const adminAuth = token ? await verifySupabaseAdminToken(token) : { valid: false };
+      const isAdmin = adminAuth.valid;
 
       const body = req.body || {};
 
@@ -319,9 +291,9 @@ async function startServer() {
 
       const authHeader = req.headers.authorization || '';
       const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
-      const isAdmin = token ? await verifySupabaseAdminToken(token) : false;
-      if (!isAdmin) {
-        return res.status(401).json({ error: "Accés no autoritzat. Cal una sessió d'administrador vàlida per provar el servidor SMTP." });
+      const adminAuth = token ? await verifySupabaseAdminToken(token) : { valid: false };
+      if (!adminAuth.valid) {
+        return res.status(401).json({ error: "Accés no autoritzat. Cal el rol d'administrador ('admin') per provar el servidor SMTP." });
       }
 
       const { emailData } = req.body || {};

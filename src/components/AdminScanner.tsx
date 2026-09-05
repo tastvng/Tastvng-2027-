@@ -104,22 +104,53 @@ export default function AdminScanner({
   useEffect(() => {
     if (!tempRecord || !tempRecord.id) return;
     const recordId = tempRecord.id;
-    const hasMissingDni = (!tempRecord.c1DniUrl || tempRecord.c1DniUrl.length < 50 || !tempRecord.c2DniUrl || tempRecord.c2DniUrl.length < 50);
+    let active = true;
+
+    async function resolveDniSigned(url: string): Promise<string> {
+      if (!url) return '';
+      if (url.startsWith('data:') || url.startsWith('http')) return url;
+      try {
+        const { getDniSignedUrl } = await import('../supabaseClient');
+        return await getDniSignedUrl(url);
+      } catch {
+        return url;
+      }
+    }
+
     // Only check if we are connected to Supabase
     const isSupabaseConfigured = localStorage.getItem('tast_supabase_url') && localStorage.getItem('tast_supabase_anon_key');
+    
+    // Resolve initial if they are storage references
+    if (tempRecord.c1DniUrl && !tempRecord.c1DniUrl.startsWith('data:') && !tempRecord.c1DniUrl.startsWith('http')) {
+      resolveDniSigned(tempRecord.c1DniUrl).then(u => {
+        if (active && u !== tempRecord.c1DniUrl) {
+          setTempRecord(prev => prev && prev.id === recordId ? { ...prev, c1DniUrl: u } : prev);
+        }
+      });
+    }
+    if (tempRecord.c2DniUrl && !tempRecord.c2DniUrl.startsWith('data:') && !tempRecord.c2DniUrl.startsWith('http')) {
+      resolveDniSigned(tempRecord.c2DniUrl).then(u => {
+        if (active && u !== tempRecord.c2DniUrl) {
+          setTempRecord(prev => prev && prev.id === recordId ? { ...prev, c2DniUrl: u } : prev);
+        }
+      });
+    }
+
+    const hasMissingDni = (!tempRecord.c1DniUrl || (!tempRecord.c1DniUrl.startsWith('dnis/') && tempRecord.c1DniUrl.length < 50) || !tempRecord.c2DniUrl || (!tempRecord.c2DniUrl.startsWith('dnis/') && tempRecord.c2DniUrl.length < 50));
     if (hasMissingDni && isSupabaseConfigured) {
-      let active = true;
       async function loadFull() {
         try {
           const { getSupabaseInscripcionById } = await import('../supabaseClient');
           const full = await getSupabaseInscripcionById(recordId);
           if (full && active) {
+            const u1 = full.c1DniUrl ? await resolveDniSigned(full.c1DniUrl) : tempRecord.c1DniUrl;
+            const u2 = full.c2DniUrl ? await resolveDniSigned(full.c2DniUrl) : tempRecord.c2DniUrl;
             setTempRecord(prev => {
               if (!prev || prev.id !== recordId) return prev;
               return {
                 ...prev,
-                c1DniUrl: full.c1DniUrl || prev.c1DniUrl,
-                c2DniUrl: full.c2DniUrl || prev.c2DniUrl
+                c1DniUrl: u1 || prev.c1DniUrl,
+                c2DniUrl: u2 || prev.c2DniUrl
               };
             });
           }
@@ -128,11 +159,11 @@ export default function AdminScanner({
         }
       }
       loadFull().catch(err => console.error("Unhandled error in loadFull inside AdminScanner:", err));
-      return () => {
-        active = false;
-      };
     }
-  }, [tempRecord?.id]);
+    return () => {
+      active = false;
+    };
+  }, [tempRecord?.id, tempRecord?.c1DniUrl, tempRecord?.c2DniUrl]);
 
   // Fallback and manual search states
   const [manualSearchText, setManualSearchText] = useState('');

@@ -1,5 +1,5 @@
 import nodemailer from "nodemailer";
-import { createClient } from "@supabase/supabase-js";
+import { applyCorsHeaders, verifySupabaseAdminToken } from "./_cors";
 
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
 const checkRateLimit = (ip: string, maxRequests: number, windowMs: number): boolean => {
@@ -16,47 +16,8 @@ const checkRateLimit = (ip: string, maxRequests: number, windowMs: number): bool
   return true;
 };
 
-const ALLOWED_ORIGINS = [
-  'https://tastvng-2027.vercel.app',
-  'https://tastvng-2027-.vercel.app',
-  'http://localhost:3000',
-  'http://127.0.0.1:3000',
-  'http://localhost:5173',
-  'http://127.0.0.1:5173'
-];
-
-async function verifySupabaseAdminToken(token: string): Promise<boolean> {
-  const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-  const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
-  if (!supabaseUrl || !supabaseAnonKey || !token) return false;
-  try {
-    const supabase = createClient(supabaseUrl, supabaseAnonKey);
-    const { data: { user }, error } = await supabase.auth.getUser(token);
-    return !error && !!user;
-  } catch {
-    return false;
-  }
-}
-
 export default async function handler(req: any, res: any) {
-  const origin = req.headers.origin;
-  if (origin) {
-    const isAllowed = 
-      ALLOWED_ORIGINS.includes(origin) ||
-      origin === process.env.APP_URL ||
-      origin === `http://${req.headers.host}` ||
-      origin === `https://${req.headers.host}`;
-
-    if (isAllowed) {
-      res.setHeader("Access-Control-Allow-Origin", origin);
-    }
-  }
-
-  res.setHeader("Access-Control-Allow-Credentials", "true");
-  res.setHeader("Access-Control-Allow-Methods", "POST,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
-  res.setHeader("X-Content-Type-Options", "nosniff");
-  res.setHeader("X-Frame-Options", "SAMEORIGIN");
+  applyCorsHeaders(req, res, "POST, OPTIONS");
 
   if (req.method === "OPTIONS") {
     return res.status(200).end();
@@ -72,12 +33,12 @@ export default async function handler(req: any, res: any) {
       return res.status(429).json({ error: "Límit de proves de correu assolit per minut. Si us plau, espereu abans de reintentar." });
     }
 
-    // Require admin session for SMTP testing
+    // Require REAL admin role for SMTP testing
     const authHeader = req.headers.authorization || '';
     const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
-    const isAdmin = token ? await verifySupabaseAdminToken(token) : false;
-    if (!isAdmin) {
-      return res.status(401).json({ error: "Accés no autoritzat. Cal una sessió d'administrador vàlida per provar el servidor SMTP." });
+    const adminAuth = token ? await verifySupabaseAdminToken(token) : { valid: false };
+    if (!adminAuth.valid) {
+      return res.status(401).json({ error: "Accés no autoritzat. Cal el rol d'administrador ('admin') per provar el servidor SMTP." });
     }
 
     const { emailData } = req.body || {};

@@ -624,3 +624,64 @@ export async function clearAllSupabaseInscripciones(): Promise<boolean> {
     return false;
   }
 }
+
+/**
+ * Checks if the current authenticated user has the 'admin' role in public.profiles.
+ * Authenticated alone does NOT mean admin.
+ */
+export async function checkCurrentUserIsAdmin(userId?: string): Promise<boolean> {
+  if (!supabase) return false;
+  try {
+    let targetId = userId;
+    let targetEmail = '';
+    if (!targetId) {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return false;
+      targetId = user.id;
+      targetEmail = user.email || '';
+    }
+
+    const { data: profile, error } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', targetId)
+      .maybeSingle();
+
+    if (!error && profile && profile.role === 'admin') {
+      return true;
+    }
+
+    // Official bootstrap fallback for primary administrator account
+    if (targetEmail && targetEmail.toLowerCase() === 'secretaria@eltast.cat') {
+      return true;
+    }
+
+    return false;
+  } catch (err) {
+    console.warn("Failed checking admin profile role:", err);
+    return false;
+  }
+}
+
+/**
+ * Resolves a signed URL for a protected DNI stored in the private 'dnis' bucket.
+ * If already a data URL, http, or https URL, returns it directly.
+ */
+export async function getDniSignedUrl(pathOrUrl: string): Promise<string> {
+  if (!pathOrUrl) return '';
+  if (pathOrUrl.startsWith('data:') || pathOrUrl.startsWith('http://') || pathOrUrl.startsWith('https://')) {
+    return pathOrUrl;
+  }
+  if (!supabase) return pathOrUrl;
+  try {
+    const cleanPath = pathOrUrl.replace(/^storage:\/\/dnis\//, '').replace(/^dnis\//, '');
+    const { data, error } = await supabase.storage.from('dnis').createSignedUrl(cleanPath, 3600);
+    if (!error && data?.signedUrl) {
+      return data.signedUrl;
+    }
+  } catch (e) {
+    console.warn("Could not create signed URL for DNI:", e);
+  }
+  return pathOrUrl;
+}
+

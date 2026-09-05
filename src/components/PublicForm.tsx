@@ -730,6 +730,54 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
       const randomSuffix = Math.random().toString(36).substring(2, 6).toUpperCase();
       const codiSeguiment = `TAST-2027-${prefix}${Date.now().toString().slice(-4)}-${randomSuffix}`;
 
+      let finalC1DniUrl = c1DniUrl || '';
+      let finalC2DniUrl = c2DniUrl || '';
+
+      // Upload DNI documents securely via server endpoint with magic bytes & rate-limiting
+      if (c1DniUrl && c1DniUrl.startsWith('data:')) {
+        try {
+          const res = await fetch('/api/upload-dni', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              codiSeguiment,
+              participant: 'c1',
+              fileData: c1DniUrl
+            })
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.storagePath) {
+              finalC1DniUrl = data.storagePath;
+            }
+          }
+        } catch (e) {
+          console.warn("Notice: server DNI upload fallback for c1:", e);
+        }
+      }
+
+      if (c2DniUrl && c2DniUrl.startsWith('data:')) {
+        try {
+          const res = await fetch('/api/upload-dni', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              codiSeguiment,
+              participant: 'c2',
+              fileData: c2DniUrl
+            })
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.storagePath) {
+              finalC2DniUrl = data.storagePath;
+            }
+          }
+        } catch (e) {
+          console.warn("Notice: server DNI upload fallback for c2:", e);
+        }
+      }
+
       const finalRespostes: Record<string, string> = {
         ...respostesCuestionari as Record<string, string>
       };
@@ -790,7 +838,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
         c1Email,
         c1Telefon,
         c1Talla,
-        c1DniUrl: c1DniUrl || '',
+        c1DniUrl: finalC1DniUrl,
         c1EsMenor,
         c1TutorNom: c1EsMenor ? c1TutorNom : '',
         c1TutorCognoms: c1EsMenor ? c1TutorCognoms : '',
@@ -802,7 +850,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
         c2Email,
         c2Telefon,
         c2Talla,
-        c2DniUrl: c2DniUrl || '',
+        c2DniUrl: finalC2DniUrl,
         c2EsMenor,
         c2TutorNom: c2EsMenor ? c2TutorNom : '',
         c2TutorCognoms: c2EsMenor ? c2TutorCognoms : '',
