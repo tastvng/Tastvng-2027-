@@ -651,11 +651,6 @@ export async function checkCurrentUserIsAdmin(userId?: string): Promise<boolean>
       return true;
     }
 
-    // Official bootstrap fallback for primary administrator account
-    if (targetEmail && targetEmail.toLowerCase() === 'secretaria@eltast.cat') {
-      return true;
-    }
-
     return false;
   } catch (err) {
     console.warn("Failed checking admin profile role:", err);

@@ -132,11 +132,6 @@ export async function verifySupabaseAdminToken(token: string): Promise<{ valid: 
       return { valid: true, userId: user.id, email: user.email };
     }
 
-    // 3. Fallback bootstrap: official administrator email
-    if (user.email && user.email.toLowerCase() === 'secretaria@eltast.cat') {
-      return { valid: true, userId: user.id, email: user.email };
-    }
-
     return { valid: false };
   } catch (err) {
     console.error("Error verifying admin token:", err);
