@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import { useLanguage } from '../LanguageContext';
 import { useActiveYear } from '../hooks/useActiveYear';
 import TranslatedText, { useTranslatedText } from './TranslatedText';
-import { Play, Image, Sparkles, ChevronRight, VolumeX, Mail, FileText, Compass, ExternalLink, Instagram, Heart, Star, Zap, Bell } from 'lucide-react';
+import { Play, Image as ImageIcon, Sparkles, ChevronRight, VolumeX, Mail, FileText, Compass, ExternalLink, Instagram, Heart, Star, Zap, Bell } from 'lucide-react';
 import { ensureValidPortadaConfig, DEFAULT_PORTADA_DATA, PORTADA_CONFIG_DEFAULTS } from './AdminPortada';
 
 export interface PortadaConfig {
@@ -656,7 +656,7 @@ export default function PortadaPage({
           >
             <div className="bg-zinc-950/85 backdrop-blur-md p-3.5 rounded-3xl border border-white/10 shadow-2xl w-full max-w-md overflow-hidden relative group">
               <div className="absolute top-3 left-3 bg-black/60 backdrop-blur-md border border-white/10 px-2.5 py-1 rounded-lg text-[9px] font-mono font-bold tracking-wider uppercase z-20 text-zinc-300 flex items-center gap-1.5">
-                {liveConfig.contingutTipus === 'video' ? <Play size={10} style={{ color: accentColor }} className="animate-pulse" /> : <Image size={10} style={{ color: accentColor }} />}
+                {liveConfig.contingutTipus === 'video' ? <Play size={10} style={{ color: accentColor }} className="animate-pulse" /> : <ImageIcon size={10} style={{ color: accentColor }} />}
                 {language === 'ca' ? 'Destacat' : 'Destacado'}
               </div>
 

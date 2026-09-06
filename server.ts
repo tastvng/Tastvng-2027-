@@ -53,20 +53,52 @@ async function startServer() {
 
   // Status check for SMTP (NEVER returns passwords or secrets)
   app.get("/api/smtp-status", (_req, res) => {
-    const host = process.env.SMTP_HOST || 'smtp.gmail.com';
-    const port = process.env.SMTP_PORT || '587';
-    const user = process.env.SMTP_USER || '';
-    const from = process.env.SMTP_FROM || process.env.SMTP_USER || '';
-    const configured = !!(process.env.SMTP_PASSWORD && process.env.SMTP_USER);
+    try {
+      const host = (process.env.SMTP_HOST || 'smtp.gmail.com').trim();
+      const portRaw = process.env.SMTP_PORT || '587';
+      const port = parseInt(String(portRaw).trim(), 10) || 587;
+      const user = (process.env.SMTP_USER || '').trim();
+      const from = (process.env.SMTP_FROM || process.env.SMTP_USER || '').trim();
+      const password = (process.env.SMTP_PASSWORD || '').trim();
+      const configured = Boolean(user && password);
 
-    res.json({
-      configured,
-      host,
-      port,
-      user: user ? user.replace(/^(.{2})(.*)(@.*)$/, '$1***$3') : '',
-      from: from ? from.replace(/^(.{2})(.*)(@.*)$/, '$1***$3') : '',
-      provider: 'Server Environment Variables (Secure)'
-    });
+      const maskString = (val: string): string => {
+        if (!val) return '';
+        const trimmed = val.trim();
+        if (trimmed.includes('@')) {
+          const parts = trimmed.split('@');
+          const local = parts[0];
+          const domain = parts.slice(1).join('@');
+          const maskedLocal = local.length > 2 ? local.slice(0, 2) + '***' : local + '***';
+          return `${maskedLocal}@${domain}`;
+        }
+        return trimmed.length > 2 ? trimmed.slice(0, 2) + '***' : trimmed + '***';
+      };
+
+      const userMasked = maskString(user);
+      const fromMasked = maskString(from);
+
+      res.json({
+        configured,
+        host,
+        port,
+        userMasked,
+        fromMasked,
+        user: userMasked,
+        from: fromMasked,
+        provider: 'Server Environment Variables (Secure)'
+      });
+    } catch (err) {
+      console.error("Safe handler error in /api/smtp-status:", err);
+      res.status(200).json({
+        configured: false,
+        host: 'smtp.gmail.com',
+        port: 587,
+        userMasked: '',
+        fromMasked: '',
+        provider: 'Server Environment Variables (Fallback)'
+      });
+    }
   });
 
   // Authoritative server-side validation & price calculation for inscriptions

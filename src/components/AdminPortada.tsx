@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Compass, Sparkles, CheckCircle2, RotateCcw, Image, Video, Palette, Play, Eye, FileText, LayoutTemplate, Sliders, Upload, Trash2, Users } from 'lucide-react';
+import { Compass, Sparkles, CheckCircle2, RotateCcw, Image as ImageIcon, Video, Palette, Play, Eye, FileText, LayoutTemplate, Sliders, Upload, Trash2, Users } from 'lucide-react';
 import { PortadaConfig } from './PortadaPage';
 import { saveSupabaseSettings, getSupabaseSettings, isSupabaseConfigured, getSupabaseSetting, saveSupabaseSetting } from '../supabaseClient';
 import { useLanguage } from '../LanguageContext';
@@ -1405,7 +1405,7 @@ export default function AdminPortada({ onAddLog }: AdminPortadaProps) {
                     : 'bg-white border-zinc-200 text-zinc-600 hover:bg-zinc-100'
                 }`}
               >
-                <Image size={16} />
+                <ImageIcon size={16} />
                 <span>Imatge / Foto</span>
               </button>
               <button
@@ -2490,7 +2490,7 @@ export default function AdminPortada({ onAddLog }: AdminPortadaProps) {
                     : 'bg-white border-zinc-200 text-zinc-600 hover:bg-zinc-100'
                 }`}
               >
-                <Image size={15} />
+                <ImageIcon size={15} />
                 <span>Foto</span>
               </button>
               <button

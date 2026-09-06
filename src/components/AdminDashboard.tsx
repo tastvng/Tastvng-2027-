@@ -32,6 +32,7 @@ import {
   ShieldCheck,
   UserCheck,
   Key,
+  Lock,
   Mail,
   Send,
   Sparkles,

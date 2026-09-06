@@ -58,22 +58,30 @@ export function isOriginAllowed(origin: string | undefined): boolean {
  * Returns true if the origin is authorized.
  */
 export function applyCorsHeaders(
-  req: { headers: Record<string, string | string[] | undefined>; method?: string },
-  res: { setHeader: (name: string, value: string) => void },
+  req: { headers?: Record<string, string | string[] | undefined>; method?: string } | undefined | null,
+  res: { setHeader?: (name: string, value: string) => void } | undefined | null,
   allowedMethods: string = 'GET, POST, OPTIONS'
 ): boolean {
-  const origin = typeof req.headers.origin === 'string' ? req.headers.origin : undefined;
-  const isAllowed = isOriginAllowed(origin);
+  try {
+    const rawOrigin = req?.headers?.origin;
+    const origin = typeof rawOrigin === 'string' ? rawOrigin : undefined;
+    const isAllowed = isOriginAllowed(origin);
 
-  if (origin && isAllowed) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    if (res && typeof res.setHeader === 'function') {
+      if (origin && isAllowed) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+        res.setHeader('Access-Control-Allow-Credentials', 'true');
+      }
+
+      res.setHeader('Access-Control-Allow-Methods', allowedMethods);
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+    }
+
+    return isAllowed;
+  } catch (err) {
+    console.error('Error applying CORS headers:', err);
+    return false;
   }
-
-  res.setHeader('Access-Control-Allow-Methods', allowedMethods);
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
-
-  return isAllowed;
 }
