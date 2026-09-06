@@ -1,6 +1,118 @@
 import nodemailer from "nodemailer";
-import { applyCorsHeaders } from "./_cors";
-import { verifySupabaseAdminToken } from "./_supabase-auth";
+
+function getStrictAllowedOrigins(): Set<string> {
+  const allowed = new Set<string>();
+  allowed.add('https://tastvng-2027.vercel.app');
+
+  if (process.env.ALLOWED_ORIGINS) {
+    for (const item of process.env.ALLOWED_ORIGINS.split(',')) {
+      const trimmed = item.trim();
+      if (trimmed) allowed.add(trimmed);
+    }
+  }
+
+  if (process.env.APP_URL) {
+    const trimmed = process.env.APP_URL.trim();
+    if (trimmed) allowed.add(trimmed);
+  }
+
+  if (process.env.NODE_ENV !== 'production') {
+    allowed.add('http://localhost:3000');
+    allowed.add('http://127.0.0.1:3000');
+    allowed.add('http://localhost:5173');
+    allowed.add('http://127.0.0.1:5173');
+  }
+
+  return allowed;
+}
+
+function applyCorsHeaders(
+  req: { headers?: Record<string, string | string[] | undefined> } | undefined | null,
+  res: { setHeader?: (name: string, value: string) => void } | undefined | null,
+  allowedMethods: string = 'POST, OPTIONS'
+): boolean {
+  try {
+    if (!res || typeof res.setHeader !== 'function') return false;
+
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+    res.setHeader("Access-Control-Allow-Methods", allowedMethods);
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept");
+    res.setHeader("Access-Control-Max-Age", "86400");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("X-Frame-Options", "SAMEORIGIN");
+    res.setHeader("X-XSS-Protection", "1; mode=block");
+    res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+
+    const rawOrigin = req?.headers?.origin;
+    const origin = (Array.isArray(rawOrigin) ? rawOrigin[0] : rawOrigin)?.trim();
+
+    if (origin) {
+      const allowedOrigins = getStrictAllowedOrigins();
+      if (allowedOrigins.has(origin)) {
+        res.setHeader("Access-Control-Allow-Origin", origin);
+        res.setHeader("Vary", "Origin");
+        return true;
+      }
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+async function verifySupabaseAdminToken(token: string): Promise<{ valid: boolean; userId?: string; email?: string }> {
+  const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+  const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || (!supabaseAnonKey && !serviceRoleKey) || !token) {
+    return { valid: false };
+  }
+
+  try {
+    const { createClient } = await import("@supabase/supabase-js");
+
+    const baseClient = createClient(supabaseUrl, serviceRoleKey || supabaseAnonKey!, {
+      auth: { persistSession: false }
+    });
+
+    const { data: { user }, error: userError } = await baseClient.auth.getUser(token);
+    if (userError || !user) {
+      return { valid: false };
+    }
+
+    let profileRole: string | null = null;
+
+    if (serviceRoleKey) {
+      const { data: profile } = await baseClient
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .maybeSingle();
+      profileRole = profile?.role || null;
+    } else {
+      const userClient = createClient(supabaseUrl, supabaseAnonKey!, {
+        global: { headers: { Authorization: `Bearer ${token}` } },
+        auth: { persistSession: false }
+      });
+      const { data: profile } = await userClient
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .maybeSingle();
+      profileRole = profile?.role || null;
+    }
+
+    if (profileRole === 'admin') {
+      return { valid: true, userId: user.id, email: user.email };
+    }
+
+    return { valid: false };
+  } catch (err) {
+    console.error("Error verifying admin token:", err);
+    return { valid: false };
+  }
+}
 
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
 const checkRateLimit = (ip: string, maxRequests: number, windowMs: number): boolean => {
