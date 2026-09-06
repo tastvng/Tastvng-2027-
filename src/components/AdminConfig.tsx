@@ -8,6 +8,8 @@ import { useLanguage } from '../LanguageContext';
 import { useActiveYear } from '../hooks/useActiveYear';
 import { 
   ArrowLeft, 
+  ArrowUp,
+  ArrowDown,
   Save, 
   Coins, 
   Plus, 
@@ -556,6 +558,15 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
     setPreguntes(preguntes.map(p => p.id === id ? { ...p, requerit: !p.requerit } : p));
   };
 
+  const handleMovePregunta = (index: number, direction: 'up' | 'down') => {
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= preguntes.length) return;
+    const newArr = [...preguntes];
+    const [moved] = newArr.splice(index, 1);
+    newArr.splice(targetIndex, 0, moved);
+    setPreguntes(newArr);
+  };
+
   const handleAddNewsPost = () => {
     if (!newPostText.trim()) return;
     const nova: NoticiaXarxes = {
@@ -680,6 +691,10 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
     } catch (err) {
       console.error("Error saving questions to Supabase table:", err);
     }
+
+    // Dispatch events to update global state and PublicForm immediately
+    window.dispatchEvent(new CustomEvent('preguntesConfigChanged', { detail: preguntes }));
+    window.dispatchEvent(new Event('sistemaConfigChanged'));
 
     onSave(updated);
     if (onSaveNoticies) {
@@ -1468,8 +1483,32 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
 
             {/* List existing fields with actions toggles */}
             <div className="space-y-3.5">
-              {preguntes.map((preg) => (
-                <div key={preg.id} className="p-4 bg-zinc-50 border border-zinc-200 rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              {preguntes.map((preg, index) => (
+                <div key={preg.id} className="p-4 bg-zinc-50 border border-zinc-200 rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4" id={`admin-pregunta-row-${preg.id}`}>
+                  {/* Reordering buttons */}
+                  <div className="flex flex-row sm:flex-col gap-1 items-center self-start sm:self-center">
+                    <button
+                      type="button"
+                      disabled={index === 0}
+                      onClick={() => handleMovePregunta(index, 'up')}
+                      className="p-1 text-zinc-400 hover:text-zinc-800 disabled:opacity-20 disabled:hover:text-zinc-400 rounded transition cursor-pointer"
+                      title={language === 'ca' ? "Pujar ordre" : "Subir orden"}
+                      id={`btn-config-order-up-${preg.id}`}
+                    >
+                      <ArrowUp size={13} />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={index === preguntes.length - 1}
+                      onClick={() => handleMovePregunta(index, 'down')}
+                      className="p-1 text-zinc-400 hover:text-zinc-800 disabled:opacity-20 disabled:hover:text-zinc-400 rounded transition cursor-pointer"
+                      title={language === 'ca' ? "Baixar ordre" : "Bajar orden"}
+                      id={`btn-config-order-down-${preg.id}`}
+                    >
+                      <ArrowDown size={13} />
+                    </button>
+                  </div>
+
                   <div className="space-y-1 flex-1 w-full">
                     <input 
                       type="text" 
@@ -1478,10 +1517,12 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                       className="bg-transparent border-b border-transparent hover:border-zinc-300 focus:border-fuchsia-400 focus:bg-white rounded px-1.5 py-1 text-xs font-bold text-zinc-900 focus:outline-none w-full"
                       placeholder={language === 'ca' ? "Títol de la pregunta / línia..." : "Título de la pregunta / línea..."}
                       title={language === 'ca' ? "Fes clic per canviar el nom de la pregunta" : "Haz clic para cambiar el nombre de la pregunta"}
+                      id={`input-admin-pregunta-titol-${preg.id}`}
                     />
                     <div className="flex gap-2 items-center text-[10px] text-zinc-400 font-mono uppercase pl-1.5">
                       <span>{language === 'ca' ? "Tipus" : "Tipo"}: {preg.tipus}</span>
                       {preg.opcions && <span>• {language === 'ca' ? "Opcs" : "Opciones"}: {preg.opcions.join(', ')}</span>}
+                      <span>• Ordre: {index + 1}</span>
                     </div>
                   </div>
 

@@ -15,7 +15,8 @@ import {
   Sparkle,
   Database
 } from 'lucide-react';
-import { CategoriaParella, SistemaConfig, Inscripcio, EstatPagament, EstatVerificacio, EstatInscripcio, SistemaConfigItem } from '../types';
+import { CategoriaParella, SistemaConfig, Inscripcio, EstatPagament, EstatVerificacio, EstatInscripcio, SistemaConfigItem, PreguntaDinamica } from '../types';
+import { cargarPreguntes } from '../api/questionnaireApi';
 import { fetchSistemaConfig } from '../supabaseClient';
 import { useLanguage } from '../LanguageContext';
 import { useActiveYear } from '../hooks/useActiveYear';
@@ -112,7 +113,10 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
     return initial;
   });
 
-  // Dynamic answers
+  // Dynamic questions and answers
+  // Table 'preguntes' in Supabase is the PRIMARY source; config.preguntesFormulari is the fallback
+  const [preguntesList, setPreguntesList] = useState<PreguntaDinamica[]>([]);
+  const [preguntesLoadedFromDb, setPreguntesLoadedFromDb] = useState<boolean>(false);
   const [respostesCuestionari, setRespostesCuestionari] = useState<Record<string, string | boolean>>({});
   
   // Extras
@@ -457,16 +461,78 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
 
   const totalCalculat = basePrice + domasCost + mocadorsCost + genericExtrasCost + c1ExtrasCost + c2ExtrasCost + uniformesCost;
 
-  // Initialize dynamic answers on layout load
+  // Load questions actively from Supabase ('preguntes' table as primary, config.preguntesFormulari as fallback)
   useEffect(() => {
-    const initialAnswers: Record<string, string | boolean> = {};
-    config.preguntesFormulari.forEach(q => {
-      if (q.activa) {
-        initialAnswers[q.id] = q.tipus === 'boolean' ? false : '';
+    let isMounted = true;
+
+    async function loadDynamicQuestions() {
+      try {
+        const dbPreguntes = await cargarPreguntes();
+        if (!isMounted) return;
+
+        if (dbPreguntes && dbPreguntes.length > 0) {
+          // Temporary log indicating questions loaded from Supabase vs fallback
+          console.log(`[PublicForm Cuestionari] Carregades ${dbPreguntes.length} preguntes des de Supabase (taula 'preguntes'), 0 des de fallback.`);
+          setPreguntesList(dbPreguntes);
+          setPreguntesLoadedFromDb(true);
+        } else {
+          const fallbackList = config.preguntesFormulari || [];
+          console.log(`[PublicForm Cuestionari] Carregades 0 preguntes des de Supabase, ${fallbackList.length} preguntes des de fallback (config.preguntesFormulari).`);
+          setPreguntesList(fallbackList);
+          setPreguntesLoadedFromDb(false);
+        }
+      } catch (err) {
+        if (!isMounted) return;
+        const fallbackList = config.preguntesFormulari || [];
+        console.warn(`[PublicForm Cuestionari] Error a Supabase. Carregades 0 preguntes des de Supabase, ${fallbackList.length} des de fallback:`, err);
+        setPreguntesList(fallbackList);
+        setPreguntesLoadedFromDb(false);
       }
+    }
+
+    loadDynamicQuestions();
+
+    // Sincronització en temps real des d'AdminConfig
+    const handlePreguntesConfigChanged = (e: Event) => {
+      const customEv = e as CustomEvent<PreguntaDinamica[]>;
+      if (customEv.detail && Array.isArray(customEv.detail)) {
+        console.log(`[PublicForm Cuestionari] Actualització en viu des d'AdminConfig: ${customEv.detail.length} preguntes.`);
+        setPreguntesList(customEv.detail);
+        setPreguntesLoadedFromDb(true);
+      } else {
+        loadDynamicQuestions();
+      }
+    };
+
+    window.addEventListener('preguntesConfigChanged', handlePreguntesConfigChanged);
+    window.addEventListener('sistemaConfigChanged', loadDynamicQuestions);
+
+    return () => {
+      isMounted = false;
+      window.removeEventListener('preguntesConfigChanged', handlePreguntesConfigChanged);
+      window.removeEventListener('sistemaConfigChanged', loadDynamicQuestions);
+    };
+  }, []);
+
+  // Sync fallback only if Supabase data has not been loaded
+  useEffect(() => {
+    if (!preguntesLoadedFromDb && config.preguntesFormulari && config.preguntesFormulari.length > 0) {
+      setPreguntesList(config.preguntesFormulari);
+    }
+  }, [config.preguntesFormulari, preguntesLoadedFromDb]);
+
+  // Initialize dynamic answers when questions list loads or updates
+  useEffect(() => {
+    setRespostesCuestionari(prev => {
+      const initialAnswers: Record<string, string | boolean> = { ...prev };
+      preguntesList.forEach(q => {
+        if (q.activa && initialAnswers[q.id] === undefined) {
+          initialAnswers[q.id] = q.tipus === 'boolean' ? false : '';
+        }
+      });
+      return initialAnswers;
     });
-    setRespostesCuestionari(initialAnswers);
-  }, [config]);
+  }, [preguntesList]);
 
   // Handle webcam capture initialization
   const startCamera = async (owner: 'c1' | 'c2') => {
@@ -631,8 +697,8 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
       if (!c2TutorAccepta) tempErrors.c2TutorAccepta = language === 'ca' ? "Heu d'acceptar l'autorització de menors 2" : "Debe aceptar la autorización de menores 2";
     }
 
-    if (config.cuestionariActiu !== false && config.preguntesFormulari) {
-      config.preguntesFormulari.filter(q => q.activa && q.requerit).forEach(q => {
+    if (config.cuestionariActiu !== false && preguntesList && preguntesList.length > 0) {
+      preguntesList.filter(q => q.activa && q.requerit).forEach(q => {
         const val = respostesCuestionari[q.id];
         if (q.tipus === 'text' && (val === undefined || val === null || String(val).trim() === '')) {
           tempErrors[`question_${q.id}`] = language === 'ca' ? "Aquesta resposta és requerida" : "Esta respuesta es requerida";
@@ -1281,8 +1347,8 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
         })()}
 
         {/* Dynamic Custom Questionnaire Sections */}
-        {config.cuestionariActiu !== false && config.preguntesFormulari && config.preguntesFormulari.filter(q => q.activa).length > 0 && (
-          <div className="bg-white rounded-3xl p-6 border border-zinc-200 shadow-md space-y-6">
+        {config.cuestionariActiu !== false && preguntesList && preguntesList.filter(q => q.activa).length > 0 && (
+          <div className="bg-white rounded-3xl p-6 border border-zinc-200 shadow-md space-y-6" id="cuestionari-preguntes-seccio">
             <div className="border-b border-zinc-100 pb-4">
               <h3 className="font-sans font-black text-zinc-900 text-lg tracking-tight uppercase">
                 <TranslatedText text={config.titolFormulariDinamic || (language === 'ca' ? 'Preguntes Addicionals' : 'Preguntas Adicionales')} />
@@ -1293,10 +1359,10 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
             </div>
 
             <div className="space-y-4">
-              {config.preguntesFormulari.filter(q => q.activa).map((q) => {
+              {preguntesList.filter(q => q.activa).map((q) => {
                 const isErr = !!errors[`question_${q.id}`];
                 return (
-                  <div key={q.id} className="space-y-1.5">
+                  <div key={q.id} className="space-y-1.5" id={`camp-pregunta-${q.id}`}>
                     <label className="block text-xs font-bold text-zinc-700 tracking-tight">
                       <TranslatedText text={q.titol} /> {q.requerit && '*'}
                     </label>
@@ -1309,6 +1375,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
                     {q.tipus === 'text' && (
                       <input 
                         type="text"
+                        id={`input-pregunta-${q.id}`}
                         value={String(respostesCuestionari[q.id] || '')}
                         onChange={(e) => setRespostesCuestionari({
                           ...respostesCuestionari,
@@ -1323,6 +1390,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
                       <label className={`flex items-start gap-2.5 p-3 rounded-xl border transition-all cursor-pointer ${respostesCuestionari[q.id] ? 'bg-fuchsia-50/40 border-fuchsia-200 text-fuchsia-950 font-bold' : 'bg-zinc-50 border-zinc-200 text-zinc-700 hover:border-zinc-300'}`}>
                         <input
                           type="checkbox"
+                          id={`input-pregunta-${q.id}`}
                           checked={!!respostesCuestionari[q.id]}
                           onChange={(e) => setRespostesCuestionari({
                             ...respostesCuestionari,
@@ -1338,6 +1406,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
 
                     {q.tipus === 'select' && (
                       <select
+                        id={`input-pregunta-${q.id}`}
                         value={String(respostesCuestionari[q.id] || '')}
                         onChange={(e) => setRespostesCuestionari({
                           ...respostesCuestionari,

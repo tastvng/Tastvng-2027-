@@ -26,8 +26,10 @@ import {
   EstatVerificacio, 
   EstatInscripcio,
   NoticiaXarxes,
-  StaffMember
+  StaffMember,
+  PreguntaDinamica
 } from './types';
+import { cargarPreguntes } from './api/questionnaireApi';
 
 import { 
   CONFIG_INICIAL, 
@@ -242,6 +244,19 @@ export default function App() {
             setConfig(CONFIG_INICIAL);
             localStorage.setItem('tast_config_2026', JSON.stringify(CONFIG_INICIAL));
           }
+
+          // Sync questions from the dedicated 'preguntes' table into global config
+          try {
+            const dbPreguntes = await cargarPreguntes();
+            if (dbPreguntes && dbPreguntes.length > 0) {
+              setConfig(prev => ({
+                ...prev,
+                preguntesFormulari: dbPreguntes
+              }));
+            }
+          } catch (pregErr) {
+            console.warn("Could not sync preguntes into global config in App.tsx:", pregErr);
+          }
         } catch (e) {
           console.error("Error loading config from Supabase:", e);
           setConfig(CONFIG_INICIAL);
@@ -419,6 +434,23 @@ export default function App() {
       setView('admin-dashboard');
     }
   }, [isAdminLoggedIn, view]);
+
+  // Listen for real-time questionnaire config changes from AdminConfig
+  useEffect(() => {
+    const handlePreguntesChange = (e: Event) => {
+      const customEv = e as CustomEvent<PreguntaDinamica[]>;
+      if (customEv.detail && Array.isArray(customEv.detail)) {
+        setConfig(prev => ({
+          ...prev,
+          preguntesFormulari: customEv.detail
+        }));
+      }
+    };
+    window.addEventListener('preguntesConfigChanged', handlePreguntesChange);
+    return () => {
+      window.removeEventListener('preguntesConfigChanged', handlePreguntesChange);
+    };
+  }, []);
 
   // Quick logger function
   const addLog = (text: string) => {
