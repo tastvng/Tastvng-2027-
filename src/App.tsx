@@ -247,12 +247,14 @@ export default function App() {
 
           // Sync questions from the dedicated 'preguntes' table into global config
           try {
-            const dbPreguntes = await cargarPreguntes();
-            if (dbPreguntes && dbPreguntes.length > 0) {
+            const { cargarPreguntesDetallat } = await import('./api/questionnaireApi');
+            const result = await cargarPreguntesDetallat(false);
+            if (result.data !== null) {
               setConfig(prev => ({
                 ...prev,
-                preguntesFormulari: dbPreguntes
+                preguntesFormulari: result.data || []
               }));
+              console.log(`[App.tsx Cüestionari] Font usada: ${result.source}. Nombre de preguntes sincronitzades a config: ${result.data.length}.`);
             }
           } catch (pregErr) {
             console.warn("Could not sync preguntes into global config in App.tsx:", pregErr);

@@ -6,135 +6,261 @@
 import { supabase, isSupabaseConfigured } from '../supabaseClient';
 import { PreguntaDinamica } from '../types';
 
+export interface CargarPreguntesResult {
+  data: PreguntaDinamica[] | null;
+  source: 'preguntes' | 'fallback';
+  error?: any;
+  count: number;
+}
+
 /**
- * Cargar preguntas desde Supabase.
- * Si la tabla no está creada o hay un error, el llamador puede usar CONFIG_INICIAL como fallback.
- * Si onlyActive es true, filtra solo aquellas con activa === true.
+ * Cargar preguntas desde Supabase con diagnósticos detallados.
+ * Utiliza la tabla 'preguntes' como fuente primaria.
+ * Si onlyActive es true, filtra solo aquellas con activa === true y respeta el orden 'ordre'.
+ */
+export async function cargarPreguntesDetallat(onlyActive: boolean = false): Promise<CargarPreguntesResult> {
+  // Intent 1: Directe a Supabase
+  if (isSupabaseConfigured && supabase) {
+    try {
+      let query = supabase
+        .from('preguntes')
+        .select('*')
+        .order('ordre', { ascending: true });
+
+      if (onlyActive) {
+        query = query.eq('activa', true);
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        console.error('[Cüestionari Diagnòstic] Error exacte de Supabase al carregar de la taula "preguntes":', error);
+      } else if (data !== null && Array.isArray(data)) {
+        const mapped: PreguntaDinamica[] = data.map((row: any, idx: number) => ({
+          id: String(row.id),
+          titol: String(row.titol || ''),
+          tipus: (row.tipus || 'text') as 'text' | 'select' | 'boolean',
+          opcions: Array.isArray(row.opcions)
+            ? row.opcions
+            : (typeof row.opcions === 'string' ? JSON.parse(row.opcions) : undefined),
+          requerit: !!row.requerit,
+          activa: !!row.activa,
+          ordre: typeof row.ordre === 'number' ? row.ordre : idx
+        }));
+
+        // Ordenar explícitament pel camp ordre
+        mapped.sort((a, b) => (a.ordre ?? 0) - (b.ordre ?? 0));
+
+        console.log(`[Cüestionari Diagnòstic] Font usada: preguntes (Supabase). Nombre de preguntes carregades: ${mapped.length} (només actives: ${onlyActive}).`);
+        return {
+          data: mapped,
+          source: 'preguntes',
+          count: mapped.length
+        };
+      }
+    } catch (err) {
+      console.error('[Cüestionari Diagnòstic] Excepció en connexió directa amb Supabase:', err);
+    }
+  }
+
+  // Intent 2: Proxy API del servidor (/api/preguntes) si la consulta directa falla
+  try {
+    const url = `/api/preguntes?active=${onlyActive ? 'true' : 'false'}`;
+    const resp = await fetch(url);
+    if (resp.ok) {
+      const json = await resp.json();
+      if (json && Array.isArray(json.data)) {
+        const mapped: PreguntaDinamica[] = json.data.map((row: any, idx: number) => ({
+          id: String(row.id),
+          titol: String(row.titol || ''),
+          tipus: (row.tipus || 'text') as 'text' | 'select' | 'boolean',
+          opcions: Array.isArray(row.opcions)
+            ? row.opcions
+            : (typeof row.opcions === 'string' ? JSON.parse(row.opcions) : undefined),
+          requerit: !!row.requerit,
+          activa: !!row.activa,
+          ordre: typeof row.ordre === 'number' ? row.ordre : idx
+        }));
+
+        mapped.sort((a, b) => (a.ordre ?? 0) - (b.ordre ?? 0));
+
+        console.log(`[Cüestionari Diagnòstic] Font usada: preguntes (via /api/preguntes). Nombre de preguntes carregades: ${mapped.length} (només actives: ${onlyActive}).`);
+        return {
+          data: mapped,
+          source: 'preguntes',
+          count: mapped.length
+        };
+      }
+    }
+  } catch (apiErr) {
+    console.warn('[Cüestionari Diagnòstic] Avís: La consulta a /api/preguntes no ha respost:', apiErr);
+  }
+
+  // Si ambdues fallen, retornar error amb source fallback
+  console.warn('[Cüestionari Diagnòstic] Font usada: fallback (config.preguntesFormulari). Supabase no disponible o taula inaccesible.');
+  return {
+    data: null,
+    source: 'fallback',
+    error: 'No s\'han pogut recuperar les preguntes de Supabase.',
+    count: 0
+  };
+}
+
+/**
+ * Cargar preguntas des de Supabase.
+ * Retorna l'array de preguntes si Supabase respon amb èxit (fins i tot si és buit []),
+ * o una llista buida si la càrrega falla completament.
  */
 export async function cargarPreguntes(onlyActive: boolean = false): Promise<PreguntaDinamica[]> {
-  if (!isSupabaseConfigured || !supabase) {
-    return [];
-  }
-
-  try {
-    let query = supabase
-      .from('preguntes')
-      .select('*')
-      .order('ordre', { ascending: true });
-
-    if (onlyActive) {
-      query = query.eq('activa', true);
-    }
-
-    const { data, error } = await query;
-
-    if (error) {
-      console.warn('Warning fetching questions from Supabase table "preguntes":', error.message || error);
-      return [];
-    }
-
-    return (data || []).map((row: any) => ({
-      id: String(row.id),
-      titol: row.titol,
-      tipus: row.tipus as 'text' | 'select' | 'boolean',
-      opcions: Array.isArray(row.opcions) ? row.opcions : undefined,
-      requerit: !!row.requerit,
-      activa: !!row.activa
-    }));
-  } catch (err) {
-    console.warn('Exception in cargarPreguntes:', err);
-    return [];
-  }
+  const result = await cargarPreguntesDetallat(onlyActive);
+  return result.data || [];
 }
 
 /**
  * Guardar una lista completa de preguntas en Supabase mediante sincronización y upsert.
+ * Retorna { success: true } o { success: false, error: ... }.
+ * NO amaga els errors: si falla a Supabase, retorna success = false.
  */
-export async function guardarPreguntes(preguntes: PreguntaDinamica[]): Promise<boolean> {
-  if (!isSupabaseConfigured || !supabase) {
-    return false;
+export async function guardarPreguntes(preguntes: PreguntaDinamica[]): Promise<{ success: boolean; error?: string }> {
+  const currentIds = preguntes.map(p => String(p.id));
+
+  // 1. Intentar directament a través del client Supabase de l'administrador
+  if (isSupabaseConfigured && supabase) {
+    try {
+      // Pas A: Eliminar preguntes esborrades
+      const { data: existingRows, error: selErr } = await supabase.from('preguntes').select('id');
+      if (!selErr && existingRows && existingRows.length > 0) {
+        const idsToDelete = existingRows
+          .map(r => String(r.id))
+          .filter(id => !currentIds.includes(id));
+
+        if (idsToDelete.length > 0) {
+          const { error: delErr } = await supabase.from('preguntes').delete().in('id', idsToDelete);
+          if (delErr) {
+            console.warn('[guardarPreguntes] Avís esborrant preguntes sobrants directament:', delErr);
+          } else {
+            console.log(`[guardarPreguntes] Preguntes esborrades de Supabase: ${idsToDelete.join(', ')}`);
+          }
+        }
+      }
+
+      // Pas B: Upsert de preguntes actuals amb ordre actualitzat
+      if (preguntes.length > 0) {
+        const payload = preguntes.map((p, index) => ({
+          id: String(p.id),
+          titol: String(p.titol || ''),
+          tipus: p.tipus || 'text',
+          opcions: p.tipus === 'select' && Array.isArray(p.opcions) && p.opcions.length > 0 ? p.opcions : null,
+          requerit: !!p.requerit,
+          activa: !!p.activa,
+          ordre: typeof p.ordre === 'number' ? p.ordre : index,
+          updated_at: new Date().toISOString()
+        }));
+
+        const { error: upErr } = await supabase
+          .from('preguntes')
+          .upsert(payload, { onConflict: 'id' });
+
+        if (upErr) {
+          console.error('[guardarPreguntes] Error directe de Supabase upserting preguntes:', upErr);
+          // Si hi ha error RLS o de client, provarem el bridge del servidor (/api/admin/preguntes)
+        } else {
+          console.log(`[guardarPreguntes] Resultat real de guardar a Supabase: Èxit (${payload.length} preguntes sincronitzades correctament).`);
+          return { success: true };
+        }
+      } else {
+        // Totes les preguntes han estat esborrades
+        console.log('[guardarPreguntes] Resultat real de guardar a Supabase: Èxit (llista buida, totes esborrades).');
+        return { success: true };
+      }
+    } catch (directErr) {
+      console.warn('[guardarPreguntes] Excepció en accés directe Supabase, provant bridge del servidor:', directErr);
+    }
   }
 
+  // 2. Intentar a través del bridge protegit del servidor /api/admin/preguntes amb el token d'administrador
   try {
-    const currentIds = preguntes.map(p => p.id);
-
-    // 1. Eliminar de Supabase las preguntas que ya no estén en la lista
-    const { data: existingRows } = await supabase.from('preguntes').select('id');
-    if (existingRows && existingRows.length > 0) {
-      const idsToDelete = existingRows
-        .map(r => String(r.id))
-        .filter(id => !currentIds.includes(id));
-
-      if (idsToDelete.length > 0) {
-        const { error: delError } = await supabase
-          .from('preguntes')
-          .delete()
-          .in('id', idsToDelete);
-        if (delError) {
-          console.warn('Warning removing deleted questions from Supabase table "preguntes":', delError);
-        }
-      }
+    let token = '';
+    if (supabase) {
+      const { data: { session } } = await supabase.auth.getSession();
+      token = session?.access_token || '';
     }
 
-    // 2. Upsert de todas las preguntas actuales con su orden actualizado
-    if (preguntes.length > 0) {
-      const payload = preguntes.map((p, index) => ({
-        id: p.id,
-        titol: p.titol,
-        tipus: p.tipus,
-        opcions: p.tipus === 'select' && p.opcions && p.opcions.length > 0 ? p.opcions : null,
-        requerit: !!p.requerit,
-        activa: !!p.activa,
-        ordre: index,
-        updated_at: new Date().toISOString()
-      }));
+    const resp = await fetch('/api/admin/preguntes', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+      },
+      body: JSON.stringify({ preguntes })
+    });
 
-      const { error } = await supabase
-        .from('preguntes')
-        .upsert(payload, { onConflict: 'id' });
-
-      if (error) {
-        console.error('Error upserting questions into "preguntes" table:', error);
-        if (error.code === '42P01') {
-          console.warn("Table 'preguntes' does not exist yet. Fallback to settings config table for saving.");
-          return true;
-        }
-        throw error;
-      }
+    const json = await resp.json();
+    if (resp.ok && json.success) {
+      console.log(`[guardarPreguntes] Resultat real de guardar a Supabase (via /api/admin/preguntes): Èxit (${preguntes.length} preguntes sincronitzades).`);
+      return { success: true };
+    } else {
+      const errorMsg = json.error || `HTTP ${resp.status}: Fallada al servidor`;
+      console.error('[guardarPreguntes] Resultat real de guardar a Supabase: Error:', errorMsg);
+      return { success: false, error: errorMsg };
     }
-
-    return true;
-  } catch (err) {
-    console.error('Exception in guardarPreguntes:', err);
-    return false;
+  } catch (apiErr: any) {
+    const errorMsg = apiErr?.message || String(apiErr);
+    console.error('[guardarPreguntes] Resultat real de guardar a Supabase: Error fatal:', errorMsg);
+    return { success: false, error: errorMsg };
   }
 }
 
 /**
- * Eliminar una pregunta de Supabase por ID.
+ * Eliminar una pregunta de Supabase per ID.
+ * Retorna { success: true } o { success: false, error: ... }.
  */
-export async function eliminarPregunta(id: string): Promise<boolean> {
-  if (!isSupabaseConfigured || !supabase) {
-    return false;
+export async function eliminarPregunta(id: string): Promise<{ success: boolean; error?: string }> {
+  // 1. Intentar directament a través de Supabase
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const { error } = await supabase
+        .from('preguntes')
+        .delete()
+        .eq('id', id);
+
+      if (!error) {
+        console.log(`[eliminarPregunta] Resultat real d'eliminar de Supabase: Pregunta "${id}" eliminada amb èxit.`);
+        return { success: true };
+      }
+      console.warn(`[eliminarPregunta] Error directe de Supabase eliminant pregunta "${id}":`, error);
+    } catch (err) {
+      console.warn(`[eliminarPregunta] Excepció en esborrat directe de "${id}":`, err);
+    }
   }
 
+  // 2. Intentar mitjançant bridge del servidor /api/admin/preguntes/:id
   try {
-    const { error } = await supabase
-      .from('preguntes')
-      .delete()
-      .eq('id', id);
-
-    if (error) {
-      console.error(`Error deleting question with ID ${id} from "preguntes" table:`, error);
-      if (error.code === '42P01') {
-        console.warn("Table 'preguntes' does not exist yet. Fallback to settings config table for deleting.");
-        return true;
-      }
-      throw error;
+    let token = '';
+    if (supabase) {
+      const { data: { session } } = await supabase.auth.getSession();
+      token = session?.access_token || '';
     }
-    return true;
-  } catch (err) {
-    console.error(`Exception in eliminarPregunta for ${id}:`, err);
-    return false;
+
+    const resp = await fetch(`/api/admin/preguntes/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      headers: {
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+      }
+    });
+
+    const json = await resp.json();
+    if (resp.ok && json.success) {
+      console.log(`[eliminarPregunta] Resultat real d'eliminar de Supabase (via /api/admin/preguntes): Pregunta "${id}" eliminada amb èxit.`);
+      return { success: true };
+    } else {
+      const errorMsg = json.error || `HTTP ${resp.status}: Error esborrant pregunta`;
+      console.error(`[eliminarPregunta] Resultat real d'eliminar de Supabase: Error eliminant "${id}":`, errorMsg);
+      return { success: false, error: errorMsg };
+    }
+  } catch (apiErr: any) {
+    const errorMsg = apiErr?.message || String(apiErr);
+    console.error(`[eliminarPregunta] Resultat real d'eliminar de Supabase: Error:`, errorMsg);
+    return { success: false, error: errorMsg };
   }
 }

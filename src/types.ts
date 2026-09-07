@@ -36,6 +36,7 @@ export interface PreguntaDinamica {
   opcions?: string[];
   requerit: boolean;
   activa: boolean;
+  ordre?: number;
   descripcio?: string;
 }
 

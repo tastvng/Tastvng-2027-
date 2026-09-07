@@ -394,6 +394,125 @@ async function startServer() {
     }
   });
 
+  // Dynamic Questionnaire Endpoints (preguntes table)
+  app.get("/api/preguntes", async (req, res) => {
+    try {
+      const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      const anonKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+      if (!supabaseUrl || (!serviceRoleKey && !anonKey)) {
+        return res.status(500).json({ error: "Supabase no configurat" });
+      }
+
+      const client = createClient(supabaseUrl, serviceRoleKey || anonKey!);
+      const onlyActive = req.query.active !== 'false';
+      let query = client.from('preguntes').select('*').order('ordre', { ascending: true });
+      if (onlyActive) {
+        query = query.eq('activa', true);
+      }
+      const { data, error } = await query;
+      if (error) {
+        console.error("[server /api/preguntes] Error fetching from preguntes:", error);
+        return res.status(500).json({ error: error.message || error });
+      }
+      return res.json({ data: data || [] });
+    } catch (err: any) {
+      console.error("[server /api/preguntes] Exception:", err);
+      return res.status(500).json({ error: err?.message || String(err) });
+    }
+  });
+
+  app.post("/api/admin/preguntes", async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization || '';
+      const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+      const adminAuth = token ? await verifySupabaseAdminToken(token) : { valid: false };
+      if (!adminAuth.valid) {
+        return res.status(401).json({ error: "No autoritzat com a administrador" });
+      }
+
+      const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      if (!supabaseUrl || !serviceRoleKey) {
+        return res.status(500).json({ error: "Configuració Supabase incompleta al servidor" });
+      }
+
+      const client = createClient(supabaseUrl, serviceRoleKey);
+      const { preguntes } = req.body;
+      if (!Array.isArray(preguntes)) {
+        return res.status(400).json({ error: "El camp 'preguntes' ha de ser una llista" });
+      }
+
+      const currentIds = preguntes.map(p => String(p.id));
+
+      const { data: existingRows } = await client.from('preguntes').select('id');
+      if (existingRows && existingRows.length > 0) {
+        const idsToDelete = existingRows
+          .map(r => String(r.id))
+          .filter(id => !currentIds.includes(id));
+
+        if (idsToDelete.length > 0) {
+          const { error: delErr } = await client.from('preguntes').delete().in('id', idsToDelete);
+          if (delErr) {
+            console.error("[server /api/admin/preguntes] Error deleting removed questions:", delErr);
+            return res.status(500).json({ error: delErr.message });
+          }
+        }
+      }
+
+      if (preguntes.length > 0) {
+        const payload = preguntes.map((p, index) => ({
+          id: String(p.id),
+          titol: String(p.titol || ''),
+          tipus: p.tipus || 'text',
+          opcions: p.tipus === 'select' && Array.isArray(p.opcions) && p.opcions.length > 0 ? p.opcions : null,
+          requerit: !!p.requerit,
+          activa: !!p.activa,
+          ordre: typeof p.ordre === 'number' ? p.ordre : index,
+          updated_at: new Date().toISOString()
+        }));
+
+        const { error: upErr } = await client.from('preguntes').upsert(payload, { onConflict: 'id' });
+        if (upErr) {
+          console.error("[server /api/admin/preguntes] Error upserting questions:", upErr);
+          return res.status(500).json({ error: upErr.message });
+        }
+      }
+
+      return res.json({ success: true, count: preguntes.length });
+    } catch (err: any) {
+      console.error("[server /api/admin/preguntes] Exception:", err);
+      return res.status(500).json({ error: err?.message || String(err) });
+    }
+  });
+
+  app.delete("/api/admin/preguntes/:id", async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization || '';
+      const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+      const adminAuth = token ? await verifySupabaseAdminToken(token) : { valid: false };
+      if (!adminAuth.valid) {
+        return res.status(401).json({ error: "No autoritzat com a administrador" });
+      }
+
+      const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      if (!supabaseUrl || !serviceRoleKey) {
+        return res.status(500).json({ error: "Configuració Supabase incompleta al servidor" });
+      }
+
+      const client = createClient(supabaseUrl, serviceRoleKey);
+      const { id } = req.params;
+      const { error } = await client.from('preguntes').delete().eq('id', id);
+      if (error) {
+        return res.status(500).json({ error: error.message });
+      }
+      return res.json({ success: true });
+    } catch (err: any) {
+      return res.status(500).json({ error: err?.message || String(err) });
+    }
+  });
+
   // Base API healthcheck endpoint
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok", time: new Date() });

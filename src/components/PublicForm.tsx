@@ -16,7 +16,7 @@ import {
   Database
 } from 'lucide-react';
 import { CategoriaParella, SistemaConfig, Inscripcio, EstatPagament, EstatVerificacio, EstatInscripcio, SistemaConfigItem, PreguntaDinamica } from '../types';
-import { cargarPreguntes } from '../api/questionnaireApi';
+import { cargarPreguntes, cargarPreguntesDetallat } from '../api/questionnaireApi';
 import { fetchSistemaConfig } from '../supabaseClient';
 import { useLanguage } from '../LanguageContext';
 import { useActiveYear } from '../hooks/useActiveYear';
@@ -467,24 +467,34 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
 
     async function loadDynamicQuestions() {
       try {
-        const dbPreguntes = await cargarPreguntes();
+        // Source 1 (PRIMARY): Active questions directly from Supabase 'preguntes' table
+        const result = await cargarPreguntesDetallat(true);
         if (!isMounted) return;
 
-        if (dbPreguntes && dbPreguntes.length > 0) {
-          // Temporary log indicating questions loaded from Supabase vs fallback
-          console.log(`[PublicForm Cuestionari] Carregades ${dbPreguntes.length} preguntes des de Supabase (taula 'preguntes'), 0 des de fallback.`);
-          setPreguntesList(dbPreguntes);
+        if (result.data !== null) {
+          // Supabase responded (table exists and query succeeded, even if empty [])
+          console.log(`[PublicForm Cuestionari] Font usada: ${result.source}. Nombre de preguntes carregades: ${result.data.length}.`);
+          const activeSorted = [...result.data]
+            .filter(q => q.activa)
+            .sort((a, b) => (a.ordre ?? 0) - (b.ordre ?? 0));
+          setPreguntesList(activeSorted);
           setPreguntesLoadedFromDb(true);
         } else {
-          const fallbackList = config.preguntesFormulari || [];
-          console.log(`[PublicForm Cuestionari] Carregades 0 preguntes des de Supabase, ${fallbackList.length} preguntes des de fallback (config.preguntesFormulari).`);
+          // Source 2 (FALLBACK): config.preguntesFormulari ONLY if Supabase is unavailable or table does not exist
+          const fallbackList = (config.preguntesFormulari || [])
+            .filter(q => q.activa)
+            .sort((a, b) => (a.ordre ?? 0) - (b.ordre ?? 0));
+          console.log(`[PublicForm Cuestionari] Font usada: fallback (config.preguntesFormulari). Nombre de preguntes carregades: ${fallbackList.length}. Error exacte Supabase:`, result.error);
           setPreguntesList(fallbackList);
           setPreguntesLoadedFromDb(false);
         }
       } catch (err) {
         if (!isMounted) return;
-        const fallbackList = config.preguntesFormulari || [];
-        console.warn(`[PublicForm Cuestionari] Error a Supabase. Carregades 0 preguntes des de Supabase, ${fallbackList.length} des de fallback:`, err);
+        const fallbackList = (config.preguntesFormulari || [])
+          .filter(q => q.activa)
+          .sort((a, b) => (a.ordre ?? 0) - (b.ordre ?? 0));
+        console.error('[PublicForm Cuestionari] Error exacte de Supabase en carregar preguntes:', err);
+        console.log(`[PublicForm Cuestionari] Font usada: fallback (config.preguntesFormulari). Nombre de preguntes carregades: ${fallbackList.length}.`);
         setPreguntesList(fallbackList);
         setPreguntesLoadedFromDb(false);
       }
@@ -496,8 +506,11 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
     const handlePreguntesConfigChanged = (e: Event) => {
       const customEv = e as CustomEvent<PreguntaDinamica[]>;
       if (customEv.detail && Array.isArray(customEv.detail)) {
-        console.log(`[PublicForm Cuestionari] Actualització en viu des d'AdminConfig: ${customEv.detail.length} preguntes.`);
-        setPreguntesList(customEv.detail);
+        const activeSorted = customEv.detail
+          .filter(q => q.activa)
+          .sort((a, b) => (a.ordre ?? 0) - (b.ordre ?? 0));
+        console.log(`[PublicForm Cuestionari] Font usada: preguntes (actualització en viu des d'AdminConfig). Nombre de preguntes carregades: ${activeSorted.length}.`);
+        setPreguntesList(activeSorted);
         setPreguntesLoadedFromDb(true);
       } else {
         loadDynamicQuestions();
@@ -513,13 +526,6 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
       window.removeEventListener('sistemaConfigChanged', loadDynamicQuestions);
     };
   }, []);
-
-  // Sync fallback only if Supabase data has not been loaded
-  useEffect(() => {
-    if (!preguntesLoadedFromDb && config.preguntesFormulari && config.preguntesFormulari.length > 0) {
-      setPreguntesList(config.preguntesFormulari);
-    }
-  }, [config.preguntesFormulari, preguntesLoadedFromDb]);
 
   // Initialize dynamic answers when questions list loads or updates
   useEffect(() => {
@@ -704,6 +710,8 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
           tempErrors[`question_${q.id}`] = language === 'ca' ? "Aquesta resposta és requerida" : "Esta respuesta es requerida";
         } else if (q.tipus === 'select' && (val === undefined || val === null || String(val).trim() === '')) {
           tempErrors[`question_${q.id}`] = language === 'ca' ? "Seleccioneu una opció" : "Seleccione una opción";
+        } else if (q.tipus === 'boolean' && !val) {
+          tempErrors[`question_${q.id}`] = language === 'ca' ? "Cal marcar aquesta casella" : "Debe marcar esta casilla";
         }
       });
     }

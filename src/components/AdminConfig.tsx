@@ -28,7 +28,7 @@ import {
   Shirt
 } from 'lucide-react';
 import { SistemaConfig, PreguntaDinamica, NoticiaXarxes, TarifaConcept, LiniaUniforme } from '../types';
-import { cargarPreguntes, guardarPreguntes, eliminarPregunta } from '../api/questionnaireApi';
+import { cargarPreguntes, cargarPreguntesDetallat, guardarPreguntes, eliminarPregunta } from '../api/questionnaireApi';
 import { fetchSistemaConfig, saveSistemaConfigItem } from '../supabaseClient';
 
 interface AdminConfigProps {
@@ -425,12 +425,13 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
   useEffect(() => {
     async function loadQuestionsFromSupabase() {
       try {
-        const dbPreguntes = await cargarPreguntes();
-        if (dbPreguntes && dbPreguntes.length > 0) {
-          setPreguntes(dbPreguntes);
+        const result = await cargarPreguntesDetallat(false);
+        if (result.data !== null) {
+          console.log(`[AdminConfig Cüestionari] Font usada: ${result.source}. Preguntes carregades: ${result.data.length}.`);
+          setPreguntes(result.data);
         }
       } catch (err) {
-        console.warn("Could not fetch questions from Supabase (this is normal if table 'preguntes' doesn't exist yet):", err);
+        console.warn("Could not fetch questions from Supabase in AdminConfig:", err);
       }
     }
     loadQuestionsFromSupabase().catch(err => console.error("Unhandled error in loadQuestionsFromSupabase:", err));
@@ -501,6 +502,11 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
     setPreguntes(prev => prev.map(p => p.id === id ? { ...p, titol: value } : p));
   };
 
+  const updatePreguntaOpcions = (id: string, value: string) => {
+    const arr = value.split(',').map(s => s.trim()).filter(Boolean);
+    setPreguntes(prev => prev.map(p => p.id === id ? { ...p, opcions: arr } : p));
+  };
+
   const handleAddPregunta = () => {
     if (!newTitol.trim()) return;
 
@@ -514,7 +520,8 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
       tipus: newTipus,
       opcions: opcionsArray,
       requerit: false,
-      activa: true
+      activa: true,
+      ordre: preguntes.length
     };
 
     setPreguntes([...preguntes, nova]);
@@ -535,17 +542,18 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
     setPreguntes(preguntes.filter(p => p.id !== id));
 
     try {
-      const success = await eliminarPregunta(id);
-      if (!success) {
-        throw new Error('Database deletion failed or returned false');
+      const res = await eliminarPregunta(id);
+      if (!res.success) {
+        throw new Error(res.error || 'Database deletion failed or returned false');
       }
+      console.log(`[AdminConfig] Resultat real d'eliminar de Supabase: Pregunta ${id} eliminada amb èxit.`);
     } catch (err) {
       console.error("Failed to delete question from Supabase, performing rollback:", err);
       setPreguntes(originalPreguntes);
 
       const errorMessage = language === 'ca'
-        ? "No s'ha pogut esborrar la pregunta de la base de dades. S'ha restablert."
-        : "No se pudo borrar la pregunta de la base de datos. Se ha restablecido.";
+        ? `No s'ha pogut esborrar la pregunta de la base de dades: ${err instanceof Error ? err.message : String(err)}`
+        : `No se pudo borrar la pregunta de la base de datos: ${err instanceof Error ? err.message : String(err)}`;
       alert(errorMessage);
     }
   };
@@ -687,9 +695,23 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
 
     // Persist questions inside the dedicated 'preguntes' table in Supabase
     try {
-      await guardarPreguntes(preguntes);
-    } catch (err) {
+      const saveRes = await guardarPreguntes(preguntes);
+      if (!saveRes.success) {
+        console.error("[AdminConfig] Error desant preguntes a Supabase:", saveRes.error);
+        const errMsg = language === 'ca'
+          ? `Error desant el qüestionari a Supabase: ${saveRes.error || 'Error desconegut'}`
+          : `Error guardando el cuestionario en Supabase: ${saveRes.error || 'Error desconocido'}`;
+        alert(errMsg);
+        return; // Do NOT show success or proceed!
+      }
+      console.log(`[AdminConfig] Resultat real de guardar a Supabase: Èxit (${preguntes.length} preguntes sincronitzades).`);
+    } catch (err: any) {
       console.error("Error saving questions to Supabase table:", err);
+      const errMsg = language === 'ca'
+        ? `Error desant el qüestionari a Supabase: ${err?.message || String(err)}`
+        : `Error guardando el cuestionario en Supabase: ${err?.message || String(err)}`;
+      alert(errMsg);
+      return;
     }
 
     // Dispatch events to update global state and PublicForm immediately
@@ -1519,11 +1541,26 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                       title={language === 'ca' ? "Fes clic per canviar el nom de la pregunta" : "Haz clic para cambiar el nombre de la pregunta"}
                       id={`input-admin-pregunta-titol-${preg.id}`}
                     />
-                    <div className="flex gap-2 items-center text-[10px] text-zinc-400 font-mono uppercase pl-1.5">
+                    <div className="flex flex-wrap gap-2 items-center text-[10px] text-zinc-400 font-mono uppercase pl-1.5">
                       <span>{language === 'ca' ? "Tipus" : "Tipo"}: {preg.tipus}</span>
-                      {preg.opcions && <span>• {language === 'ca' ? "Opcs" : "Opciones"}: {preg.opcions.join(', ')}</span>}
                       <span>• Ordre: {index + 1}</span>
                     </div>
+                    {preg.tipus === 'select' && (
+                      <div className="flex items-center gap-2 pl-1.5 pt-1">
+                        <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider whitespace-nowrap">
+                          {language === 'ca' ? "Opcions (CSV):" : "Opciones (CSV):"}
+                        </span>
+                        <input
+                          type="text"
+                          value={(preg.opcions || []).join(', ')}
+                          onChange={(e) => updatePreguntaOpcions(preg.id, e.target.value)}
+                          className="bg-zinc-50 border border-zinc-200 focus:border-fuchsia-400 focus:bg-white rounded px-2 py-0.5 text-[11px] font-medium text-zinc-800 focus:outline-none flex-1 w-full"
+                          placeholder={language === 'ca' ? "Opció 1, Opció 2, Opció 3" : "Opción 1, Opción 2, Opción 3"}
+                          title={language === 'ca' ? "Modifica les opcions separades per comes" : "Modifica las opciones separadas por comas"}
+                          id={`input-admin-pregunta-opcions-${preg.id}`}
+                        />
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex items-center gap-2 self-end sm:self-auto font-sans text-[11px] font-bold">
