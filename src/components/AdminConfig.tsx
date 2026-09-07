@@ -29,7 +29,7 @@ import {
 } from 'lucide-react';
 import { SistemaConfig, PreguntaDinamica, NoticiaXarxes, TarifaConcept, LiniaUniforme } from '../types';
 import { cargarPreguntes, cargarPreguntesDetallat, guardarPreguntes, eliminarPregunta } from '../api/questionnaireApi';
-import { fetchSistemaConfig, saveSistemaConfigItem } from '../supabaseClient';
+import { fetchSistemaConfig, saveSistemaConfigItem, supabase, isSupabaseConfigured, logSupabaseWriteDiagnostic } from '../supabaseClient';
 
 interface AdminConfigProps {
   config: SistemaConfig;
@@ -55,6 +55,36 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
   const [dbUrlSetup, setDbUrlSetup] = useState(() => localStorage.getItem('VITE_SUPABASE_URL') || '');
   const [dbAnonSetup, setDbAnonSetup] = useState(() => localStorage.getItem('VITE_SUPABASE_ANON_KEY') || '');
   const [dbConfigSaved, setDbConfigSaved] = useState(false);
+
+  // Authenticated user diagnostic state
+  const [adminAuthInfo, setAdminAuthInfo] = useState<{
+    uid: string | null;
+    email: string | null;
+    sessionActive: boolean;
+  }>({
+    uid: null,
+    email: null,
+    sessionActive: false
+  });
+
+  useEffect(() => {
+    if (isSupabaseConfigured && supabase) {
+      supabase.auth.getSession().then(({ data: { session }, error }) => {
+        const info = {
+          uid: session?.user?.id || null,
+          email: session?.user?.email || null,
+          sessionActive: !!session
+        };
+        setAdminAuthInfo(info);
+        console.log('[AdminConfig Diagnostic Inicial] Usuari autenticat detectat a AdminConfig:', {
+          ...info,
+          sessionError: error?.message || null
+        });
+      }).catch(err => {
+        console.warn('[AdminConfig Diagnostic Inicial] Error obtenint sessió:', err);
+      });
+    }
+  }, []);
 
   const handleSaveLocalSupabase = () => {
     localStorage.setItem('VITE_SUPABASE_URL', dbUrlSetup.trim());
@@ -633,6 +663,29 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
   };
 
   const handleGuardarConfig = async () => {
+    // Diagnòstic temporal obligatori abans de cada escriptura:
+    if (isSupabaseConfigured && supabase) {
+      const { data: { session }, error: sessionErr } = await supabase.auth.getSession();
+      console.log('[AdminConfig Diagnostic Pre-Escriptura]:', {
+        authUid: session?.user?.id || null,
+        sessionExists: !!session,
+        email: session?.user?.email || null,
+        getSessionResult: session ? 'SUCCESS' : 'NO_SESSION',
+        sessionError: sessionErr ? sessionErr.message : null,
+        taula: 'preguntes, sistema_config, settings',
+        operacio: 'Sincronització i guardat complet de configuració',
+      });
+
+      if (!session) {
+        console.error('[AdminConfig Diagnostic] Intent de guardar sense sessió vàlida!');
+        const errMsg = language === 'ca'
+          ? "No s'ha trobat cap sessió d'administrador activa. Si us plau, inicieu sessió de nou abans de guardar."
+          : "No se ha encontrado ninguna sesión de administrador activa. Por favor, inicie sesión de nuevo antes de guardar.";
+        alert(errMsg);
+        return;
+      }
+    }
+
     // Find rates in the array or fall back to single inputs
     const adultsVal = tarifesDinamiques.find(t => t.id === 'adults')?.valor ?? Number(preuAdult);
     const juvenilsVal = tarifesDinamiques.find(t => t.id === 'juvenils')?.valor ?? Number(preuJuvenil);
@@ -744,6 +797,18 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
         <h2 className="font-sans font-extrabold text-base tracking-tight text-white flex items-center gap-2">
           {language === 'ca' ? "Personalitza Canons i Cüestionaris" : "Personaliza Cánones y Cuestionarios"}
         </h2>
+
+        {/* Authenticated Admin Diagnostic Badge */}
+        <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-zinc-800/90 border border-zinc-700 rounded-xl text-xs font-mono text-zinc-300" id="admin-auth-diagnostic-badge">
+          <span className={`w-2 h-2 rounded-full ${adminAuthInfo.sessionActive ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`}></span>
+          <span className="text-zinc-400">Admin:</span>
+          <span className="text-white font-semibold">{adminAuthInfo.email || (adminAuthInfo.sessionActive ? 'Autenticat' : 'Verificant sessió...')}</span>
+          {adminAuthInfo.uid && (
+            <span className="text-[10px] text-zinc-500 font-mono hidden xl:inline" title={adminAuthInfo.uid}>
+              ({adminAuthInfo.uid.substring(0, 8)}...)
+            </span>
+          )}
+        </div>
 
         <div className="flex items-center gap-2">
           {onResetConfig && (

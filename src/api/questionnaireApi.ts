@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { supabase, isSupabaseConfigured } from '../supabaseClient';
+import { supabase, isSupabaseConfigured, logSupabaseWriteDiagnostic } from '../supabaseClient';
 import { PreguntaDinamica } from '../types';
 
 export interface CargarPreguntesResult {
@@ -124,20 +124,26 @@ export async function cargarPreguntes(onlyActive: boolean = false): Promise<Preg
 export async function guardarPreguntes(preguntes: PreguntaDinamica[]): Promise<{ success: boolean; error?: string }> {
   const currentIds = preguntes.map(p => String(p.id));
 
+  // Diagnòstic previ a l'escriptura
+  await logSupabaseWriteDiagnostic('preguntes', `GUARDAR_PREGUNTES (${preguntes.length} preguntes)`);
+
   // 1. Intentar directament a través del client Supabase de l'administrador
   if (isSupabaseConfigured && supabase) {
     try {
       // Pas A: Eliminar preguntes esborrades
       const { data: existingRows, error: selErr } = await supabase.from('preguntes').select('id');
-      if (!selErr && existingRows && existingRows.length > 0) {
+      if (selErr) {
+        console.error('[Supabase Write Error] Taula: preguntes, Operació: SELECT existents, Error complet:', selErr);
+      } else if (existingRows && existingRows.length > 0) {
         const idsToDelete = existingRows
           .map(r => String(r.id))
           .filter(id => !currentIds.includes(id));
 
         if (idsToDelete.length > 0) {
+          await logSupabaseWriteDiagnostic('preguntes', `DELETE (${idsToDelete.length} preguntes sobrants)`);
           const { error: delErr } = await supabase.from('preguntes').delete().in('id', idsToDelete);
           if (delErr) {
-            console.warn('[guardarPreguntes] Avís esborrant preguntes sobrants directament:', delErr);
+            console.error('[Supabase Write Error] Taula: preguntes, Operació: DELETE (sobrants), Error complet:', delErr);
           } else {
             console.log(`[guardarPreguntes] Preguntes esborrades de Supabase: ${idsToDelete.join(', ')}`);
           }
@@ -157,13 +163,13 @@ export async function guardarPreguntes(preguntes: PreguntaDinamica[]): Promise<{
           updated_at: new Date().toISOString()
         }));
 
+        await logSupabaseWriteDiagnostic('preguntes', `UPSERT (${payload.length} preguntes)`);
         const { error: upErr } = await supabase
           .from('preguntes')
           .upsert(payload, { onConflict: 'id' });
 
         if (upErr) {
-          console.error('[guardarPreguntes] Error directe de Supabase upserting preguntes:', upErr);
-          // Si hi ha error RLS o de client, provarem el bridge del servidor (/api/admin/preguntes)
+          console.error('[Supabase Write Error] Taula: preguntes, Operació: UPSERT, Error complet:', upErr);
         } else {
           console.log(`[guardarPreguntes] Resultat real de guardar a Supabase: Èxit (${payload.length} preguntes sincronitzades correctament).`);
           return { success: true };
@@ -174,7 +180,7 @@ export async function guardarPreguntes(preguntes: PreguntaDinamica[]): Promise<{
         return { success: true };
       }
     } catch (directErr) {
-      console.warn('[guardarPreguntes] Excepció en accés directe Supabase, provant bridge del servidor:', directErr);
+      console.error('[Supabase Write Error] Excepció en accés directe Supabase:', directErr);
     }
   }
 
@@ -216,6 +222,9 @@ export async function guardarPreguntes(preguntes: PreguntaDinamica[]): Promise<{
  * Retorna { success: true } o { success: false, error: ... }.
  */
 export async function eliminarPregunta(id: string): Promise<{ success: boolean; error?: string }> {
+  // Diagnòstic previ a l'eliminació
+  await logSupabaseWriteDiagnostic('preguntes', `DELETE (id: ${id})`);
+
   // 1. Intentar directament a través de Supabase
   if (isSupabaseConfigured && supabase) {
     try {
@@ -228,9 +237,9 @@ export async function eliminarPregunta(id: string): Promise<{ success: boolean; 
         console.log(`[eliminarPregunta] Resultat real d'eliminar de Supabase: Pregunta "${id}" eliminada amb èxit.`);
         return { success: true };
       }
-      console.warn(`[eliminarPregunta] Error directe de Supabase eliminant pregunta "${id}":`, error);
+      console.error(`[Supabase Write Error] Taula: preguntes, Operació: DELETE (id: ${id}), Error complet:`, error);
     } catch (err) {
-      console.warn(`[eliminarPregunta] Excepció en esborrat directe de "${id}":`, err);
+      console.error(`[Supabase Write Error] Excepció en esborrat directe de "${id}":`, err);
     }
   }
 

@@ -350,12 +350,23 @@ export default function App() {
   useEffect(() => {
     if (isSupabaseConfigured && supabase) {
       // Check current session and verify admin role in public.profiles
-      supabase.auth.getSession().then(async ({ data: { session } }) => {
+      supabase.auth.getSession().then(async ({ data: { session }, error: sessionErr }) => {
+        console.log('[App.tsx Diagnostic Session Check]:', {
+          sessionExists: !!session,
+          uid: session?.user?.id || null,
+          email: session?.user?.email || null,
+          error: sessionErr?.message || null
+        });
         if (!session) {
           setIsAdminLoggedIn(false);
           return;
         }
         const isAdmin = await checkCurrentUserIsAdmin(session.user?.id);
+        console.log('[App.tsx Diagnostic Admin Check]:', {
+          uid: session.user.id,
+          email: session.user.email,
+          isAdmin
+        });
         setIsAdminLoggedIn(isAdmin);
         if (!isAdmin && ['admin-dashboard', 'admin-ficha', 'admin-config', 'admin-scanner'].includes(view)) {
           setView('login');
@@ -366,7 +377,12 @@ export default function App() {
       });
 
       // Listen to auth changes
-      const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+        console.log(`[App.tsx Auth Event: ${event}]`, {
+          sessionExists: !!session,
+          uid: session?.user?.id || null,
+          email: session?.user?.email || null
+        });
         if (!session) {
           setIsAdminLoggedIn(false);
           if (['admin-dashboard', 'admin-ficha', 'admin-config', 'admin-scanner'].includes(view)) {
@@ -376,6 +392,11 @@ export default function App() {
         }
 
         const isAdmin = await checkCurrentUserIsAdmin(session.user?.id);
+        console.log('[App.tsx Auth Event Admin Check]:', {
+          uid: session.user.id,
+          email: session.user.email,
+          isAdmin
+        });
         setIsAdminLoggedIn(isAdmin);
         if (isAdmin) {
           if (view === 'login') {

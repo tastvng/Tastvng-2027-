@@ -42,7 +42,25 @@ export default function AdminLogin({ onLoginSuccess, onBackToPublic }: AdminLogi
       const savedUser = localStorage.getItem('tast_saved_username') || '';
       if (savedUser && !username) setUsername(savedUser);
     }
-  }, []);
+
+    // Auto-detect existing active admin session
+    if (isSupabaseConfigured && supabase) {
+      supabase.auth.getSession().then(async ({ data: { session }, error }) => {
+        if (session?.user) {
+          console.log('[AdminLogin Diagnostic] Sessió prèvia detectada:', {
+            uid: session.user.id,
+            email: session.user.email,
+            sessionExists: true
+          });
+          const isAdmin = await checkCurrentUserIsAdmin(session.user.id);
+          if (isAdmin) {
+            console.log('[AdminLogin Diagnostic] Usuari reconegut com a administrador. Accés concedit.');
+            onLoginSuccess();
+          }
+        }
+      }).catch(err => console.warn('[AdminLogin Diagnostic] Error verificant sessió prèvia:', err));
+    }
+  }, [onLoginSuccess]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -64,6 +82,7 @@ export default function AdminLogin({ onLoginSuccess, onBackToPublic }: AdminLogi
         });
 
         if (error) {
+          console.error('[AdminLogin Diagnostic] Error en signInWithPassword:', error);
           setIsVerifying(false);
           setErrorError(language === 'ca'
             ? `Error d'autenticació: ${error.message === 'Invalid login credentials' ? 'Credencials no vàlides' : error.message}`
@@ -72,8 +91,15 @@ export default function AdminLogin({ onLoginSuccess, onBackToPublic }: AdminLogi
         }
 
         if (data.session) {
+          console.log('[AdminLogin Diagnostic] Login completat amb èxit a Supabase:', {
+            authUid: data.user?.id,
+            email: data.user?.email,
+            sessionExists: !!data.session
+          });
+
           const isAdmin = await checkCurrentUserIsAdmin(data.user?.id);
           if (!isAdmin) {
+            console.warn('[AdminLogin Diagnostic] L\'usuari no té el rol admin a public.profiles:', data.user?.email);
             await supabase.auth.signOut();
             setIsVerifying(false);
             setErrorError(language === 'ca'

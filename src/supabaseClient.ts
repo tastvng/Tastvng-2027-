@@ -15,7 +15,14 @@ const supabaseAnonKey = envAnon || localAnon;
 export const isSupabaseConfigured = !!(supabaseUrl && supabaseAnonKey && supabaseUrl.startsWith('http'));
 
 export const supabase = isSupabaseConfigured
-  ? createClient(supabaseUrl, supabaseAnonKey)
+  ? createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+        storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+      },
+    })
   : null;
 
 // Clean logging
@@ -23,6 +30,52 @@ if (isSupabaseConfigured) {
   console.log("Supabase client initialized successfully using config: " + (envUrl ? "ENV" : "LocalStorage"));
 } else {
   console.log("Supabase is not yet fully configured in your environment. Falling back gracefully to LocalStorage for interface settings.");
+}
+
+export interface SupabaseWriteDiagnosticResult {
+  sessionExists: boolean;
+  uid: string | null;
+  email: string | null;
+  sessionError: any;
+}
+
+/**
+ * Diagnòstic temporal abans de cada escriptura:
+ * - auth.uid() o ID de l'usuari autenticat.
+ * - existència de session.
+ * - email de l'usuari autenticat.
+ * - resultat de supabase.auth.getSession().
+ * - taula i operació que s'intenta executar.
+ * - error complet retornat per Supabase (si n'hi ha).
+ */
+export async function logSupabaseWriteDiagnostic(table: string, operation: string): Promise<SupabaseWriteDiagnosticResult> {
+  if (!supabase) {
+    console.warn(`[Supabase Write Diagnostic] Taula: '${table}', Operació: '${operation}' -> Client Supabase no configurat.`);
+    return { sessionExists: false, uid: null, email: null, sessionError: 'No Supabase client' };
+  }
+  try {
+    const { data, error } = await supabase.auth.getSession();
+    const session = data?.session;
+    const uid = session?.user?.id || null;
+    const email = session?.user?.email || null;
+    const sessionExists = !!session;
+
+    console.log(`[Supabase Write Diagnostic]
+--------------------------------------------------
+Taula: '${table}'
+Operació: '${operation}'
+Existència de session: ${sessionExists}
+auth.uid() / ID: ${uid || '(cap / anònim)'}
+Email: ${email || '(cap / anònim)'}
+Resultat supabase.auth.getSession(): ${error ? `ERROR: ${error.message}` : (session ? 'Sessió activa trobada' : 'Sense sessió (Anònim)')}
+Access Token: ${session?.access_token ? 'Present' : 'Absent'}
+--------------------------------------------------`);
+
+    return { sessionExists, uid, email, sessionError: error };
+  } catch (err) {
+    console.error(`[Supabase Write Diagnostic] Error obtenint sessió abans d'escriure a '${table}':`, err);
+    return { sessionExists: false, uid: null, email: null, sessionError: err };
+  }
 }
 
 // In-memory cache to prevent duplicate settings queries during application lifecycle
@@ -142,6 +195,9 @@ export async function saveSupabaseSetting(key: string, value: any): Promise<bool
     return false;
   }
 
+  // Diagnòstic abans d'escriure a 'settings'
+  await logSupabaseWriteDiagnostic('settings', `UPSERT (key: ${key})`);
+
   try {
     // Update/invalidate memory cache first so all consecutive reads see the fresh value
     settingCache.set(key, value);
@@ -175,10 +231,11 @@ export async function saveSupabaseSetting(key: string, value: any): Promise<bool
       .upsert(upsertPayload, upsertOptions);
 
     if (!upsertError) {
+      console.log(`[Supabase Write Success] Taula: 'settings', Operació: UPSERT (key: ${key}) completada amb èxit.`);
       return true;
     }
 
-    console.warn(`Direct upsert failed, executing defensive fallback flow:`, upsertError.message || upsertError);
+    console.error(`[Supabase Write Error] Taula: 'settings', Operació: UPSERT (key: ${key}), Error complet:`, upsertError);
 
     // Update fallback
     if (keyExistsInTable) {
@@ -433,6 +490,10 @@ export async function getSupabaseInscripcionById(id: string): Promise<Inscripcio
  */
 export async function saveSupabaseInscripcion(ins: Inscripcio): Promise<boolean> {
   if (!supabase) return false;
+  
+  // Diagnòstic abans d'escriure a 'inscripciones'
+  await logSupabaseWriteDiagnostic('inscripciones', `UPSERT (id: ${ins.id}, codi: ${ins.codiSeguiment})`);
+
   try {
     const tableName = 'inscripciones';
     
@@ -549,12 +610,14 @@ export async function saveSupabaseInscripcion(ins: Inscripcio): Promise<boolean>
  */
 export async function deleteSupabaseInscripcion(id: string): Promise<boolean> {
   if (!supabase) return false;
+  await logSupabaseWriteDiagnostic('inscripciones', `DELETE (id: ${id})`);
   try {
     let response = await supabase
       .from('inscripciones')
       .delete()
       .eq('id', id);
     if (!response.error) return true;
+    console.error(`[Supabase Write Error] Taula: 'inscripciones', Operació: DELETE (id: ${id}), Error complet:`, response.error);
     
     // Fallback Catalan
     response = await supabase
@@ -562,7 +625,7 @@ export async function deleteSupabaseInscripcion(id: string): Promise<boolean> {
       .delete()
       .eq('id', id);
     if (response.error) {
-      console.error("Error deleting inscription from Supabase ('inscripciones' and 'inscripcions' tables failed):", response.error.message);
+      console.error("[Supabase Write Error] Fallback 'inscripcions' DELETE també ha fallat:", response.error);
     }
     return !response.error;
   } catch(e) {
@@ -576,12 +639,14 @@ export async function deleteSupabaseInscripcion(id: string): Promise<boolean> {
  */
 export async function deleteMultipleSupabaseInscripciones(ids: string[]): Promise<boolean> {
   if (!supabase) return false;
+  await logSupabaseWriteDiagnostic('inscripciones', `DELETE MULTIPLE (${ids.length} registres)`);
   try {
     let response = await supabase
       .from('inscripciones')
       .delete()
       .in('id', ids);
     if (!response.error) return true;
+    console.error("[Supabase Write Error] Taula: 'inscripciones', Operació: DELETE MULTIPLE, Error complet:", response.error);
     
     // Fallback Catalan
     response = await supabase
@@ -589,7 +654,7 @@ export async function deleteMultipleSupabaseInscripciones(ids: string[]): Promis
       .delete()
       .in('id', ids);
     if (response.error) {
-      console.error("Error mass deleting inscriptions from Supabase:", response.error.message);
+      console.error("[Supabase Write Error] Fallback 'inscripcions' DELETE MULTIPLE també ha fallat:", response.error);
     }
     return !response.error;
   } catch(e) {
@@ -603,12 +668,14 @@ export async function deleteMultipleSupabaseInscripciones(ids: string[]): Promis
  */
 export async function clearAllSupabaseInscripciones(): Promise<boolean> {
   if (!supabase) return false;
+  await logSupabaseWriteDiagnostic('inscripciones', 'DELETE ALL');
   try {
     let response = await supabase
       .from('inscripciones')
       .delete()
       .neq('id', '_dummy_placeholder_id_string_that_does_not_exist_');
     if (!response.error) return true;
+    console.error("[Supabase Write Error] Taula: 'inscripciones', Operació: DELETE ALL, Error complet:", response.error);
     
     // Fallback Catalan
     response = await supabase
@@ -616,7 +683,7 @@ export async function clearAllSupabaseInscripciones(): Promise<boolean> {
       .delete()
       .neq('id', '_dummy_placeholder_id_string_that_does_not_exist_');
     if (response.error) {
-      console.error("Error clearing inscriptions from Supabase ('inscripciones' and 'inscripcions' tables failed):", response.error.message);
+      console.error("[Supabase Write Error] Fallback 'inscripcions' DELETE ALL també ha fallat:", response.error);
     }
     return !response.error;
   } catch(e) {
@@ -752,6 +819,9 @@ export async function saveSistemaConfigItem(clau: string, valor: any): Promise<b
 
     if (!supabase) return true;
 
+    // Diagnòstic abans d'escriure a 'sistema_config'
+    await logSupabaseWriteDiagnostic('sistema_config', `UPSERT (clau: ${clau})`);
+
     const payload = {
       clau,
       valor,
@@ -764,11 +834,12 @@ export async function saveSistemaConfigItem(clau: string, valor: any): Promise<b
       .upsert(payload, { onConflict: 'clau' });
 
     if (error) {
+      console.error(`[Supabase Write Error] Taula: 'sistema_config', Operació: UPSERT (clau: ${clau}), Error complet:`, error);
       const { error: err2 } = await supabase
         .from('sistema_config')
         .upsert({ clau, valor }, { onConflict: 'clau' });
       if (err2) {
-        console.warn(`Direct upsert to sistema_config failed for [${clau}]:`, err2.message);
+        console.error(`[Supabase Write Error] Taula: 'sistema_config', Fallback UPSERT (clau: ${clau}), Error complet:`, err2);
       }
     }
 
