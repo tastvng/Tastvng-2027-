@@ -114,10 +114,15 @@ export default function AdminFicha({ registration, config, onBack, onSave }: Adm
   }, [registration.id, registration.c1DniUrl, registration.c2DniUrl]);
 
   // Participant Editable configurations
+  const [emailContactoPareja, setEmailContactoPareja] = useState(
+    registration.emailContactoPareja || registration.c1Email || registration.c2Email || ''
+  );
+  const [telefonContactoPareja, setTelefonContactoPareja] = useState(
+    registration.telefonContactoPareja || registration.c1Telefon || registration.c2Telefon || ''
+  );
+
   const [c1Nom, setC1Nom] = useState(registration.c1Nom);
   const [c1Cognoms, setC1Cognoms] = useState(registration.c1Cognoms);
-  const [c1Email, setC1Email] = useState(registration.c1Email);
-  const [c1Telefon, setC1Telefon] = useState(registration.c1Telefon);
   const [c1Talla, setC1Talla] = useState(registration.c1Talla);
   const [c1UniformeTipus, setC1UniformeTipus] = useState<'compra' | 'lloguer'>(registration.c1UniformeTipus || 'compra');
 
@@ -128,8 +133,6 @@ export default function AdminFicha({ registration, config, onBack, onSave }: Adm
 
   const [c2Nom, setC2Nom] = useState(registration.c2Nom);
   const [c2Cognoms, setC2Cognoms] = useState(registration.c2Cognoms);
-  const [c2Email, setC2Email] = useState(registration.c2Email);
-  const [c2Telefon, setC2Telefon] = useState(registration.c2Telefon);
   const [c2Talla, setC2Talla] = useState(registration.c2Talla);
   const [c2UniformeTipus, setC2UniformeTipus] = useState<'compra' | 'lloguer'>(registration.c2UniformeTipus || 'compra');
 
@@ -183,10 +186,12 @@ export default function AdminFicha({ registration, config, onBack, onSave }: Adm
 
     const updatedInscripcio: Inscripcio = {
       ...registration,
+      emailContactoPareja: emailContactoPareja.trim(),
+      telefonContactoPareja: telefonContactoPareja.trim(),
       c1Nom: c1Nom.trim(),
       c1Cognoms: c1Cognoms.trim(),
-      c1Email: c1Email.trim(),
-      c1Telefon: c1Telefon.trim(),
+      c1Email: emailContactoPareja.trim(),
+      c1Telefon: telefonContactoPareja.trim(),
       c1Talla,
       c1UniformeTipus,
       c1TutorNom: c1TutorNom.trim(),
@@ -195,8 +200,8 @@ export default function AdminFicha({ registration, config, onBack, onSave }: Adm
       c1TutorTelefon: c1TutorTelefon.trim(),
       c2Nom: c2Nom.trim(),
       c2Cognoms: c2Cognoms.trim(),
-      c2Email: c2Email.trim(),
-      c2Telefon: c2Telefon.trim(),
+      c2Email: emailContactoPareja.trim(),
+      c2Telefon: telefonContactoPareja.trim(),
       c2Talla,
       c2UniformeTipus,
       c2TutorNom: c2TutorNom.trim(),
@@ -291,6 +296,47 @@ export default function AdminFicha({ registration, config, onBack, onSave }: Adm
               </span>
             </div>
 
+            {/* Dades de Contacte de la Parella (Únic) */}
+            <div className="bg-fuchsia-50/50 border border-fuchsia-200/80 rounded-2xl p-4.5 space-y-2 mb-4" id="couple-contact-card">
+              <div className="flex items-center justify-between pb-1 border-b border-fuchsia-200/60">
+                <span className="text-xs font-bold text-zinc-900 tracking-tight flex items-center gap-1.5">
+                  <Phone size={13} className="text-fuchsia-600" />
+                  {language === 'ca' ? 'Dades de Contacte de la Parella (Únic)' : 'Datos de Contacto de la Pareja (Único)'}
+                </span>
+                <span className="text-[9px] font-mono font-bold text-fuchsia-700 bg-fuchsia-100 px-2 py-0.5 rounded-md">
+                  {language === 'ca' ? 'Comú per a la parella' : 'Común para la pareja'}
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                <div>
+                  <label className="block text-[10px] text-zinc-600 font-bold uppercase font-mono mb-1">
+                    {language === 'ca' ? 'Telèfon de contacte *' : 'Teléfono de contacto *'}
+                  </label>
+                  <input 
+                    type="tel" 
+                    value={telefonContactoPareja} 
+                    onChange={(e) => setTelefonContactoPareja(e.target.value)}
+                    className="w-full bg-white border border-zinc-200 focus:border-fuchsia-500 rounded-xl px-3 py-2 text-xs font-bold font-sans focus:outline-none" 
+                    placeholder={language === 'ca' ? 'Ex. 600123456' : 'Ej. 600123456'}
+                    id="admin-input-couple-phone"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] text-zinc-600 font-bold uppercase font-mono mb-1">
+                    {language === 'ca' ? 'Correu electrònic *' : 'Correo electrónico *'}
+                  </label>
+                  <input 
+                    type="email" 
+                    value={emailContactoPareja} 
+                    onChange={(e) => setEmailContactoPareja(e.target.value)}
+                    className="w-full bg-white border border-zinc-200 focus:border-fuchsia-500 rounded-xl px-3 py-2 text-xs font-bold font-sans focus:outline-none truncate" 
+                    placeholder={language === 'ca' ? 'Ex. parella@gmail.com' : 'Ej. pareja@gmail.com'}
+                    id="admin-input-couple-email"
+                  />
+                </div>
+              </div>
+            </div>
+
             {/* Participants mirror block cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               {/* Comparser 1 profile card */}
@@ -315,27 +361,6 @@ export default function AdminFicha({ registration, config, onBack, onSave }: Adm
                         value={c1Cognoms} 
                         onChange={(e) => setC1Cognoms(e.target.value)}
                         className="w-full bg-white border border-zinc-200 focus:border-[#ff0090] rounded-lg px-2.5 py-1.5 text-xs font-bold font-sans focus:outline-none" 
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-1.5">
-                    <div>
-                      <label className="block text-[9px] text-zinc-500 uppercase font-mono mb-0.5">Telèfon</label>
-                      <input 
-                        type="tel" 
-                        value={c1Telefon} 
-                        onChange={(e) => setC1Telefon(e.target.value)}
-                        className="w-full bg-white border border-zinc-200 focus:border-[#ff0090] rounded-lg px-2.5 py-1.5 text-xs font-bold font-sans focus:outline-none" 
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[9px] text-zinc-500 uppercase font-mono mb-0.5">E-mail</label>
-                      <input 
-                        type="email" 
-                        value={c1Email} 
-                        onChange={(e) => setC1Email(e.target.value)}
-                        className="w-full bg-white border border-zinc-200 focus:border-[#ff0090] rounded-lg px-2.5 py-1.5 text-xs font-bold font-sans focus:outline-none truncate" 
                       />
                     </div>
                   </div>
@@ -460,27 +485,6 @@ export default function AdminFicha({ registration, config, onBack, onSave }: Adm
                         value={c2Cognoms} 
                         onChange={(e) => setC2Cognoms(e.target.value)}
                         className="w-full bg-white border border-zinc-200 focus:border-[#ff0090] rounded-lg px-2.5 py-1.5 text-xs font-bold font-sans focus:outline-none" 
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-1.5">
-                    <div>
-                      <label className="block text-[9px] text-zinc-500 uppercase font-mono mb-0.5">Telèfon</label>
-                      <input 
-                        type="tel" 
-                        value={c2Telefon} 
-                        onChange={(e) => setC2Telefon(e.target.value)}
-                        className="w-full bg-white border border-zinc-200 focus:border-[#ff0090] rounded-lg px-2.5 py-1.5 text-xs font-bold font-sans focus:outline-none" 
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[9px] text-zinc-500 uppercase font-mono mb-0.5">E-mail</label>
-                      <input 
-                        type="email" 
-                        value={c2Email} 
-                        onChange={(e) => setC2Email(e.target.value)}
-                        className="w-full bg-white border border-zinc-200 focus:border-[#ff0090] rounded-lg px-2.5 py-1.5 text-xs font-bold font-sans focus:outline-none truncate" 
                       />
                     </div>
                   </div>

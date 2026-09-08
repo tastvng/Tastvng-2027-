@@ -105,18 +105,38 @@ async function startServer() {
   app.post("/api/validate-inscription", (req, res) => {
     try {
       const data = req.body || {};
-      const { categoria, teDomasBalco, teMocadorsExtra, c1Nom, c1Cognoms, c1Email, c1Telefon, c2Nom, c2Cognoms, c2Email, c2Telefon, c1EsMenor, c2EsMenor, c1TutorDni, c2TutorDni } = data;
+      const { 
+        categoria, 
+        teDomasBalco, 
+        teMocadorsExtra, 
+        c1Nom, 
+        c1Cognoms, 
+        c1Email, 
+        c1Telefon, 
+        c2Nom, 
+        c2Cognoms, 
+        c2Email, 
+        c2Telefon, 
+        c1EsMenor, 
+        c2EsMenor, 
+        c1TutorDni, 
+        c2TutorDni,
+        emailContactoPareja,
+        telefonContactoPareja
+      } = data;
+
+      const finalEmail = (emailContactoPareja || c1Email || c2Email || '').trim();
+      const finalTelefon = (telefonContactoPareja || c1Telefon || c2Telefon || '').trim();
 
       // Basic presence validation
-      if (!c1Nom?.trim() || !c1Cognoms?.trim() || !c1Email?.trim() || !c1Telefon?.trim() ||
-          !c2Nom?.trim() || !c2Cognoms?.trim() || !c2Email?.trim() || !c2Telefon?.trim()) {
-        return res.status(400).json({ error: "Falten dades obligatòries dels participants." });
+      if (!c1Nom?.trim() || !c1Cognoms?.trim() || !c2Nom?.trim() || !c2Cognoms?.trim() || !finalEmail || !finalTelefon) {
+        return res.status(400).json({ error: "Falten dades obligatòries de la parella o dels participants." });
       }
 
       // Email format validation
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(c1Email.trim()) || !emailRegex.test(c2Email.trim())) {
-        return res.status(400).json({ error: "El format del correu electrònic no és vàlid." });
+      if (!emailRegex.test(finalEmail)) {
+        return res.status(400).json({ error: "El format del correu electrònic de contacte no és vàlid." });
       }
 
       // Minor validation

@@ -182,12 +182,13 @@ export default function Confirmation({ registration, onClear, onUpdate, config }
     setSmtpError('');
 
     try {
-      const emailList = [registration.c1Email, registration.c2Email].filter(Boolean).filter(email => email.includes('@'));
+      const coupleEmail = (registration.emailContactoPareja || registration.c1Email || registration.c2Email || '').trim();
+      const emailList = coupleEmail && coupleEmail.includes('@') ? [coupleEmail] : [];
       if (emailList.length === 0) {
         setSmtpStatus('error');
         setSmtpError(language === 'ca' 
-          ? "S'ha trobat cap adreça de correu vàlida per als participants." 
-          : "No se encontró ninguna dirección de correo válida para los participantes.");
+          ? "No s'ha trobat cap adreça de correu de contacte vàlida per a la parella." 
+          : "No se encontró ninguna dirección de correo de contacto válida para la pareja.");
         return;
       }
 
@@ -649,11 +650,11 @@ export default function Confirmation({ registration, onClear, onUpdate, config }
                 </p>
                 <p className="text-zinc-500 leading-relaxed">
                   {language === 'ca' 
-                    ? `Hem enviat una còpia d'aquest comprobat a `
+                    ? `Hem enviat una còpia d'aquest comprovant a `
                     : `Hemos enviado una copia de este comprobante a `}
-                  <span className="font-mono">{registration.c1Email}</span>
-                  {language === 'ca' ? ' i ' : ' y '}
-                  <span className="font-mono">{registration.c2Email}</span>.
+                  <span className="font-mono font-semibold text-zinc-700">
+                    {registration.emailContactoPareja || registration.c1Email || registration.c2Email}
+                  </span>.
                 </p>
               </div>
             </div>
@@ -757,7 +758,7 @@ export default function Confirmation({ registration, onClear, onUpdate, config }
         {/* Real-time micro details */}
         <div className="mt-3 space-y-1 font-mono text-[10px] text-zinc-400">
           <p><span className="text-zinc-600 font-bold">DE:</span> <span className="text-fuchsia-400 font-bold">secretaria@eltast.cat</span> <span className="text-[8px] bg-white/5 border border-white/10 px-1 py-0.5 rounded text-zinc-300 uppercase ml-1 uppercase">Live Connection</span></p>
-          <p><span className="text-zinc-600 font-bold">A:</span> <span className="text-zinc-200 font-bold">{registration.c1Email}</span>, <span className="text-zinc-200 font-bold">{registration.c2Email}</span></p>
+          <p><span className="text-zinc-600 font-bold">A:</span> <span className="text-zinc-200 font-bold">{registration.emailContactoPareja || registration.c1Email || registration.c2Email}</span></p>
           <p><span className="text-zinc-600 font-bold">ASSUMPTE / ASUNTO:</span> <span className="text-zinc-200 font-sans">{language === 'ca' ? `${subSubjectCa} ${registration.codiSeguiment}` : `${subSubjectEs} ${registration.codiSeguiment}`}</span></p>
           
           {smtpStatus === 'error' && (

@@ -789,6 +789,25 @@ export default function AdminScanner({
                     </div>
                   </div>
 
+                  {/* Contacte Parella */}
+                  <div className="bg-[#18181b] p-3.5 rounded-2xl border border-white/10 text-xs font-sans mb-4 flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <span className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider block font-bold">
+                        {language === 'ca' ? "Dades de Contacte de la Parella:" : "Datos de Contacto de la Pareja:"}
+                      </span>
+                      <div className="flex flex-wrap items-center gap-4 mt-1">
+                        <span className="font-bold text-white flex items-center gap-1.5 font-mono text-xs">
+                          <Phone size={12} className="text-[#ff0090]" />
+                          {tempRecord.telefonContactoPareja || tempRecord.c1Telefon || tempRecord.c2Telefon || "N/A"}
+                        </span>
+                        <span className="font-bold text-zinc-300 flex items-center gap-1.5 text-xs">
+                          <Mail size={12} className="text-[#ff0090]" />
+                          {tempRecord.emailContactoPareja || tempRecord.c1Email || tempRecord.c2Email || "N/A"}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
                   {/* Informació general columns */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs font-sans">
                     
@@ -805,21 +824,6 @@ export default function AdminScanner({
                       <div className="space-y-1.5">
                         <p className="text-[10px] text-zinc-500 font-mono">{language === 'ca' ? "Nom Sencer:" : "Nombre Completo:"}</p>
                         <p className="font-black text-white text-sm">{tempRecord.c1Nom} {tempRecord.c1Cognoms}</p>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2 pt-1">
-                        <div className="bg-zinc-950 p-2 rounded-xl border border-white/5 min-w-0">
-                          <p className="text-[9px] text-zinc-500 font-mono truncate">{language === 'ca' ? "Correu Electrònic:" : "Correo Electrónico:"}</p>
-                          <p className="font-bold text-zinc-200 mt-0.5 truncate flex items-center gap-1" title={tempRecord.c1Email}>
-                            <Mail size={10} className="text-[#ff0090]" /> {tempRecord.c1Email}
-                          </p>
-                        </div>
-                        <div className="bg-zinc-950 p-2 rounded-xl border border-white/5 min-w-0">
-                          <p className="text-[9px] text-zinc-500 font-mono truncate">{language === 'ca' ? "Telèfon Mòbil:" : "Teléfono Móvil:"}</p>
-                          <p className="font-bold text-zinc-200 mt-0.5 truncate flex items-center gap-1">
-                            <Phone size={10} className="text-[#ff0090]" /> {tempRecord.c1Telefon}
-                          </p>
-                        </div>
                       </div>
 
                       <div className="grid grid-cols-2 gap-2 pt-1">
@@ -909,21 +913,6 @@ export default function AdminScanner({
                       <div className="space-y-1.5">
                         <p className="text-[10px] text-zinc-500 font-mono">{language === 'ca' ? "Nom Sencer:" : "Nombre Completo:"}</p>
                         <p className="font-black text-white text-sm">{tempRecord.c2Nom} {tempRecord.c2Cognoms}</p>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2 pt-1">
-                        <div className="bg-zinc-950 p-2 rounded-xl border border-white/5 min-w-0">
-                          <p className="text-[9px] text-zinc-500 font-mono truncate">{language === 'ca' ? "Correu Electrònic:" : "Correo Electrónico:"}</p>
-                          <p className="font-bold text-zinc-200 mt-0.5 truncate flex items-center gap-1" title={tempRecord.c2Email}>
-                            <Mail size={10} className="text-[#ff0090]" /> {tempRecord.c2Email || "N/A"}
-                          </p>
-                        </div>
-                        <div className="bg-zinc-950 p-2 rounded-xl border border-white/5 min-w-0">
-                          <p className="text-[9px] text-zinc-500 font-mono truncate">{language === 'ca' ? "Telèfon Mòbil:" : "Teléfono Móvil:"}</p>
-                          <p className="font-bold text-zinc-200 mt-0.5 truncate flex items-center gap-1">
-                            <Phone size={10} className="text-[#ff0090]" /> {tempRecord.c2Telefon}
-                          </p>
-                        </div>
                       </div>
 
                       <div className="grid grid-cols-2 gap-2 pt-1">

@@ -32,42 +32,48 @@ export async function syncToGoogleSheet(
     syncTimeout = setTimeout(async () => {
       try {
         const activeYear = localStorage.getItem('tast_any_edicio') || '2027';
-        const formattedData = inscripcions.map((i) => ({
-          anyEdicio: activeYear,
-          codiSeguiment: i.codiSeguiment,
-          categoria: i.categoria,
-          c1Nom: i.c1Nom,
-          c1Cognoms: i.c1Cognoms,
-          c1Email: i.c1Email,
-          c1Telefon: i.c1Telefon,
-          c1Talla: i.c1Talla,
-          c1UniformeTipus: i.c1UniformeTipus || 'compra',
-          c1EsMenor: i.c1EsMenor ? 'SÍ' : 'NO',
-          c1TutorNom: i.c1EsMenor ? (i.c1TutorNom || '') : '',
-          c1TutorCognoms: i.c1EsMenor ? (i.c1TutorCognoms || '') : '',
-          c1TutorDni: i.c1EsMenor ? (i.c1TutorDni || '') : '',
-          c1TutorTelefon: i.c1EsMenor ? (i.c1TutorTelefon || '') : '',
-          c2Nom: i.c2Nom,
-          c2Cognoms: i.c2Cognoms,
-          c2Email: i.c2Email,
-          c2Telefon: i.c2Telefon,
-          c2Talla: i.c2Talla,
-          c2UniformeTipus: i.c2UniformeTipus || 'compra',
-          c2EsMenor: i.c2EsMenor ? 'SÍ' : 'NO',
-          c2TutorNom: i.c2EsMenor ? (i.c2TutorNom || '') : '',
-          c2TutorCognoms: i.c2EsMenor ? (i.c2TutorCognoms || '') : '',
-          c2TutorDni: i.c2EsMenor ? (i.c2TutorDni || '') : '',
-          c2TutorTelefon: i.c2EsMenor ? (i.c2TutorTelefon || '') : '',
-          preuTotal: i.preuCalculat,
-          domasBalco: i.teDomasBalco ? 'SÍ' : 'NO',
-          mocadorsExtra: i.teMocadorsExtra,
-          estatPagament: i.estatPagament,
-          metodePagament: i.metodePagament || 'CAP',
-          validacioDni: i.estatDni,
-          entregaMaterial: i.entregaMaterial,
-          llistaEspera: i.llistaEspera ? 'SÍ' : 'NO',
-          dataCreacio: i.creadoEn ? new Date(i.creadoEn).toLocaleString('ca-ES') : ''
-        }));
+        const formattedData = inscripcions.map((i) => {
+          const emailContacto = i.emailContactoPareja || i.c1Email || i.c2Email || '';
+          const telefonContacto = i.telefonContactoPareja || i.c1Telefon || i.c2Telefon || '';
+          return {
+            anyEdicio: activeYear,
+            codiSeguiment: i.codiSeguiment,
+            categoria: i.categoria,
+            emailContactoPareja: emailContacto,
+            telefonContactoPareja: telefonContacto,
+            c1Nom: i.c1Nom,
+            c1Cognoms: i.c1Cognoms,
+            c1Email: emailContacto,
+            c1Telefon: telefonContacto,
+            c1Talla: i.c1Talla,
+            c1UniformeTipus: i.c1UniformeTipus || 'compra',
+            c1EsMenor: i.c1EsMenor ? 'SÍ' : 'NO',
+            c1TutorNom: i.c1EsMenor ? (i.c1TutorNom || '') : '',
+            c1TutorCognoms: i.c1EsMenor ? (i.c1TutorCognoms || '') : '',
+            c1TutorDni: i.c1EsMenor ? (i.c1TutorDni || '') : '',
+            c1TutorTelefon: i.c1EsMenor ? (i.c1TutorTelefon || '') : '',
+            c2Nom: i.c2Nom,
+            c2Cognoms: i.c2Cognoms,
+            c2Email: emailContacto,
+            c2Telefon: telefonContacto,
+            c2Talla: i.c2Talla,
+            c2UniformeTipus: i.c2UniformeTipus || 'compra',
+            c2EsMenor: i.c2EsMenor ? 'SÍ' : 'NO',
+            c2TutorNom: i.c2EsMenor ? (i.c2TutorNom || '') : '',
+            c2TutorCognoms: i.c2EsMenor ? (i.c2TutorCognoms || '') : '',
+            c2TutorDni: i.c2EsMenor ? (i.c2TutorDni || '') : '',
+            c2TutorTelefon: i.c2EsMenor ? (i.c2TutorTelefon || '') : '',
+            preuTotal: i.preuCalculat,
+            domasBalco: i.teDomasBalco ? 'SÍ' : 'NO',
+            mocadorsExtra: i.teMocadorsExtra,
+            estatPagament: i.estatPagament,
+            metodePagament: i.metodePagament || 'CAP',
+            validacioDni: i.estatDni,
+            entregaMaterial: i.entregaMaterial,
+            llistaEspera: i.llistaEspera ? 'SÍ' : 'NO',
+            dataCreacio: i.creadoEn ? new Date(i.creadoEn).toLocaleString('ca-ES') : ''
+          };
+        });
 
         const summaries = calculateDailySummaries(inscripcions);
 

@@ -45,11 +45,15 @@ export interface Inscripcio {
   codiSeguiment: string;
   categoria: CategoriaParella;
   
+  // Dades de Contacte de la Parella (Únic)
+  emailContactoPareja?: string;
+  telefonContactoPareja?: string;
+  
   // Comparser 1
   c1Nom: string;
   c1Cognoms: string;
-  c1Email: string;
-  c1Telefon: string;
+  c1Email?: string;
+  c1Telefon?: string;
   c1Talla: string; // Talla samarreta o armilla
   c1DniUrl: string; // Foto o fitxer de DNI
   c1EsMenor?: boolean;
@@ -62,8 +66,8 @@ export interface Inscripcio {
   // Comparser 2
   c2Nom: string;
   c2Cognoms: string;
-  c2Email: string;
-  c2Telefon: string;
+  c2Email?: string;
+  c2Telefon?: string;
   c2Talla: string;
   c2DniUrl: string; // Foto o fitxer de DNI
   c2EsMenor?: boolean;

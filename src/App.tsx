@@ -656,9 +656,10 @@ export default function App() {
     setActiveRegistration(newReg);
     setView('confirmacio');
     addLog(`Preinscripció realitzada amb èxit per a: ${newReg.c1Nom} & ${newReg.c2Nom}. Codi: ${newReg.codiSeguiment}`);
+    const contactEmail = newReg.emailContactoPareja || newReg.c1Email || newReg.c2Email || '';
     addLog(language === 'ca'
-      ? `📧 SMTP: Correu de confirmació oficial enviat automàticament des de secretaria@eltast.cat a ${newReg.c1Email} i ${newReg.c2Email}`
-      : `📧 SMTP: Correo de confirmación oficial enviado automáticamente desde secretaria@eltast.cat a ${newReg.c1Email} y ${newReg.c2Email}`
+      ? `📧 SMTP: Correu de confirmació oficial enviat automàticament des de secretaria@eltast.cat a ${contactEmail}`
+      : `📧 SMTP: Correo de confirmación oficial enviado automáticamente desde secretaria@eltast.cat a ${contactEmail}`
     );
     if (isSupabaseConfigured) {
       try {

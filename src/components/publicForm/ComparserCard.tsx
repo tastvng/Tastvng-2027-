@@ -10,10 +10,10 @@ interface ComparserCardProps {
   setNom: (val: string) => void;
   cognoms: string;
   setCognoms: (val: string) => void;
-  telefon: string;
-  setTelefon: (val: string) => void;
-  email: string;
-  setEmail: (val: string) => void;
+  telefon?: string;
+  setTelefon?: (val: string) => void;
+  email?: string;
+  setEmail?: (val: string) => void;
   dniUrl: string | null;
   setDniUrl: (val: string | null) => void;
   esMenor: boolean;
@@ -39,8 +39,8 @@ interface ComparserCardProps {
 
   // Duplicate checks
   isNameDuplicate: boolean;
-  isEmailDuplicate: boolean;
-  isPhoneDuplicate: boolean;
+  isEmailDuplicate?: boolean;
+  isPhoneDuplicate?: boolean;
 
   // Errors and Config
   errors: Record<string, string>;
@@ -97,7 +97,7 @@ export const ComparserCard: React.FC<ComparserCardProps> = ({
   const keyQuantitat = num === 1 ? 'c1Quantitat' : 'c2Quantitat';
   const keyTipus = num === 1 ? 'c1Tipus' : 'c2Tipus';
 
-  const hasDuplicateError = errors[`${prefix}Duplicat`] || isNameDuplicate || isEmailDuplicate || isPhoneDuplicate;
+  const hasDuplicateError = errors[`${prefix}Duplicat`] || isNameDuplicate;
 
   return (
     <div className={`rounded-3xl p-6 border transition-all relative overflow-hidden ${hasDuplicateError ? 'bg-amber-50/10 border-amber-300 ring-2 ring-amber-300 shadow-amber-100/30' : 'bg-white border-zinc-200/80 shadow-md'}`}>
@@ -171,54 +171,6 @@ export const ComparserCard: React.FC<ComparserCardProps> = ({
             placeholder={language === 'ca' ? "Ex. Garcia Pujol" : "Ej. García Pujol"}
             id={`input-${prefix}-cognoms`}
           />
-        </div>
-
-        <div>
-          <div className="flex items-center justify-between mb-1">
-            <label className="block text-xs font-bold text-zinc-700 tracking-tight">
-              {language === 'ca' ? 'Telèfon de contacte *' : 'Teléfono de contacto *'}
-            </label>
-            <span className="text-[8px] font-bold text-emerald-600 bg-emerald-50 px-1 py-0.5 rounded font-mono uppercase tracking-tight flex items-center gap-0.5" title={language === 'ca' ? "Es desa a la base de dades" : "Se guarda en la base de datos"}>
-              <Database size={8} /> BBDD
-            </span>
-          </div>
-          <input 
-            type="tel" 
-            value={telefon} 
-            onChange={(e) => setTelefon(e.target.value)}
-            className={`w-full bg-zinc-50 border ${errors[`${prefix}Telefon`] || isPhoneDuplicate ? 'border-amber-400 focus:border-amber-500 bg-amber-50/5' : 'border-zinc-200 focus:border-fuchsia-500'} focus:bg-white rounded-xl px-4 py-3 text-sm focus:outline-none transition-all`}
-            placeholder={language === 'ca' ? "Ex. 600123456" : "Ej. 600123456"}
-            id={`input-${prefix}-telefon`}
-          />
-          {isPhoneDuplicate && (
-            <p className="text-[9px] text-amber-600 font-bold mt-1 flex items-center gap-1 animate-pulse">
-              <AlertTriangle size={10} /> {language === 'ca' ? "Aquest telèfon ja consta registrat a la BBDD" : "Este teléfono ya consta registrado en la BBDD"}
-            </p>
-          )}
-        </div>
-
-        <div>
-          <div className="flex items-center justify-between mb-1">
-            <label className="block text-xs font-bold text-zinc-700 tracking-tight">
-              {language === 'ca' ? 'Correu electrònic *' : 'Correo electrónico *'}
-            </label>
-            <span className="text-[8px] font-bold text-emerald-600 bg-emerald-50 px-1 py-0.5 rounded font-mono uppercase tracking-tight flex items-center gap-0.5" title={language === 'ca' ? "Es desa a la base de dades" : "Se guarda en la base de datos"}>
-              <Database size={8} /> BBDD
-            </span>
-          </div>
-          <input 
-            type="email" 
-            value={email} 
-            onChange={(e) => setEmail(e.target.value)}
-            className={`w-full bg-zinc-50 border ${errors[`${prefix}Email`] || isEmailDuplicate ? 'border-amber-400 focus:border-amber-500 bg-amber-50/5' : 'border-zinc-200 focus:border-fuchsia-500'} focus:bg-white rounded-xl px-4 py-3 text-sm focus:outline-none transition-all`}
-            placeholder={language === 'ca' ? "Ex. joan@gmail.com" : "Ej. juan@gmail.com"}
-            id={`input-${prefix}-email`}
-          />
-          {isEmailDuplicate && (
-            <p className="text-[9px] text-amber-600 font-bold mt-1 flex items-center gap-1 animate-pulse">
-              <AlertTriangle size={10} /> {language === 'ca' ? "Aquest correu ja consta registrat a la BBDD" : "Este correo ya consta registrado en la BBDD"}
-            </p>
-          )}
         </div>
 
         {/* Minor status and Tutor details */}

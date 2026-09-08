@@ -313,17 +313,43 @@ function parseInscripcionesRows(rows: any[]): Inscripcio[] {
     if (r.payload && typeof r.payload === 'object') return r.payload;
     if (r.config && typeof r.config === 'object') return r.config;
 
+    // Common couple contact extraction with migration from old c1/c2 fields
+    const rawC1Email = r.c1Email !== undefined ? r.c1Email : (r.c1_email || r.c1email || '');
+    const rawC2Email = r.c2Email !== undefined ? r.c2Email : (r.c2_email || r.c2email || '');
+    const rawC1Telefon = r.c1Telefon !== undefined ? r.c1Telefon : (r.c1_telefon || r.c1telefon || '');
+    const rawC2Telefon = r.c2Telefon !== undefined ? r.c2Telefon : (r.c2_telefon || r.c2telefon || '');
+
+    const explicitEmail = r.emailContactoPareja !== undefined ? r.emailContactoPareja
+      : (r.email_contacto_pareja || r.emailcontactopareja || '');
+    const explicitTelefon = r.telefonContactoPareja !== undefined ? r.telefonContactoPareja
+      : (r.telefon_contacto_pareja || r.telefoncontactopareja || '');
+
+    // Migration rule: Use explicit if set, otherwise first valid email/phone found
+    const emailContactoPareja = explicitEmail ||
+      (rawC1Email && rawC1Email.includes('@') ? rawC1Email : '') ||
+      (rawC2Email && rawC2Email.includes('@') ? rawC2Email : '') ||
+      rawC1Email || rawC2Email || '';
+
+    const telefonContactoPareja = explicitTelefon ||
+      (rawC1Telefon && String(rawC1Telefon).trim().length > 0 ? rawC1Telefon : '') ||
+      (rawC2Telefon && String(rawC2Telefon).trim().length > 0 ? rawC2Telefon : '') ||
+      rawC1Telefon || rawC2Telefon || '';
+
     // Standard column parse with snake_case and casing fallback modes
     return {
       id: r.id || r.key || '',
       codiSeguiment: r.codiSeguiment !== undefined ? r.codiSeguiment 
                     : (r.codi_seguiment || r.codiseguiment || ''),
       categoria: r.categoria || 'ADULT',
+
+      // Single couple contact
+      emailContactoPareja,
+      telefonContactoPareja,
       
       c1Nom: r.c1Nom !== undefined ? r.c1Nom : (r.c1_nom || r.c1nom || ''),
       c1Cognoms: r.c1Cognoms !== undefined ? r.c1Cognoms : (r.c1_cognoms || r.c1cognoms || ''),
-      c1Email: r.c1Email !== undefined ? r.c1Email : (r.c1_email || r.c1email || ''),
-      c1Telefon: r.c1Telefon !== undefined ? r.c1Telefon : (r.c1_telefon || r.c1telefon || ''),
+      c1Email: emailContactoPareja,
+      c1Telefon: telefonContactoPareja,
       c1Talla: r.c1Talla !== undefined ? r.c1Talla : (r.c1_talla || r.c1talla || ''),
       c1DniUrl: r.c1DniUrl !== undefined ? r.c1DniUrl : (r.c1_dni_url || r.c1dni_url || r.c1_dni || r.c1dni || ''),
       c1EsMenor: r.c1EsMenor !== undefined ? !!r.c1EsMenor : !!(r.c1_es_menor || r.c1esmenor),
@@ -335,8 +361,8 @@ function parseInscripcionesRows(rows: any[]): Inscripcio[] {
 
       c2Nom: r.c2Nom !== undefined ? r.c2Nom : (r.c2_nom || r.c2nom || ''),
       c2Cognoms: r.c2Cognoms !== undefined ? r.c2Cognoms : (r.c2_cognoms || r.c2cognoms || ''),
-      c2Email: r.c2Email !== undefined ? r.c2Email : (r.c2_email || r.c2email || ''),
-      c2Telefon: r.c2Telefon !== undefined ? r.c2Telefon : (r.c2_telefon || r.c2telefon || ''),
+      c2Email: emailContactoPareja,
+      c2Telefon: telefonContactoPareja,
       c2Talla: r.c2Talla !== undefined ? r.c2Talla : (r.c2_talla || r.c2talla || ''),
       c2DniUrl: r.c2DniUrl !== undefined ? r.c2DniUrl : (r.c2_dni_url || r.c2dni_url || r.c2_dni || r.c2dni || ''),
       c2EsMenor: r.c2EsMenor !== undefined ? !!r.c2EsMenor : !!(r.c2_es_menor || r.c2esmenor),
@@ -503,7 +529,16 @@ export async function saveSupabaseInscripcion(ins: Inscripcio): Promise<boolean>
 
   try {
     const tableName = 'inscripciones';
+    const contactEmail = (ins.emailContactoPareja || ins.c1Email || ins.c2Email || '').trim();
+    const contactTelefon = (ins.telefonContactoPareja || ins.c1Telefon || ins.c2Telefon || '').trim();
     
+    // Store common contact in dynamic responses as well for schema resiliency
+    const enrichedRespostes = {
+      ...(ins.respostesCuestionari || {}),
+      emailContactoPareja: contactEmail,
+      telefonContactoPareja: contactTelefon
+    };
+
     // Attempt 1: Best match using exact verified columns (CamelCase standard, snake_case for status & position)
     let response = await supabase
       .from(tableName)
@@ -513,8 +548,8 @@ export async function saveSupabaseInscripcion(ins: Inscripcio): Promise<boolean>
         categoria: ins.categoria,
         c1Nom: ins.c1Nom,
         c1Cognoms: ins.c1Cognoms,
-        c1Email: ins.c1Email,
-        c1Telefon: ins.c1Telefon,
+        c1Email: contactEmail,
+        c1Telefon: contactTelefon,
         c1Talla: ins.c1Talla,
         c1DniUrl: ins.c1DniUrl,
         c1EsMenor: ins.c1EsMenor || false,
@@ -525,8 +560,8 @@ export async function saveSupabaseInscripcion(ins: Inscripcio): Promise<boolean>
         c1UniformeTipus: ins.c1UniformeTipus || null,
         c2Nom: ins.c2Nom,
         c2Cognoms: ins.c2Cognoms,
-        c2Email: ins.c2Email,
-        c2Telefon: ins.c2Telefon,
+        c2Email: contactEmail,
+        c2Telefon: contactTelefon,
         c2Talla: ins.c2Talla,
         c2DniUrl: ins.c2DniUrl,
         c2EsMenor: ins.c2EsMenor || false,
@@ -535,7 +570,7 @@ export async function saveSupabaseInscripcion(ins: Inscripcio): Promise<boolean>
         c2TutorDni: ins.c2TutorDni || null,
         c2TutorTelefon: ins.c2TutorTelefon || null,
         c2UniformeTipus: ins.c2UniformeTipus || null,
-        respostesCuestionari: ins.respostesCuestionari,
+        respostesCuestionari: enrichedRespostes,
         seleccionsUniforme: ins.seleccionsUniforme || {},
         preuCalculat: ins.preuCalculat,
         teDomasBalco: ins.teDomasBalco,
@@ -563,8 +598,8 @@ export async function saveSupabaseInscripcion(ins: Inscripcio): Promise<boolean>
         categoria: ins.categoria,
         c1_nom: ins.c1Nom,
         c1_cognoms: ins.c1Cognoms,
-        c1_email: ins.c1Email,
-        c1_telefon: ins.c1Telefon,
+        c1_email: contactEmail,
+        c1_telefon: contactTelefon,
         c1_talla: ins.c1Talla,
         c1_dni_url: ins.c1DniUrl,
         c1_es_menor: ins.c1EsMenor || false,
@@ -575,8 +610,8 @@ export async function saveSupabaseInscripcion(ins: Inscripcio): Promise<boolean>
         c1_uniforme_tipus: ins.c1UniformeTipus || null,
         c2_nom: ins.c2Nom,
         c2_cognoms: ins.c2Cognoms,
-        c2_email: ins.c2Email,
-        c2_telefon: ins.c2Telefon,
+        c2_email: contactEmail,
+        c2_telefon: contactTelefon,
         c2_talla: ins.c2Talla,
         c2_dni_url: ins.c2DniUrl,
         c2_es_menor: ins.c2EsMenor || false,
@@ -585,7 +620,7 @@ export async function saveSupabaseInscripcion(ins: Inscripcio): Promise<boolean>
         c2_tutor_dni: ins.c2TutorDni || null,
         c2_tutor_telefon: ins.c2TutorTelefon || null,
         c2_uniforme_tipus: ins.c2UniformeTipus || null,
-        respostes_cuestionari: ins.respostesCuestionari,
+        respostes_cuestionari: enrichedRespostes,
         seleccions_uniforme: ins.seleccionsUniforme || {},
         preu_calculat: ins.preuCalculat,
         te_domas_balco: ins.teDomasBalco,

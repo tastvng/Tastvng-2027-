@@ -227,9 +227,10 @@ export default function AdminDashboard({
     setRowSmtpSending(prev => ({ ...prev, [item.id]: 'sending' }));
 
     try {
-      const emailList = [item.c1Email, item.c2Email].filter(Boolean).filter(email => email.includes('@'));
+      const coupleEmail = (item.emailContactoPareja || item.c1Email || item.c2Email || '').trim();
+      const emailList = coupleEmail && coupleEmail.includes('@') ? [coupleEmail] : [];
       if (emailList.length === 0) {
-        alert(language === 'ca' ? "No s'ha trobat cap adreça de correu vàlida per als participants." : "No se encontró ninguna dirección de correo válida para los participantes.");
+        alert(language === 'ca' ? "No s'ha trobat cap adreça de correu de contacte vàlida per a la parella." : "No se encontró ninguna dirección de correo de contacto válida para la pareja.");
         setRowSmtpSending(prev => ({ ...prev, [item.id]: 'error' }));
         return;
       }
@@ -483,14 +484,12 @@ export default function AdminDashboard({
   
   const [newC1Nom, setNewC1Nom] = useState('');
   const [newC1Cognoms, setNewC1Cognoms] = useState('');
-  const [newC1Email, setNewC1Email] = useState('');
-  const [newC1Telefon, setNewC1Telefon] = useState('');
+  const [newEmailContactoPareja, setNewEmailContactoPareja] = useState('');
+  const [newTelefonContactoPareja, setNewTelefonContactoPareja] = useState('');
   const [newC1Talla, setNewC1Talla] = useState('M');
   
   const [newC2Nom, setNewC2Nom] = useState('');
   const [newC2Cognoms, setNewC2Cognoms] = useState('');
-  const [newC2Email, setNewC2Email] = useState('');
-  const [newC2Telefon, setNewC2Telefon] = useState('');
   const [newC2Talla, setNewC2Talla] = useState('M');
   
   const [newC1UniformeTipus, setNewC1UniformeTipus] = useState<'compra' | 'lloguer'>('compra');
@@ -782,17 +781,19 @@ export default function AdminDashboard({
       id: 'ins-' + Math.random().toString(36).substr(2, 9),
       codiSeguiment: tracker,
       categoria: newCategoria,
+      emailContactoPareja: newEmailContactoPareja.trim() || 'secretaria@eltast.cat',
+      telefonContactoPareja: newTelefonContactoPareja.trim() || '600000000',
       c1Nom: newC1Nom.trim(),
       c1Cognoms: newC1Cognoms.trim(),
-      c1Email: newC1Email.trim() || 'secretaria@eltast.cat',
-      c1Telefon: newC1Telefon.trim() || '600000000',
+      c1Email: newEmailContactoPareja.trim() || 'secretaria@eltast.cat',
+      c1Telefon: newTelefonContactoPareja.trim() || '600000000',
       c1Talla: newC1Talla,
       c1DniUrl: 'https://images.unsplash.com/photo-1554080353-a576cf803bda?q=80&w=600&auto=format&fit=crop',
       c1UniformeTipus: newC1UniformeTipus,
       c2Nom: newC2Nom.trim(),
       c2Cognoms: newC2Cognoms.trim(),
-      c2Email: newC2Email.trim() || 'secretaria@eltast.cat',
-      c2Telefon: newC2Telefon.trim() || '600000000',
+      c2Email: newEmailContactoPareja.trim() || 'secretaria@eltast.cat',
+      c2Telefon: newTelefonContactoPareja.trim() || '600000000',
       c2Talla: newC2Talla,
       c2DniUrl: 'https://images.unsplash.com/photo-1554080353-a576cf803bda?q=80&w=600&auto=format&fit=crop',
       c2UniformeTipus: newC2UniformeTipus,
@@ -815,12 +816,10 @@ export default function AdminDashboard({
     // Reset Form
     setNewC1Nom('');
     setNewC1Cognoms('');
-    setNewC1Email('');
-    setNewC1Telefon('');
     setNewC2Nom('');
     setNewC2Cognoms('');
-    setNewC2Email('');
-    setNewC2Telefon('');
+    setNewEmailContactoPareja('');
+    setNewTelefonContactoPareja('');
     setNewDomas(false);
     setNewMocadors(0);
     setNewEstatPagament(EstatPagament.PENDENT);
@@ -1037,14 +1036,16 @@ export default function AdminDashboard({
     // Text search
     const textFields = [
       item.codiSeguiment,
+      item.emailContactoPareja || '',
+      item.telefonContactoPareja || '',
       item.c1Nom,
       item.c1Cognoms,
-      item.c1Email,
-      item.c1Telefon,
+      item.c1Email || '',
+      item.c1Telefon || '',
       item.c2Nom,
       item.c2Cognoms,
-      item.c2Email,
-      item.c2Telefon,
+      item.c2Email || '',
+      item.c2Telefon || '',
       item.c1UniformeTipus || 'compra',
       item.c2UniformeTipus || 'compra',
       (item.c1UniformeTipus === 'lloguer' ? 'lloguer alquiler renta rent' : 'compra venta sale buy'),
@@ -1252,8 +1253,8 @@ export default function AdminDashboard({
       // A (Marca temporal)
       const dMarca = i.creadoEn ? new Date(i.creadoEn) : null;
       
-      // B (Email)
-      const email = i.c1Email || "";
+      // B (Email de Contacte)
+      const email = i.emailContactoPareja || i.c1Email || i.c2Email || "";
 
       // C (Pareja)
       const pareja = i.codiSeguiment || "";
@@ -1272,11 +1273,11 @@ export default function AdminDashboard({
       // F (Nom Comparsera)
       const comparser2 = `${i.c2Nom || ""} ${i.c2Cognoms || ""}`.trim();
 
-      // G (Telefon)
-      const telefon = i.c1Telefon || "";
+      // G (Telefon de Contacte)
+      const telefon = i.telefonContactoPareja || i.c1Telefon || i.c2Telefon || "";
 
-      // H (Correu Electronic)
-      const correuElectronic = i.c2Email || "";
+      // H (Correu Electronic de Contacte)
+      const correuElectronic = i.emailContactoPareja || i.c1Email || i.c2Email || "";
 
       // I (Preu Parella)
       const preuParella = i.categoria === CategoriaParella.ADULT 
@@ -1343,7 +1344,7 @@ export default function AdminDashboard({
       }
 
       // W (M)
-      const mVal = (i.creadoEn && i.c1Email) ? 'TRUE' : 'FALSE';
+      const mVal = (i.creadoEn && (i.emailContactoPareja || i.c1Email || i.c2Email)) ? 'TRUE' : 'FALSE';
 
       // X (Fecha Inscripcion)
       let dataInscripcio = dMarca;
@@ -2035,7 +2036,10 @@ export default function AdminDashboard({
                             </span>
                           )}
                         </div>
-                        <span className="text-[10px] text-zinc-400 font-mono">{new Date(item.creadoEn).toLocaleDateString('ca-ES')}</span>
+                        <span className="text-[10px] text-zinc-400 font-mono block">{new Date(item.creadoEn).toLocaleDateString('ca-ES')}</span>
+                        <div className="text-[10px] text-zinc-500 font-mono mt-0.5 flex items-center gap-1" title={item.emailContactoPareja || item.c1Email || ''}>
+                          <span className="text-zinc-400">📞</span> {item.telefonContactoPareja || item.c1Telefon || item.c2Telefon || 'N/A'}
+                        </div>
                       </td>
 
                       {/* Participant 1 info */}
@@ -2049,7 +2053,7 @@ export default function AdminDashboard({
                           )}
                         </p>
                         <p className="text-[10px] text-zinc-400 font-mono">
-                          {item.c1Telefon} • Talla {item.c1Talla} <span className="text-[#ff0090] font-sans font-bold text-[9px] uppercase px-1 pb-0.5 bg-fuchsia-50/50 rounded border border-fuchsia-100/50 ml-1">{item.c1UniformeTipus === 'lloguer' ? (language === 'ca' ? 'Lloguer' : 'Alquiler') : (language === 'ca' ? 'Compra' : 'Compra')}</span>
+                          Talla {item.c1Talla} <span className="text-[#ff0090] font-sans font-bold text-[9px] uppercase px-1 pb-0.5 bg-fuchsia-50/50 rounded border border-fuchsia-100/50 ml-1">{item.c1UniformeTipus === 'lloguer' ? (language === 'ca' ? 'Lloguer' : 'Alquiler') : (language === 'ca' ? 'Compra' : 'Compra')}</span>
                         </p>
                       </td>
 
@@ -2064,7 +2068,7 @@ export default function AdminDashboard({
                           )}
                         </p>
                         <p className="text-[10px] text-zinc-400 font-mono">
-                          {item.c2Telefon} • Talla {item.c2Talla} <span className="text-[#ff0090] font-sans font-bold text-[9px] uppercase px-1 pb-0.5 bg-fuchsia-50/50 rounded border border-fuchsia-100/50 ml-1">{item.c2UniformeTipus === 'lloguer' ? (language === 'ca' ? 'Lloguer' : 'Alquiler') : (language === 'ca' ? 'Compra' : 'Compra')}</span>
+                          Talla {item.c2Talla} <span className="text-[#ff0090] font-sans font-bold text-[9px] uppercase px-1 pb-0.5 bg-fuchsia-50/50 rounded border border-fuchsia-100/50 ml-1">{item.c2UniformeTipus === 'lloguer' ? (language === 'ca' ? 'Lloguer' : 'Alquiler') : (language === 'ca' ? 'Compra' : 'Compra')}</span>
                         </p>
                       </td>
 
@@ -2949,6 +2953,45 @@ export default function AdminDashboard({
                 </div>
               </div>
 
+              {/* Dades de Contacte de la Parella */}
+              <div className="p-4 bg-fuchsia-50/50 rounded-2xl border border-fuchsia-200/80 space-y-3">
+                <div className="flex items-center justify-between pb-1 border-b border-fuchsia-200/60">
+                  <h4 className="font-sans font-bold text-xs text-zinc-900 tracking-tight flex items-center gap-1.5">
+                    <Phone size={13} className="text-fuchsia-600" />
+                    {language === 'ca' ? 'Dades de Contacte de la Parella (Únic)' : 'Datos de Contacto de la Pareja (Único)'}
+                  </h4>
+                  <span className="text-[9px] font-mono font-bold text-fuchsia-700 bg-fuchsia-100 px-2 py-0.5 rounded-md">
+                    {language === 'ca' ? 'Comú per a la parella' : 'Común para la pareja'}
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] text-zinc-600 font-bold uppercase font-mono mb-1">
+                      {language === 'ca' ? 'Telèfon de contacte *' : 'Teléfono de contacto *'}
+                    </label>
+                    <input 
+                      type="tel" 
+                      value={newTelefonContactoPareja}
+                      onChange={(e) => setNewTelefonContactoPareja(e.target.value)}
+                      placeholder="600000000"
+                      className="w-full bg-white border border-zinc-200 focus:border-fuchsia-500 rounded-xl px-3 py-2 text-xs focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-zinc-600 font-bold uppercase font-mono mb-1">
+                      {language === 'ca' ? 'Correu electrònic *' : 'Correo electrónico *'}
+                    </label>
+                    <input 
+                      type="email" 
+                      value={newEmailContactoPareja}
+                      onChange={(e) => setNewEmailContactoPareja(e.target.value)}
+                      placeholder="parella@example.com"
+                      className="w-full bg-white border border-zinc-200 focus:border-fuchsia-500 rounded-xl px-3 py-2 text-xs focus:outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 {/* Comparser 1 Box */}
                 <div className="p-4 bg-zinc-50 rounded-2xl border border-zinc-150 space-y-3.5">
@@ -2978,17 +3021,7 @@ export default function AdminDashboard({
                     />
                   </div>
 
-                  <div className="grid grid-cols-3 gap-2">
-                    <div>
-                      <label className="block text-[10px] text-zinc-500 uppercase font-mono mb-0.5">Mòbil (Opcional)</label>
-                      <input 
-                        type="tel" 
-                        value={newC1Telefon}
-                        onChange={(e) => setNewC1Telefon(e.target.value)}
-                        placeholder="600000000"
-                        className="w-full bg-white border border-zinc-200 focus:border-[#ff0090] rounded-xl px-2.5 py-2 text-[11px] focus:outline-none"
-                      />
-                    </div>
+                  <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="block text-[10px] text-zinc-500 uppercase font-mono mb-0.5">Talla Camisa</label>
                       <select
@@ -2996,7 +3029,7 @@ export default function AdminDashboard({
                         onChange={(e) => setNewC1Talla(e.target.value)}
                         className="w-full bg-white border border-zinc-200 rounded-xl px-2.5 py-2 text-[11px] focus:outline-none cursor-pointer font-bold"
                       >
-                        <option value="XS font-bold">XS</option>
+                        <option value="XS">XS</option>
                         <option value="S">S</option>
                         <option value="M">M</option>
                         <option value="L">L</option>
@@ -3015,17 +3048,6 @@ export default function AdminDashboard({
                         <option value="lloguer">Lloguer</option>
                       </select>
                     </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] text-zinc-500 uppercase font-mono mb-0.5">E-mail (Opcional)</label>
-                    <input 
-                      type="email" 
-                      value={newC1Email}
-                      onChange={(e) => setNewC1Email(e.target.value)}
-                      placeholder="joan@example.com"
-                      className="w-full bg-white border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3 py-2 text-xs focus:outline-none"
-                    />
                   </div>
                 </div>
 
@@ -3057,17 +3079,7 @@ export default function AdminDashboard({
                     />
                   </div>
 
-                  <div className="grid grid-cols-3 gap-2">
-                    <div>
-                      <label className="block text-[10px] text-zinc-500 uppercase font-mono mb-0.5">Mòbil (Opcional)</label>
-                      <input 
-                        type="tel" 
-                        value={newC2Telefon}
-                        onChange={(e) => setNewC2Telefon(e.target.value)}
-                        placeholder="611000000"
-                        className="w-full bg-white border border-zinc-200 focus:border-[#ff0090] rounded-xl px-2.5 py-2 text-[11px] focus:outline-none"
-                      />
-                    </div>
+                  <div className="grid grid-cols-2 gap-2">
                     <div>
                       <label className="block text-[10px] text-zinc-500 uppercase font-mono mb-0.5">Talla Camisa</label>
                       <select
@@ -3094,17 +3106,6 @@ export default function AdminDashboard({
                         <option value="lloguer">Lloguer</option>
                       </select>
                     </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] text-zinc-500 uppercase font-mono mb-0.5">E-mail (Opcional)</label>
-                    <input 
-                      type="email" 
-                      value={newC2Email}
-                      onChange={(e) => setNewC2Email(e.target.value)}
-                      placeholder="marta@example.com"
-                      className="w-full bg-white border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3 py-2 text-xs focus:outline-none"
-                    />
                   </div>
                 </div>
               </div>
