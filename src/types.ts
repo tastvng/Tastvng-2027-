@@ -102,6 +102,7 @@ export interface Inscripcio {
 export interface TarifaConcept {
   id: string;
   nom: string;
+  nomES?: string;
   valor: number;
   actiu: boolean;
   tipus: 'categoria_adult' | 'categoria_juvenil' | 'extra_domas' | 'extra_mocador' | 'extra_generic';
@@ -117,6 +118,7 @@ export interface LiniaUniforme {
   preuLloguer?: number;
   opcional?: boolean;
   armilla_opcional?: boolean;
+  actiu?: boolean;
 }
 
 export interface SistemaConfigItem {
@@ -153,6 +155,26 @@ export interface SistemaConfig {
   googleSheetSyncActive?: boolean;
   cuestionariActiu?: boolean;
   armilla_opcional?: boolean;
+  // Dynamic categories
+  categoriaAdultaNom?: string;
+  categoriaAdultaNomES?: string;
+  categoriaJuvenilNom?: string;
+  categoriaJuvenilNomES?: string;
+  categoriaAdultaDescCA?: string;
+  categoriaAdultaDescES?: string;
+  categoriaJuvenilDescCA?: string;
+  categoriaJuvenilDescES?: string;
+  categoriaAdultaActiva?: boolean;
+  categoriaJuvenilActiva?: boolean;
+  // DNI configuration
+  requerirDni?: boolean;
+  instruccionsDniCA?: string;
+  instruccionsDniES?: string;
+  // Confirmation messages
+  titolConfirmacioCA?: string;
+  titolConfirmacioES?: string;
+  missatgeConfirmacioCA?: string;
+  missatgeConfirmacioES?: string;
 }
 
 export interface NoticiaXarxes {

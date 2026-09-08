@@ -45,7 +45,6 @@ interface ComparserCardProps {
   // Errors and Config
   errors: Record<string, string>;
   config: SistemaConfig;
-  accessoryPrices?: { clavells: number; corbati: number };
 
   // File Upload and Camera callbacks
   handleFileUpload: (e: React.ChangeEvent<HTMLInputElement>, owner: 'c1' | 'c2') => void;
@@ -87,7 +86,6 @@ export const ComparserCard: React.FC<ComparserCardProps> = ({
   isPhoneDuplicate,
   errors,
   config,
-  accessoryPrices,
   handleFileUpload,
   startCamera,
 }) => {
@@ -350,9 +348,10 @@ export const ComparserCard: React.FC<ComparserCardProps> = ({
             nom: config.nomUniforme || 'Talla de Samarreta',
             nomES: config.nomUniformeES || 'Talla de Camiseta',
             opcions: config.opcionsUniforme || ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'],
-            requeixQuantitat: false
+            requeixQuantitat: false,
+            actiu: true
           }
-        ]).map((linia) => {
+        ]).filter(l => l.actiu !== false).map((linia) => {
           const isOptional = !!(linia.opcional || linia.armilla_opcional || config.armilla_opcional);
           const keyVol = num === 1 ? 'c1Vol' : 'c2Vol';
           const sel = seleccionsUniforme[linia.id] || { [keyTalla]: linia.opcions[0] || 'M', [keyQuantitat]: 1, [keyTipus]: 'compra', [keyVol]: true };
@@ -363,7 +362,7 @@ export const ComparserCard: React.FC<ComparserCardProps> = ({
 
           const displayNom = language === 'ca' 
             ? linia.nom.replace(/armilla/gi, t('armilla')) 
-            : linia.nomES.replace(/chaleco/gi, t('armilla'));
+            : (linia.nomES || linia.nom).replace(/chaleco/gi, t('armilla'));
 
           return (
             <div key={linia.id} className="space-y-3 p-4 bg-zinc-50 border border-zinc-200 rounded-2xl">
@@ -510,30 +509,7 @@ export const ComparserCard: React.FC<ComparserCardProps> = ({
 
         {/* Extras per Comparser */}
         {(() => {
-          const dbExtras = (config.tarifesDinamiques || []).filter(t => t.actiu && t.tipus === 'extra_generic');
-          const extrasForThisComparser = [...dbExtras];
-          
-          const hasClavells = extrasForThisComparser.some(t => /clavell|clavel/i.test(t.nom));
-          if (!hasClavells) {
-            extrasForThisComparser.push({
-              id: 'clavells',
-              nom: language === 'ca' ? 'Clavellis' : 'Claveles',
-              valor: accessoryPrices?.clavells ?? 8,
-              actiu: true,
-              tipus: 'extra_generic'
-            });
-          }
-          
-          const hasCorbati = extrasForThisComparser.some(t => /corbat/i.test(t.nom));
-          if (!hasCorbati) {
-            extrasForThisComparser.push({
-              id: 'corbati',
-              nom: language === 'ca' ? 'Corbatí' : 'Corbatín',
-              valor: accessoryPrices?.corbati ?? 10,
-              actiu: true,
-              tipus: 'extra_generic'
-            });
-          }
+          const extrasForThisComparser = (config.tarifesDinamiques || []).filter(t => t.actiu && t.tipus === 'extra_generic');
 
           if (extrasForThisComparser.length === 0) return null;
           return (
@@ -544,18 +520,15 @@ export const ComparserCard: React.FC<ComparserCardProps> = ({
               <div className="space-y-3">
                 {extrasForThisComparser.map(extr => {
                   const isChecked = (extrasSeleccionats[extr.id] || 0) > 0;
-                  let finalPrice = extr.valor;
-                  if (/clavell|clavel/i.test(extr.nom)) {
-                    finalPrice = accessoryPrices?.clavells ?? extr.valor;
-                  } else if (/corbat/i.test(extr.nom)) {
-                    finalPrice = accessoryPrices?.corbati ?? extr.valor;
-                  }
+                  const finalPrice = extr.valor;
+                  const displayName = language === 'es' && extr.nomES ? extr.nomES : extr.nom;
+
                   return (
                     <div key={extr.id} 
                          onClick={() => setExtrasSeleccionats(prev => ({ ...prev, [extr.id]: isChecked ? 0 : 1 }))}
                          className={`flex justify-between items-center bg-zinc-50 border rounded-xl p-3 cursor-pointer transition-colors ${isChecked ? 'border-[#ff0090] bg-fuchsia-50/50' : 'border-zinc-200 hover:border-zinc-300'}`}>
                       <div>
-                        <span className="block text-xs font-bold text-zinc-800">{extr.nom}</span>
+                        <span className="block text-xs font-bold text-zinc-800">{displayName}</span>
                         <span className="block text-[10px] text-fuchsia-600 font-mono font-bold uppercase">PREU (COMPRA): {finalPrice}€</span>
                       </div>
                       <div className="flex items-center">
@@ -574,8 +547,13 @@ export const ComparserCard: React.FC<ComparserCardProps> = ({
         {/* DNI upload zona */}
         <div className="pt-2">
           <label className="block text-xs font-bold text-zinc-700 tracking-tight mb-1.5">
-            {language === 'ca' ? 'Foto de la part frontal del DNI *' : 'Foto de la parte frontal del DNI *'}
+            {language === 'ca' ? 'Foto de la part frontal del DNI' : 'Foto de la parte frontal del DNI'} {config.requerirDni !== false ? '*' : <span className="text-zinc-400 font-normal font-mono text-[10px]">({language === 'ca' ? 'Opcional' : 'Opcional'})</span>}
           </label>
+          {((language === 'ca' ? config.instruccionsDniCA : config.instruccionsDniES) || null) && (
+            <p className="text-[11px] text-zinc-500 mb-2 leading-relaxed">
+              {language === 'ca' ? config.instruccionsDniCA : config.instruccionsDniES}
+            </p>
+          )}
           {dniUrl ? (
             <div className="border border-zinc-200 rounded-2xl p-3 bg-zinc-50 flex items-center justify-between gap-3 relative overflow-hidden group">
               <img 

@@ -6,16 +6,17 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { CheckCircle, Download, Mail, Calendar, MapPin, Printer, ArrowLeft, RefreshCw, Sparkle, ChevronDown, ChevronUp, Send, Inbox, AlertTriangle } from 'lucide-react';
-import { Inscripcio, CategoriaParella } from '../types';
+import { Inscripcio, CategoriaParella, SistemaConfig } from '../types';
 import { useLanguage } from '../LanguageContext';
 
 interface ConfirmationProps {
   registration: Inscripcio;
   onClear: () => void;
   onUpdate?: (updatedReg: Inscripcio) => void;
+  config?: SistemaConfig;
 }
 
-export default function Confirmation({ registration, onClear, onUpdate }: ConfirmationProps) {
+export default function Confirmation({ registration, onClear, onUpdate, config }: ConfirmationProps) {
   const { language, t } = useLanguage();
   const [showEmailPreview, setShowEmailPreview] = useState(false);
   const [smtpStatus, setSmtpStatus] = useState<'idle' | 'sending' | 'success' | 'error' | 'not_configured'>('idle');
@@ -441,13 +442,15 @@ export default function Confirmation({ registration, onClear, onUpdate }: Confir
         </motion.div>
         
         <h1 className="font-sans font-black text-3xl text-zinc-900 tracking-tight mb-2">
-          {t('conf_title')}
+          {(language === 'ca' ? config?.titolConfirmacioCA : config?.titolConfirmacioES) || t('conf_title')}
         </h1>
         <p className="text-zinc-500 text-sm max-w-sm mx-auto font-sans leading-relaxed">
-          {language === 'ca' ? (
-            <>Ben fet! Hem registrat la vostra parella per a l'esdeveniment {nomEsdeveniment} de l'entitat <strong className="text-fuchsia-600">El Tast</strong>.</>
-          ) : (
-            <>¡Buen trabajo! Hemos registrado a vuestra pareja para el evento {nomEsdeveniment} de la entidad <strong className="text-fuchsia-600">El Tast</strong>.</>
+          {(language === 'ca' ? config?.missatgeConfirmacioCA : config?.missatgeConfirmacioES) || (
+            language === 'ca' ? (
+              <>Ben fet! Hem registrat la vostra parella per a l'esdeveniment {nomEsdeveniment} de l'entitat <strong className="text-fuchsia-600">El Tast</strong>.</>
+            ) : (
+              <>¡Buen trabajo! Hemos registrado a vuestra pareja para el evento {nomEsdeveniment} de la entidad <strong className="text-fuchsia-600">El Tast</strong>.</>
+            )
           )}
         </p>
       </div>

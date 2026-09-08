@@ -1128,6 +1128,7 @@ export default function App() {
             {view === 'confirmacio' && activeRegistration && (
               <Confirmation 
                 registration={activeRegistration} 
+                config={config}
                 onClear={() => {
                   setActiveRegistration(null);
                   setView('public');

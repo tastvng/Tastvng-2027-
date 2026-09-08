@@ -60,7 +60,7 @@ export async function logSupabaseWriteDiagnostic(table: string, operation: strin
     const email = session?.user?.email || null;
     const sessionExists = !!session;
 
-    console.log(`[Supabase Write Diagnostic]
+    console.log(`[logSupabaseWriteDiagnostic]
 --------------------------------------------------
 Taula: '${table}'
 Operació: '${operation}'
@@ -69,7 +69,14 @@ auth.uid() / ID: ${uid || '(cap / anònim)'}
 Email: ${email || '(cap / anònim)'}
 Resultat supabase.auth.getSession(): ${error ? `ERROR: ${error.message}` : (session ? 'Sessió activa trobada' : 'Sense sessió (Anònim)')}
 Access Token: ${session?.access_token ? 'Present' : 'Absent'}
---------------------------------------------------`);
+--------------------------------------------------`, {
+      table,
+      operation,
+      sessionExists,
+      uid,
+      email,
+      sessionError: error || null
+    });
 
     return { sessionExists, uid, email, sessionError: error };
   } catch (err) {

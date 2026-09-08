@@ -123,6 +123,12 @@ export async function cargarPreguntes(onlyActive: boolean = false): Promise<Preg
  */
 export async function guardarPreguntes(preguntes: PreguntaDinamica[]): Promise<{ success: boolean; error?: string }> {
   const currentIds = preguntes.map(p => String(p.id));
+  let directError: any = null;
+
+  console.log(`[guardarPreguntes] Iniciant sincronització a Supabase:`, {
+    totalPreguntes: preguntes.length,
+    ids: currentIds
+  });
 
   // Diagnòstic previ a l'escriptura
   await logSupabaseWriteDiagnostic('preguntes', `GUARDAR_PREGUNTES (${preguntes.length} preguntes)`);
@@ -133,7 +139,7 @@ export async function guardarPreguntes(preguntes: PreguntaDinamica[]): Promise<{
       // Pas A: Eliminar preguntes esborrades
       const { data: existingRows, error: selErr } = await supabase.from('preguntes').select('id');
       if (selErr) {
-        console.error('[Supabase Write Error] Taula: preguntes, Operació: SELECT existents, Error complet:', selErr);
+        console.error('[guardarPreguntes] Error consultant preguntes existents a Supabase:', selErr);
       } else if (existingRows && existingRows.length > 0) {
         const idsToDelete = existingRows
           .map(r => String(r.id))
@@ -143,7 +149,7 @@ export async function guardarPreguntes(preguntes: PreguntaDinamica[]): Promise<{
           await logSupabaseWriteDiagnostic('preguntes', `DELETE (${idsToDelete.length} preguntes sobrants)`);
           const { error: delErr } = await supabase.from('preguntes').delete().in('id', idsToDelete);
           if (delErr) {
-            console.error('[Supabase Write Error] Taula: preguntes, Operació: DELETE (sobrants), Error complet:', delErr);
+            console.error('[guardarPreguntes] Error esborrant preguntes sobrants a Supabase:', delErr);
           } else {
             console.log(`[guardarPreguntes] Preguntes esborrades de Supabase: ${idsToDelete.join(', ')}`);
           }
@@ -169,7 +175,8 @@ export async function guardarPreguntes(preguntes: PreguntaDinamica[]): Promise<{
           .upsert(payload, { onConflict: 'id' });
 
         if (upErr) {
-          console.error('[Supabase Write Error] Taula: preguntes, Operació: UPSERT, Error complet:', upErr);
+          directError = upErr;
+          console.error('[guardarPreguntes] Error complet Supabase (upsert directe):', upErr);
         } else {
           console.log(`[guardarPreguntes] Resultat real de guardar a Supabase: Èxit (${payload.length} preguntes sincronitzades correctament).`);
           return { success: true };
@@ -180,7 +187,8 @@ export async function guardarPreguntes(preguntes: PreguntaDinamica[]): Promise<{
         return { success: true };
       }
     } catch (directErr) {
-      console.error('[Supabase Write Error] Excepció en accés directe Supabase:', directErr);
+      directError = directErr;
+      console.error('[guardarPreguntes] Excepció en accés directe Supabase:', directErr);
     }
   }
 
@@ -206,13 +214,20 @@ export async function guardarPreguntes(preguntes: PreguntaDinamica[]): Promise<{
       console.log(`[guardarPreguntes] Resultat real de guardar a Supabase (via /api/admin/preguntes): Èxit (${preguntes.length} preguntes sincronitzades).`);
       return { success: true };
     } else {
-      const errorMsg = json.error || `HTTP ${resp.status}: Fallada al servidor`;
-      console.error('[guardarPreguntes] Resultat real de guardar a Supabase: Error:', errorMsg);
+      const errorMsg = directError?.message || json.error || `HTTP ${resp.status}: Fallada al servidor`;
+      console.error('[guardarPreguntes] Resultat real de guardar a Supabase: Error:', {
+        directError,
+        serverError: json.error,
+        status: resp.status
+      });
       return { success: false, error: errorMsg };
     }
   } catch (apiErr: any) {
-    const errorMsg = apiErr?.message || String(apiErr);
-    console.error('[guardarPreguntes] Resultat real de guardar a Supabase: Error fatal:', errorMsg);
+    const errorMsg = directError?.message || apiErr?.message || String(apiErr);
+    console.error('[guardarPreguntes] Resultat real de guardar a Supabase: Error fatal:', {
+      directError,
+      apiErr
+    });
     return { success: false, error: errorMsg };
   }
 }

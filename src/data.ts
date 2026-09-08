@@ -68,10 +68,12 @@ export const CONFIG_INICIAL: SistemaConfig = {
   armilla_opcional: true,
   titolSeccioTarifes: 'Tarifes i Cànons 2026',
   tarifesDinamiques: [
-    { id: 'adults', nom: 'Preu Parella Adulta (€)', valor: 90.00, actiu: true, tipus: 'categoria_adult' },
-    { id: 'juvenils', nom: 'Preu Parella Juvenil (€)', valor: 60.00, actiu: true, tipus: 'categoria_juvenil' },
-    { id: 'domas', nom: 'Cànon Domàs de Balcó (€)', valor: 15.00, actiu: true, tipus: 'extra_domas' },
-    { id: 'mocador', nom: 'Cànon Mocador Extra (€)', valor: 6.00, actiu: true, tipus: 'extra_mocador' }
+    { id: 'adults', nom: 'Preu Parella Adulta (€)', nomES: 'Precio Pareja Adulta (€)', valor: 90.00, actiu: true, tipus: 'categoria_adult' },
+    { id: 'juvenils', nom: 'Preu Parella Juvenil (€)', nomES: 'Precio Pareja Juvenil (€)', valor: 60.00, actiu: true, tipus: 'categoria_juvenil' },
+    { id: 'domas', nom: 'Cànon Domàs de Balcó (€)', nomES: 'Canon Domás de Balcón (€)', valor: 15.00, actiu: true, tipus: 'extra_domas' },
+    { id: 'mocador', nom: 'Cànon Mocador Extra (€)', nomES: 'Canon Pañuelo Extra (€)', valor: 6.00, actiu: true, tipus: 'extra_mocador' },
+    { id: 'clavells', nom: 'Clavells', nomES: 'Claveles', valor: 8.00, actiu: true, tipus: 'extra_generic' },
+    { id: 'corbati', nom: 'Corbatí', nomES: 'Corbatín', valor: 10.00, actiu: true, tipus: 'extra_generic' }
   ],
   titolFormulariDinamic: "Preguntes del Qüestionari d'El Tast",
   cuestionariActiu: true,
@@ -115,16 +117,39 @@ export const CONFIG_INICIAL: SistemaConfig = {
       nom: "Talla de Samarreta Oficial",
       nomES: "Talla de Camiseta Oficial",
       opcions: ["XS", "S", "M", "L", "XL", "XXL", "3XL"],
-      requeixQuantitat: false
+      requeixQuantitat: false,
+      actiu: true,
+      opcional: false
     },
     {
       id: 'lin-2',
       nom: "Talla de Jaqueta Tècnica",
       nomES: "Talla de Chaqueta Técnica",
       opcions: ["S", "M", "L", "XL", "XXL"],
-      requeixQuantitat: true
+      requeixQuantitat: true,
+      actiu: true,
+      opcional: true
     }
   ],
+  categoriaAdultaNom: "Parella Adulta",
+  categoriaAdultaNomES: "Pareja Adulta",
+  categoriaJuvenilNom: "Parella Juvenil",
+  categoriaJuvenilNomES: "Pareja Juvenil",
+  categoriaAdultaDescCA: "Especialista per a partir de 16 anys o més. Inclou samarretes exclusives de la collada i purs dolços.",
+  categoriaAdultaDescES: "Especial para a partir de 16 años o más. Incluye camisetas exclusivas de la colla y puros dulces.",
+  categoriaJuvenilDescCA: "Ideal per a parelles de 5 a 15 anys d'edat. Inclou fulard petit de color fucsia.",
+  categoriaJuvenilDescES: "Ideal para parejas de 5 a 15 años de edad. Incluye pañuelo pequeño de color fucsia.",
+  categoriaAdultaActiva: true,
+  categoriaJuvenilActiva: true,
+  requerirDni: true,
+  instruccionsDniCA: "Pugeu una imatge clara del DNI frontal de cadascun dels participants.",
+  instruccionsDniES: "Suba una imagen clara del DNI frontal de cada uno de los participantes.",
+  textLegalRgpd: "En compliment del Reglament General de Protecció de Dades (RGPD), us informem que les vostres dades personals i la imatge del DNI frontal seran tractades exclusivament per l'Associació Cultural El Tast per gestionar la inscripció al Carnaval i verificar l'edat dels participants. No se cediran dades a tercers excepte obligació legal i seran totalment destruïdes una vegada finalitzat el Carnaval.",
+  textLegalRgpdES: "En cumplimiento del Reglamento General de Protección de Datos (RGPD), le informamos que sus datos personales y la imagen del DNI frontal serán tratados exclusivamente por la Associació Cultural El Tast para gestionar la inscripción al Carnaval y verificar la edad de los participantes. No se cederán datos a terceros salvo obligación legal y serán totalmente destruidos una vez finalizado el Carnaval.",
+  titolConfirmacioCA: "Inscripció Confirmada!",
+  titolConfirmacioES: "¡Inscripción Confirmada!",
+  missatgeConfirmacioCA: "Hem registrat la vostra parella per a l'esdeveniment de l'entitat El Tast.",
+  missatgeConfirmacioES: "Hemos registrado a vuestra pareja para el evento de la entidad El Tast.",
   textLegalAutoritzacioMenors: "AUTORITZACIÓ DE MENORS D'EDAT\n\nEn condició de tutor/a legal del menor inscrit, declaro sota la meva responsabilitat que autoritzo expressament la seva participació a l'esdeveniment i activitats organitzades per l'Associació Cultural El Tast (Vilanova i la Geltrú 2026).\n\nCertifico que el menor es troba en condicions físiques i de salut aptes per al correcte desenvolupament de l'activitat, i m'en faig responsable de qualsevol incidència que se'n derivi del seu estat previ de salut, així com del compliment de la normativa vigent de l'organització.",
   textLegalAutoritzacioMenorsES: "AUTORIZACIÓN DE MENORES DE EDAD\n\nEn condición de tutor/a legal del menor inscrito, declaro bajo mi responsabilidad que autorizo expresamente su participación en el evento y actividades organizadas por la Associació Cultural El Tast (Vilanova i la Geltrú 2026).\n\nCertifico que el menor se encuentra en condiciones físicas y de salud aptas para el correcto desarrollo de la actividad, y me hago responsable de cualquier incidencia que se derive de su estado previo de salud, así como del cumplimiento de la normativa de la organización."
 };
