@@ -149,83 +149,38 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
     }
   }, []);
 
-  // Fetch dynamic accessory prices from 'personalizacion' settings row (bypass cache to always get fresh config on load)
-  const [accessoryPrices, setAccessoryPrices] = useState({ clavells: 8, corbati: 10 });
-  useEffect(() => {
-    let active = true;
-    const loadDynamicPrices = async () => {
-      try {
-        const { getSupabaseSetting, isSupabaseConfigured } = await import('../supabaseClient');
-        if (isSupabaseConfigured) {
-          const personalConfig = await getSupabaseSetting<any>('personalizacion', null, true);
-          if (active && personalConfig && personalConfig.accesorios) {
-            const clavellsPrice = parseFloat(personalConfig.accesorios.clavells);
-            const corbatiPrice = parseFloat(personalConfig.accesorios.corbati);
-            setAccessoryPrices({
-              clavells: isNaN(clavellsPrice) ? 8 : clavellsPrice,
-              corbati: isNaN(corbatiPrice) ? 10 : corbatiPrice
-            });
-          }
-        }
-      } catch (err) {
-        console.error("Error loading dynamic accessory prices:", err);
-      }
-    };
-    
-    const handleEvent = () => {
-      loadDynamicPrices().catch(err => console.warn("Handled error in loadDynamicPrices:", err));
-    };
-
-    handleEvent();
-    
-    // Refresh prices automatically on event triggers
-    window.addEventListener('hoursConfigChanged', handleEvent);
-    window.addEventListener('eventDataChanged', handleEvent);
-    window.addEventListener('localStorage', handleEvent);
-    
-    return () => {
-      active = false;
-      window.removeEventListener('hoursConfigChanged', handleEvent);
-      window.removeEventListener('eventDataChanged', handleEvent);
-      window.removeEventListener('localStorage', handleEvent);
-    };
-  }, []);
-
   // sistema_config data state for category descriptions and settings
-  const [configData, setConfigData] = useState<SistemaConfigItem[]>(() => {
-    try {
-      const caAdulta = localStorage.getItem('descripcio_parella_adulta_ca') || localStorage.getItem('categoria_adulta_desc_ca') || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_adulta_desc_ca;
-      const esAdulta = localStorage.getItem('descripcio_parella_adulta_es') || localStorage.getItem('categoria_adulta_desc_es') || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_adulta_desc_es;
-      const caJuvenil = localStorage.getItem('descripcio_parella_juvenil_ca') || localStorage.getItem('categoria_juvenil_desc_ca') || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_juvenil_desc_ca;
-      const esJuvenil = localStorage.getItem('descripcio_parella_juvenil_es') || localStorage.getItem('categoria_juvenil_desc_es') || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_juvenil_desc_es;
-      return [
-        { clau: 'descripcio_parella_adulta_ca', valor: { text: caAdulta } },
-        { clau: 'descripcio_parella_adulta_es', valor: { text: esAdulta } },
-        { clau: 'descripcio_parella_juvenil_ca', valor: { text: caJuvenil } },
-        { clau: 'descripcio_parella_juvenil_es', valor: { text: esJuvenil } },
-      ];
-    } catch {
-      return [];
-    }
-  });
+  const [configData, setConfigData] = useState<SistemaConfigItem[]>([]);
 
-  // Category descriptions (Parella Adulta & Parella Juvenil) loaded from Supabase settings
-  const [categoriaDesc, setCategoriaDesc] = useState(() => {
-    try {
-      const caAdulta = localStorage.getItem('descripcio_parella_adulta_ca') || localStorage.getItem('categoria_adulta_desc_ca');
-      const esAdulta = localStorage.getItem('descripcio_parella_adulta_es') || localStorage.getItem('categoria_adulta_desc_es');
-      const caJuvenil = localStorage.getItem('descripcio_parella_juvenil_ca') || localStorage.getItem('categoria_juvenil_desc_ca');
-      const esJuvenil = localStorage.getItem('descripcio_parella_juvenil_es') || localStorage.getItem('categoria_juvenil_desc_es');
-      return {
-        categoria_adulta_desc_ca: caAdulta || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_adulta_desc_ca,
-        categoria_adulta_desc_es: esAdulta || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_adulta_desc_es,
-        categoria_juvenil_desc_ca: caJuvenil || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_juvenil_desc_ca,
-        categoria_juvenil_desc_es: esJuvenil || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_juvenil_desc_es,
-      };
-    } catch {
-      return DEFAULT_CATEGORIA_DESCRIPTIONS;
+  // Category descriptions (Parella Adulta & Parella Juvenil) loaded from config or Supabase settings
+  const [categoriaDesc, setCategoriaDesc] = useState(() => ({
+    categoria_adulta_desc_ca: config.categoriaAdultaDescCA || '',
+    categoria_adulta_desc_es: config.categoriaAdultaDescES || '',
+    categoria_juvenil_desc_ca: config.categoriaJuvenilDescCA || '',
+    categoria_juvenil_desc_es: config.categoriaJuvenilDescES || '',
+  }));
+
+  useEffect(() => {
+    if (config.categoriaAdultaDescCA || config.categoriaJuvenilDescCA) {
+      setCategoriaDesc({
+        categoria_adulta_desc_ca: config.categoriaAdultaDescCA || '',
+        categoria_adulta_desc_es: config.categoriaAdultaDescES || '',
+        categoria_juvenil_desc_ca: config.categoriaJuvenilDescCA || '',
+        categoria_juvenil_desc_es: config.categoriaJuvenilDescES || '',
+      });
     }
-  });
+  }, [config.categoriaAdultaDescCA, config.categoriaAdultaDescES, config.categoriaJuvenilDescCA, config.categoriaJuvenilDescES]);
+
+  useEffect(() => {
+    // Automatically keep categoria in valid state if one category is deactivated
+    const isAdultDisabled = config.categoriaAdultaActiva === false;
+    const isJuvenilDisabled = config.categoriaJuvenilActiva === false;
+    if (isAdultDisabled && !isJuvenilDisabled && categoria === CategoriaParella.ADULT) {
+      setCategoria(CategoriaParella.JUVENIL);
+    } else if (isJuvenilDisabled && !isAdultDisabled && categoria === CategoriaParella.JUVENIL) {
+      setCategoria(CategoriaParella.ADULT);
+    }
+  }, [config.categoriaAdultaActiva, config.categoriaJuvenilActiva, categoria]);
 
   useEffect(() => {
     let active = true;
@@ -247,10 +202,10 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
           ]);
           if (active) {
             const resolved = {
-              categoria_adulta_desc_ca: adultaCa || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_adulta_desc_ca,
-              categoria_adulta_desc_es: adultaEs || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_adulta_desc_es,
-              categoria_juvenil_desc_ca: juvenilCa || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_juvenil_desc_ca,
-              categoria_juvenil_desc_es: juvenilEs || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_juvenil_desc_es,
+              categoria_adulta_desc_ca: config.categoriaAdultaDescCA || adultaCa || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_adulta_desc_ca,
+              categoria_adulta_desc_es: config.categoriaAdultaDescES || adultaEs || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_adulta_desc_es,
+              categoria_juvenil_desc_ca: config.categoriaJuvenilDescCA || juvenilCa || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_juvenil_desc_ca,
+              categoria_juvenil_desc_es: config.categoriaJuvenilDescES || juvenilEs || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_juvenil_desc_es,
             };
             setCategoriaDesc(resolved);
           }
@@ -262,10 +217,10 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
 
     const handleUpdate = () => {
       try {
-        const caAdulta = localStorage.getItem('descripcio_parella_adulta_ca') || localStorage.getItem('categoria_adulta_desc_ca') || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_adulta_desc_ca;
-        const esAdulta = localStorage.getItem('descripcio_parella_adulta_es') || localStorage.getItem('categoria_adulta_desc_es') || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_adulta_desc_es;
-        const caJuvenil = localStorage.getItem('descripcio_parella_juvenil_ca') || localStorage.getItem('categoria_juvenil_desc_ca') || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_juvenil_desc_ca;
-        const esJuvenil = localStorage.getItem('descripcio_parella_juvenil_es') || localStorage.getItem('categoria_juvenil_desc_es') || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_juvenil_desc_es;
+        const caAdulta = config.categoriaAdultaDescCA || localStorage.getItem('descripcio_parella_adulta_ca') || localStorage.getItem('categoria_adulta_desc_ca') || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_adulta_desc_ca;
+        const esAdulta = config.categoriaAdultaDescES || localStorage.getItem('descripcio_parella_adulta_es') || localStorage.getItem('categoria_adulta_desc_es') || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_adulta_desc_es;
+        const caJuvenil = config.categoriaJuvenilDescCA || localStorage.getItem('descripcio_parella_juvenil_ca') || localStorage.getItem('categoria_juvenil_desc_ca') || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_juvenil_desc_ca;
+        const esJuvenil = config.categoriaJuvenilDescES || localStorage.getItem('descripcio_parella_juvenil_es') || localStorage.getItem('categoria_juvenil_desc_es') || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_juvenil_desc_es;
         setConfigData([
           { clau: 'descripcio_parella_adulta_ca', valor: { text: caAdulta } },
           { clau: 'descripcio_parella_adulta_es', valor: { text: esAdulta } },
@@ -292,13 +247,13 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
       window.removeEventListener('categoriaDescChanged', handleUpdate);
       window.removeEventListener('storage', handleUpdate);
     };
-  }, []);
+  }, [config.categoriaAdultaDescCA, config.categoriaAdultaDescES, config.categoriaJuvenilDescCA, config.categoriaJuvenilDescES]);
 
-  // Descriptions from sistema_config with fallbacks
-  const descripcioDultaCA = configData.find(c => c.clau === 'descripcio_parella_adulta_ca')?.valor?.text || categoriaDesc.categoria_adulta_desc_ca || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_adulta_desc_ca;
-  const descripcioDultaES = configData.find(c => c.clau === 'descripcio_parella_adulta_es')?.valor?.text || categoriaDesc.categoria_adulta_desc_es || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_adulta_desc_es;
-  const descripcioJuvenilCA = configData.find(c => c.clau === 'descripcio_parella_juvenil_ca')?.valor?.text || categoriaDesc.categoria_juvenil_desc_ca || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_juvenil_desc_ca;
-  const descripcioJuvenilES = configData.find(c => c.clau === 'descripcio_parella_juvenil_es')?.valor?.text || categoriaDesc.categoria_juvenil_desc_es || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_juvenil_desc_es;
+  // Descriptions with config prop as primary Single Source of Truth
+  const descripcioDultaCA = config.categoriaAdultaDescCA || configData.find(c => c.clau === 'descripcio_parella_adulta_ca')?.valor?.text || categoriaDesc.categoria_adulta_desc_ca || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_adulta_desc_ca;
+  const descripcioDultaES = config.categoriaAdultaDescES || configData.find(c => c.clau === 'descripcio_parella_adulta_es')?.valor?.text || categoriaDesc.categoria_adulta_desc_es || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_adulta_desc_es;
+  const descripcioJuvenilCA = config.categoriaJuvenilDescCA || configData.find(c => c.clau === 'descripcio_parella_juvenil_ca')?.valor?.text || categoriaDesc.categoria_juvenil_desc_ca || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_juvenil_desc_ca;
+  const descripcioJuvenilES = config.categoriaJuvenilDescES || configData.find(c => c.clau === 'descripcio_parella_juvenil_es')?.valor?.text || categoriaDesc.categoria_juvenil_desc_es || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_juvenil_desc_es;
 
   // Live duplicate check flags for Comparser 1 & 2
   const isC1NameDuplicate = useMemo(() => {
@@ -387,42 +342,14 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
     .reduce((sum, t) => sum + (genericExtrasQty[t.id] || 0) * t.valor, 0);
 
   const c1ExtrasCost = Object.entries(c1ExtrasSeleccionats).reduce((total, [id, qty]) => {
-    let price = 0;
     const extra = (config.tarifesDinamiques || []).find(t => t.id === id);
-    if (extra) {
-      price = extra.valor;
-      if (/clavell|clavel/i.test(extra.nom)) {
-        price = accessoryPrices.clavells;
-      } else if (/corbat/i.test(extra.nom)) {
-        price = accessoryPrices.corbati;
-      }
-    } else if (id === 'clavells') {
-      price = accessoryPrices.clavells;
-    } else if (id === 'corbati') {
-      price = accessoryPrices.corbati;
-    } else {
-      return total;
-    }
+    const price = extra ? extra.valor : 0;
     return total + price * Number(qty);
   }, 0);
 
   const c2ExtrasCost = Object.entries(c2ExtrasSeleccionats).reduce((total, [id, qty]) => {
-    let price = 0;
     const extra = (config.tarifesDinamiques || []).find(t => t.id === id);
-    if (extra) {
-      price = extra.valor;
-      if (/clavell|clavel/i.test(extra.nom)) {
-        price = accessoryPrices.clavells;
-      } else if (/corbat/i.test(extra.nom)) {
-        price = accessoryPrices.corbati;
-      }
-    } else if (id === 'clavells') {
-      price = accessoryPrices.clavells;
-    } else if (id === 'corbati') {
-      price = accessoryPrices.corbati;
-    } else {
-      return total;
-    }
+    const price = extra ? extra.valor : 0;
     return total + price * Number(qty);
   }, 0);
 
@@ -679,7 +606,9 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
     if (!c1Cognoms.trim()) tempErrors.c1Cognoms = language === 'ca' ? "Els cognoms del primer participant són obligatoris" : "Los apellidos del primer participante son obligatorios";
     if (!c1Telefon.trim()) tempErrors.c1Telefon = language === 'ca' ? "El telèfon del primer participant és obligatori" : "El teléfono del primer participante es obligatorio";
     if (!c1Email.trim()) tempErrors.c1Email = language === 'ca' ? "El correu del primer participant és obligatori" : "El correo del primer participante es obligatorio";
-    if (!c1DniUrl) tempErrors.c1Dni = language === 'ca' ? "Heu de pujar una imatge del DNI frontal" : "Debe subir una imagen del DNI frontal";
+    if (config.requerirDni !== false && !c1DniUrl) {
+      tempErrors.c1Dni = language === 'ca' ? "Heu de pujar una imatge del DNI frontal" : "Debe subir una imagen del DNI frontal";
+    }
 
     if (c1EsMenor) {
       if (!c1TutorNom.trim()) tempErrors.c1TutorNom = language === 'ca' ? "El nom del tutor és obligatori" : "El nombre del tutor es obligatorio";
@@ -693,7 +622,9 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
     if (!c2Cognoms.trim()) tempErrors.c2Cognoms = language === 'ca' ? "Els cognoms del segon participant són obligatoris" : "Los apellidos del segundo participante son obligatorios";
     if (!c2Telefon.trim()) tempErrors.c2Telefon = language === 'ca' ? "El telèfon del segon participant és obligatori" : "El teléfono del segundo participante es obligatorio";
     if (!c2Email.trim()) tempErrors.c2Email = language === 'ca' ? "El correu del segon participant és obligatori" : "El correo del segundo participante es obligatorio";
-    if (!c2DniUrl) tempErrors.c2Dni = language === 'ca' ? "Heu de pujar una imatge del DNI frontal del segon participant" : "Debe subir una imagen del DNI frontal del segundo participante";
+    if (config.requerirDni !== false && !c2DniUrl) {
+      tempErrors.c2Dni = language === 'ca' ? "Heu de pujar una imatge del DNI frontal del segon participant" : "Debe subir una imagen del DNI frontal del segundo participante";
+    }
 
     if (c2EsMenor) {
       if (!c2TutorNom.trim()) tempErrors.c2TutorNom = language === 'ca' ? "El nom del tutor 2 és obligatori" : "El nombre del tutor 2 es obligatorio";
@@ -910,17 +841,12 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
         if (Number(qty) > 0) {
           const extraDef = (config.tarifesDinamiques || []).find((t: any) => t.id === id);
           if (extraDef) {
-            let finalPrice = extraDef.valor;
-            if (/clavell|clavel/i.test(extraDef.nom)) {
-              finalPrice = accessoryPrices.clavells;
-            } else if (/corbat/i.test(extraDef.nom)) {
-              finalPrice = accessoryPrices.corbati;
-            }
-            extresGuardats.push({ id, nom: extraDef.nom, quantitat: Number(qty), preuUnitari: finalPrice });
+            const nom = language === 'ca' ? extraDef.nom : (extraDef.nomES || extraDef.nom);
+            extresGuardats.push({ id, nom, quantitat: Number(qty), preuUnitari: extraDef.valor });
           } else if (id === 'clavells') {
-            extresGuardats.push({ id, nom: language === 'ca' ? 'Clavellis' : 'Claveles', quantitat: Number(qty), preuUnitari: accessoryPrices.clavells });
+            extresGuardats.push({ id, nom: language === 'ca' ? 'Clavells' : 'Claveles', quantitat: Number(qty), preuUnitari: 8 });
           } else if (id === 'corbati') {
-            extresGuardats.push({ id, nom: language === 'ca' ? 'Corbatí' : 'Corbatín', quantitat: Number(qty), preuUnitari: accessoryPrices.corbati });
+            extresGuardats.push({ id, nom: language === 'ca' ? 'Corbatí' : 'Corbatín', quantitat: Number(qty), preuUnitari: 10 });
           }
         }
       });
@@ -928,17 +854,12 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
         if (Number(qty) > 0) {
           const extraDef = (config.tarifesDinamiques || []).find((t: any) => t.id === id);
           if (extraDef) {
-            let finalPrice = extraDef.valor;
-            if (/clavell|clavel/i.test(extraDef.nom)) {
-              finalPrice = accessoryPrices.clavells;
-            } else if (/corbat/i.test(extraDef.nom)) {
-              finalPrice = accessoryPrices.corbati;
-            }
-            extresGuardats.push({ id, nom: extraDef.nom, quantitat: Number(qty), preuUnitari: finalPrice });
+            const nom = language === 'ca' ? extraDef.nom : (extraDef.nomES || extraDef.nom);
+            extresGuardats.push({ id, nom, quantitat: Number(qty), preuUnitari: extraDef.valor });
           } else if (id === 'clavells') {
-            extresGuardats.push({ id, nom: language === 'ca' ? 'Clavellis' : 'Claveles', quantitat: Number(qty), preuUnitari: accessoryPrices.clavells });
+            extresGuardats.push({ id, nom: language === 'ca' ? 'Clavells' : 'Claveles', quantitat: Number(qty), preuUnitari: 8 });
           } else if (id === 'corbati') {
-            extresGuardats.push({ id, nom: language === 'ca' ? 'Corbatí' : 'Corbatín', quantitat: Number(qty), preuUnitari: accessoryPrices.corbati });
+            extresGuardats.push({ id, nom: language === 'ca' ? 'Corbatí' : 'Corbatín', quantitat: Number(qty), preuUnitari: 10 });
           }
         }
       });
@@ -1073,10 +994,10 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
             {language === 'ca' ? `Formulari de preinscripció ${activeYear}` : `Formulario de preinscripción ${activeYear}`}
           </span>
           <h1 id="public-form-title" className="font-sans font-bold text-3xl md:text-4xl text-zinc-900 tracking-tight mt-1.5">
-            {t('form_title')}
+            {config.titolPrincipal ? `${config.titolPrincipal} ${config.titolSecundari || ''}`.trim() : t('form_title')}
           </h1>
           <p className="text-zinc-500 text-sm mt-1">
-            {t('form_subtitle')}
+            {config.subtitol ? config.subtitol : t('form_subtitle')}
           </p>
         </div>
         
@@ -1169,7 +1090,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {(() => {
               const adultTarifaObj = (config.tarifesDinamiques || []).find(t => t.id === 'adults') || { nom: 'Parella Adulta', valor: config.preuAdult, actiu: !(config.tarifesDinamiques && config.tarifesDinamiques.length > 0) };
-              const isAdultDisabled = !adultTarifaObj.actiu;
+              const isAdultDisabled = config.categoriaAdultaActiva === false || !adultTarifaObj.actiu;
 
               return (
                 <div 
@@ -1194,7 +1115,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
                     )}
                   </div>
                   <h4 className="font-sans font-bold text-xl text-white">
-                    {language === 'ca' ? 'Parella Adulta' : 'Pareja Adulta'}
+                    {language === 'ca' ? (config.categoriaAdultaNom || 'Parella Adulta') : (config.categoriaAdultaNomES || 'Pareja Adulta')}
                   </h4>
                   <p className="text-zinc-400 text-xs mt-1 leading-relaxed">
                     {language === 'ca' ? descripcioDultaCA : descripcioDultaES}
@@ -1209,7 +1130,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
 
             {(() => {
               const juvenilTarifaObj = (config.tarifesDinamiques || []).find(t => t.id === 'juvenils') || { nom: 'Parella Juvenil', valor: config.preuJuvenil, actiu: !(config.tarifesDinamiques && config.tarifesDinamiques.length > 0) };
-              const isJuvenilDisabled = !juvenilTarifaObj.actiu;
+              const isJuvenilDisabled = config.categoriaJuvenilActiva === false || !juvenilTarifaObj.actiu;
 
               return (
                 <div 
@@ -1234,7 +1155,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
                     )}
                   </div>
                   <h4 className="font-sans font-bold text-xl text-white">
-                    {language === 'ca' ? 'Parella Juvenil' : 'Pareja Juvenil'}
+                    {language === 'ca' ? (config.categoriaJuvenilNom || 'Parella Juvenil') : (config.categoriaJuvenilNomES || 'Pareja Juvenil')}
                   </h4>
                   <p className="text-zinc-400 text-xs mt-1 leading-relaxed">
                     {language === 'ca' ? descripcioJuvenilCA : descripcioJuvenilES}
@@ -1303,7 +1224,6 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
             isPhoneDuplicate={isC1PhoneDuplicate}
             errors={errors}
             config={config}
-            accessoryPrices={accessoryPrices}
             handleFileUpload={handleFileUpload}
             startCamera={startCamera}
           />
@@ -1343,7 +1263,6 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
             isPhoneDuplicate={isC2PhoneDuplicate}
             errors={errors}
             config={config}
-            accessoryPrices={accessoryPrices}
             handleFileUpload={handleFileUpload}
             startCamera={startCamera}
           />

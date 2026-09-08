@@ -229,6 +229,21 @@ export default function App() {
     }
   }, []);
 
+  // Listen for configUpdated and sistemaConfigChanged events to update global config in real time
+  useEffect(() => {
+    const handleConfigUpdated = (e: any) => {
+      if (e.detail) {
+        setConfig(e.detail);
+      }
+    };
+    window.addEventListener('configUpdated', handleConfigUpdated);
+    window.addEventListener('sistemaConfigChanged', handleConfigUpdated);
+    return () => {
+      window.removeEventListener('configUpdated', handleConfigUpdated);
+      window.removeEventListener('sistemaConfigChanged', handleConfigUpdated);
+    };
+  }, []);
+
   // Load and recover state from Supabase / LocalStorage on mount
   useEffect(() => {
     async function loadAllFromDatabase() {
@@ -518,14 +533,15 @@ export default function App() {
         );
       } catch (err) {
         console.error("Error saving config to Supabase:", err);
-        showToast(language === 'ca' ? '❌ Error al desar la configuració' : '❌ Error al guardar la configuración', 'error');
+        showToast(language === 'ca' ? '❌ Error al desar la configuració a Supabase' : '❌ Error al guardar la configuración en Supabase', 'error');
         saveLogger.log(
-          'Admin Diseño',
+          'Admin Secretaría',
           language === 'ca' ? 'Guardar configuració' : 'Guardar configuración',
           'error',
           undefined,
           err instanceof Error ? err.message : String(err)
         );
+        throw err;
       }
     } else {
       showToast(language === 'ca' ? '✓ Configuració desada localment' : '✓ Configuración guardada localmente', 'success');
@@ -581,15 +597,14 @@ export default function App() {
   };
 
   const getEstatInscripcioGlobalFromDatabase = async (): Promise<'obertes' | 'llista_espera'> => {
-    let globalStatus = 'obertes';
+    let globalStatus = config.estatInscripcions || 'obertes';
     if (isSupabaseConfigured) {
       try {
-        globalStatus = await getSupabaseSetting<string>('estat_inscripcio_global', config.estatInscripcions || 'obertes');
+        const dbStatus = await getSupabaseSetting<string>('estat_inscripcio_global', config.estatInscripcions || 'obertes');
+        if (dbStatus) globalStatus = dbStatus;
       } catch (e) {
         console.error("Error reading global status from Supabase:", e);
       }
-    } else {
-      globalStatus = localStorage.getItem('estat_inscripcio_global') || config.estatInscripcions || 'obertes';
     }
     
     // Map 'espera', 'llista_espera', or 'tancades' to 'llista_espera', and 'obertes' to 'obertes'
@@ -1094,7 +1109,7 @@ export default function App() {
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <div className="lg:col-span-2">
                   <PublicForm 
-                    config={{ ...config, cuestionariActiu: portadaConfig.cuestionariActiu !== false }} 
+                    config={config} 
                     onSubmit={addRegistration} 
                     onGoToLogin={() => setView('login')}
                   />

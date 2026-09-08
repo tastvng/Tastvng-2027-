@@ -23,20 +23,46 @@ export default function Confirmation({ registration, onClear, onUpdate, config }
   const [smtpError, setSmtpError] = useState('');
 
   const [nomEsdeveniment, setNomEsdeveniment] = useState(() => {
+    if (config?.titolPrincipal) {
+      return `${config.titolPrincipal} ${config.subtitol || ''}`.trim();
+    }
     const activeYear = localStorage.getItem('tast_any_edicio') || '2027';
     const rawName = localStorage.getItem('tast_nom_esdeveniment') || 'Carnaval 2027';
     return rawName.replace(/2026/g, activeYear).replace(/2027/g, activeYear);
   });
   const [direccioEsdeveniment, setDireccioEsdeveniment] = useState(() => localStorage.getItem('tast_direccio_esdeveniment') || 'Plaça Soler i Carbonell, 28, Vilanova i la Geltrú');
 
-  const [subSubjectCa, setSubSubjectCa] = useState(() => localStorage.getItem('tast_email_subject_ca') || `🎟️ El Tast ${nomEsdeveniment} - Confirmació d'Inscripció`);
-  const [subSubjectEs, setSubSubjectEs] = useState(() => localStorage.getItem('tast_email_subject_es') || `🎟️ El Tast ${nomEsdeveniment} - Confirmación de Inscripción`);
-  const [subBodyCa, setSubBodyCa] = useState(() => localStorage.getItem('tast_email_body_ca') || `S'ha generat correctament el vostre comprovant per a ${nomEsdeveniment}.`);
-  const [subBodyEs, setSubBodyEs] = useState(() => localStorage.getItem('tast_email_body_es') || `Se ha generado correctamente vuestro comprobante para ${nomEsdeveniment}.`);
-  const [subLogo, setSubLogo] = useState(() => localStorage.getItem('tast_email_logo') || "");
+  const [subSubjectCa, setSubSubjectCa] = useState(() => config?.titolConfirmacioCA || localStorage.getItem('tast_email_subject_ca') || `🎟️ El Tast ${nomEsdeveniment} - Confirmació d'Inscripció`);
+  const [subSubjectEs, setSubSubjectEs] = useState(() => config?.titolConfirmacioES || localStorage.getItem('tast_email_subject_es') || `🎟️ El Tast ${nomEsdeveniment} - Confirmación de Inscripción`);
+  const [subBodyCa, setSubBodyCa] = useState(() => config?.missatgeConfirmacioCA || localStorage.getItem('tast_email_body_ca') || `S'ha generat correctament el vostre comprovant per a ${nomEsdeveniment}.`);
+  const [subBodyEs, setSubBodyEs] = useState(() => config?.missatgeConfirmacioES || localStorage.getItem('tast_email_body_es') || `Se ha generado correctamente vuestro comprobante para ${nomEsdeveniment}.`);
+  const [subLogo, setSubLogo] = useState(() => config?.logoImgUrl || localStorage.getItem('tast_email_logo') || "");
 
   const [hoursConfigCa, setHoursConfigCa] = useState(() => localStorage.getItem('tast_secretaria_hours_ca') || "Dimecres i divendres, de 18:00h a 21:30h.");
   const [hoursConfigEs, setHoursConfigEs] = useState(() => localStorage.getItem('tast_secretaria_hours_es') || "Miércoles y viernes, de 18:00h a 21:30h.");
+
+  // Keep synced with config prop changes
+  useEffect(() => {
+    if (config?.titolPrincipal) {
+      const full = `${config.titolPrincipal} ${config.subtitol || ''}`.trim();
+      setNomEsdeveniment(full);
+    }
+    if (config?.titolConfirmacioCA) {
+      setSubSubjectCa(config.titolConfirmacioCA);
+    }
+    if (config?.titolConfirmacioES) {
+      setSubSubjectEs(config.titolConfirmacioES);
+    }
+    if (config?.missatgeConfirmacioCA) {
+      setSubBodyCa(config.missatgeConfirmacioCA);
+    }
+    if (config?.missatgeConfirmacioES) {
+      setSubBodyEs(config.missatgeConfirmacioES);
+    }
+    if (config?.logoImgUrl) {
+      setSubLogo(config.logoImgUrl);
+    }
+  }, [config]);
 
   useEffect(() => {
     // 1. Initial load from local cache if pre-existing

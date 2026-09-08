@@ -350,6 +350,29 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
   const [textLegalAutoritzacioMenors, setTextLegalAutoritzacioMenors] = useState(config.textLegalAutoritzacioMenors || `AUTORITZACIÓ DE MENORS D'EDAT\n\nEn condició de tutor/a legal del menor inscrit, declaro sota la meva responsabilitat que autoritzo expressament la seva participació a l'esdeveniment i activitats organitzades per l'Associació Cultural El Tast (Vilanova i la Geltrú ${activeYear}).\n\nCertifico que el menor es troba en condicions físiques i de salut aptes per al correcte desenvolupament de l'activitat, i m'en faig responsable de qualsevol incidència que se'n derivi del seu estat previ de salut, així com del cumprimento de la normativa vigent de l'organització.`);
   const [textLegalAutoritzacioMenorsES, setTextLegalAutoritzacioMenorsES] = useState(config.textLegalAutoritzacioMenorsES || `AUTORIZACIÓN DE MENORES DE EDAD\n\nEn condición de tutor/a legal del menor inscrito, declaro bajo mi responsabilidad que autorizo expresamente su participación en el evento y actividades organizadas por la Associació Cultural El Tast (Vilanova i la Geltrú ${activeYear}).\n\nCertifico que el menor se encuentra en condiciones físicas y de salud aptas para el correcto desarrollo de la actividad, y me hago responsable de cualquier incidencia que se derive de su estado previo de salud, así como del cumplimiento de la normativa de la organización.`);
 
+  // DNI & Documentation state
+  const [requerirDni, setRequerirDni] = useState<boolean>(config.requerirDni !== false);
+  const [instruccionsDniCA, setInstruccionsDniCA] = useState<string>(config.instruccionsDniCA || '');
+  const [instruccionsDniES, setInstruccionsDniES] = useState<string>(config.instruccionsDniES || '');
+
+  // Dynamic Categories names & activations
+  const [categoriaAdultaNom, setCategoriaAdultaNom] = useState(config.categoriaAdultaNom || 'Parella Adulta');
+  const [categoriaAdultaNomES, setCategoriaAdultaNomES] = useState(config.categoriaAdultaNomES || 'Pareja Adulta');
+  const [categoriaJuvenilNom, setCategoriaJuvenilNom] = useState(config.categoriaJuvenilNom || 'Parella Juvenil');
+  const [categoriaJuvenilNomES, setCategoriaJuvenilNomES] = useState(config.categoriaJuvenilNomES || 'Pareja Juvenil');
+  const [categoriaAdultaActiva, setCategoriaAdultaActiva] = useState(config.categoriaAdultaActiva !== false);
+  const [categoriaJuvenilActiva, setCategoriaJuvenilActiva] = useState(config.categoriaJuvenilActiva !== false);
+
+  // Legal RGPD state
+  const [textLegalRgpd, setTextLegalRgpd] = useState(config.textLegalRgpd || "En compliment del RGPD i la LOPDGDD, les dades recollides s'utilitzaran exclusivament per a l'organització de l'acte per l'Associació Cultural El Tast.");
+  const [textLegalRgpdES, setTextLegalRgpdES] = useState(config.textLegalRgpdES || "En cumplimiento del RGPD y la LOPDGDD, los datos recogidos se utilizarán exclusivamente para la organización del acto por la Associació Cultural El Tast.");
+
+  // Confirmation messages state
+  const [titolConfirmacioCA, setTitolConfirmacioCA] = useState(config.titolConfirmacioCA || '');
+  const [titolConfirmacioES, setTitolConfirmacioES] = useState(config.titolConfirmacioES || '');
+  const [missatgeConfirmacioCA, setMissatgeConfirmacioCA] = useState(config.missatgeConfirmacioCA || '');
+  const [missatgeConfirmacioES, setMissatgeConfirmacioES] = useState(config.missatgeConfirmacioES || '');
+
   const [notifSuccess, setNotifSuccess] = useState(false);
 
   // Google Sheets Real-time sync states
@@ -693,6 +716,7 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
     const mocadorVal = tarifesDinamiques.find(t => t.id === 'mocador')?.valor ?? Number(preuMocadorExtra);
 
     const updated: SistemaConfig = {
+      ...config,
       preuAdult: Number(adultsVal),
       preuJuvenil: Number(juvenilsVal),
       preuDomasBalco: Number(domasVal),
@@ -718,7 +742,26 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
       googleSheetSyncUrl: googleSheetSyncUrl.trim(),
       googleSheetSyncActive: googleSheetSyncActive,
       cuestionariActiu: cuestionariActiu,
-      armilla_opcional: armillaOpcional
+      armilla_opcional: armillaOpcional,
+      categoriaAdultaNom: categoriaAdultaNom.trim(),
+      categoriaAdultaNomES: categoriaAdultaNomES.trim(),
+      categoriaJuvenilNom: categoriaJuvenilNom.trim(),
+      categoriaJuvenilNomES: categoriaJuvenilNomES.trim(),
+      categoriaAdultaDescCA: descripcioAdultaCA,
+      categoriaAdultaDescES: descripcioAdultaES,
+      categoriaJuvenilDescCA: descripcioJuvenilCA,
+      categoriaJuvenilDescES: descripcioJuvenilES,
+      categoriaAdultaActiva: categoriaAdultaActiva,
+      categoriaJuvenilActiva: categoriaJuvenilActiva,
+      requerirDni: requerirDni,
+      instruccionsDniCA: instruccionsDniCA.trim(),
+      instruccionsDniES: instruccionsDniES.trim(),
+      textLegalRgpd: textLegalRgpd.trim(),
+      textLegalRgpdES: textLegalRgpdES.trim(),
+      titolConfirmacioCA: titolConfirmacioCA.trim(),
+      titolConfirmacioES: titolConfirmacioES.trim(),
+      missatgeConfirmacioCA: missatgeConfirmacioCA.trim(),
+      missatgeConfirmacioES: missatgeConfirmacioES.trim(),
     };
 
     // Save parella descriptions and armilla_opcional to sistema_config
@@ -852,6 +895,138 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
         {/* Left column: Prices configurations */}
         <div className="lg:col-span-1 space-y-6 animate-fadeIn">
 
+          {/* ESTAT DE LES INSCRIPCIONS */}
+          <div className="bg-white rounded-3xl border border-zinc-200 p-6 shadow-sm space-y-4 animate-fadeIn" id="config-estat-inscripcions-card">
+            <div className="border-b border-zinc-100 pb-3">
+              <h3 className="font-sans font-black text-sm text-zinc-900 uppercase tracking-wider flex items-center gap-2">
+                <span className="text-lg">🚦</span> {language === 'ca' ? "Estat de les Inscripcions" : "Estado de las Inscripciones"}
+              </h3>
+              <p className="text-[10px] text-zinc-400 mt-1">
+                {language === 'ca' 
+                  ? "Controla la disponibilitat pública del qüestionari i l'activació de llista d'espera." 
+                  : "Controla la disponibilidad pública del cuestionario y la activación de lista de espera."}
+              </p>
+            </div>
+
+            <div className="space-y-2.5">
+              {[
+                { 
+                  val: 'obertes' as const, 
+                  icon: '🟢', 
+                  titolCA: 'Inscripcions Obertes', 
+                  titolES: 'Inscripciones Abiertas', 
+                  descCA: 'El formulari està actiu i permet registrar noves parelles amb normalitat.',
+                  descES: 'El formulario está activo y permite registrar nuevas parejas con normalidad.'
+                },
+                { 
+                  val: 'espera' as const, 
+                  icon: '🟡', 
+                  titolCA: "Llista d'Espera Activa", 
+                  titolES: 'Lista de Espera Activa', 
+                  descCA: "Aforament complet. Les noves sol·licituds van directament a la llista d'espera oficial.",
+                  descES: 'Aforo completo. Las nuevas solicitudes van directamente a la lista de espera oficial.'
+                },
+                { 
+                  val: 'tancades' as const, 
+                  icon: '🔴', 
+                  titolCA: 'Inscripcions Tancades', 
+                  titolES: 'Inscripciones Cerradas', 
+                  descCA: "Formulari tancat. Es bloqueja l'enviament de qualsevol nova sol·licitud.",
+                  descES: 'Formulario cerrado. Se bloquea el envío de cualquier nueva solicitud.'
+                },
+              ].map((opt) => (
+                <div
+                  key={opt.val}
+                  onClick={() => setEstatInscripcions(opt.val)}
+                  className={`p-3.5 rounded-2xl border-2 cursor-pointer transition-all ${
+                    estatInscripcions === opt.val
+                      ? 'border-fuchsia-500 bg-fuchsia-50/50 shadow-sm'
+                      : 'border-zinc-200 bg-zinc-50 hover:bg-zinc-100/80'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span>{opt.icon}</span>
+                      <span className="font-sans font-bold text-xs text-zinc-900">
+                        {language === 'ca' ? opt.titolCA : opt.titolES}
+                      </span>
+                    </div>
+                    <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${estatInscripcions === opt.val ? 'border-fuchsia-500' : 'border-zinc-300'}`}>
+                      {estatInscripcions === opt.val && <div className="w-2 h-2 rounded-full bg-fuchsia-500" />}
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-zinc-500 mt-1 pl-6">
+                    {language === 'ca' ? opt.descCA : opt.descES}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* CONFIGURACIÓ DE DNI I DOCUMENTACIÓ */}
+          <div className="bg-white rounded-3xl border border-zinc-200 p-6 shadow-sm space-y-4 animate-fadeIn" id="config-dni-card">
+            <div className="border-b border-zinc-100 pb-3">
+              <h3 className="font-sans font-black text-sm text-zinc-900 uppercase tracking-wider flex items-center gap-2">
+                <span className="text-lg">🪪</span> {language === 'ca' ? "Configuració de DNI" : "Configuración de DNI"}
+              </h3>
+              <p className="text-[10px] text-zinc-400 mt-1">
+                {language === 'ca' 
+                  ? "Defineix si la càrrega del DNI és obligatòria i les instruccions que veuran els usuaris." 
+                  : "Define si la carga del DNI es obligatoria y las instrucciones que verán los usuarios."}
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex items-center justify-between p-3.5 bg-zinc-50 border border-zinc-150 rounded-2xl">
+                <div>
+                  <span className="block font-sans font-bold text-xs text-zinc-800">
+                    {language === 'ca' ? "DNI Obligatori per enviar" : "DNI Obligatorio para enviar"}
+                  </span>
+                  <span className="block text-[10px] text-zinc-400">
+                    {requerirDni 
+                      ? (language === 'ca' ? "Els usuaris no podran enviar sense pujar el DNI" : "Los usuarios no podrán enviar sin subir el DNI")
+                      : (language === 'ca' ? "Pujar el DNI és opcional" : "Subir el DNI es opcional")}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setRequerirDni(!requerirDni)}
+                  className={`w-12 h-6 flex items-center rounded-full p-1 transition duration-300 cursor-pointer ${
+                    requerirDni ? 'bg-fuchsia-600 justify-end' : 'bg-zinc-300 justify-start'
+                  }`}
+                >
+                  <div className="bg-white w-4 h-4 rounded-full shadow-md transform transition" />
+                </button>
+              </div>
+
+              <div className="space-y-2">
+                <div>
+                  <label className="block text-[10px] text-zinc-500 font-mono font-bold uppercase mb-1">
+                    {language === 'ca' ? "Instruccions DNI (Català)" : "Instrucciones DNI (Castellán)"}
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={instruccionsDniCA}
+                    onChange={(e) => setInstruccionsDniCA(e.target.value)}
+                    placeholder="Instruccions que es mostren sota la càrrega de DNI..."
+                    className="w-full bg-zinc-50 border border-zinc-200 focus:border-fuchsia-500 focus:bg-white rounded-xl p-2 text-xs text-zinc-800 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] text-zinc-500 font-mono font-bold uppercase mb-1">
+                    {language === 'ca' ? "Instruccions DNI (Castellà)" : "Instrucciones DNI (Castellano)"}
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={instruccionsDniES}
+                    onChange={(e) => setInstruccionsDniES(e.target.value)}
+                    placeholder="Instrucciones que se muestran bajo la subida de DNI..."
+                    className="w-full bg-zinc-50 border border-zinc-200 focus:border-fuchsia-500 focus:bg-white rounded-xl p-2 text-xs text-zinc-800 focus:outline-none"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
 
           {/* GOOGLE SHEETS REAL-TIME SYNC CONFIG */}
           <div className="bg-white rounded-3xl border border-zinc-200 p-6 shadow-sm space-y-5 animate-fadeIn" id="config-googlesheets-card">
@@ -1090,8 +1265,13 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
 
                     <button
                       type="button"
-                      onClick={() => updateTarifaConcept(tf.id, { actiu: !tf.actiu })}
-                      className={`px-3 py-1.5 rounded-lg border text-[10px] font-bold transition-all shrink-0 ${
+                      onClick={() => {
+                        const newActiu = !tf.actiu;
+                        updateTarifaConcept(tf.id, { actiu: newActiu });
+                        if (tf.id === 'adults' || tf.tipus === 'categoria_adult') setCategoriaAdultaActiva(newActiu);
+                        if (tf.id === 'juvenils' || tf.tipus === 'categoria_juvenil') setCategoriaJuvenilActiva(newActiu);
+                      }}
+                      className={`px-3 py-1.5 rounded-lg border text-[10px] font-bold transition-all shrink-0 cursor-pointer ${
                         tf.actiu 
                           ? 'bg-fuchsia-50 border-fuchsia-200 text-fuchsia-600' 
                           : 'bg-zinc-200/50 border-transparent text-zinc-400'
@@ -1103,9 +1283,21 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                     </button>
                   </div>
 
-                  {/* Descriptions for Parella Adulta */}
+                  {/* Spanish Name & Descriptions for Parella Adulta */}
                   {(tf.tipus === 'categoria_adult' || tf.id === 'adults') && (
                     <div className="pt-2.5 border-t border-zinc-200/70 space-y-2 mt-2">
+                      <div className="space-y-1">
+                        <label className="block text-[10px] text-zinc-500 font-mono font-bold uppercase">
+                          {language === 'ca' ? "Nom en Castellà" : "Nombre en Castellano"}
+                        </label>
+                        <input
+                          type="text"
+                          value={categoriaAdultaNomES}
+                          onChange={(e) => setCategoriaAdultaNomES(e.target.value)}
+                          className="w-full bg-white border border-zinc-250 focus:border-fuchsia-500 rounded-xl px-3 py-1.5 text-xs font-medium text-zinc-800 focus:outline-none"
+                          placeholder="Pareja Adulta"
+                        />
+                      </div>
                       <div className="space-y-1">
                         <label className="block text-[10px] text-zinc-500 font-mono font-bold uppercase">
                           {language === 'ca' ? "Descripció Parella Adulta (Català)" : "Descripción Pareja Adulta (Catalán)"}
@@ -1133,9 +1325,21 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                     </div>
                   )}
 
-                  {/* Descriptions for Parella Juvenil */}
+                  {/* Spanish Name & Descriptions for Parella Juvenil */}
                   {(tf.tipus === 'categoria_juvenil' || tf.id === 'juvenils') && (
                     <div className="pt-2.5 border-t border-zinc-200/70 space-y-2 mt-2">
+                      <div className="space-y-1">
+                        <label className="block text-[10px] text-zinc-500 font-mono font-bold uppercase">
+                          {language === 'ca' ? "Nom en Castellà" : "Nombre en Castellano"}
+                        </label>
+                        <input
+                          type="text"
+                          value={categoriaJuvenilNomES}
+                          onChange={(e) => setCategoriaJuvenilNomES(e.target.value)}
+                          className="w-full bg-white border border-zinc-250 focus:border-fuchsia-500 rounded-xl px-3 py-1.5 text-xs font-medium text-zinc-800 focus:outline-none"
+                          placeholder="Pareja Juvenil"
+                        />
+                      </div>
                       <div className="space-y-1">
                         <label className="block text-[10px] text-zinc-500 font-mono font-bold uppercase">
                           {language === 'ca' ? "Descripció Parella Juvenil (Català)" : "Descripción Pareja Juvenil (Catalán)"}
@@ -1538,6 +1742,71 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                     placeholder={language === 'ca' ? "Text legal de l'autorització..." : "Texto legal de la autorización..."}
                     id="input-config-minor-legal-unified"
                   />
+                </div>
+              </div>
+
+              {/* RGPD Data Protection legal texts */}
+              <div className="pt-4 border-t border-zinc-100 space-y-3">
+                <span className="block text-[9px] text-zinc-400 uppercase font-mono tracking-wider font-bold">
+                  {language === 'ca' ? "Protecció de Dades / RGPD" : "Protección de Datos / RGPD"}
+                </span>
+                <div className="space-y-1">
+                  <label className="block text-xs font-bold text-zinc-700">
+                    {language === 'ca' ? "Clàusula Legal del Formulari *" : "Cláusula Legal del Formulario *"}
+                  </label>
+                  <textarea
+                    value={language === 'ca' ? textLegalRgpd : textLegalRgpdES}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (language === 'ca') setTextLegalRgpd(val);
+                      else setTextLegalRgpdES(val);
+                    }}
+                    rows={3}
+                    className="w-full bg-zinc-50 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-4 py-2 text-xs focus:outline-none transition-all font-sans leading-relaxed shadow-inner"
+                    placeholder={language === 'ca' ? "Text de la política de protecció de dades..." : "Texto de la política de protección de datos..."}
+                    id="input-config-rgpd-legal-unified"
+                  />
+                </div>
+              </div>
+
+              {/* Confirmation Texts Customization */}
+              <div className="pt-4 border-t border-zinc-100 space-y-3">
+                <span className="block text-[9px] text-zinc-400 uppercase font-mono tracking-wider font-bold">
+                  {language === 'ca' ? "Missatges de Confirmació" : "Mensajes de Confirmación"}
+                </span>
+                <div className="space-y-2">
+                  <div>
+                    <label className="block text-[10px] text-zinc-500 uppercase font-mono font-bold">
+                      {language === 'ca' ? "Títol de Confirmació" : "Título de Confirmación"}
+                    </label>
+                    <input
+                      type="text"
+                      value={language === 'ca' ? titolConfirmacioCA : titolConfirmacioES}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (language === 'ca') setTitolConfirmacioCA(val);
+                        else setTitolConfirmacioES(val);
+                      }}
+                      className="w-full bg-zinc-50 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3 py-1.5 text-xs font-bold focus:outline-none"
+                      placeholder={language === 'ca' ? "Ex: Inscripció Completada amb Èxit!" : "Ej: ¡Inscripción Completada con Éxito!"}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-zinc-500 uppercase font-mono font-bold">
+                      {language === 'ca' ? "Missatge de Confirmació" : "Mensaje de Confirmación"}
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={language === 'ca' ? missatgeConfirmacioCA : missatgeConfirmacioES}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (language === 'ca') setMissatgeConfirmacioCA(val);
+                        else setMissatgeConfirmacioES(val);
+                      }}
+                      className="w-full bg-zinc-50 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3 py-1.5 text-xs focus:outline-none"
+                      placeholder={language === 'ca' ? "Missatge d'agraïment o instruccions posteriors..." : "Mensaje de agradecimiento o instrucciones posteriores..."}
+                    />
+                  </div>
                 </div>
               </div>
             </div>
