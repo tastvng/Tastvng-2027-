@@ -25,11 +25,13 @@ import {
   TrendingUp,
   Palette,
   Type,
-  Shirt
+  Shirt,
+  ShieldCheck
 } from 'lucide-react';
 import { SistemaConfig, PreguntaDinamica, NoticiaXarxes, TarifaConcept, LiniaUniforme } from '../types';
 import { cargarPreguntes, cargarPreguntesDetallat, guardarPreguntes, eliminarPregunta } from '../api/questionnaireApi';
 import { fetchSistemaConfig, saveSistemaConfigItem, supabase, isSupabaseConfigured, logSupabaseWriteDiagnostic } from '../supabaseClient';
+import { AdminStaffManagement } from './AdminStaffManagement';
 
 interface AdminConfigProps {
   config: SistemaConfig;
@@ -55,6 +57,7 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
   const [dbUrlSetup, setDbUrlSetup] = useState(() => localStorage.getItem('VITE_SUPABASE_URL') || '');
   const [dbAnonSetup, setDbAnonSetup] = useState(() => localStorage.getItem('VITE_SUPABASE_ANON_KEY') || '');
   const [dbConfigSaved, setDbConfigSaved] = useState(false);
+  const [showStaffModal, setShowStaffModal] = useState(false);
 
   // Authenticated user diagnostic state
   const [adminAuthInfo, setAdminAuthInfo] = useState<{
@@ -876,6 +879,17 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
         </div>
 
         <div className="flex items-center gap-2">
+          <button 
+            type="button"
+            onClick={() => setShowStaffModal(true)}
+            className="text-xs bg-zinc-850 hover:bg-[#ff0090]/20 hover:text-white hover:border-[#ff0090] border border-zinc-750 font-bold px-3 py-2.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer"
+            id="btn-nav-config-staff"
+            title={language === 'ca' ? "Gestió d'administradors i personal" : "Gestión de administradores y personal"}
+          >
+            <ShieldCheck size={14} className="text-[#ff0090]" /> 
+            {language === 'ca' ? "Staff i Admins" : "Staff y Admins"}
+          </button>
+
           {onResetConfig && (
             <button 
               type="button"
@@ -2549,6 +2563,14 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {showStaffModal && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <AdminStaffManagement
+            onClose={() => setShowStaffModal(false)}
+          />
         </div>
       )}
     </div>

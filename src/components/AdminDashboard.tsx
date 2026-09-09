@@ -44,10 +44,11 @@ import {
   EyeOff,
   RefreshCw
 } from 'lucide-react';
-import { Inscripcio, CategoriaParella, EstatPagament, EstatVerificacio, EstatInscripcio, MetodePagament, SistemaConfig, StaffMember, NoticiaXarxes } from '../types';
+import { Inscripcio, CategoriaParella, EstatPagament, EstatVerificacio, EstatInscripcio, MetodePagament, SistemaConfig, NoticiaXarxes } from '../types';
 import ExcelJS from 'exceljs';
 import AdminPortada from './AdminPortada';
 import AdminPersonalitzacio from './AdminPersonalitzacio';
+import { AdminStaffManagement } from './AdminStaffManagement';
 import { calculateDailySummaries } from '../dailySummary';
 
 interface AdminDashboardProps {
@@ -147,32 +148,9 @@ export default function AdminDashboard({
   const [clearConfirmText, setClearConfirmText] = useState('');
   const [showBulkDeleteConfirmModal, setShowBulkDeleteConfirmModal] = useState(false);
 
-  // Staff management state
+  // Staff management state (Official Supabase Auth + profiles via server API)
   const [showStaffModal, setShowStaffModal] = useState(false);
-  const [staffList, setStaffList] = useState<StaffMember[]>(() => {
-    try {
-      const saved = localStorage.getItem('tast_staff_2026');
-      if (saved) {
-        return JSON.parse(saved);
-      }
-    } catch (e) {
-      console.error(e);
-    }
-    const defaults: StaffMember[] = [
-      { id: 'st-0', nom: 'Secretaria General', usuari: 'secretaria@eltast.cat', rol: 'Secretaria', creadoEn: '01/01/2027', actiu: true },
-      { id: 'st-1', nom: 'Tast VNG (Admin)', usuari: 'tastvng@gmail.com', rol: 'SuperAdministrador', creadoEn: '01/01/2027', actiu: true },
-      { id: 'st-2', nom: 'Jordi Altiplà', usuari: 'jordia@eltast.cat', rol: 'Coordinador', creadoEn: '02/02/2027', actiu: true },
-      { id: 'st-3', nom: 'Mireia VNG', usuari: 'mireiav@eltast.cat', rol: 'Mesa d\'Entrega', creadoEn: '15/03/2027', actiu: true }
-    ];
-    localStorage.setItem('tast_staff_2026', JSON.stringify(defaults));
-    return defaults;
-  });
-
-  // Manual staff member introduction state
-  const [newStaffNom, setNewStaffNom] = useState('');
-  const [newStaffUsuari, setNewStaffUsuari] = useState('');
-  const [newStaffRol, setNewStaffRol] = useState<'SuperAdministrador' | 'Secretaria' | 'Mesa d\'Entrega' | 'Coordinador'>('Secretaria');
-  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [staffCount, setStaffCount] = useState<number>(3);
   const [inscriptionDeleteConfirmId, setInscriptionDeleteConfirmId] = useState<string | null>(null);
 
   // Synchronize administrative configurations with Supabase Settings & Server Status
@@ -210,12 +188,6 @@ export default function AdminDashboard({
         if (fbHnd) setScFacebookHandle(fbHnd);
         if (tkConn !== null && tkConn !== '') setScTikTokConnected(tkConn === 'true');
         if (tkHnd) setScTikTokHandle(tkHnd);
-
-        const staff = await getSupabaseSetting<StaffMember[] | null>('tast_staff_2026', null);
-        if (staff && staff.length > 0) {
-          setStaffList(staff);
-          localStorage.setItem('tast_staff_2026', JSON.stringify(staff));
-        }
       } catch (err) {
         console.error("Failed to load admin settings from Supabase:", err);
       }
@@ -831,191 +803,6 @@ export default function AdminDashboard({
     setNewMocadors(0);
     setNewEstatPagament(EstatPagament.PENDENT);
     setShowAddModal(false);
-  };
-
-  const handleAddStaffMember = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newStaffNom.trim() || !newStaffUsuari.trim()) {
-      alert("Si us plau, omple el nom i el correu d’identificació per al membre del staff.");
-      return;
-    }
-
-    const nouMembre: StaffMember = {
-      id: 'st-' + Math.random().toString(36).substr(2, 9),
-      nom: newStaffNom.trim(),
-      usuari: newStaffUsuari.trim().toLowerCase(),
-      rol: newStaffRol,
-      creadoEn: new Date().toLocaleDateString('ca-ES'),
-      actiu: true
-    };
-
-    const updated = [...staffList, nouMembre];
-    setStaffList(updated);
-    localStorage.setItem('tast_staff_2026', JSON.stringify(updated));
-    let isSynced = false;
-    try {
-      const { isSupabaseConfigured, saveSupabaseSetting } = await import('../supabaseClient');
-      if (isSupabaseConfigured) {
-        await saveSupabaseSetting('tast_staff_2026', updated);
-        isSynced = true;
-      }
-      saveLogger.log(
-        'Admin Staff',
-        language === 'ca' ? `Afegir membre de personal: ${newStaffNom}` : `Añadir miembro de personal: ${newStaffNom}`,
-        'success',
-        language === 'ca' ? `Rol: ${newStaffRol} - ${isSynced ? "Sincronitzat amb Supabase" : "Desat localment"}` : `Rol: ${newStaffRol} - ${isSynced ? "Sincronizado con Supabase" : "Guardado localmente"}`
-      );
-    } catch (err: any) {
-      saveLogger.log(
-        'Admin Staff',
-        language === 'ca' ? `Afegir membre de personal: ${newStaffNom}` : `Añadir miembro de personal: ${newStaffNom}`,
-        'error',
-        undefined,
-        err?.message || String(err)
-      );
-    }
-    window.dispatchEvent(new Event('staffChanged'));
-
-    showToast(
-      language === 'ca'
-        ? `✓ S'ha afegit ${newStaffNom} correctament${isSynced ? " (Sincronitzat)" : ""}`
-        : `✓ Se ha añadido a ${newStaffNom} correctamente${isSynced ? " (Sincronizado)" : ""}`,
-      'success'
-    );
-
-    if (onAddLog) {
-      onAddLog(`S'ha afegit ${newStaffNom} (${newStaffRol}) al personal d'administració.`);
-    }
-
-    // Reset fields
-    setNewStaffNom('');
-    setNewStaffUsuari('');
-    setNewStaffRol('Secretaria');
-  };
-
-  const handleUpdateStaffRol = async (id: string, rol: 'SuperAdministrador' | 'Secretaria' | 'Mesa d\'Entrega' | 'Coordinador') => {
-    const updated = staffList.map(s => s.id === id ? { ...s, rol } : s);
-    setStaffList(updated);
-    localStorage.setItem('tast_staff_2026', JSON.stringify(updated));
-    let isSynced = false;
-    const target = staffList.find(s => s.id === id);
-    try {
-      const { isSupabaseConfigured, saveSupabaseSetting } = await import('../supabaseClient');
-      if (isSupabaseConfigured) {
-        await saveSupabaseSetting('tast_staff_2026', updated);
-        isSynced = true;
-      }
-      saveLogger.log(
-        'Admin Staff',
-        language === 'ca' ? `Actualitzar rol de personal: ${target?.nom || 'staff'}` : `Actualizar rol de personal: ${target?.nom || 'staff'}`,
-        'success',
-        language === 'ca' ? `Nou rol: ${rol} - ${isSynced ? "Sincronitzat amb Supabase" : "Desat localment"}` : `Nuevo rol: ${rol} - ${isSynced ? "Sincronizado con Supabase" : "Guardado localmente"}`
-      );
-    } catch (err: any) {
-      saveLogger.log(
-        'Admin Staff',
-        language === 'ca' ? `Actualitzar rol de personal: ${target?.nom || 'staff'}` : `Actualizar rol de personal: ${target?.nom || 'staff'}`,
-        'error',
-        undefined,
-        err?.message || String(err)
-      );
-    }
-    window.dispatchEvent(new Event('staffChanged'));
-    showToast(
-      language === 'ca'
-        ? `✓ Rol actualitzat correctament${isSynced ? " (Sincronitzat)" : ""}`
-        : `✓ Rol actualizado correctamente${isSynced ? " (Sincronizado)" : ""}`,
-      'success'
-    );
-    if (onAddLog) {
-      onAddLog(`S'ha canviat el rol del perfil d'administrador i actualitzat a Supabase.`);
-    }
-  };
-
-  const handleToggleStaffActiu = async (id: string) => {
-    const target = staffList.find(s => s.id === id);
-    const updated = staffList.map(s => s.id === id ? { ...s, actiu: !s.actiu } : s);
-    setStaffList(updated);
-    localStorage.setItem('tast_staff_2026', JSON.stringify(updated));
-    let isSynced = false;
-    try {
-      const { isSupabaseConfigured, saveSupabaseSetting } = await import('../supabaseClient');
-      if (isSupabaseConfigured) {
-        await saveSupabaseSetting('tast_staff_2026', updated);
-        isSynced = true;
-      }
-      saveLogger.log(
-        'Admin Staff',
-        language === 'ca' ? `Modificar estat d'accés: ${target?.nom || 'staff'}` : `Modificar estado de acceso: ${target?.nom || 'staff'}`,
-        'success',
-        language === 'ca' ? `Estat actiu: ${!target?.actiu} - ${isSynced ? "Sincronitzat amb Supabase" : "Desat localment"}` : `Estado activo: ${!target?.actiu} - ${isSynced ? "Sincronizado con Supabase" : "Guardado localmente"}`
-      );
-    } catch (err: any) {
-      saveLogger.log(
-        'Admin Staff',
-        language === 'ca' ? `Modificar estat d'accés: ${target?.nom || 'staff'}` : `Modificar estado de acceso: ${target?.nom || 'staff'}`,
-        'error',
-        undefined,
-        err?.message || String(err)
-      );
-    }
-    window.dispatchEvent(new Event('staffChanged'));
-    showToast(
-      language === 'ca'
-        ? `✓ Estat d'accés modificat per a ${target?.nom || 'staff'}`
-        : `✓ Estado de acceso modificado para ${target?.nom || 'staff'}`,
-      'success'
-    );
-    if (onAddLog) {
-      onAddLog(`Estat d'accés del perfil de staff modificat i sincronitzat amb Supabase.`);
-    }
-  };
-
-  const handleRemoveStaffMember = async (id: string, name: string) => {
-    if (deleteConfirmId === id) {
-      const updated = staffList.filter(s => s.id !== id);
-      setStaffList(updated);
-      localStorage.setItem('tast_staff_2026', JSON.stringify(updated));
-      let isSynced = false;
-      try {
-        const { isSupabaseConfigured, saveSupabaseSetting } = await import('../supabaseClient');
-        if (isSupabaseConfigured) {
-          await saveSupabaseSetting('tast_staff_2026', updated);
-          isSynced = true;
-        }
-        saveLogger.log(
-          'Admin Staff',
-          language === 'ca' ? `Eliminar membre de personal: ${name}` : `Eliminar miembro de personal: ${name}`,
-          'success',
-          language === 'ca' ? `Sincronitzat amb Supabase` : `Sincronizado con Supabase`
-        );
-      } catch (err: any) {
-        saveLogger.log(
-          'Admin Staff',
-          language === 'ca' ? `Eliminar membre de personal: ${name}` : `Eliminar miembro de personal: ${name}`,
-          'error',
-          undefined,
-          err?.message || String(err)
-        );
-      }
-      window.dispatchEvent(new Event('staffChanged'));
-      showToast(
-        language === 'ca'
-          ? `✓ S'ha eliminat ${name} correctament${isSynced ? " (Sincronitzat)" : ""}`
-          : `✓ Se ha eliminado a ${name} correctamente${isSynced ? " (Sincronizado)" : ""}`,
-        'success'
-      );
-      if (onAddLog) {
-        onAddLog(`Retirat ${name} del canal de personal habilitat i sincronitzat amb Supabase.`);
-      }
-      setDeleteConfirmId(null);
-    } else {
-      setDeleteConfirmId(id);
-      // Automatically reset confirmation after 3.5 seconds of inactivity
-      setTimeout(() => {
-        setDeleteConfirmId(prev => prev === id ? null : prev);
-      }, 3500);
-    }
   };
 
   // Stats calculation
@@ -1634,7 +1421,12 @@ export default function AdminDashboard({
             className="text-xs bg-zinc-900 hover:bg-[#ff0090]/15 hover:text-white hover:border-[#ff0090] border border-zinc-800 font-bold px-4 py-2.5 rounded-xl transition-all flex items-center gap-1.5 focus:outline-none shadow-md shadow-fuchsia-500/5 cursor-pointer"
             id="btn-nav-staff"
           >
-            <ShieldCheck size={14} className="text-[#ff0090]" /> {language === 'ca' ? "Gestió de Staff" : "Gestión de Staff"}
+            <ShieldCheck size={14} className="text-[#ff0090]" /> {language === 'ca' ? "Staff i Administradors" : "Staff y Administradores"}
+            {staffCount > 0 && (
+              <span className="ml-1 px-1.5 py-0.5 bg-[#ff0090]/20 text-[#ff0090] text-[10px] font-mono font-bold rounded-md">
+                {staffCount}
+              </span>
+            )}
           </button>
 
           <button 
@@ -3318,202 +3110,14 @@ export default function AdminDashboard({
         </div>
       )}
 
-      {/* 2. Modal: Gestió de Staff i Administradors */}
+      {/* 2. Modal: Gestió Oficial de Staff i Administradors (Supabase Auth + profiles) */}
       {showStaffModal && (
         <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-3xl border border-zinc-200 shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden">
-            
-            {/* Header */}
-            <div className="p-6 border-b border-zinc-100 flex justify-between items-center bg-zinc-950 text-white animate-fade-in">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2 bg-fuchsia-600 rounded-xl">
-                  <ShieldCheck size={20} className="text-white" />
-                </div>
-                <div>
-                  <h3 className="font-sans font-black text-base text-white tracking-tight">Gestió de Staff i Administradors</h3>
-                  <p className="text-[11px] text-zinc-400 font-sans">Afegeix administradors, assigna rols o gestiona permisos de l'equip del Tast</p>
-                </div>
-              </div>
-              <button 
-                onClick={() => setShowStaffModal(false)}
-                className="p-1.5 px-3 text-xs bg-zinc-900 border border-zinc-800 hover:bg-zinc-850 rounded-xl transition font-mono tracking-tighter"
-              >
-                Tancar (esc)
-              </button>
-            </div>
-
-            {/* Content (Scrollable) */}
-            <div className="p-6 overflow-y-auto space-y-6 flex-1 bg-zinc-50">
-              
-              {/* Grid 2 Columns: Add member / Current members */}
-              <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-                
-                {/* 1. Add Staff Member Form (Manual Introduction) */}
-                <div className="lg:col-span-2 bg-white rounded-2xl p-5 border border-zinc-200 shadow-sm space-y-4">
-                  <h4 className="font-sans font-bold text-xs text-zinc-800 uppercase tracking-widest flex items-center gap-1">
-                    <UserCheck size={16} className="text-[#ff0090]" /> Alta de Superadministradors i Staff
-                  </h4>
-                  <div className="h-px bg-zinc-100" />
-
-                  <form onSubmit={handleAddStaffMember} className="space-y-3.5">
-                    <div>
-                      <label className="block text-[10px] text-zinc-500 uppercase font-mono mb-1 font-bold">Nom Complet *</label>
-                      <input 
-                        type="text" 
-                        required
-                        value={newStaffNom}
-                        onChange={(e) => setNewStaffNom(e.target.value)}
-                        placeholder="Ex. Joan Garcia"
-                        className="w-full bg-zinc-50 text-zinc-900 border border-zinc-200 focus:border-[#ff0090] focus:bg-white rounded-xl px-3 py-2 text-xs focus:outline-none transition-all"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] text-zinc-500 uppercase font-mono mb-1 font-bold">Nom d'Usuari *</label>
-                      <div className="relative">
-                        <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-zinc-400 pointer-events-none text-xs font-mono">@</span>
-                        <input 
-                          type="text" 
-                          required
-                          value={newStaffUsuari}
-                          onChange={(e) => setNewStaffUsuari(e.target.value)}
-                          placeholder="Ex. joang"
-                          className="w-full bg-zinc-50 text-zinc-900 border border-zinc-200 focus:border-[#ff0090] focus:bg-white rounded-xl pl-7 pr-3 py-2 text-xs focus:outline-none transition-all"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] text-zinc-500 uppercase font-mono mb-1 font-bold">Seleccionar Categoria (SuperAdministrador o Staff) *</label>
-                      <select
-                        value={newStaffRol}
-                        onChange={(e) => setNewStaffRol(e.target.value as any)}
-                        className="w-full bg-zinc-50 text-zinc-900 border border-zinc-200 rounded-xl px-3 py-2 text-xs focus:outline-none cursor-pointer font-bold"
-                      >
-                        <option value="SuperAdministrador">👑 SuperAdministrador (Accés i Control Total)</option>
-                        <option value="Secretaria">👥 Staff / Secretaria (Edició i Pagaments)</option>
-                        <option value="Mesa d'Entrega">👥 Staff / Mesa d'Entrega (Lliurament de Dossals)</option>
-                        <option value="Coordinador">👥 Staff / Coordinador Tècnic de Taula</option>
-                      </select>
-                    </div>
-
-                    <p className="text-[10px] text-zinc-400 font-sans italic">
-                      {language === 'ca'
-                        ? 'Nota de seguretat: L’autenticació del personal es gestiona mitjançant Supabase Auth oficial.'
-                        : 'Nota de seguridad: La autenticación del personal se gestiona mediante Supabase Auth oficial.'}
-                    </p>
-
-                    <button
-                      type="submit"
-                      className="w-full mt-2 py-2.5 bg-zinc-950 text-white hover:bg-black font-bold rounded-xl transition text-xs flex items-center justify-center gap-1 shadow-sm uppercase tracking-wider cursor-pointer font-sans"
-                    >
-                      <Plus size={14} className="text-[#ff0090]" /> Donar d'Alta Membre
-                    </button>
-                  </form>
-                </div>
-
-                {/* 2. Staff Directory */}
-                <div className="lg:col-span-3 bg-white rounded-2xl p-5 border border-zinc-200 shadow-sm space-y-4">
-                  <div className="flex justify-between items-center">
-                    <h4 className="font-sans font-bold text-xs text-zinc-800 uppercase tracking-widest">
-                      Llistat de Personal ({staffList.length})
-                    </h4>
-                    <span className="text-[9px] bg-zinc-100 text-zinc-500 font-mono font-bold px-2 py-0.5 rounded">
-                      {activeYear} ACTIVE SHEETS
-                    </span>
-                  </div>
-                  <div className="h-px bg-zinc-100" />
-
-                  {staffList.length === 0 ? (
-                    <div className="py-8 text-center text-zinc-400 font-sans text-xs">
-                      No hi ha cap membre extra registrat. Utilitzeu el qüestionari manual de l’esquerra enguany.
-                    </div>
-                  ) : (
-                    <div className="space-y-3 max-h-[420px] overflow-y-auto pr-1">
-                      {staffList.map((st) => (
-                        <div 
-                          key={st.id} 
-                          className={`p-3 rounded-xl border transition-all flex flex-col md:flex-row md:items-center justify-between gap-3 ${
-                            st.actiu ? 'bg-white border-zinc-200 hover:bg-zinc-50/50 hover:shadow-xs' : 'bg-zinc-50 border-zinc-150 opacity-60'
-                          }`}
-                        >
-                          <div className="space-y-1">
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-sm text-zinc-900 leading-none">{st.nom}</span>
-                              <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded font-mono ${
-                                st.rol === 'SuperAdministrador' ? 'bg-red-50 text-red-550 border border-red-200' :
-                                st.rol === 'Secretaria' ? 'bg-fuchsia-50 text-fuchsia-550 border border-fuchsia-200' :
-                                st.rol === 'Coordinador' ? 'bg-blue-50 text-blue-550 border border-blue-200' :
-                                'bg-zinc-100 text-zinc-650 border border-zinc-200'
-                              }`}>
-                                {st.rol}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-3 text-[10px] text-zinc-500 font-mono">
-                              <span>usuari: <strong className="text-zinc-650">@{st.usuari}</strong></span>
-                              <span>estat: <strong className="text-zinc-650">{st.actiu ? 'Actiu' : 'Inactiu'}</strong></span>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-2 shrink-0">
-                            {/* Role changer dropdown */}
-                            <select
-                              value={st.rol}
-                              onChange={(e) => handleUpdateStaffRol(st.id, e.target.value as any)}
-                              className="bg-zinc-100 hover:bg-zinc-200 text-zinc-800 text-[10px] border-none font-bold rounded px-2 py-1 focus:outline-none cursor-pointer"
-                            >
-                              <option value="Secretaria">Secretaria</option>
-                              <option value="Mesa d'Entrega">Mesa d'Entrega</option>
-                              <option value="Coordinador">Coordinador</option>
-                              <option value="SuperAdministrador">Admin</option>
-                            </select>
-
-                            {/* Active Toggle Button */}
-                            <button
-                              onClick={() => handleToggleStaffActiu(st.id)}
-                              className={`text-[9px] font-bold px-2 py-1 rounded transition cursor-pointer ${
-                                st.actiu 
-                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100' 
-                                  : 'bg-zinc-100 text-zinc-400 border border-zinc-200 hover:bg-zinc-200 hover:text-zinc-600'
-                              }`}
-                              title="Habilitar/Deshabilitar accés"
-                            >
-                              {st.actiu ? 'Actiu' : 'Inactiu'}
-                            </button>
-
-                            {/* Delete Button */}
-                            <button
-                              onClick={() => handleRemoveStaffMember(st.id, st.nom)}
-                              className={`px-2 py-1 transition rounded-lg cursor-pointer text-xs font-bold font-sans flex items-center gap-1 ${
-                                deleteConfirmId === st.id 
-                                  ? 'bg-red-650 text-white animate-pulse' 
-                                  : 'text-zinc-400 hover:text-red-500 hover:bg-red-55'
-                              }`}
-                              title={deleteConfirmId === st.id ? "Clica un altre cop per confirmar" : "Retirar accés"}
-                            >
-                              {deleteConfirmId === st.id ? (
-                                <span className="text-[10px] px-1 font-extrabold uppercase">Confirmar?</span>
-                              ) : (
-                                <Trash2 size={13} />
-                              )}
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-              </div>
-            </div>
-
-            {/* Footer */}
-            <div className="p-4 bg-zinc-950 border-t border-zinc-900 flex justify-between items-center text-[10px] text-zinc-400 font-mono">
-              <span>Nota: Els usuaris afegits es poden fer servir instantàniament des de la pantalla de login.</span>
-              <span>Associació Cultural El Tast • Vilanova {activeYear}</span>
-            </div>
-
-          </div>
+          <AdminStaffManagement
+            onClose={() => setShowStaffModal(false)}
+            onUserCountChange={(count) => setStaffCount(count)}
+            onAddLog={onAddLog}
+          />
         </div>
       )}
 

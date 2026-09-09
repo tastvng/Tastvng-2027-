@@ -64,7 +64,8 @@ import {
   deleteSupabaseInscripcion, 
   deleteMultipleSupabaseInscripciones, 
   clearAllSupabaseInscripciones,
-  checkCurrentUserIsAdmin
+  checkCurrentUserIsAdmin,
+  fetchAdminUsers
 } from './supabaseClient';
 
 export default function App() {
@@ -920,38 +921,43 @@ export default function App() {
     addLog("Sessió de secretaria tancada de manera segura.");
   };
 
-  // Dynamic Staff state to update header visual dynamically
-  const [staffCount, setStaffCount] = useState<number>(4);
+  // Dynamic Staff state to update header visual dynamically from Supabase Auth + profiles
+  const [staffCount, setStaffCount] = useState<number>(0);
   useEffect(() => {
-    const updateCount = () => {
+    // Clear obsolete fake staff cache from localStorage
+    try {
+      localStorage.removeItem('tast_staff_2026');
+    } catch {}
+
+    const refreshStaffCount = async () => {
+      if (!isAdminLoggedIn) return;
       try {
-        const saved = localStorage.getItem('tast_staff_2026');
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          setStaffCount(parsed.length);
-        } else {
-          // Initialize defaults
-          const defaults = [
-            { id: 'st-0', nom: 'Secretaria General', usuari: 'secretaria@eltast.cat', rol: 'Secretaria', creadoEn: '01/01/2027', actiu: true },
-            { id: 'st-1', nom: 'Tast VNG (Admin)', usuari: 'tastvng@gmail.com', rol: 'SuperAdministrador', creadoEn: '01/01/2027', actiu: true },
-            { id: 'st-2', nom: 'Jordi Altiplà', usuari: 'jordia@eltast.cat', rol: 'Coordinador', creadoEn: '02/02/2027', actiu: true },
-            { id: 'st-3', nom: 'Mireia VNG', usuari: 'mireiav@eltast.cat', rol: 'Mesa d\'Entrega', creadoEn: '15/03/2027', actiu: true }
-          ];
-          localStorage.setItem('tast_staff_2026', JSON.stringify(defaults));
-          setStaffCount(4);
+        const res = await fetchAdminUsers();
+        if (res.users && Array.isArray(res.users)) {
+          setStaffCount(res.users.length);
         }
-      } catch (e) {
-        console.error(e);
+      } catch (err) {
+        console.warn("Could not refresh staff count:", err);
       }
     };
-    updateCount();
-    window.addEventListener('storage', updateCount);
-    window.addEventListener('staffChanged', updateCount);
-    return () => {
-      window.removeEventListener('storage', updateCount);
-      window.removeEventListener('staffChanged', updateCount);
+
+    if (isAdminLoggedIn) {
+      refreshStaffCount();
+    }
+
+    const handleStaffEvent = (e: any) => {
+      if (e?.detail?.count !== undefined) {
+        setStaffCount(e.detail.count);
+      } else {
+        refreshStaffCount();
+      }
     };
-  }, []);
+
+    window.addEventListener('staffChanged', handleStaffEvent);
+    return () => {
+      window.removeEventListener('staffChanged', handleStaffEvent);
+    };
+  }, [isAdminLoggedIn]);
 
   useEffect(() => {
     document.title = `Inscripcions El Tast ${activeYear} — Secretariat Digital`;

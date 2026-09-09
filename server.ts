@@ -6,6 +6,7 @@ import dotenv from "dotenv";
 import { applyCorsHeaders } from "./api/_cors";
 import { verifySupabaseAdminToken } from "./api/_supabase-auth";
 import uploadDniHandler from "./api/upload-dni";
+import adminUsersHandler from "./api/admin-users";
 
 dotenv.config();
 
@@ -532,6 +533,10 @@ async function startServer() {
       return res.status(500).json({ error: err?.message || String(err) });
     }
   });
+
+  // Admin & Staff User Management Endpoints (Strictly authenticates via verifySupabaseAdminToken and uses SUPABASE_SERVICE_ROLE_KEY)
+  app.all("/api/admin/users", adminUsersHandler);
+  app.all("/api/admin/users/:id", adminUsersHandler);
 
   // Base API healthcheck endpoint
   app.get("/api/health", (req, res) => {

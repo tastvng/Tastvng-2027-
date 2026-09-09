@@ -894,3 +894,194 @@ export async function saveSistemaConfigItem(clau: string, valor: any): Promise<b
   }
 }
 
+export interface AdminUserRecord {
+  id: string;
+  email: string;
+  name: string;
+  role: 'admin' | 'staff';
+  created_at: string;
+  updated_at?: string;
+  last_sign_in_at?: string | null;
+  actiu: boolean;
+  isCurrentCaller?: boolean;
+}
+
+/**
+ * Gets the current Supabase session access token for authenticated requests to /api/admin/*
+ */
+export async function getAdminAccessToken(): Promise<string | null> {
+  if (!supabase) return null;
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.access_token || null;
+  } catch (e) {
+    console.warn("Failed retrieving access token:", e);
+    return null;
+  }
+}
+
+/**
+ * Fetches the real list of administrators and staff directly from the secure /api/admin/users endpoint
+ * (which queries auth.users + public.profiles on the server).
+ */
+export async function fetchAdminUsers(): Promise<{ users: AdminUserRecord[]; error?: string }> {
+  try {
+    const token = await getAdminAccessToken();
+    if (!token) {
+      return { users: [], error: "No s'ha trobat cap sessió d'administrador activa." };
+    }
+
+    const res = await fetch('/api/admin/users', {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      return { users: [], error: data?.error || `Error ${res.status}` };
+    }
+
+    return { users: data.users || [] };
+  } catch (err: any) {
+    console.error("fetchAdminUsers failed:", err);
+    return { users: [], error: err?.message || "Error de connexió amb el servidor" };
+  }
+}
+
+/**
+ * Creates a new administrator or staff user securely via /api/admin/users.
+ * Never stores or transmits the password outside of this protected API call.
+ */
+export async function createAdminUser(params: {
+  nom: string;
+  email: string;
+  role: 'admin' | 'staff';
+  password: string;
+  confirmPassword: string;
+}): Promise<{ success: boolean; user?: AdminUserRecord; error?: string }> {
+  try {
+    const token = await getAdminAccessToken();
+    if (!token) {
+      return { success: false, error: "Cal tenir una sessió activa d'administrador per donar d'alta personal." };
+    }
+
+    const res = await fetch('/api/admin/users', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify(params)
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      return { success: false, error: data?.error || `Error ${res.status}` };
+    }
+
+    return { success: true, user: data.user };
+  } catch (err: any) {
+    console.error("createAdminUser failed:", err);
+    return { success: false, error: err?.message || "Error de connexió en crear l'usuari" };
+  }
+}
+
+/**
+ * Updates an admin/staff user role via /api/admin/users/:id.
+ */
+export async function updateAdminUserRole(
+  id: string,
+  role: 'admin' | 'staff'
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const token = await getAdminAccessToken();
+    if (!token) {
+      return { success: false, error: "Cal tenir una sessió activa d'administrador." };
+    }
+
+    const res = await fetch(`/api/admin/users/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ role })
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      return { success: false, error: data?.error || `Error ${res.status}` };
+    }
+
+    return { success: true };
+  } catch (err: any) {
+    console.error("updateAdminUserRole failed:", err);
+    return { success: false, error: err?.message || "Error de connexió en actualitzar el rol" };
+  }
+}
+
+/**
+ * Toggles an admin/staff user's active status via /api/admin/users/:id.
+ */
+export async function toggleAdminUserActive(
+  id: string,
+  actiu: boolean
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const token = await getAdminAccessToken();
+    if (!token) {
+      return { success: false, error: "Cal tenir una sessió activa d'administrador." };
+    }
+
+    const res = await fetch(`/api/admin/users/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ actiu })
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      return { success: false, error: data?.error || `Error ${res.status}` };
+    }
+
+    return { success: true };
+  } catch (err: any) {
+    console.error("toggleAdminUserActive failed:", err);
+    return { success: false, error: err?.message || "Error de connexió en actualitzar l'estat" };
+  }
+}
+
+/**
+ * Deletes an admin/staff user securely via /api/admin/users/:id.
+ * Crucially, does NOT touch inscriptions or any event data.
+ */
+export async function deleteAdminUser(id: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const token = await getAdminAccessToken();
+    if (!token) {
+      return { success: false, error: "Cal tenir una sessió activa d'administrador." };
+    }
+
+    const res = await fetch(`/api/admin/users/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      return { success: false, error: data?.error || `Error ${res.status}` };
+    }
+
+    return { success: true };
+  } catch (err: any) {
+    console.error("deleteAdminUser failed:", err);
+    return { success: false, error: err?.message || "Error de connexió en eliminar l'usuari" };
+  }
+}
+
