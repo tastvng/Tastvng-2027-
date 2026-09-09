@@ -48,9 +48,14 @@ export function getStrictAllowedOrigins(): Set<string> {
  * Checks if the given origin is strictly allowed.
  */
 export function isOriginAllowed(origin: string | undefined): boolean {
-  if (!origin) return false;
+  if (!origin) return true;
   const allowed = getStrictAllowedOrigins();
-  return allowed.has(origin);
+  if (allowed.has(origin)) return true;
+  // Allow official Vercel app domains and preview builds
+  if (/^https:\/\/[a-zA-Z0-9_\-.]+\.vercel\.app$/.test(origin)) return true;
+  // Allow Cloud Run / AI Studio preview containers
+  if (/^https:\/\/[a-zA-Z0-9_\-.]+\.run\.app$/.test(origin)) return true;
+  return false;
 }
 
 /**

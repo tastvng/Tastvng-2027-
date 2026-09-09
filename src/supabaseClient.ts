@@ -921,28 +921,93 @@ export async function getAdminAccessToken(): Promise<string | null> {
 }
 
 /**
- * Fetches the real list of administrators and staff directly from the secure /api/admin/users endpoint
+ * Safely executes a fetch request expecting a JSON response.
+ * Strictly verifies response.ok, Content-Type, and extracts text first to avoid
+ * syntax errors like "Unexpected token < in JSON at position 0" if the server returns HTML.
+ */
+async function safeFetchJson<T = any>(
+  url: string,
+  options: RequestInit
+): Promise<{ ok: boolean; status: number; data?: T; error?: string }> {
+  try {
+    const res = await fetch(url, options);
+    const contentType = (res.headers.get('content-type') || '').toLowerCase();
+    const rawText = await res.text();
+
+    if (!contentType.includes('application/json')) {
+      const snippet = rawText.trim().slice(0, 160).replace(/\s+/g, ' ');
+      const isHtml = rawText.includes('<html') || rawText.includes('<!DOCTYPE') || rawText.includes('The page');
+      return {
+        ok: false,
+        status: res.status,
+        error: `[Error ${res.status}] Petició a '${url}' ha retornat ${isHtml ? 'HTML' : 'text no-JSON'} (${contentType || 'sense content-type'}): "${snippet || 'buit'}"`
+      };
+    }
+
+    let parsed: any;
+    try {
+      parsed = JSON.parse(rawText);
+    } catch (parseErr: any) {
+      const snippet = rawText.trim().slice(0, 160).replace(/\s+/g, ' ');
+      return {
+        ok: false,
+        status: res.status,
+        error: `Error de format JSON des de '${url}': ${parseErr.message}. Contingut: "${snippet}"`
+      };
+    }
+
+    if (!res.ok) {
+      return {
+        ok: false,
+        status: res.status,
+        data: parsed,
+        error: parsed?.error || `Error HTTP ${res.status} al servidor`
+      };
+    }
+
+    return {
+      ok: true,
+      status: res.status,
+      data: parsed
+    };
+  } catch (netErr: any) {
+    return {
+      ok: false,
+      status: 0,
+      error: `Error de connexió de xarxa amb '${url}': ${netErr?.message || String(netErr)}`
+    };
+  }
+}
+
+/**
+ * Diagnostic health check for the admin module: GET /api/admin-health
+ */
+export async function checkAdminHealth(): Promise<{ ok: boolean; status: number; data?: any; error?: string }> {
+  return safeFetchJson('/api/admin-health', { method: 'GET' });
+}
+
+/**
+ * Fetches the real list of administrators and staff directly from the secure /api/admin-users-list endpoint
  * (which queries auth.users + public.profiles on the server).
  */
 export async function fetchAdminUsers(): Promise<{ users: AdminUserRecord[]; error?: string }> {
   try {
     const token = await getAdminAccessToken();
     if (!token) {
-      return { users: [], error: "No s'ha trobat cap sessió d'administrador activa." };
+      return { users: [], error: "No s'ha trobat cap sessió d'administrador activa (token no disponible)." };
     }
 
-    const res = await fetch('/api/admin/users', {
+    const res = await safeFetchJson<{ success: boolean; users?: AdminUserRecord[]; error?: string }>('/api/admin-users-list', {
       headers: {
         'Authorization': `Bearer ${token}`
       }
     });
 
-    const data = await res.json();
-    if (!res.ok) {
-      return { users: [], error: data?.error || `Error ${res.status}` };
+    if (!res.ok || !res.data) {
+      return { users: [], error: res.error || `Error HTTP ${res.status} al sol·licitar /api/admin-users-list` };
     }
 
-    return { users: data.users || [] };
+    return { users: res.data.users || [] };
   } catch (err: any) {
     console.error("fetchAdminUsers failed:", err);
     return { users: [], error: err?.message || "Error de connexió amb el servidor" };
@@ -950,7 +1015,7 @@ export async function fetchAdminUsers(): Promise<{ users: AdminUserRecord[]; err
 }
 
 /**
- * Creates a new administrator or staff user securely via /api/admin/users.
+ * Creates a new administrator or staff user securely via /api/admin-user-create.
  * Never stores or transmits the password outside of this protected API call.
  */
 export async function createAdminUser(params: {
@@ -966,7 +1031,7 @@ export async function createAdminUser(params: {
       return { success: false, error: "Cal tenir una sessió activa d'administrador per donar d'alta personal." };
     }
 
-    const res = await fetch('/api/admin/users', {
+    const res = await safeFetchJson<{ success: boolean; user?: AdminUserRecord; error?: string }>('/api/admin-user-create', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -975,12 +1040,11 @@ export async function createAdminUser(params: {
       body: JSON.stringify(params)
     });
 
-    const data = await res.json();
-    if (!res.ok) {
-      return { success: false, error: data?.error || `Error ${res.status}` };
+    if (!res.ok || !res.data) {
+      return { success: false, error: res.error || `Error HTTP ${res.status} al crear usuari` };
     }
 
-    return { success: true, user: data.user };
+    return { success: true, user: res.data.user };
   } catch (err: any) {
     console.error("createAdminUser failed:", err);
     return { success: false, error: err?.message || "Error de connexió en crear l'usuari" };
@@ -988,7 +1052,7 @@ export async function createAdminUser(params: {
 }
 
 /**
- * Updates an admin/staff user role via /api/admin/users/:id.
+ * Updates an admin/staff user role via /api/admin-user-update.
  */
 export async function updateAdminUserRole(
   id: string,
@@ -1000,18 +1064,17 @@ export async function updateAdminUserRole(
       return { success: false, error: "Cal tenir una sessió activa d'administrador." };
     }
 
-    const res = await fetch(`/api/admin/users/${encodeURIComponent(id)}`, {
-      method: 'PATCH',
+    const res = await safeFetchJson<{ success: boolean; error?: string }>('/api/admin-user-update', {
+      method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`
       },
-      body: JSON.stringify({ role })
+      body: JSON.stringify({ id, role })
     });
 
-    const data = await res.json();
     if (!res.ok) {
-      return { success: false, error: data?.error || `Error ${res.status}` };
+      return { success: false, error: res.error || `Error HTTP ${res.status} en actualitzar rol` };
     }
 
     return { success: true };
@@ -1022,7 +1085,7 @@ export async function updateAdminUserRole(
 }
 
 /**
- * Toggles an admin/staff user's active status via /api/admin/users/:id.
+ * Toggles an admin/staff user's active status via /api/admin-user-update.
  */
 export async function toggleAdminUserActive(
   id: string,
@@ -1034,18 +1097,17 @@ export async function toggleAdminUserActive(
       return { success: false, error: "Cal tenir una sessió activa d'administrador." };
     }
 
-    const res = await fetch(`/api/admin/users/${encodeURIComponent(id)}`, {
-      method: 'PATCH',
+    const res = await safeFetchJson<{ success: boolean; error?: string }>('/api/admin-user-update', {
+      method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`
       },
-      body: JSON.stringify({ actiu })
+      body: JSON.stringify({ id, actiu })
     });
 
-    const data = await res.json();
     if (!res.ok) {
-      return { success: false, error: data?.error || `Error ${res.status}` };
+      return { success: false, error: res.error || `Error HTTP ${res.status} en actualitzar l'estat` };
     }
 
     return { success: true };
@@ -1056,7 +1118,7 @@ export async function toggleAdminUserActive(
 }
 
 /**
- * Deletes an admin/staff user securely via /api/admin/users/:id.
+ * Deletes an admin/staff user securely via /api/admin-user-delete.
  * Crucially, does NOT touch inscriptions or any event data.
  */
 export async function deleteAdminUser(id: string): Promise<{ success: boolean; error?: string }> {
@@ -1066,16 +1128,17 @@ export async function deleteAdminUser(id: string): Promise<{ success: boolean; e
       return { success: false, error: "Cal tenir una sessió activa d'administrador." };
     }
 
-    const res = await fetch(`/api/admin/users/${encodeURIComponent(id)}`, {
-      method: 'DELETE',
+    const res = await safeFetchJson<{ success: boolean; error?: string }>('/api/admin-user-delete', {
+      method: 'POST',
       headers: {
+        'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`
-      }
+      },
+      body: JSON.stringify({ id })
     });
 
-    const data = await res.json();
     if (!res.ok) {
-      return { success: false, error: data?.error || `Error ${res.status}` };
+      return { success: false, error: res.error || `Error HTTP ${res.status} en eliminar l'usuari` };
     }
 
     return { success: true };

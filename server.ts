@@ -7,6 +7,11 @@ import { applyCorsHeaders } from "./api/_cors";
 import { verifySupabaseAdminToken } from "./api/_supabase-auth";
 import uploadDniHandler from "./api/upload-dni";
 import adminUsersHandler from "./api/admin-users";
+import adminHealthHandler from "./api/admin-health";
+import adminUsersListHandler from "./api/admin-users-list";
+import adminUserCreateHandler from "./api/admin-user-create";
+import adminUserUpdateHandler from "./api/admin-user-update";
+import adminUserDeleteHandler from "./api/admin-user-delete";
 
 dotenv.config();
 
@@ -535,6 +540,11 @@ async function startServer() {
   });
 
   // Admin & Staff User Management Endpoints (Strictly authenticates via verifySupabaseAdminToken and uses SUPABASE_SERVICE_ROLE_KEY)
+  app.all("/api/admin-health", adminHealthHandler);
+  app.all("/api/admin-users-list", adminUsersListHandler);
+  app.all("/api/admin-user-create", adminUserCreateHandler);
+  app.all("/api/admin-user-update", adminUserUpdateHandler);
+  app.all("/api/admin-user-delete", adminUserDeleteHandler);
   app.all("/api/admin/users", adminUsersHandler);
   app.all("/api/admin/users/:id", adminUsersHandler);
 

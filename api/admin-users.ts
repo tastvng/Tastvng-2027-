@@ -23,6 +23,11 @@ export interface SanitizedAdminUser {
  * Protected: Requires authenticated user with profiles.role === 'admin'
  */
 export default async function adminUsersHandler(req: any, res: any) {
+  // Always ensure JSON output header
+  if (res.setHeader) {
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  }
+
   // 1. CORS headers
   applyCorsHeaders(req, res, "GET, POST, PATCH, DELETE, OPTIONS");
   if (req.method === "OPTIONS") {

@@ -24,6 +24,7 @@ import {
   updateAdminUserRole, 
   toggleAdminUserActive, 
   deleteAdminUser, 
+  checkAdminHealth,
   AdminUserRecord 
 } from '../supabaseClient';
 import { useLanguage } from '../LanguageContext';
@@ -62,6 +63,26 @@ export const AdminStaffManagement: React.FC<AdminStaffManagementProps> = ({
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+  const [healthStatus, setHealthStatus] = useState<string | null>(null);
+  const [isCheckingHealth, setIsCheckingHealth] = useState(false);
+
+  // Diagnostic health verification
+  const handleCheckHealth = async () => {
+    setIsCheckingHealth(true);
+    setHealthStatus(null);
+    try {
+      const res = await checkAdminHealth();
+      if (res.ok && res.data) {
+        setHealthStatus(`✓ [${res.status}] /api/admin-health: OK (Supabase Configurat: ${res.data.supabaseConfigured ? 'Sí' : 'No'})`);
+      } else {
+        setHealthStatus(`❌ [${res.status}] ${res.error || 'Error desconegut a /api/admin-health'}`);
+      }
+    } catch (e: any) {
+      setHealthStatus(`❌ Error de xarxa: ${e?.message || String(e)}`);
+    } finally {
+      setIsCheckingHealth(false);
+    }
+  };
 
   // Load real administrators from Auth + profiles
   const loadUsers = async () => {
@@ -413,6 +434,7 @@ export const AdminStaffManagement: React.FC<AdminStaffManagementProps> = ({
                     type={showPassword ? 'text' : 'password'}
                     required
                     minLength={6}
+                    autoComplete="new-password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
@@ -440,6 +462,7 @@ export const AdminStaffManagement: React.FC<AdminStaffManagementProps> = ({
                     type={showPassword ? 'text' : 'password'}
                     required
                     minLength={6}
+                    autoComplete="new-password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     placeholder="••••••••"
@@ -525,16 +548,36 @@ export const AdminStaffManagement: React.FC<AdminStaffManagementProps> = ({
                 <span>{language === 'ca' ? "Carregant administradors des de Supabase Auth..." : "Cargando administradores desde Supabase Auth..."}</span>
               </div>
             ) : fetchError ? (
-              <div className="py-8 p-4 bg-amber-50 border border-amber-200 rounded-2xl text-amber-850 text-xs text-center space-y-2">
-                <AlertCircle size={20} className="text-amber-600 mx-auto" />
-                <p className="font-bold">{language === 'ca' ? "No s'ha pogut obtenir la llista de personal:" : "No se ha podido obtener la lista de personal:"}</p>
-                <p className="text-[11px] font-mono text-zinc-600">{fetchError}</p>
-                <button
-                  onClick={loadUsers}
-                  className="mt-2 text-xs font-bold bg-zinc-900 text-white px-3 py-1.5 rounded-xl cursor-pointer hover:bg-black transition"
-                >
-                  {language === 'ca' ? 'Reintentar connexió' : 'Reintentar conexión'}
-                </button>
+              <div className="py-6 p-4 bg-red-50 border border-red-200 rounded-2xl text-red-900 text-xs text-left space-y-3">
+                <div className="flex items-center gap-2 text-red-700 font-bold">
+                  <AlertCircle size={18} className="shrink-0" />
+                  <span>{language === 'ca' ? "Error en consultar el servei de personal (/api/admin-users-list):" : "Error al consultar el servicio de personal (/api/admin-users-list):"}</span>
+                </div>
+                <div className="p-3 bg-white/80 border border-red-200 rounded-xl font-mono text-[11px] text-red-800 break-words leading-relaxed whitespace-pre-wrap">
+                  {fetchError}
+                </div>
+                <div className="flex items-center gap-2 pt-1 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={loadUsers}
+                    className="text-xs font-bold bg-zinc-900 text-white px-3.5 py-1.5 rounded-xl cursor-pointer hover:bg-black transition shadow-sm"
+                  >
+                    {language === 'ca' ? 'Reintentar petició' : 'Reintentar petición'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCheckHealth}
+                    disabled={isCheckingHealth}
+                    className="text-xs font-bold bg-white text-zinc-800 border border-zinc-300 hover:border-zinc-400 px-3.5 py-1.5 rounded-xl cursor-pointer transition disabled:opacity-50"
+                  >
+                    {isCheckingHealth ? 'Comprovant...' : 'Diagnòstic /api/admin-health'}
+                  </button>
+                </div>
+                {healthStatus && (
+                  <div className="p-2.5 bg-zinc-900 text-zinc-200 text-[11px] font-mono rounded-xl border border-zinc-800">
+                    {healthStatus}
+                  </div>
+                )}
               </div>
             ) : users.length === 0 ? (
               <div className="py-12 text-center text-zinc-400 font-sans text-xs">
