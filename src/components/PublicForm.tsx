@@ -15,7 +15,9 @@ import {
   Sparkle,
   Database,
   Phone,
-  Mail
+  Mail,
+  Package,
+  Check
 } from 'lucide-react';
 import { CategoriaParella, SistemaConfig, Inscripcio, EstatPagament, EstatVerificacio, EstatInscripcio, SistemaConfigItem, PreguntaDinamica } from '../types';
 import { cargarPreguntes, cargarPreguntesDetallat } from '../api/questionnaireApi';
@@ -811,35 +813,44 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
       if (teMocadorsExtra > 0) finalRespostes['mocadors_qty'] = String(teMocadorsExtra);
       
       Object.keys(genericExtrasQty).forEach(key => {
-        if (genericExtrasQty[key] > 0) {
-          finalRespostes[`extra_qty_${key}`] = String(genericExtrasQty[key]);
+        const q = Number(genericExtrasQty[key] || 0);
+        if (q > 0) {
+          finalRespostes[`extra_qty_${key}`] = String(q);
+          if (key === 'clavells') finalRespostes['clavells_qty'] = String(q);
+          if (key === 'corbati') finalRespostes['corbati_qty'] = String(q);
         }
       });
 
       const extresGuardats: { id: string; nom: string; quantitat: number; preuUnitari: number }[] = [];
-      Object.entries(c1ExtrasSeleccionats).forEach(([id, qty]) => {
-        if (Number(qty) > 0) {
-          const extraDef = (config.tarifesDinamiques || []).find((t: any) => t.id === id);
-          if (extraDef) {
-            const nom = language === 'ca' ? extraDef.nom : (extraDef.nomES || extraDef.nom);
-            extresGuardats.push({ id, nom, quantitat: Number(qty), preuUnitari: extraDef.valor });
-          } else if (id === 'clavells') {
-            extresGuardats.push({ id, nom: language === 'ca' ? 'Clavells' : 'Claveles', quantitat: Number(qty), preuUnitari: 8 });
-          } else if (id === 'corbati') {
-            extresGuardats.push({ id, nom: language === 'ca' ? 'Corbatí' : 'Corbatín', quantitat: Number(qty), preuUnitari: 10 });
+
+      // Add all active dynamic generic extras selected by the couple
+      (config.tarifesDinamiques || [])
+        .filter(t => t.tipus === 'extra_generic' && t.actiu)
+        .forEach(t => {
+          const qty = Number(genericExtrasQty[t.id] || 0);
+          if (qty > 0) {
+            const displayName = language === 'es' && t.nomES ? t.nomES : t.nom;
+            extresGuardats.push({
+              id: t.id,
+              nom: displayName,
+              quantitat: qty,
+              preuUnitari: t.valor
+            });
           }
-        }
-      });
-      Object.entries(c2ExtrasSeleccionats).forEach(([id, qty]) => {
-        if (Number(qty) > 0) {
+        });
+
+      // Backward compatibility for any extras recorded via participant or legacy state
+      Object.entries(genericExtrasQty).forEach(([id, rawQty]) => {
+        const qty = Number(rawQty || 0);
+        if (qty > 0 && !extresGuardats.some(e => e.id === id)) {
           const extraDef = (config.tarifesDinamiques || []).find((t: any) => t.id === id);
           if (extraDef) {
-            const nom = language === 'ca' ? extraDef.nom : (extraDef.nomES || extraDef.nom);
-            extresGuardats.push({ id, nom, quantitat: Number(qty), preuUnitari: extraDef.valor });
+            const nom = language === 'es' && extraDef.nomES ? extraDef.nomES : extraDef.nom;
+            extresGuardats.push({ id, nom, quantitat: qty, preuUnitari: extraDef.valor });
           } else if (id === 'clavells') {
-            extresGuardats.push({ id, nom: language === 'ca' ? 'Clavells' : 'Claveles', quantitat: Number(qty), preuUnitari: 8 });
+            extresGuardats.push({ id, nom: language === 'ca' ? 'Clavells' : 'Claveles', quantitat: qty, preuUnitari: 8 });
           } else if (id === 'corbati') {
-            extresGuardats.push({ id, nom: language === 'ca' ? 'Corbatí' : 'Corbatín', quantitat: Number(qty), preuUnitari: 10 });
+            extresGuardats.push({ id, nom: language === 'ca' ? 'Corbatí' : 'Corbatín', quantitat: qty, preuUnitari: 10 });
           }
         }
       });
@@ -1332,9 +1343,145 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
           />
         </div>
 
-        {/* Extra Accessories Order Section */}
+        {/* Dynamic Material Lines & Complements Section for the Couple */}
         {(() => {
-          return null;
+          const activeMaterialLines = (config.tarifesDinamiques || []).filter(
+            t => (t.tipus === 'extra_generic' || t.tipus === 'extra_domas' || t.tipus === 'extra_mocador') && t.actiu === true
+          );
+
+          if (activeMaterialLines.length === 0) return null;
+
+          return (
+            <div className="bg-white rounded-3xl p-6 sm:p-8 border border-zinc-200 shadow-md space-y-6" id="seccio-material-parella">
+              <div className="border-b border-zinc-100 pb-4">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-fuchsia-50 border border-fuchsia-100 flex items-center justify-center text-[#ff0090]">
+                    <Package size={18} />
+                  </div>
+                  <div>
+                    <h3 className="font-sans font-black text-zinc-900 text-lg tracking-tight uppercase">
+                      {language === 'ca' ? 'Material i Complements de la Parella' : 'Material y Complementos de la Pareja'}
+                    </h3>
+                    <p className="text-xs text-zinc-500 mt-0.5 leading-relaxed">
+                      {language === 'ca'
+                        ? 'Opcions de material addicionals per a la parella (actualitzades automàticament des de Secretaria).'
+                        : 'Opciones de material adicionales para la pareja (actualizadas automáticamente desde Secretaría).'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {activeMaterialLines.map((line) => {
+                  let qty = 0;
+                  let onQtyChange: (newVal: number) => void = () => {};
+
+                  if (line.tipus === 'extra_domas' || line.id === 'domas') {
+                    qty = teDomasBalcoQty;
+                    onQtyChange = (val) => setTeDomasBalcoQty(Math.max(0, val));
+                  } else if (line.tipus === 'extra_mocador' || line.id === 'mocador') {
+                    qty = teMocadorsExtra;
+                    onQtyChange = (val) => setTeMocadorsExtra(Math.max(0, val));
+                  } else {
+                    qty = genericExtrasQty[line.id] || 0;
+                    onQtyChange = (val) => setGenericExtrasQty(prev => ({
+                      ...prev,
+                      [line.id]: Math.max(0, val)
+                    }));
+                  }
+
+                  const displayName = language === 'es' && line.nomES ? line.nomES : line.nom;
+                  const isSelected = qty > 0;
+                  const lineTotal = qty * line.valor;
+
+                  return (
+                    <div 
+                      key={line.id}
+                      className={`relative rounded-2xl p-4 border transition-all duration-200 flex flex-col justify-between gap-3 ${
+                        isSelected 
+                          ? 'border-[#ff0090] bg-fuchsia-50/50 shadow-sm ring-1 ring-[#ff0090]/20' 
+                          : 'border-zinc-200 bg-zinc-50/60 hover:border-zinc-300 hover:bg-zinc-50'
+                      }`}
+                      id={`material-card-${line.id}`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div 
+                          className="flex-1 cursor-pointer select-none"
+                          onClick={() => {
+                            if (qty === 0) onQtyChange(1);
+                          }}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-extrabold text-zinc-900 tracking-tight block">
+                              {displayName}
+                            </span>
+                            {isSelected && (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold font-mono bg-[#ff0090] text-white">
+                                {qty}x
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="text-xs font-mono font-bold text-fuchsia-700">
+                              {line.valor.toFixed(2)}€ <span className="text-[10px] text-zinc-400 font-normal">/ unitat</span>
+                            </span>
+                            {isSelected && (
+                              <span className="text-xs font-mono font-black text-zinc-900 bg-white px-2 py-0.5 rounded-md border border-fuchsia-200">
+                                Total: {lineTotal.toFixed(2)}€
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Quick Checkbox button */}
+                        <button
+                          type="button"
+                          onClick={() => onQtyChange(isSelected ? 0 : 1)}
+                          className={`w-7 h-7 rounded-xl border flex items-center justify-center transition-all cursor-pointer shrink-0 ${
+                            isSelected 
+                              ? 'bg-[#ff0090] border-[#ff0090] text-white shadow-sm' 
+                              : 'bg-white border-zinc-300 text-transparent hover:border-zinc-400'
+                          }`}
+                          title={isSelected ? (language === 'ca' ? 'Treure selecció' : 'Quitar selección') : (language === 'ca' ? 'Seleccionar 1 unitat' : 'Seleccionar 1 unidad')}
+                        >
+                          <Check size={14} className={isSelected ? 'block' : 'opacity-0'} />
+                        </button>
+                      </div>
+
+                      {/* Quantity selector stepper */}
+                      <div className="flex items-center justify-between pt-2 border-t border-zinc-200/50">
+                        <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-wide">
+                          {language === 'ca' ? 'Quantitat:' : 'Cantidad:'}
+                        </span>
+                        <div className="flex items-center gap-1 bg-white border border-zinc-250 rounded-xl p-0.5 shadow-2xs">
+                          <button
+                            type="button"
+                            onClick={() => onQtyChange(Math.max(0, qty - 1))}
+                            disabled={qty <= 0}
+                            className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-600 hover:bg-zinc-100 disabled:opacity-30 disabled:hover:bg-transparent transition cursor-pointer"
+                            aria-label="Disminuir quantitat"
+                          >
+                            <Minus size={13} />
+                          </button>
+                          <span className="w-8 text-center font-mono font-black text-xs text-zinc-900 select-none">
+                            {qty}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => onQtyChange(qty + 1)}
+                            className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-600 hover:bg-zinc-100 transition cursor-pointer"
+                            aria-label="Augmentar quantitat"
+                          >
+                            <Plus size={13} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
         })()}
 
         {/* Dynamic Custom Questionnaire Sections */}

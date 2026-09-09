@@ -642,6 +642,17 @@ export default function AdminFicha({ registration, config, onBack, onSave }: Adm
                   }
                   return null;
                 })()}
+
+                {/* Dynamic generic extras badges */}
+                {(registration.extresSeleccionats || []).filter(e => e.quantitat > 0).map((ext) => (
+                  <span 
+                    key={ext.id}
+                    className="bg-fuchsia-50 text-fuchsia-900 text-xs font-bold px-3 py-1.5 rounded-xl border border-fuchsia-200 flex items-center gap-1.5 shadow-2xs"
+                  >
+                    <span className="w-2 h-2 rounded-full bg-[#ff0090]"></span>
+                    {ext.quantitat}x {ext.nom} <span className="font-mono text-[10px] text-fuchsia-600 font-normal">({ext.quantitat * ext.preuUnitari}€)</span>
+                  </span>
+                ))}
               </div>
             </div>
 

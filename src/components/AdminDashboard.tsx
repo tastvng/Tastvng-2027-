@@ -275,9 +275,15 @@ export default function AdminDashboard({
           </div>`;
       }
 
+      const genericExtrasHtml = (item.extresSeleccionats || [])
+        .filter(ext => ext.quantitat > 0)
+        .map(ext => `<li>• ${ext.quantitat}x ${ext.nom} (${ext.quantitat * ext.preuUnitari}€)</li>`)
+        .join('');
+
       const extrasHtml = `
-        ${item.teDomasBalco ? `<li>• 1x ${language === 'ca' ? 'Domàs de Balcó (Domás de Balcón)' : 'Colgadura de Balcón'}</li>` : ''}
-        ${item.teMocadorsExtra > 0 ? `<li>• ${item.teMocadorsExtra}x ${language === 'ca' ? 'Mocador oficial extra (Pañuelo extra)' : 'Pañuelo oficial extra'}</li>` : ''}
+        ${item.teDomasBalco ? `<li>• 1x ${language === 'ca' ? 'Domàs de Balcó' : 'Colgadura de Balcón'}</li>` : ''}
+        ${item.teMocadorsExtra > 0 ? `<li>• ${item.teMocadorsExtra}x ${language === 'ca' ? 'Mocador oficial extra' : 'Pañuelo oficial extra'}</li>` : ''}
+        ${genericExtrasHtml}
       `;
 
       const emailHtml = `

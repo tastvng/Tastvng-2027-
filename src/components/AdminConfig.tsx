@@ -106,14 +106,25 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
 
   // States for dynamic customizable tariffs/payment lines
   const [titolSeccioTarifes, setTitolSeccioTarifes] = useState(config.titolSeccioTarifes || `Tarifes i Cànons ${activeYear}`);
-  const [tarifesDinamiques, setTarifesDinamiques] = useState<TarifaConcept[]>(
-    config.tarifesDinamiques || [
-      { id: 'adults', nom: 'Preu Parella Adulta (€)', valor: config.preuAdult, actiu: true, tipus: 'categoria_adult' },
-      { id: 'juvenils', nom: 'Preu Parella Juvenil (€)', valor: config.preuJuvenil, actiu: true, tipus: 'categoria_juvenil' },
-      { id: 'domas', nom: 'Cànon Domàs de Balcó (€)', valor: config.preuDomasBalco, actiu: true, tipus: 'extra_domas' },
-      { id: 'mocador', nom: 'Cànon Mocador Extra (€)', valor: config.preuMocadorExtra, actiu: true, tipus: 'extra_mocador' }
-    ]
-  );
+  const [tarifesDinamiques, setTarifesDinamiques] = useState<TarifaConcept[]>(() => {
+    if (config.tarifesDinamiques && config.tarifesDinamiques.length > 0) {
+      return config.tarifesDinamiques;
+    }
+    return [
+      { id: 'adults', nom: 'Preu Parella Adulta (€)', nomES: 'Precio Pareja Adulta (€)', valor: config.preuAdult, actiu: true, tipus: 'categoria_adult' },
+      { id: 'juvenils', nom: 'Preu Parella Juvenil (€)', nomES: 'Precio Pareja Juvenil (€)', valor: config.preuJuvenil, actiu: true, tipus: 'categoria_juvenil' },
+      { id: 'domas', nom: 'Cànon Domàs de Balcó (€)', nomES: 'Canon Domás de Balcón (€)', valor: config.preuDomasBalco, actiu: true, tipus: 'extra_domas' },
+      { id: 'mocador', nom: 'Cànon Mocador Extra (€)', nomES: 'Canon Pañuelo Extra (€)', valor: config.preuMocadorExtra, actiu: true, tipus: 'extra_mocador' },
+      { id: 'clavells', nom: 'Clavells', nomES: 'Claveles', valor: 8.00, actiu: true, tipus: 'extra_generic' },
+      { id: 'corbati', nom: 'Corbatí', nomES: 'Corbatín', valor: 10.00, actiu: true, tipus: 'extra_generic' }
+    ];
+  });
+
+  useEffect(() => {
+    if (config.tarifesDinamiques && config.tarifesDinamiques.length > 0) {
+      setTarifesDinamiques(config.tarifesDinamiques);
+    }
+  }, [config.tarifesDinamiques]);
 
   // Generate Apps Script dynamically based on the active state of the dynamic rates
   const domasTarifaFromList = tarifesDinamiques.find(t => t.id === 'domas' || t.tipus === 'extra_domas');
@@ -234,6 +245,16 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
 
   const handleRemoveTarifa = (id: string) => {
     setTarifesDinamiques(tarifesDinamiques.filter(t => t.id !== id));
+  };
+
+  const moveTarifa = (index: number, direction: 'up' | 'down') => {
+    const newIndex = direction === 'up' ? index - 1 : index + 1;
+    if (newIndex < 0 || newIndex >= tarifesDinamiques.length) return;
+    const copy = [...tarifesDinamiques];
+    const temp = copy[index];
+    copy[index] = copy[newIndex];
+    copy[newIndex] = temp;
+    setTarifesDinamiques(copy);
   };
 
   const updateTarifaConcept = (id: string, updates: Partial<TarifaConcept>) => {
@@ -812,7 +833,8 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
 
     // Dispatch events to update global state and PublicForm immediately
     window.dispatchEvent(new CustomEvent('preguntesConfigChanged', { detail: preguntes }));
-    window.dispatchEvent(new Event('sistemaConfigChanged'));
+    window.dispatchEvent(new CustomEvent('configUpdated', { detail: updated }));
+    window.dispatchEvent(new CustomEvent('sistemaConfigChanged', { detail: updated }));
 
     onSave(updated);
     if (onSaveNoticies) {
@@ -1228,7 +1250,7 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
               <span className="block text-[10px] text-zinc-400 uppercase font-mono tracking-wider font-bold">
                 {language === 'ca' ? "Línies de Tarifes i Preus" : "Líneas de Tarifas y Precios"}
               </span>
-              {tarifesDinamiques.map((tf) => (
+              {tarifesDinamiques.map((tf, idx) => (
                 <div key={tf.id} className="p-3 bg-zinc-50 border border-zinc-200 rounded-2xl space-y-2">
                   <div className="flex justify-between items-center gap-2">
                     {/* Rename name of the line */}
@@ -1241,14 +1263,34 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                       title={language === 'ca' ? "Fes clic per canviar el nom de la línia" : "Haz clic para cambiar el nombre de la línea"}
                     />
 
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveTarifa(tf.id)}
-                      className="p-1 text-zinc-400 hover:text-red-500 rounded transition shrink-0"
-                      title={language === 'ca' ? "Eliminar línia" : "Eliminar línea"}
-                    >
-                      <Trash2 size={12} />
-                    </button>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => moveTarifa(idx, 'up')}
+                        disabled={idx === 0}
+                        className="p-1 text-zinc-400 hover:text-zinc-700 disabled:opacity-20 transition cursor-pointer"
+                        title={language === 'ca' ? "Pujar ordre" : "Subir orden"}
+                      >
+                        <ArrowUp size={12} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => moveTarifa(idx, 'down')}
+                        disabled={idx === tarifesDinamiques.length - 1}
+                        className="p-1 text-zinc-400 hover:text-zinc-700 disabled:opacity-20 transition cursor-pointer"
+                        title={language === 'ca' ? "Baixar ordre" : "Bajar orden"}
+                      >
+                        <ArrowDown size={12} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveTarifa(tf.id)}
+                        className="p-1 text-zinc-400 hover:text-red-500 rounded transition shrink-0 ml-1 cursor-pointer"
+                        title={language === 'ca' ? "Eliminar línia" : "Eliminar línea"}
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
                   </div>
 
                   <div className="flex items-center gap-2">

@@ -449,43 +449,6 @@ export const ComparserCard: React.FC<ComparserCardProps> = ({
           );
         })}
 
-        {/* Extras per Comparser */}
-        {(() => {
-          const extrasForThisComparser = (config.tarifesDinamiques || []).filter(t => t.actiu && t.tipus === 'extra_generic');
-
-          if (extrasForThisComparser.length === 0) return null;
-          return (
-            <div className="pt-4 border-t border-zinc-200/60 pb-2">
-              <label className="block text-xs font-bold text-zinc-700 tracking-tight mb-3">
-                {language === 'ca' ? 'Extras / Complements' : 'Extras / Complementos'}
-              </label>
-              <div className="space-y-3">
-                {extrasForThisComparser.map(extr => {
-                  const isChecked = (extrasSeleccionats[extr.id] || 0) > 0;
-                  const finalPrice = extr.valor;
-                  const displayName = language === 'es' && extr.nomES ? extr.nomES : extr.nom;
-
-                  return (
-                    <div key={extr.id} 
-                         onClick={() => setExtrasSeleccionats(prev => ({ ...prev, [extr.id]: isChecked ? 0 : 1 }))}
-                         className={`flex justify-between items-center bg-zinc-50 border rounded-xl p-3 cursor-pointer transition-colors ${isChecked ? 'border-[#ff0090] bg-fuchsia-50/50' : 'border-zinc-200 hover:border-zinc-300'}`}>
-                      <div>
-                        <span className="block text-xs font-bold text-zinc-800">{displayName}</span>
-                        <span className="block text-[10px] text-fuchsia-600 font-mono font-bold uppercase">PREU (COMPRA): {finalPrice}€</span>
-                      </div>
-                      <div className="flex items-center">
-                        <div className={`w-6 h-6 rounded border flex items-center justify-center transition-colors ${isChecked ? 'bg-[#ff0090] border-[#ff0090]' : 'bg-white border-zinc-300'}`}>
-                          {isChecked && <Check className="w-4 h-4 text-white" />}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          );
-        })()}
-
         {/* DNI upload zona */}
         <div className="pt-2">
           <label className="block text-xs font-bold text-zinc-700 tracking-tight mb-1.5">

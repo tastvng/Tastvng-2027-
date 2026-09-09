@@ -195,9 +195,15 @@ export default function Confirmation({ registration, onClear, onUpdate, config }
       const emailSubjectBase = language === 'ca' ? subSubjectCa : subSubjectEs;
       const emailSubject = `${emailSubjectBase} ${registration.codiSeguiment}`;
 
+      const genericExtrasHtml = (registration.extresSeleccionats || [])
+        .filter(ext => ext.quantitat > 0)
+        .map(ext => `<li>• ${ext.quantitat}x ${ext.nom} (${ext.quantitat * ext.preuUnitari}€)</li>`)
+        .join('');
+
       const extrasHtml = `
-        ${registration.teDomasBalco ? `<li>• 1x ${language === 'ca' ? 'Domàs de Balcó (Domás de Balcón)' : 'Colgadura de Balcón'}</li>` : ''}
-        ${registration.teMocadorsExtra > 0 ? `<li>• ${registration.teMocadorsExtra}x ${language === 'ca' ? 'Mocador oficial extra (Pañuelo extra)' : 'Pañuelo oficial extra'}</li>` : ''}
+        ${registration.teDomasBalco ? `<li>• 1x ${language === 'ca' ? 'Domàs de Balcó' : 'Colgadura de Balcón'}</li>` : ''}
+        ${registration.teMocadorsExtra > 0 ? `<li>• ${registration.teMocadorsExtra}x ${language === 'ca' ? 'Mocador oficial extra' : 'Pañuelo oficial extra'}</li>` : ''}
+        ${genericExtrasHtml}
       `;
 
       const emailBodyText = language === 'ca' ? subBodyCa : subBodyEs;
@@ -604,10 +610,10 @@ export default function Confirmation({ registration, onClear, onUpdate, config }
               </div>
             )}
 
-            {registration.teDomasBalco || registration.teMocadorsExtra > 0 ? (
+            {registration.teDomasBalco || registration.teMocadorsExtra > 0 || (registration.extresSeleccionats && registration.extresSeleccionats.filter(e => e.quantitat > 0).length > 0) ? (
               <div className="flex justify-between items-start text-xs">
                 <span className="text-zinc-500 font-bold uppercase tracking-wide">
-                  {language === 'ca' ? 'Complements:' : 'Complementos:'}
+                  {language === 'ca' ? 'Material i Complements:' : 'Material y Complementos:'}
                 </span>
                 <span className="font-semibold text-zinc-800 text-right space-y-0.5 block">
                   {registration.teDomasBalco && (
@@ -622,6 +628,11 @@ export default function Confirmation({ registration, onClear, onUpdate, config }
                         : `+${registration.teMocadorsExtra} Pañuelo oficial`}
                     </span>
                   )}
+                  {(registration.extresSeleccionats || []).filter(e => e.quantitat > 0).map((ext) => (
+                    <span key={ext.id} className="block text-[#ff0090] font-bold">
+                      +{ext.quantitat} {ext.nom} ({ext.quantitat * ext.preuUnitari}€)
+                    </span>
+                  ))}
                 </span>
               </div>
             ) : null}
@@ -847,6 +858,14 @@ export default function Confirmation({ registration, onClear, onUpdate, config }
                       <span className="text-zinc-500 font-bold">{language === 'ca' ? 'Total preu de parella:' : 'Total precio de pareja:'}</span>
                       <span className="font-mono font-black text-zinc-800">{registration.preuCalculat}€</span>
                     </div>
+                    {(registration.extresSeleccionats || []).filter(e => e.quantitat > 0).length > 0 && (
+                      <div className="pt-1 text-[9px] text-zinc-600 flex justify-between">
+                        <span>{language === 'ca' ? 'Material:' : 'Material:'}</span>
+                        <span className="font-medium text-right">
+                          {registration.extresSeleccionats.filter(e => e.quantitat > 0).map(e => `${e.quantitat}x ${e.nom}`).join(', ')}
+                        </span>
+                      </div>
+                    )}
                   </div>
 
                   {/* Embedded small QR */}
