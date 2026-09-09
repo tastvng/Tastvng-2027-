@@ -252,8 +252,15 @@ export default function App() {
           // 1. Fetch Global Config
           const dbConfig = await getSupabaseSetting<SistemaConfig | null>('tast_config_2026', null);
           if (dbConfig) {
-            setConfig(dbConfig);
-            localStorage.setItem('tast_config_2026', JSON.stringify(dbConfig));
+            const mergedConfig: SistemaConfig = {
+              ...CONFIG_INICIAL,
+              ...dbConfig,
+              tarifesDinamiques: (dbConfig.tarifesDinamiques && dbConfig.tarifesDinamiques.length > 0)
+                ? dbConfig.tarifesDinamiques
+                : CONFIG_INICIAL.tarifesDinamiques
+            };
+            setConfig(mergedConfig);
+            localStorage.setItem('tast_config_2026', JSON.stringify(mergedConfig));
           } else {
             console.log("No config found in Supabase settings table, uploading CONFIG_INICIAL...");
             setConfig(CONFIG_INICIAL);
@@ -337,7 +344,15 @@ export default function App() {
         try {
           const savedConfig = localStorage.getItem('tast_config_2026');
           if (savedConfig) {
-            setConfig(JSON.parse(savedConfig));
+            const parsed = JSON.parse(savedConfig);
+            const mergedConfig: SistemaConfig = {
+              ...CONFIG_INICIAL,
+              ...parsed,
+              tarifesDinamiques: (parsed.tarifesDinamiques && parsed.tarifesDinamiques.length > 0)
+                ? parsed.tarifesDinamiques
+                : CONFIG_INICIAL.tarifesDinamiques
+            };
+            setConfig(mergedConfig);
           } else {
             setConfig(CONFIG_INICIAL);
           }
