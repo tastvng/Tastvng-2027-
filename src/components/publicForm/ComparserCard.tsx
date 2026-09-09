@@ -10,10 +10,6 @@ interface ComparserCardProps {
   setNom: (val: string) => void;
   cognoms: string;
   setCognoms: (val: string) => void;
-  telefon?: string;
-  setTelefon?: (val: string) => void;
-  email?: string;
-  setEmail?: (val: string) => void;
   dniUrl: string | null;
   setDniUrl: (val: string | null) => void;
   esMenor: boolean;
@@ -39,8 +35,6 @@ interface ComparserCardProps {
 
   // Duplicate checks
   isNameDuplicate: boolean;
-  isEmailDuplicate?: boolean;
-  isPhoneDuplicate?: boolean;
 
   // Errors and Config
   errors: Record<string, string>;
@@ -57,10 +51,6 @@ export const ComparserCard: React.FC<ComparserCardProps> = ({
   setNom,
   cognoms,
   setCognoms,
-  telefon,
-  setTelefon,
-  email,
-  setEmail,
   dniUrl,
   setDniUrl,
   esMenor,

@@ -13,7 +13,9 @@ import {
   AlertTriangle,
   ChevronRight,
   Sparkle,
-  Database
+  Database,
+  Phone,
+  Mail
 } from 'lucide-react';
 import { CategoriaParella, SistemaConfig, Inscripcio, EstatPagament, EstatVerificacio, EstatInscripcio, SistemaConfigItem, PreguntaDinamica } from '../types';
 import { cargarPreguntes, cargarPreguntesDetallat } from '../api/questionnaireApi';
@@ -58,11 +60,13 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
   // Form fields state
   const [categoria, setCategoria] = useState<CategoriaParella>(CategoriaParella.ADULT);
   
+  // Dades de Contacte de la Parella (Únic per a la parella)
+  const [emailContactoPareja, setEmailContactoPareja] = useState('');
+  const [telefonContactoPareja, setTelefonContactoPareja] = useState('');
+
   // Comparser 1 state
   const [c1Nom, setC1Nom] = useState('');
   const [c1Cognoms, setC1Cognoms] = useState('');
-  const [c1Email, setC1Email] = useState('');
-  const [c1Telefon, setC1Telefon] = useState('');
   const [c1Talla, setC1Talla] = useState('M');
   const [c1DniUrl, setC1DniUrl] = useState<string | null>(null);
   const [c1EsMenor, setC1EsMenor] = useState(false);
@@ -76,8 +80,6 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
   // Comparser 2 state
   const [c2Nom, setC2Nom] = useState('');
   const [c2Cognoms, setC2Cognoms] = useState('');
-  const [c2Email, setC2Email] = useState('');
-  const [c2Telefon, setC2Telefon] = useState('');
   const [c2Talla, setC2Talla] = useState('M');
   const [c2DniUrl, setC2DniUrl] = useState<string | null>(null);
   const [c2EsMenor, setC2EsMenor] = useState(false);
@@ -270,23 +272,23 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
     });
   }, [c1Nom, c1Cognoms, existingInscripcions]);
 
-  const isC1EmailDuplicate = useMemo(() => {
-    if (!c1Email.trim()) return false;
-    const emailNorm = c1Email.trim().toLowerCase();
+  const isCoupleEmailDuplicate = useMemo(() => {
+    if (!emailContactoPareja.trim()) return false;
+    const emailNorm = emailContactoPareja.trim().toLowerCase();
     return existingInscripcions.some(ins => 
-      (ins.c1Email || '').trim().toLowerCase() === emailNorm || 
+      (ins.emailContactoPareja || ins.c1Email || '').trim().toLowerCase() === emailNorm || 
       (ins.c2Email || '').trim().toLowerCase() === emailNorm
     );
-  }, [c1Email, existingInscripcions]);
+  }, [emailContactoPareja, existingInscripcions]);
 
-  const isC1PhoneDuplicate = useMemo(() => {
-    if (!c1Telefon.trim()) return false;
-    const phoneNorm = c1Telefon.trim().replace(/\s+/g, '');
+  const isCouplePhoneDuplicate = useMemo(() => {
+    if (!telefonContactoPareja.trim()) return false;
+    const phoneNorm = telefonContactoPareja.trim().replace(/\s+/g, '');
     return existingInscripcions.some(ins => 
-      (ins.c1Telefon || '').trim().replace(/\s+/g, '') === phoneNorm || 
+      (ins.telefonContactoPareja || ins.c1Telefon || '').trim().replace(/\s+/g, '') === phoneNorm || 
       (ins.c2Telefon || '').trim().replace(/\s+/g, '') === phoneNorm
     );
-  }, [c1Telefon, existingInscripcions]);
+  }, [telefonContactoPareja, existingInscripcions]);
 
   const isC2NameDuplicate = useMemo(() => {
     if (!c2Nom.trim() || !c2Cognoms.trim()) return false;
@@ -301,24 +303,6 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
              (nomNorm === insC2Nom && cognomsNorm === insC2Cognoms);
     });
   }, [c2Nom, c2Cognoms, existingInscripcions]);
-
-  const isC2EmailDuplicate = useMemo(() => {
-    if (!c2Email.trim()) return false;
-    const emailNorm = c2Email.trim().toLowerCase();
-    return existingInscripcions.some(ins => 
-      (ins.c1Email || '').trim().toLowerCase() === emailNorm || 
-      (ins.c2Email || '').trim().toLowerCase() === emailNorm
-    );
-  }, [c2Email, existingInscripcions]);
-
-  const isC2PhoneDuplicate = useMemo(() => {
-    if (!c2Telefon.trim()) return false;
-    const phoneNorm = c2Telefon.trim().replace(/\s+/g, '');
-    return existingInscripcions.some(ins => 
-      (ins.c1Telefon || '').trim().replace(/\s+/g, '') === phoneNorm || 
-      (ins.c2Telefon || '').trim().replace(/\s+/g, '') === phoneNorm
-    );
-  }, [c2Telefon, existingInscripcions]);
   
   // Camera Modal state
   const [cameraOwner, setCameraOwner] = useState<'c1' | 'c2' | null>(null);
@@ -602,10 +586,18 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
   const validateForm = () => {
     const tempErrors: Record<string, string> = {};
 
+    // Dades de Contacte de la Parella
+    if (!telefonContactoPareja.trim()) {
+      tempErrors.telefonContactoPareja = language === 'ca' ? "El telèfon de contacte de la parella és obligatori" : "El teléfono de contacto de la pareja es obligatorio";
+    }
+    if (!emailContactoPareja.trim()) {
+      tempErrors.emailContactoPareja = language === 'ca' ? "El correu electrònic de contacte de la parella és obligatori" : "El correo electrónico de contacto de la pareja es obligatorio";
+    } else if (!emailContactoPareja.includes('@') || !emailContactoPareja.includes('.')) {
+      tempErrors.emailContactoPareja = language === 'ca' ? "El format del correu electrònic no és vàlid" : "El formato del correo electrónico no es válido";
+    }
+
     if (!c1Nom.trim()) tempErrors.c1Nom = language === 'ca' ? "El nom del primer participant és obligatori" : "El nombre del primer participante es obligatorio";
     if (!c1Cognoms.trim()) tempErrors.c1Cognoms = language === 'ca' ? "Els cognoms del primer participant són obligatoris" : "Los apellidos del primer participante son obligatorios";
-    if (!c1Telefon.trim()) tempErrors.c1Telefon = language === 'ca' ? "El telèfon del primer participant és obligatori" : "El teléfono del primer participante es obligatorio";
-    if (!c1Email.trim()) tempErrors.c1Email = language === 'ca' ? "El correu del primer participant és obligatori" : "El correo del primer participante es obligatorio";
     if (config.requerirDni !== false && !c1DniUrl) {
       tempErrors.c1Dni = language === 'ca' ? "Heu de pujar una imatge del DNI frontal" : "Debe subir una imagen del DNI frontal";
     }
@@ -620,8 +612,6 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
 
     if (!c2Nom.trim()) tempErrors.c2Nom = language === 'ca' ? "El nom del segon participant és obligatori" : "El nombre del segundo participante es obligatorio";
     if (!c2Cognoms.trim()) tempErrors.c2Cognoms = language === 'ca' ? "Els cognoms del segon participant són obligatoris" : "Los apellidos del segundo participante son obligatorios";
-    if (!c2Telefon.trim()) tempErrors.c2Telefon = language === 'ca' ? "El telèfon del segon participant és obligatori" : "El teléfono del segundo participante es obligatorio";
-    if (!c2Email.trim()) tempErrors.c2Email = language === 'ca' ? "El correu del segon participant és obligatori" : "El correo del segundo participante es obligatorio";
     if (config.requerirDni !== false && !c2DniUrl) {
       tempErrors.c2Dni = language === 'ca' ? "Heu de pujar una imatge del DNI frontal del segon participant" : "Debe subir una imagen del DNI frontal del segundo participante";
     }
@@ -647,10 +637,6 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
       });
     }
 
-    if (c1Email.trim().toLowerCase() === c2Email.trim().toLowerCase() && c1Email.trim() !== '') {
-      tempErrors.c2Email = language === 'ca' ? "Els correus electrònics no poden ser idèntics" : "Los correos electrónicos no pueden ser idénticos";
-    }
-
     if (!acceptaRGPD) tempErrors.rgpd = language === 'ca' ? "Heu d'acceptar els termes de privadesa" : "Debe aceptar los términos de privacidad";
     if (!acceptaPresencial) tempErrors.presencial = language === 'ca' ? "Heu d'acceptar pagar i recollir de manera presencial" : "Debe aceptar pagar y recoger de forma presencial";
 
@@ -662,11 +648,9 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
         
         const c1NomNormalized = c1Nom.trim().toLowerCase().replace(/\s+/g, ' ');
         const c1CognomsNormalized = c1Cognoms.trim().toLowerCase().replace(/\s+/g, ' ');
-        const c1EmailNormalized = c1Email.trim().toLowerCase();
         
         const c2NomNormalized = c2Nom.trim().toLowerCase().replace(/\s+/g, ' ');
         const c2CognomsNormalized = c2Cognoms.trim().toLowerCase().replace(/\s+/g, ' ');
-        const c2EmailNormalized = c2Email.trim().toLowerCase();
 
         let c1AlreadyRegistered = false;
         let c2AlreadyRegistered = false;
@@ -674,30 +658,26 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
         for (const ins of existingInscripcions) {
           const insC1Nom = (ins.c1Nom || '').trim().toLowerCase().replace(/\s+/g, ' ');
           const insC1Cognoms = (ins.c1Cognoms || '').trim().toLowerCase().replace(/\s+/g, ' ');
-          const insC1Email = (ins.c1Email || '').trim().toLowerCase();
           
           const insC2Nom = (ins.c2Nom || '').trim().toLowerCase().replace(/\s+/g, ' ');
           const insC2Cognoms = (ins.c2Cognoms || '').trim().toLowerCase().replace(/\s+/g, ' ');
-          const insC2Email = (ins.c2Email || '').trim().toLowerCase();
 
           // Check Comparser 1 matching ANY of the registrants (either as c1 or c2)
           if (
-            (c1NomNormalized && c1CognomsNormalized && (
+            c1NomNormalized && c1CognomsNormalized && (
               (c1NomNormalized === insC1Nom && c1CognomsNormalized === insC1Cognoms) ||
               (c1NomNormalized === insC2Nom && c1CognomsNormalized === insC2Cognoms)
-            )) ||
-            (c1EmailNormalized && (c1EmailNormalized === insC1Email || c1EmailNormalized === insC2Email))
+            )
           ) {
             c1AlreadyRegistered = true;
           }
 
           // Check Comparser 2 matching ANY of the registrants (either as c1 or c2)
           if (
-            (c2NomNormalized && c2CognomsNormalized && (
+            c2NomNormalized && c2CognomsNormalized && (
               (c2NomNormalized === insC1Nom && c2CognomsNormalized === insC1Cognoms) ||
               (c2NomNormalized === insC2Nom && c2CognomsNormalized === insC2Cognoms)
-            )) ||
-            (c2EmailNormalized && (c2EmailNormalized === insC1Email || c2EmailNormalized === insC2Email))
+            )
           ) {
             c2AlreadyRegistered = true;
           }
@@ -868,10 +848,12 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
         id: randomId,
         codiSeguiment,
         categoria,
+        emailContactoPareja: emailContactoPareja.trim(),
+        telefonContactoPareja: telefonContactoPareja.trim(),
         c1Nom,
         c1Cognoms,
-        c1Email,
-        c1Telefon,
+        c1Email: emailContactoPareja.trim(),
+        c1Telefon: telefonContactoPareja.trim(),
         c1Talla,
         c1DniUrl: finalC1DniUrl,
         c1EsMenor,
@@ -882,8 +864,8 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
         c1UniformeTipus,
         c2Nom,
         c2Cognoms,
-        c2Email,
-        c2Telefon,
+        c2Email: emailContactoPareja.trim(),
+        c2Telefon: telefonContactoPareja.trim(),
         c2Talla,
         c2DniUrl: finalC2DniUrl,
         c2EsMenor,
@@ -913,14 +895,16 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            emailContactoPareja: emailContactoPareja.trim(),
+            telefonContactoPareja: telefonContactoPareja.trim(),
             c1Nom,
             c1Cognoms,
-            c1Email,
-            c1Telefon,
+            c1Email: emailContactoPareja.trim(),
+            c1Telefon: telefonContactoPareja.trim(),
             c2Nom,
             c2Cognoms,
-            c2Email,
-            c2Telefon,
+            c2Email: emailContactoPareja.trim(),
+            c2Telefon: telefonContactoPareja.trim(),
             categoria,
             preuTotal: totalCalculat
           })
@@ -1187,6 +1171,98 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
           </div>
         )}
 
+        {/* DADES DE LA PARELLA (Contacte Únic per a la parella) */}
+        <div className="bg-white rounded-3xl p-6 sm:p-8 border border-zinc-200 shadow-sm space-y-6" id="card-couple-contact">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-100 pb-5">
+            <div>
+              <span className="text-xs font-mono uppercase tracking-wider text-fuchsia-600 font-bold block mb-1">
+                {language === 'ca' ? 'PAS 2 • DADES GENERALS' : 'PASO 2 • DATOS GENERALES'}
+              </span>
+              <h3 className="font-sans font-black text-xl text-zinc-900 tracking-tight flex items-center gap-2">
+                <Phone size={20} className="text-[#ff0090]" />
+                {language === 'ca' ? 'Dades de la Parella' : 'Datos de la Pareja'}
+              </h3>
+              <p className="text-zinc-500 text-xs mt-1">
+                {language === 'ca' 
+                  ? 'Un únic telèfon i correu electrònic oficial per a les comunicacions de la parella.' 
+                  : 'Un único teléfono y correo electrónico oficial para las comunicaciones de la pareja.'}
+              </p>
+            </div>
+            <div className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-fuchsia-50 text-fuchsia-700 rounded-full text-xs font-bold border border-fuchsia-200/70 self-start sm:self-auto">
+              <Mail size={13} />
+              {language === 'ca' ? 'Contacte oficial comú' : 'Contacto oficial común'}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Telèfon de contacte */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-bold text-zinc-700 tracking-tight">
+                  {language === 'ca' ? 'Telèfon de contacte *' : 'Teléfono de contacto *'}
+                </label>
+                <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded font-mono uppercase tracking-tight flex items-center gap-1" title={language === 'ca' ? "Es desa a la base de dades" : "Se guarda en la base de datos"}>
+                  <Database size={9} /> BBDD
+                </span>
+              </div>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-zinc-400">
+                  <Phone size={16} />
+                </div>
+                <input 
+                  type="tel" 
+                  value={telefonContactoPareja} 
+                  onChange={(e) => setTelefonContactoPareja(e.target.value)}
+                  className={`w-full pl-10 pr-4 py-3 bg-zinc-50 border ${errors.telefonContactoPareja || isCouplePhoneDuplicate ? 'border-amber-400 focus:border-amber-500 bg-amber-50/5' : 'border-zinc-200 focus:border-fuchsia-500'} focus:bg-white rounded-2xl text-sm focus:outline-none transition-all font-mono`}
+                  placeholder={language === 'ca' ? "Ex. 600123456" : "Ej. 600123456"}
+                  id="input-couple-phone"
+                />
+              </div>
+              {errors.telefonContactoPareja && (
+                <p className="text-xs text-red-500 font-medium mt-1">{errors.telefonContactoPareja}</p>
+              )}
+              {isCouplePhoneDuplicate && (
+                <p className="text-[10px] text-amber-600 font-bold mt-1 flex items-center gap-1">
+                  <AlertTriangle size={11} /> {language === 'ca' ? "Aquest telèfon ja consta a la BBDD" : "Este teléfono ya consta en la BBDD"}
+                </p>
+              )}
+            </div>
+
+            {/* Correu electrònic */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-bold text-zinc-700 tracking-tight">
+                  {language === 'ca' ? 'Correu electrònic *' : 'Correo electrónico *'}
+                </label>
+                <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded font-mono uppercase tracking-tight flex items-center gap-1" title={language === 'ca' ? "Es desa a la base de dades" : "Se guarda en la base de datos"}>
+                  <Database size={9} /> BBDD
+                </span>
+              </div>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-zinc-400">
+                  <Mail size={16} />
+                </div>
+                <input 
+                  type="email" 
+                  value={emailContactoPareja} 
+                  onChange={(e) => setEmailContactoPareja(e.target.value)}
+                  className={`w-full pl-10 pr-4 py-3 bg-zinc-50 border ${errors.emailContactoPareja || isCoupleEmailDuplicate ? 'border-amber-400 focus:border-amber-500 bg-amber-50/5' : 'border-zinc-200 focus:border-fuchsia-500'} focus:bg-white rounded-2xl text-sm focus:outline-none transition-all`}
+                  placeholder={language === 'ca' ? "Ex. parella@gmail.com" : "Ej. pareja@gmail.com"}
+                  id="input-couple-email"
+                />
+              </div>
+              {errors.emailContactoPareja && (
+                <p className="text-xs text-red-500 font-medium mt-1">{errors.emailContactoPareja}</p>
+              )}
+              {isCoupleEmailDuplicate && (
+                <p className="text-[10px] text-amber-600 font-bold mt-1 flex items-center gap-1">
+                  <AlertTriangle size={11} /> {language === 'ca' ? "Aquest correu ja consta a la BBDD" : "Este correo ya consta en la BBDD"}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+
         {/* Two-Column Comparser Info Sheets */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           <ComparserCard
@@ -1195,10 +1271,6 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
             setNom={setC1Nom}
             cognoms={c1Cognoms}
             setCognoms={setC1Cognoms}
-            telefon={c1Telefon}
-            setTelefon={setC1Telefon}
-            email={c1Email}
-            setEmail={setC1Email}
             dniUrl={c1DniUrl}
             setDniUrl={setC1DniUrl}
             esMenor={c1EsMenor}
@@ -1220,8 +1292,6 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
             extrasSeleccionats={c1ExtrasSeleccionats}
             setExtrasSeleccionats={setC1ExtrasSeleccionats}
             isNameDuplicate={isC1NameDuplicate}
-            isEmailDuplicate={isC1EmailDuplicate}
-            isPhoneDuplicate={isC1PhoneDuplicate}
             errors={errors}
             config={config}
             handleFileUpload={handleFileUpload}
@@ -1234,10 +1304,6 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
             setNom={setC2Nom}
             cognoms={c2Cognoms}
             setCognoms={setC2Cognoms}
-            telefon={c2Telefon}
-            setTelefon={setC2Telefon}
-            email={c2Email}
-            setEmail={setC2Email}
             dniUrl={c2DniUrl}
             setDniUrl={setC2DniUrl}
             esMenor={c2EsMenor}
@@ -1259,8 +1325,6 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
             extrasSeleccionats={c2ExtrasSeleccionats}
             setExtrasSeleccionats={setC2ExtrasSeleccionats}
             isNameDuplicate={isC2NameDuplicate}
-            isEmailDuplicate={isC2EmailDuplicate}
-            isPhoneDuplicate={isC2PhoneDuplicate}
             errors={errors}
             config={config}
             handleFileUpload={handleFileUpload}

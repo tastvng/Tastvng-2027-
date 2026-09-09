@@ -34,6 +34,7 @@ import {
   Key,
   Lock,
   Mail,
+  Phone,
   Send,
   Sparkles,
   Share2,
