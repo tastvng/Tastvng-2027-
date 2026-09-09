@@ -1352,17 +1352,17 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
           if (activeMaterialLines.length === 0) return null;
 
           return (
-            <div className="bg-white rounded-3xl p-6 sm:p-8 border border-zinc-200 shadow-md space-y-6" id="seccio-material-parella">
-              <div className="border-b border-zinc-100 pb-4">
+            <div className="bg-[#0a0a0a] rounded-3xl p-6 sm:p-8 border border-zinc-800 shadow-xl space-y-6" id="seccio-material-parella">
+              <div className="border-b border-zinc-800/80 pb-4">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-xl bg-fuchsia-50 border border-fuchsia-100 flex items-center justify-center text-[#ff0090]">
+                  <div className="w-8 h-8 rounded-xl bg-fuchsia-950/40 border border-fuchsia-800/40 flex items-center justify-center text-[#ff0090]">
                     <Package size={18} />
                   </div>
                   <div>
-                    <h3 className="font-sans font-black text-zinc-900 text-lg tracking-tight uppercase">
+                    <h3 className="font-sans font-black text-white text-lg tracking-tight uppercase">
                       {language === 'ca' ? 'Material i Complements de la Parella' : 'Material y Complementos de la Pareja'}
                     </h3>
-                    <p className="text-xs text-zinc-500 mt-0.5 leading-relaxed">
+                    <p className="text-xs text-zinc-400 mt-0.5 leading-relaxed">
                       {language === 'ca'
                         ? 'Opcions de material addicionals per a la parella (actualitzades automàticament des de Secretaria).'
                         : 'Opciones de material adicionales para la pareja (actualizadas automáticamente desde Secretaría).'}
@@ -1397,22 +1397,22 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
                   return (
                     <div 
                       key={line.id}
-                      className={`relative rounded-2xl p-4 border transition-all duration-200 flex flex-col justify-between gap-3 ${
+                      className={`material-card relative rounded-2xl p-4 border transition-all duration-200 flex flex-col justify-between gap-3 cursor-pointer ${
                         isSelected 
-                          ? 'border-[#ff0090] bg-fuchsia-50/50 shadow-sm ring-1 ring-[#ff0090]/20' 
-                          : 'border-zinc-200 bg-zinc-50/60 hover:border-zinc-300 hover:bg-zinc-50'
+                          ? 'border-[#ff0090] bg-[#ff0090]/15 shadow-sm ring-1 ring-[#ff0090]/30' 
+                          : 'border-zinc-800 bg-[#121212]'
                       }`}
                       id={`material-card-${line.id}`}
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div 
-                          className="flex-1 cursor-pointer select-none"
+                          className="flex-1 select-none"
                           onClick={() => {
                             if (qty === 0) onQtyChange(1);
                           }}
                         >
                           <div className="flex items-center gap-2">
-                            <span className="text-sm font-extrabold text-zinc-900 tracking-tight block">
+                            <span className="text-sm font-extrabold text-white tracking-tight block">
                               {displayName}
                             </span>
                             {isSelected && (
@@ -1422,11 +1422,11 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
                             )}
                           </div>
                           <div className="flex items-center gap-2 mt-1">
-                            <span className="text-xs font-mono font-bold text-fuchsia-700">
+                            <span className="material-price text-xs font-mono font-bold text-[#ff0090]">
                               {line.valor.toFixed(2)}€ <span className="text-[10px] text-zinc-400 font-normal">/ unitat</span>
                             </span>
                             {isSelected && (
-                              <span className="text-xs font-mono font-black text-zinc-900 bg-white px-2 py-0.5 rounded-md border border-fuchsia-200">
+                              <span className="text-xs font-mono font-black text-white bg-zinc-900 px-2 py-0.5 rounded-md border border-[#ff0090]/30">
                                 Total: {lineTotal.toFixed(2)}€
                               </span>
                             )}
@@ -1436,11 +1436,14 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
                         {/* Quick Checkbox button */}
                         <button
                           type="button"
-                          onClick={() => onQtyChange(isSelected ? 0 : 1)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onQtyChange(isSelected ? 0 : 1);
+                          }}
                           className={`w-7 h-7 rounded-xl border flex items-center justify-center transition-all cursor-pointer shrink-0 ${
                             isSelected 
                               ? 'bg-[#ff0090] border-[#ff0090] text-white shadow-sm' 
-                              : 'bg-white border-zinc-300 text-transparent hover:border-zinc-400'
+                              : 'bg-zinc-900 border-zinc-700 text-transparent hover:border-[#ff0090]'
                           }`}
                           title={isSelected ? (language === 'ca' ? 'Treure selecció' : 'Quitar selección') : (language === 'ca' ? 'Seleccionar 1 unitat' : 'Seleccionar 1 unidad')}
                         >
@@ -1449,27 +1452,30 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
                       </div>
 
                       {/* Quantity selector stepper */}
-                      <div className="flex items-center justify-between pt-2 border-t border-zinc-200/50">
-                        <span className="text-[11px] font-bold text-zinc-500 uppercase tracking-wide">
+                      <div 
+                        className="flex items-center justify-between pt-2 border-t border-zinc-800/80"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wide">
                           {language === 'ca' ? 'Quantitat:' : 'Cantidad:'}
                         </span>
-                        <div className="flex items-center gap-1 bg-white border border-zinc-250 rounded-xl p-0.5 shadow-2xs">
+                        <div className="flex items-center gap-1 bg-zinc-900 border border-zinc-700 rounded-xl p-0.5 shadow-2xs">
                           <button
                             type="button"
                             onClick={() => onQtyChange(Math.max(0, qty - 1))}
                             disabled={qty <= 0}
-                            className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-600 hover:bg-zinc-100 disabled:opacity-30 disabled:hover:bg-transparent transition cursor-pointer"
+                            className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-300 hover:bg-zinc-800 disabled:opacity-30 disabled:hover:bg-transparent transition cursor-pointer"
                             aria-label="Disminuir quantitat"
                           >
                             <Minus size={13} />
                           </button>
-                          <span className="w-8 text-center font-mono font-black text-xs text-zinc-900 select-none">
+                          <span className="w-8 text-center font-mono font-black text-xs text-white select-none">
                             {qty}
                           </span>
                           <button
                             type="button"
                             onClick={() => onQtyChange(qty + 1)}
-                            className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-600 hover:bg-zinc-100 transition cursor-pointer"
+                            className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-300 hover:bg-zinc-800 transition cursor-pointer"
                             aria-label="Augmentar quantitat"
                           >
                             <Plus size={13} />

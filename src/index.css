@@ -226,4 +226,40 @@ body {
   backdrop-filter: blur(8px) !important;
 }
 
+/* Material & Accessories Cards Consistent Styling */
+.material-card {
+  transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease !important;
+}
+
+.material-card:hover,
+#app-root-container .material-card:hover {
+  background: #18181b !important;
+  color: #ffffff !important;
+  border-color: rgba(255, 0, 144, 0.65) !important;
+  box-shadow: 0 0 18px rgba(255, 0, 144, 0.16) !important;
+}
+
+.material-card:hover *,
+.material-card:hover span,
+.material-card:hover label,
+.material-card:hover p,
+#app-root-container .material-card:hover *,
+#app-root-container .material-card:hover span,
+#app-root-container .material-card:hover label,
+#app-root-container .material-card:hover p {
+  color: #ffffff !important;
+}
+
+.material-card:hover .material-price,
+#app-root-container .material-card:hover .material-price {
+  color: #ff0090 !important;
+}
+
+.material-card:hover button,
+#app-root-container .material-card:hover button {
+  color: #ffffff !important;
+  background: #09090b !important;
+}
+
+
 
