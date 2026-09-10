@@ -68,7 +68,7 @@ export default function MobileRemoteScanner({
     async function initSession() {
       try {
         setConnectionStatus('connecting');
-        const res = await fetch('/api/scanner-session', {
+        const res = await fetch('/api/scanner', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -121,11 +121,12 @@ export default function MobileRemoteScanner({
     pingInterval = setInterval(async () => {
       if (!isComponentMounted.current) return;
       try {
-        const res = await fetch('/api/scanner-session', {
+        const res = await fetch('/api/scanner', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            action: 'mobile_ping',
+            action: 'ping',
+            from: 'mobile',
             sessionId,
             syncKey
           })
@@ -298,7 +299,7 @@ export default function MobileRemoteScanner({
       }
 
       // b) Send via Serverless Session API (resilient fallback)
-      const res = await fetch('/api/scanner-session', {
+      const res = await fetch('/api/scanner', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

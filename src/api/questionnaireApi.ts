@@ -63,9 +63,9 @@ export async function cargarPreguntesDetallat(onlyActive: boolean = false): Prom
     }
   }
 
-  // Intent 2: Proxy API del servidor (/api/preguntes) si la consulta directa falla
+  // Intent 2: Proxy API del servidor (/api/config?action=preguntes) si la consulta directa falla
   try {
-    const url = `/api/preguntes?active=${onlyActive ? 'true' : 'false'}`;
+    const url = `/api/config?action=preguntes&active=${onlyActive ? 'true' : 'false'}`;
     const resp = await fetch(url);
     if (resp.ok) {
       const json = await resp.json();
@@ -84,7 +84,7 @@ export async function cargarPreguntesDetallat(onlyActive: boolean = false): Prom
 
         mapped.sort((a, b) => (a.ordre ?? 0) - (b.ordre ?? 0));
 
-        console.log(`[Cüestionari Diagnòstic] Font usada: preguntes (via /api/preguntes). Nombre de preguntes carregades: ${mapped.length} (només actives: ${onlyActive}).`);
+        console.log(`[Cüestionari Diagnòstic] Font usada: preguntes (via /api/config). Nombre de preguntes carregades: ${mapped.length} (només actives: ${onlyActive}).`);
         return {
           data: mapped,
           source: 'preguntes',
@@ -93,7 +93,7 @@ export async function cargarPreguntesDetallat(onlyActive: boolean = false): Prom
       }
     }
   } catch (apiErr) {
-    console.warn('[Cüestionari Diagnòstic] Avís: La consulta a /api/preguntes no ha respost:', apiErr);
+    console.warn('[Cüestionari Diagnòstic] Avís: La consulta a /api/config no ha respost:', apiErr);
   }
 
   // Si ambdues fallen, retornar error amb source fallback
@@ -192,7 +192,7 @@ export async function guardarPreguntes(preguntes: PreguntaDinamica[]): Promise<{
     }
   }
 
-  // 2. Intentar a través del bridge protegit del servidor /api/admin/preguntes amb el token d'administrador
+  // 2. Intentar a través del bridge protegit del servidor /api/config?action=preguntes amb el token d'administrador
   try {
     let token = '';
     if (supabase) {
@@ -200,7 +200,7 @@ export async function guardarPreguntes(preguntes: PreguntaDinamica[]): Promise<{
       token = session?.access_token || '';
     }
 
-    const resp = await fetch('/api/admin/preguntes', {
+    const resp = await fetch('/api/config?action=preguntes', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -211,7 +211,7 @@ export async function guardarPreguntes(preguntes: PreguntaDinamica[]): Promise<{
 
     const json = await resp.json();
     if (resp.ok && json.success) {
-      console.log(`[guardarPreguntes] Resultat real de guardar a Supabase (via /api/admin/preguntes): Èxit (${preguntes.length} preguntes sincronitzades).`);
+      console.log(`[guardarPreguntes] Resultat real de guardar a Supabase (via /api/config): Èxit (${preguntes.length} preguntes sincronitzades).`);
       return { success: true };
     } else {
       const errorMsg = directError?.message || json.error || `HTTP ${resp.status}: Fallada al servidor`;
@@ -258,7 +258,7 @@ export async function eliminarPregunta(id: string): Promise<{ success: boolean; 
     }
   }
 
-  // 2. Intentar mitjançant bridge del servidor /api/admin/preguntes/:id
+  // 2. Intentar mitjançant bridge del servidor /api/config?action=preguntes&id=:id
   try {
     let token = '';
     if (supabase) {
@@ -266,7 +266,7 @@ export async function eliminarPregunta(id: string): Promise<{ success: boolean; 
       token = session?.access_token || '';
     }
 
-    const resp = await fetch(`/api/admin/preguntes/${encodeURIComponent(id)}`, {
+    const resp = await fetch(`/api/config?action=preguntes&id=${encodeURIComponent(id)}`, {
       method: 'DELETE',
       headers: {
         ...(token ? { 'Authorization': `Bearer ${token}` } : {})
@@ -275,7 +275,7 @@ export async function eliminarPregunta(id: string): Promise<{ success: boolean; 
 
     const json = await resp.json();
     if (resp.ok && json.success) {
-      console.log(`[eliminarPregunta] Resultat real d'eliminar de Supabase (via /api/admin/preguntes): Pregunta "${id}" eliminada amb èxit.`);
+      console.log(`[eliminarPregunta] Resultat real d'eliminar de Supabase (via /api/config): Pregunta "${id}" eliminada amb èxit.`);
       return { success: true };
     } else {
       const errorMsg = json.error || `HTTP ${resp.status}: Error esborrant pregunta`;

@@ -361,7 +361,7 @@ export default function Confirmation({ registration, onClear, onUpdate, config }
 
       // Dispatch to all emails (passing base64 media payload as real MIME CID attachment)
       const sendPromises = emailList.map(emailTo => {
-        return fetch('/api/send-email', {
+        return fetch('/api/email?action=send', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -377,7 +377,7 @@ export default function Confirmation({ registration, onClear, onUpdate, config }
             }
           })
         }).catch(err => {
-          console.error(`Fetch to /api/send-email failed for ${emailTo}:`, err);
+          console.error(`Fetch to /api/email?action=send failed for ${emailTo}:`, err);
           return {
             ok: false,
             status: 500,

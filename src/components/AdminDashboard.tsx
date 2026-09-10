@@ -156,7 +156,7 @@ export default function AdminDashboard({
   // Synchronize administrative configurations with Supabase Settings & Server Status
   useEffect(() => {
     // Check server SMTP configuration status securely
-    fetch('/api/smtp-status')
+    fetch('/api/email?action=status')
       .then(r => (r.ok ? r.json() : { configured: false }))
       .then(d => {
         setSmtpServerConfigured(!!d?.configured);
@@ -373,7 +373,7 @@ export default function AdminDashboard({
       } catch {}
 
       const sendPromises = emailList.map(emailTo => {
-        return fetch('/api/send-email', {
+        return fetch('/api/email?action=send', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -390,7 +390,7 @@ export default function AdminDashboard({
             }
           })
         }).catch(err => {
-          console.error(`Fetch to /api/send-email failed for ${emailTo}:`, err);
+          console.error(`Fetch to /api/email?action=send failed for ${emailTo}:`, err);
           return {
             ok: false,
             status: 500,
@@ -509,7 +509,7 @@ export default function AdminDashboard({
         }
       } catch {}
 
-      const response = await fetch('/api/test-smtp', {
+      const response = await fetch('/api/email?action=test', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

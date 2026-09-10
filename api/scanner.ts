@@ -1,8 +1,3 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
-
 import { applyCorsHeaders } from './_cors';
 
 export interface EphemeralSession {
@@ -30,19 +25,24 @@ setInterval(() => {
   }
 }, 120000);
 
-export default async function handler(req: any, res: any) {
+/**
+ * Consolidated Mobile Scanner Serverless Handler: /api/scanner
+ * Manages synchronous mobile QR pairing & real-time scanner exchange.
+ */
+export default async function scannerHandler(req: any, res: any) {
+  if (res.setHeader) {
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  }
+
   applyCorsHeaders(req, res, 'POST, GET, OPTIONS');
 
   if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method Not Allowed' });
+    return res.status ? res.status(200).end() : res.sendStatus(200);
   }
 
   try {
-    const { action, sessionId, syncKey, code } = req.body || {};
+    const payload = req.method === 'GET' ? req.query : (req.body || {});
+    const { action, sessionId, syncKey, code } = payload;
 
     if (!sessionId || typeof sessionId !== 'string') {
       return res.status(400).json({ error: 'sessionId és obligatori i ha de ser una cadena de text' });
@@ -58,63 +58,65 @@ export default async function handler(req: any, res: any) {
         return res.status(400).json({ error: 'syncKey és obligatòria' });
       }
 
-      const expiresAt = now + 20 * 60 * 1000; // 20 minuts de validesa
       const session: EphemeralSession = {
         sessionId: cleanSessionId,
         syncKey: cleanSyncKey,
         createdAt: now,
-        expiresAt,
+        expiresAt: now + 20 * 60 * 1000, // 20 minutes
         status: 'esperando_conexion',
         lastPingPc: now,
         lastPingMobile: 0,
         lastScannedCode: null,
-        scannedAt: null,
+        scannedAt: null
       };
 
       activeSessions.set(cleanSessionId, session);
+
       return res.status(200).json({
         ok: true,
         session: {
-          sessionId: cleanSessionId,
-          syncKey: cleanSyncKey,
-          status: 'esperando_conexion',
-          expiresAt
+          sessionId: session.sessionId,
+          syncKey: session.syncKey,
+          status: session.status,
+          expiresAt: session.expiresAt
         }
       });
     }
 
-    // Retrieve existing session
+    // Lookup existing session
     const session = activeSessions.get(cleanSessionId);
+
     if (!session) {
       return res.status(404).json({
         ok: false,
-        status: 'sesion_caducada',
-        error: 'Sessió no trobada o caducada. Torneu a enllaçar el dispositiu.'
+        error: 'Sessió no trobada o caducada. Si us plau, genera un nou QR des del PC.',
+        status: 'sesion_caducada'
       });
     }
 
     // Check expiration
     if (now > session.expiresAt) {
       session.status = 'sesion_caducada';
-      return res.status(200).json({
+      return res.status(410).json({
         ok: false,
-        status: 'sesion_caducada',
-        error: 'Aquesta sessió ha caducat.'
+        error: 'La sessió ha caducat.',
+        status: 'sesion_caducada'
       });
     }
 
-    // Validate syncKey match
+    // Verify syncKey if provided
     if (cleanSyncKey && session.syncKey !== cleanSyncKey) {
       return res.status(403).json({
         ok: false,
-        error: 'Clau de sincronització (syncKey) incorrecta.'
+        error: 'Clau de sincronització no vàlida.'
       });
     }
 
-    // 2. Action: mobile_connect (Mobile phone reports successful connection)
+    // 2. Action: mobile_connect (Smartphone joins session)
     if (action === 'mobile_connect') {
-      session.status = 'movil_conectado';
       session.lastPingMobile = now;
+      session.status = 'movil_conectado';
+
       return res.status(200).json({
         ok: true,
         status: 'movil_conectado',
@@ -122,61 +124,25 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    // 3. Action: mobile_ping (Mobile heartbeat)
-    if (action === 'mobile_ping') {
-      session.lastPingMobile = now;
-      if (session.status === 'movil_desconectado') {
-        session.status = 'movil_conectado';
-      }
-      return res.status(200).json({ ok: true, status: session.status });
-    }
-
-    // 4. Action: mobile_scan (Mobile transmits scanned QR code to PC)
-    if (action === 'mobile_scan') {
-      if (!code || typeof code !== 'string') {
-        return res.status(400).json({ error: 'Codi escanejat no vàlid' });
-      }
-
-      const cleanCode = code.trim().slice(0, 256);
-      if (!cleanCode) {
-        return res.status(400).json({ error: 'Codi buit' });
-      }
-
-      session.lastScannedCode = cleanCode;
-      session.scannedAt = now;
-      session.status = 'codigo_recibido';
-      session.lastPingMobile = now;
-
-      return res.status(200).json({
-        ok: true,
-        message: 'Codi enviat correctament a l’ordinador.'
-      });
-    }
-
-    // 5. Action: pc_poll (Desktop PC queries session status and consumes any scanned code)
-    if (action === 'pc_poll') {
+    // 3. Action: pc_poll (Desktop checks session state and receives scans)
+    if (action === 'pc_poll' || (req.method === 'GET' && action === 'poll')) {
       session.lastPingPc = now;
 
-      // Check if mobile has been silent for > 45 seconds while it was connected
-      if (
-        (session.status === 'movil_conectado' || session.status === 'esperando_escaneo') &&
-        session.lastPingMobile > 0 &&
-        now - session.lastPingMobile > 45000
-      ) {
+      // If mobile hasn't pinged in 45s and was connected, mark as disconnected
+      if (session.status !== 'esperando_conexion' && session.lastPingMobile > 0 && now - session.lastPingMobile > 45000) {
         session.status = 'movil_desconectado';
       }
 
-      // If there is an unconsumed scanned code
-      if (session.lastScannedCode) {
-        const deliveredCode = session.lastScannedCode;
-        // WIPE code immediately from server memory so it is NEVER permanently retained!
-        session.lastScannedCode = null;
+      if (session.status === 'codigo_recibido' && session.lastScannedCode) {
+        const receivedCode = session.lastScannedCode;
+        // Reset immediately to waiting for next scan to avoid repeat triggers
         session.status = 'esperando_escaneo';
+        session.lastScannedCode = null;
 
         return res.status(200).json({
           ok: true,
           status: 'codigo_recibido',
-          code: deliveredCode,
+          code: receivedCode,
           expiresAt: session.expiresAt
         });
       }
@@ -188,15 +154,57 @@ export default async function handler(req: any, res: any) {
       });
     }
 
+    // 4. Action: mobile_scan (Smartphone sends scanned QR code)
+    if (action === 'mobile_scan') {
+      if (!code || typeof code !== 'string') {
+        return res.status(400).json({ error: 'Codi escanejat no vàlid' });
+      }
+
+      const cleanCode = code.trim().slice(0, 100);
+
+      session.lastPingMobile = now;
+      session.lastScannedCode = cleanCode;
+      session.scannedAt = now;
+      session.status = 'codigo_recibido';
+
+      return res.status(200).json({
+        ok: true,
+        message: 'Codi enviat correctament a l’ordinador.'
+      });
+    }
+
+    // 5. Action: ping (keepalive from mobile or pc)
+    if (action === 'ping') {
+      const from = payload.from;
+      if (from === 'mobile') {
+        session.lastPingMobile = now;
+      } else {
+        session.lastPingPc = now;
+      }
+      return res.status(200).json({
+        ok: true,
+        status: session.status
+      });
+    }
+
     // 6. Action: disconnect or mobile_disconnect
     if (action === 'disconnect' || action === 'mobile_disconnect') {
       session.status = 'movil_desconectado';
       return res.status(200).json({ ok: true, status: 'movil_desconectado' });
     }
 
-    return res.status(400).json({ error: `Acció desconeguda: ${action}` });
+    // 7. Action: status
+    if (action === 'status') {
+      return res.status(200).json({
+        ok: true,
+        status: session.status,
+        expiresAt: session.expiresAt
+      });
+    }
+
+    return res.status(400).json({ error: `Acció desconeguda a /api/scanner: ${action}` });
   } catch (err: any) {
-    console.error('Error handling scanner session:', err);
-    return res.status(500).json({ error: 'Error intern del servidor al processar la sessió' });
+    console.error('Error in /api/scanner handler:', err);
+    return res.status(500).json({ error: 'Error intern al servei d’escàner' });
   }
 }

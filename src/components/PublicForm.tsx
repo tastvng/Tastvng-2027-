@@ -763,7 +763,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
       // Upload DNI documents securely via server endpoint with magic bytes & rate-limiting
       if (c1DniUrl && c1DniUrl.startsWith('data:')) {
         try {
-          const res = await fetch('/api/upload-dni', {
+          const res = await fetch('/api/inscriptions?action=upload-dni', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -785,7 +785,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
 
       if (c2DniUrl && c2DniUrl.startsWith('data:')) {
         try {
-          const res = await fetch('/api/upload-dni', {
+          const res = await fetch('/api/inscriptions?action=upload-dni', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -902,7 +902,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
 
       // Server-side validation check
       try {
-        const valRes = await fetch('/api/validate-inscription', {
+        const valRes = await fetch('/api/inscriptions?action=validate', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

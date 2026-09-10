@@ -31,6 +31,22 @@
     }
   ],
   "rewrites": [
+    { "source": "/api/admin-health", "destination": "/api/admin?action=health" },
+    { "source": "/api/admin-users-list", "destination": "/api/admin?action=list" },
+    { "source": "/api/admin-user-create", "destination": "/api/admin?action=create" },
+    { "source": "/api/admin-user-update", "destination": "/api/admin?action=update" },
+    { "source": "/api/admin-user-delete", "destination": "/api/admin?action=delete" },
+    { "source": "/api/admin/users/:id", "destination": "/api/admin?action=users&id=:id" },
+    { "source": "/api/admin/users", "destination": "/api/admin?action=users" },
+    { "source": "/api/smtp-status", "destination": "/api/email?action=status" },
+    { "source": "/api/send-email", "destination": "/api/email?action=send" },
+    { "source": "/api/test-smtp", "destination": "/api/email?action=test" },
+    { "source": "/api/upload-dni", "destination": "/api/inscriptions?action=upload-dni" },
+    { "source": "/api/validate-inscription", "destination": "/api/inscriptions?action=validate" },
+    { "source": "/api/scanner-session", "destination": "/api/scanner" },
+    { "source": "/api/preguntes", "destination": "/api/config?action=preguntes" },
+    { "source": "/api/admin/preguntes/:id", "destination": "/api/config?action=preguntes&id=:id" },
+    { "source": "/api/admin/preguntes", "destination": "/api/config?action=preguntes" },
     { "source": "/api/:path*", "destination": "/api/:path*" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]

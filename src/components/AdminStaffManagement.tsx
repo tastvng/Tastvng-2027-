@@ -73,9 +73,9 @@ export const AdminStaffManagement: React.FC<AdminStaffManagementProps> = ({
     try {
       const res = await checkAdminHealth();
       if (res.ok && res.data) {
-        setHealthStatus(`✓ [${res.status}] /api/admin-health: OK (Supabase Configurat: ${res.data.supabaseConfigured ? 'Sí' : 'No'})`);
+        setHealthStatus(`✓ [${res.status}] /api/admin?action=health: OK (Supabase Configurat: ${res.data.supabaseConfigured ? 'Sí' : 'No'})`);
       } else {
-        setHealthStatus(`❌ [${res.status}] ${res.error || 'Error desconegut a /api/admin-health'}`);
+        setHealthStatus(`❌ [${res.status}] ${res.error || 'Error desconegut a /api/admin'}`);
       }
     } catch (e: any) {
       setHealthStatus(`❌ Error de xarxa: ${e?.message || String(e)}`);
@@ -551,7 +551,7 @@ export const AdminStaffManagement: React.FC<AdminStaffManagementProps> = ({
               <div className="py-6 p-4 bg-red-50 border border-red-200 rounded-2xl text-red-900 text-xs text-left space-y-3">
                 <div className="flex items-center gap-2 text-red-700 font-bold">
                   <AlertCircle size={18} className="shrink-0" />
-                  <span>{language === 'ca' ? "Error en consultar el servei de personal (/api/admin-users-list):" : "Error al consultar el servicio de personal (/api/admin-users-list):"}</span>
+                  <span>{language === 'ca' ? "Error en consultar el servei de personal (/api/admin?action=list):" : "Error al consultar el servicio de personal (/api/admin?action=list):"}</span>
                 </div>
                 <div className="p-3 bg-white/80 border border-red-200 rounded-xl font-mono text-[11px] text-red-800 break-words leading-relaxed whitespace-pre-wrap">
                   {fetchError}
@@ -570,7 +570,7 @@ export const AdminStaffManagement: React.FC<AdminStaffManagementProps> = ({
                     disabled={isCheckingHealth}
                     className="text-xs font-bold bg-white text-zinc-800 border border-zinc-300 hover:border-zinc-400 px-3.5 py-1.5 rounded-xl cursor-pointer transition disabled:opacity-50"
                   >
-                    {isCheckingHealth ? 'Comprovant...' : 'Diagnòstic /api/admin-health'}
+                    {isCheckingHealth ? 'Comprovant...' : 'Diagnòstic /api/admin'}
                   </button>
                 </div>
                 {healthStatus && (

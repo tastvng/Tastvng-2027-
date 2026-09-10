@@ -5,14 +5,12 @@ import { createClient } from "@supabase/supabase-js";
 import dotenv from "dotenv";
 import { applyCorsHeaders } from "./api/_cors";
 import { verifySupabaseAdminToken } from "./api/_supabase-auth";
-import uploadDniHandler from "./api/upload-dni";
-import adminUsersHandler from "./api/admin-users";
-import adminHealthHandler from "./api/admin-health";
-import adminUsersListHandler from "./api/admin-users-list";
-import adminUserCreateHandler from "./api/admin-user-create";
-import adminUserUpdateHandler from "./api/admin-user-update";
-import adminUserDeleteHandler from "./api/admin-user-delete";
-import scannerSessionHandler from "./api/scanner-session";
+import adminHandler from "./api/admin";
+import emailHandler from "./api/email";
+import inscriptionsHandler from "./api/inscriptions";
+import scannerHandler from "./api/scanner";
+import configHandler from "./api/config";
+import healthHandler from "./api/health";
 
 dotenv.config();
 
@@ -182,8 +180,9 @@ async function startServer() {
     }
   });
 
-  // Secure DNI upload endpoint (strict binary inspection & rate-limiting)
-  app.post("/api/upload-dni", uploadDniHandler);
+  // Consolidated Inscriptions & DNI upload endpoint
+  app.all("/api/inscriptions", inscriptionsHandler);
+  app.all("/api/upload-dni", inscriptionsHandler);
 
   // Secure Nodemailer SMTP sending endpoint with strict anti-relay and TLS
   app.post("/api/send-email", async (req, res) => {
@@ -540,20 +539,30 @@ async function startServer() {
     }
   });
 
-  // Admin & Staff User Management Endpoints (Strictly authenticates via verifySupabaseAdminToken and uses SUPABASE_SERVICE_ROLE_KEY)
-  app.all("/api/admin-health", adminHealthHandler);
-  app.all("/api/admin-users-list", adminUsersListHandler);
-  app.all("/api/admin-user-create", adminUserCreateHandler);
-  app.all("/api/admin-user-update", adminUserUpdateHandler);
-  app.all("/api/admin-user-delete", adminUserDeleteHandler);
-  app.all("/api/admin/users", adminUsersHandler);
-  app.all("/api/admin/users/:id", adminUsersHandler);
-  app.all("/api/scanner-session", scannerSessionHandler);
+  // Consolidated Serverless Handlers (Max 12 Functions Architecture)
+  // 1. /api/admin & aliases
+  app.all("/api/admin", adminHandler);
+  app.use("/api/admin", adminHandler);
+  app.all("/api/admin-health", adminHandler);
+  app.all("/api/admin-users-list", adminHandler);
+  app.all("/api/admin-user-create", adminHandler);
+  app.all("/api/admin-user-update", adminHandler);
+  app.all("/api/admin-user-delete", adminHandler);
 
-  // Base API healthcheck endpoint
-  app.get("/api/health", (req, res) => {
-    res.json({ status: "ok", time: new Date() });
-  });
+  // 2. /api/email & aliases
+  app.all("/api/email", emailHandler);
+  app.all("/api/smtp-status", emailHandler);
+  app.all("/api/test-smtp", emailHandler);
+
+  // 3. /api/scanner & aliases
+  app.all("/api/scanner", scannerHandler);
+  app.all("/api/scanner-session", scannerHandler);
+
+  // 4. /api/config & aliases
+  app.all("/api/config", configHandler);
+
+  // 5. /api/health
+  app.all("/api/health", healthHandler);
 
   // Lazy load GoogleGenAI client for translation
   let aiClient: any = null;

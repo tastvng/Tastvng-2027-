@@ -1057,14 +1057,14 @@ async function safeFetchJson<T = any>(
 }
 
 /**
- * Diagnostic health check for the admin module: GET /api/admin-health
+ * Diagnostic health check for the admin module: GET /api/admin?action=health
  */
 export async function checkAdminHealth(): Promise<{ ok: boolean; status: number; data?: any; error?: string }> {
-  return safeFetchJson('/api/admin-health', { method: 'GET' });
+  return safeFetchJson('/api/admin?action=health', { method: 'GET' });
 }
 
 /**
- * Fetches the real list of administrators and staff directly from the secure /api/admin-users-list endpoint
+ * Fetches the real list of administrators and staff directly from the secure /api/admin?action=list endpoint
  * (which queries auth.users + public.profiles on the server).
  */
 export async function fetchAdminUsers(): Promise<{ users: AdminUserRecord[]; error?: string }> {
@@ -1074,14 +1074,14 @@ export async function fetchAdminUsers(): Promise<{ users: AdminUserRecord[]; err
       return { users: [], error: "No s'ha trobat cap sessió d'administrador activa (token no disponible)." };
     }
 
-    const res = await safeFetchJson<{ success: boolean; users?: AdminUserRecord[]; error?: string }>('/api/admin-users-list', {
+    const res = await safeFetchJson<{ success: boolean; users?: AdminUserRecord[]; error?: string }>('/api/admin?action=list', {
       headers: {
         'Authorization': `Bearer ${token}`
       }
     });
 
     if (!res.ok || !res.data) {
-      return { users: [], error: res.error || `Error HTTP ${res.status} al sol·licitar /api/admin-users-list` };
+      return { users: [], error: res.error || `Error HTTP ${res.status} al sol·licitar /api/admin` };
     }
 
     return { users: res.data.users || [] };
@@ -1092,7 +1092,7 @@ export async function fetchAdminUsers(): Promise<{ users: AdminUserRecord[]; err
 }
 
 /**
- * Creates a new administrator or staff user securely via /api/admin-user-create.
+ * Creates a new administrator or staff user securely via /api/admin?action=create.
  * Never stores or transmits the password outside of this protected API call.
  */
 export async function createAdminUser(params: {
@@ -1108,7 +1108,7 @@ export async function createAdminUser(params: {
       return { success: false, error: "Cal tenir una sessió activa d'administrador per donar d'alta personal." };
     }
 
-    const res = await safeFetchJson<{ success: boolean; user?: AdminUserRecord; error?: string }>('/api/admin-user-create', {
+    const res = await safeFetchJson<{ success: boolean; user?: AdminUserRecord; error?: string }>('/api/admin?action=create', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -1129,7 +1129,7 @@ export async function createAdminUser(params: {
 }
 
 /**
- * Updates an admin/staff user role via /api/admin-user-update.
+ * Updates an admin/staff user role via /api/admin?action=update.
  */
 export async function updateAdminUserRole(
   id: string,
@@ -1141,7 +1141,7 @@ export async function updateAdminUserRole(
       return { success: false, error: "Cal tenir una sessió activa d'administrador." };
     }
 
-    const res = await safeFetchJson<{ success: boolean; error?: string }>('/api/admin-user-update', {
+    const res = await safeFetchJson<{ success: boolean; error?: string }>('/api/admin?action=update', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -1162,7 +1162,7 @@ export async function updateAdminUserRole(
 }
 
 /**
- * Toggles an admin/staff user's active status via /api/admin-user-update.
+ * Toggles an admin/staff user's active status via /api/admin?action=update.
  */
 export async function toggleAdminUserActive(
   id: string,
@@ -1174,7 +1174,7 @@ export async function toggleAdminUserActive(
       return { success: false, error: "Cal tenir una sessió activa d'administrador." };
     }
 
-    const res = await safeFetchJson<{ success: boolean; error?: string }>('/api/admin-user-update', {
+    const res = await safeFetchJson<{ success: boolean; error?: string }>('/api/admin?action=update', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -1195,7 +1195,7 @@ export async function toggleAdminUserActive(
 }
 
 /**
- * Deletes an admin/staff user securely via /api/admin-user-delete.
+ * Deletes an admin/staff user securely via /api/admin?action=delete.
  * Crucially, does NOT touch inscriptions or any event data.
  */
 export async function deleteAdminUser(id: string): Promise<{ success: boolean; error?: string }> {
@@ -1205,7 +1205,7 @@ export async function deleteAdminUser(id: string): Promise<{ success: boolean; e
       return { success: false, error: "Cal tenir una sessió activa d'administrador." };
     }
 
-    const res = await safeFetchJson<{ success: boolean; error?: string }>('/api/admin-user-delete', {
+    const res = await safeFetchJson<{ success: boolean; error?: string }>('/api/admin?action=delete', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

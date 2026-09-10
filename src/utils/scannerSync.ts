@@ -91,7 +91,7 @@ export function extractAndValidateCode(raw: string): string | null {
  */
 export async function apiCreateSession(sessionId: string, syncKey: string): Promise<RemoteScannerSession | null> {
   try {
-    const res = await fetch('/api/scanner-session', {
+    const res = await fetch('/api/scanner', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -118,7 +118,7 @@ export async function apiPollSession(
   syncKey: string
 ): Promise<{ ok: boolean; status: RemoteScannerStatus; code?: string; expiresAt?: number }> {
   try {
-    const res = await fetch('/api/scanner-session', {
+    const res = await fetch('/api/scanner', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
