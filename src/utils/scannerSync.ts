@@ -112,10 +112,12 @@ export async function apiCreateSession(sessionId: string, syncKey: string): Prom
 
 /**
  * Desktop PC polls the ephemeral session for status updates and unconsumed scanned codes.
+ * If renewModal is true, server automatically extends the 30-min TTL.
  */
 export async function apiPollSession(
   sessionId: string, 
-  syncKey: string
+  syncKey: string,
+  renewModal: boolean = false
 ): Promise<{ ok: boolean; status: RemoteScannerStatus; code?: string; expiresAt?: number }> {
   try {
     const res = await fetch('/api/scanner', {
@@ -124,12 +126,16 @@ export async function apiPollSession(
       body: JSON.stringify({
         action: 'pc_poll',
         sessionId,
-        syncKey
+        syncKey,
+        renewModal
       })
     });
 
     if (!res.ok) {
-      return { ok: false, status: 'sesion_caducada' };
+      if (res.status === 410) {
+        return { ok: false, status: 'sesion_caducada' };
+      }
+      return { ok: false, status: 'esperando_conexion' };
     }
 
     const data = await res.json();
@@ -141,5 +147,47 @@ export async function apiPollSession(
     };
   } catch (err) {
     return { ok: false, status: 'esperando_conexion' };
+  }
+}
+
+/**
+ * Explicitly renews session TTL (e.g. while modal is open)
+ */
+export async function apiRenewSession(sessionId: string, syncKey: string): Promise<{ ok: boolean; expiresAt?: number }> {
+  try {
+    const res = await fetch('/api/scanner', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'renew',
+        sessionId,
+        syncKey
+      })
+    });
+    if (!res.ok) return { ok: false };
+    const data = await res.json();
+    return { ok: true, expiresAt: data.expiresAt };
+  } catch (e) {
+    return { ok: false };
+  }
+}
+
+/**
+ * Explicitly invalidates session on close or regenerate
+ */
+export async function apiInvalidateSession(sessionId: string, syncKey: string): Promise<boolean> {
+  try {
+    const res = await fetch('/api/scanner', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'invalidate',
+        sessionId,
+        syncKey
+      })
+    });
+    return res.ok;
+  } catch (e) {
+    return false;
   }
 }

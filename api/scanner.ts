@@ -15,6 +15,9 @@ export interface EphemeralSession {
 // In-memory sessions store (ephemeral, temporary, auto-expiring)
 const activeSessions = new Map<string, EphemeralSession>();
 
+// Minimum session duration: 30 minutes
+const MIN_SESSION_DURATION_MS = 30 * 60 * 1000;
+
 // Cleanup expired sessions every 2 minutes
 setInterval(() => {
   const now = Date.now();
@@ -42,7 +45,7 @@ export default async function scannerHandler(req: any, res: any) {
 
   try {
     const payload = req.method === 'GET' ? req.query : (req.body || {});
-    const { action, sessionId, syncKey, code } = payload;
+    const { action, sessionId, syncKey, code, renewModal } = payload;
 
     if (!sessionId || typeof sessionId !== 'string') {
       return res.status(400).json({ error: 'sessionId és obligatori i ha de ser una cadena de text' });
@@ -62,7 +65,7 @@ export default async function scannerHandler(req: any, res: any) {
         sessionId: cleanSessionId,
         syncKey: cleanSyncKey,
         createdAt: now,
-        expiresAt: now + 20 * 60 * 1000, // 20 minutes
+        expiresAt: now + MIN_SESSION_DURATION_MS, // 30 minutes minimum
         status: 'esperando_conexion',
         lastPingPc: now,
         lastPingMobile: 0,
@@ -84,22 +87,39 @@ export default async function scannerHandler(req: any, res: any) {
     }
 
     // Lookup existing session
-    const session = activeSessions.get(cleanSessionId);
+    let session = activeSessions.get(cleanSessionId);
 
+    // If session not found in server memory
     if (!session) {
-      return res.status(404).json({
-        ok: false,
-        error: 'Sessió no trobada o caducada. Si us plau, genera un nou QR des del PC.',
-        status: 'sesion_caducada'
-      });
+      // Authoritative PC fallback: If desktop is polling with valid syncKey, auto-recover session instead of false "expired"
+      if ((action === 'pc_poll' || action === 'renew') && cleanSyncKey) {
+        session = {
+          sessionId: cleanSessionId,
+          syncKey: cleanSyncKey,
+          createdAt: now,
+          expiresAt: now + MIN_SESSION_DURATION_MS,
+          status: 'esperando_conexion',
+          lastPingPc: now,
+          lastPingMobile: 0,
+          lastScannedCode: null,
+          scannedAt: null
+        };
+        activeSessions.set(cleanSessionId, session);
+      } else {
+        return res.status(404).json({
+          ok: false,
+          error: 'Sessió no trobada o caducada. Si us plau, genera un nou QR des del PC.',
+          status: 'sesion_caducada'
+        });
+      }
     }
 
-    // Check expiration
-    if (now > session.expiresAt) {
-      session.status = 'sesion_caducada';
-      return res.status(410).json({
-        ok: false,
-        error: 'La sessió ha caducat.',
+    // Explicit destruction/invalidation (when user closes, disconnects or regenerates)
+    if (action === 'destroy' || action === 'invalidate') {
+      activeSessions.delete(cleanSessionId);
+      return res.status(200).json({
+        ok: true,
+        message: 'Sessió invalidada correctament.',
         status: 'sesion_caducada'
       });
     }
@@ -112,6 +132,21 @@ export default async function scannerHandler(req: any, res: any) {
       });
     }
 
+    // If renew action or renewModal is requested while pairing modal is open: extend TTL!
+    if (action === 'renew' || renewModal === true || renewModal === 'true') {
+      session.expiresAt = Math.max(session.expiresAt, now + MIN_SESSION_DURATION_MS);
+    }
+
+    // Check expiration (only if not renewed)
+    if (now > session.expiresAt) {
+      session.status = 'sesion_caducada';
+      return res.status(410).json({
+        ok: false,
+        error: 'La sessió ha caducat.',
+        status: 'sesion_caducada'
+      });
+    }
+
     // 2. Action: mobile_connect (Smartphone joins session)
     if (action === 'mobile_connect') {
       session.lastPingMobile = now;
@@ -120,7 +155,8 @@ export default async function scannerHandler(req: any, res: any) {
       return res.status(200).json({
         ok: true,
         status: 'movil_conectado',
-        message: 'Mòbil connectat amb èxit a la sessió.'
+        message: 'Mòbil connectat amb èxit a la sessió.',
+        expiresAt: session.expiresAt
       });
     }
 
@@ -169,7 +205,8 @@ export default async function scannerHandler(req: any, res: any) {
 
       return res.status(200).json({
         ok: true,
-        message: 'Codi enviat correctament a l’ordinador.'
+        message: 'Codi enviat correctament a l’ordinador.',
+        expiresAt: session.expiresAt
       });
     }
 
@@ -183,14 +220,15 @@ export default async function scannerHandler(req: any, res: any) {
       }
       return res.status(200).json({
         ok: true,
-        status: session.status
+        status: session.status,
+        expiresAt: session.expiresAt
       });
     }
 
     // 6. Action: disconnect or mobile_disconnect
     if (action === 'disconnect' || action === 'mobile_disconnect') {
       session.status = 'movil_desconectado';
-      return res.status(200).json({ ok: true, status: 'movil_desconectado' });
+      return res.status(200).json({ ok: true, status: 'movil_desconectado', expiresAt: session.expiresAt });
     }
 
     // 7. Action: status

@@ -30,7 +30,8 @@ import { useLanguage } from '../LanguageContext';
 import { Inscripcio, SistemaConfig, RemoteScannerStatus, CategoriaParella, EstatPagament, EstatInscripcio, EstatVerificacio } from '../types';
 import { useActiveYear } from '../hooks/useActiveYear';
 import { supabase, getSupabaseInscripcionByCodeOrId, getDniSignedUrl } from '../supabaseClient';
-import { buildMobilePairingUrl, extractAndValidateCode, apiCreateSession, apiPollSession } from '../utils/scannerSync';
+import { buildMobilePairingUrl, extractAndValidateCode, apiCreateSession, apiPollSession, apiRenewSession, apiInvalidateSession } from '../utils/scannerSync';
+import QRCode from 'qrcode';
 import jsQR from 'jsqr';
 
 interface AdminScannerProps {
@@ -75,7 +76,49 @@ export default function AdminScanner({
   // 2. States & Realtime Status
   const [scannerStatus, setScannerStatus] = useState<RemoteScannerStatus>('esperando_conexion');
   const [showPairingModal, setShowPairingModal] = useState<boolean>(initialOpenPairing);
+  const [sessionExpiresAt, setSessionExpiresAt] = useState<number | null>(null);
+  const [qrDataUrl, setQrDataUrl] = useState<string>('');
   const [copiedLink, setCopiedLink] = useState(false);
+
+  const showPairingModalRef = useRef(showPairingModal);
+  useEffect(() => {
+    showPairingModalRef.current = showPairingModal;
+  }, [showPairingModal]);
+
+  const pairingUrl = buildMobilePairingUrl(syncKey, sessionId);
+
+  // Generate crisp, high-contrast B&W QR code (minimum 320x320 px, margin 4, high error correction 'H')
+  useEffect(() => {
+    let active = true;
+    QRCode.toDataURL(pairingUrl, {
+      errorCorrectionLevel: 'H',
+      margin: 4, // Ample white quiet zone for Xiaomi 12 & iPhone 11 Pro camera detection
+      width: 360,
+      color: {
+        dark: '#000000', // Pure black modules
+        light: '#FFFFFF' // Pure white background
+      }
+    }).then(url => {
+      if (active) {
+        setQrDataUrl(url);
+      }
+    }).catch(err => {
+      console.error('Error generating pairing QR data URL:', err);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [pairingUrl]);
+
+  // Format expiry time display (e.g. 18:45)
+  const formatExpiryTime = (timestamp: number | null) => {
+    if (!timestamp) return null;
+    const d = new Date(timestamp);
+    const h = String(d.getHours()).padStart(2, '0');
+    const m = String(d.getMinutes()).padStart(2, '0');
+    return `${h}:${m}`;
+  };
 
   // Active scanned result & preview
   const [activeRecord, setActiveRecord] = useState<Inscripcio | null>(null);
@@ -262,6 +305,9 @@ export default function AdminScanner({
       if (!isComponentMounted.current) return;
       if (session) {
         setScannerStatus(session.status);
+        if (session.expiresAt) {
+          setSessionExpiresAt(session.expiresAt);
+        }
       }
     });
 
@@ -293,11 +339,17 @@ export default function AdminScanner({
     }
 
     // High-frequency polling fallback (every 1500ms)
+    // Pass showPairingModalRef.current to renew TTL dynamically while pairing modal is open
     pollInterval = setInterval(async () => {
       if (!isComponentMounted.current) return;
       try {
-        const res = await apiPollSession(sessionId, syncKey);
+        const isModalOpen = showPairingModalRef.current;
+        const res = await apiPollSession(sessionId, syncKey, isModalOpen);
         if (!isComponentMounted.current) return;
+
+        if (res.expiresAt) {
+          setSessionExpiresAt(res.expiresAt);
+        }
 
         if (res.ok) {
           // Update status
@@ -327,8 +379,24 @@ export default function AdminScanner({
     };
   }, [sessionId, syncKey, handleProcessCode]);
 
-  // 5. Generate New Session
-  const handleGenerateNewSession = () => {
+  // Extend TTL immediately whenever the pairing modal is opened
+  useEffect(() => {
+    if (showPairingModal) {
+      apiRenewSession(sessionId, syncKey).then(res => {
+        if (!isComponentMounted.current) return;
+        if (res.ok && res.expiresAt) {
+          setSessionExpiresAt(res.expiresAt);
+          setScannerStatus(prev => prev === 'sesion_caducada' ? 'esperando_conexion' : prev);
+        }
+      });
+    }
+  }, [showPairingModal, sessionId, syncKey]);
+
+  // 5. Generate New Session & Regenerate QR
+  const handleGenerateNewSession = async () => {
+    // Invalidate old session on server
+    apiInvalidateSession(sessionId, syncKey);
+
     const newKey = Math.random().toString(36).substring(2, 8).toUpperCase();
     const newSessId = `sess_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     try { sessionStorage.setItem('tast_scanner_sync_key', newKey); } catch (e) {}
@@ -336,6 +404,11 @@ export default function AdminScanner({
     setSessionId(newSessId);
     setScannerStatus('esperando_conexion');
     setFeedback(null);
+
+    const session = await apiCreateSession(newSessId, newKey);
+    if (session && session.expiresAt) {
+      setSessionExpiresAt(session.expiresAt);
+    }
   };
 
   // 6. Local PC Webcam scanning logic
@@ -404,8 +477,6 @@ export default function AdminScanner({
     setManualCodeInput('');
     handleProcessCode(code);
   };
-
-  const pairingUrl = buildMobilePairingUrl(syncKey, sessionId);
 
   // Status visual configurations
   const getStatusConfig = () => {
@@ -593,8 +664,12 @@ export default function AdminScanner({
                 <span className="font-mono text-[11px] text-zinc-300">Supabase Realtime + API</span>
               </div>
               <div className="flex justify-between text-xs">
-                <span className="text-zinc-400">{language === 'ca' ? "Validesa:" : "Validez:"}</span>
-                <span className="font-mono text-[11px] text-emerald-400">20 min (auto-renovable)</span>
+                <span className="text-zinc-400">{language === 'ca' ? "Caducitat:" : "Caducidad:"}</span>
+                <span className="font-mono text-[11px] text-emerald-400">
+                  {sessionExpiresAt 
+                    ? `${language === 'ca' ? 'Fins a les' : 'Hasta las'} ${formatExpiryTime(sessionExpiresAt)}` 
+                    : (language === 'ca' ? '30 min (renovable)' : '30 min (renovable)')}
+                </span>
               </div>
             </div>
 
@@ -893,7 +968,7 @@ export default function AdminScanner({
       {/* ================= PAIRING MODAL: Display Secure HTTPS QR Code ================= */}
       {showPairingModal && (
         <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-150" id="pairing-modal-overlay">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl shadow-2xl max-w-md w-full overflow-hidden p-6 space-y-5 text-white animate-in zoom-in-95 duration-150">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden p-6 space-y-5 text-white animate-in zoom-in-95 duration-150">
             
             {/* Modal Header */}
             <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
@@ -927,26 +1002,76 @@ export default function AdminScanner({
                 : "Escanee este código QR con la cámara de su teléfono para abrir el lector. Cuando escanee el QR del comprobante de un participante, la ficha completa se abrirá automáticamente en este ordenador."}
             </p>
 
-            {/* QR Code Container (Public HTTPS, No Localhost) */}
+            {/* QR Code Container (High Contrast B&W, 320x320 px minimum, Quiet Zone Margin) */}
             <div className="flex flex-col items-center justify-center bg-zinc-950 p-6 rounded-2xl border border-zinc-800">
-              <div className="p-3 bg-white rounded-2xl shadow-xl border-2 border-fuchsia-500/20">
-                <img 
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=240x240&color=e6007e&data=${encodeURIComponent(pairingUrl)}`}
-                  alt="Pairing QR code for remote mobile scanner"
-                  className="w-48 h-48 block rounded-lg"
-                  referrerPolicy="no-referrer"
-                />
+              <div className="p-4 bg-white rounded-2xl shadow-2xl flex items-center justify-center min-w-[320px] min-h-[320px] w-[320px] h-[320px] border border-zinc-300" id="qr-code-frame">
+                {scannerStatus === 'sesion_caducada' ? (
+                  <div className="flex flex-col items-center justify-center text-center p-4">
+                    <AlertTriangle size={48} className="text-rose-500 mb-2 animate-bounce" />
+                    <h4 className="font-black text-sm text-zinc-900 uppercase">
+                      {language === 'ca' ? "Sessió caducada" : "Sesión caducada"}
+                    </h4>
+                    <p className="text-xs text-zinc-600 mt-1 max-w-[240px]">
+                      {language === 'ca' 
+                        ? "Aquest codi ha caducat per seguretat. Premeu el botó per regenerar-lo." 
+                        : "Este código ha caducado por seguridad. Pulse el botón para regenerarlo."}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleGenerateNewSession}
+                      className="mt-4 px-4 py-2 bg-[#ff0090] hover:bg-[#e0007e] text-white font-bold text-xs rounded-xl transition shadow"
+                      id="btn-regenerate-expired-qr"
+                    >
+                      {language === 'ca' ? "Regenerar QR" : "Regenerar QR"}
+                    </button>
+                  </div>
+                ) : qrDataUrl ? (
+                  <img 
+                    src={qrDataUrl}
+                    alt="Pairing QR code for remote mobile scanner"
+                    className="w-[288px] h-[288px] block object-contain select-none"
+                    id="admin-pairing-qr-img"
+                  />
+                ) : (
+                  <RotateCw className="animate-spin text-zinc-400" size={32} />
+                )}
               </div>
 
-              {/* Status inside modal */}
-              <div className="mt-4 flex flex-col items-center gap-1.5 text-center">
-                <div className={`px-3 py-1 rounded-full font-mono text-xs font-bold border flex items-center gap-1.5 ${statusConfig.badgeBg}`}>
-                  <span className={`w-2 h-2 rounded-full ${statusConfig.dotColor}`} />
-                  <span>{statusConfig.label}</span>
+              {/* Status and Expiry inside modal */}
+              <div className="mt-4 flex flex-col items-center gap-2 text-center w-full">
+                <div className="flex flex-wrap items-center justify-center gap-2">
+                  <div className={`px-3 py-1 rounded-full font-mono text-xs font-bold border flex items-center gap-1.5 ${statusConfig.badgeBg}`}>
+                    <span className={`w-2 h-2 rounded-full ${statusConfig.dotColor}`} />
+                    <span>{statusConfig.label}</span>
+                  </div>
+
+                  {sessionExpiresAt && (
+                    <div className="flex items-center gap-1.5 text-xs text-emerald-400 font-mono bg-emerald-950/50 border border-emerald-500/30 px-3 py-1 rounded-xl">
+                      <Clock size={12} />
+                      <span>
+                        {language === 'ca'
+                          ? `Caduca a les ${formatExpiryTime(sessionExpiresAt)}`
+                          : `Caduca a las ${formatExpiryTime(sessionExpiresAt)}`}
+                      </span>
+                    </div>
+                  )}
                 </div>
-                <span className="font-mono text-[10px] text-zinc-500 mt-1 select-all">
-                  {language === 'ca' ? "CLAU" : "CLAVE"}: TAST-{syncKey}
-                </span>
+
+                <div className="flex items-center justify-between w-full px-2 pt-1">
+                  <span className="font-mono text-[11px] text-zinc-400 select-all">
+                    {language === 'ca' ? "CLAU" : "CLAVE"}: <strong className="text-white">TAST-{syncKey}</strong>
+                  </span>
+
+                  <button
+                    type="button"
+                    onClick={handleGenerateNewSession}
+                    className="px-3 py-1 bg-zinc-850 hover:bg-zinc-750 text-zinc-300 hover:text-white font-bold text-xs rounded-lg transition flex items-center gap-1.5 border border-zinc-700 cursor-pointer"
+                    id="btn-modal-regenerate-qr"
+                  >
+                    <RefreshCw size={12} />
+                    {language === 'ca' ? "Regenerar QR" : "Regenerar QR"}
+                  </button>
+                </div>
               </div>
             </div>
 
