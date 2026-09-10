@@ -90,6 +90,10 @@ export default function App() {
   const [view, setView] = useState<string>(() => {
     try {
       if (typeof window !== 'undefined') {
+        const searchParams = new URLSearchParams(window.location.search);
+        if (searchParams.get('mode') === 'mobile-scanner' && searchParams.get('syncKey')) {
+          return 'mobile-scanner';
+        }
         const hash = window.location.hash;
         const path = window.location.pathname;
         if (hash === '#admin' || path === '/admin' || window.location.search.includes('admin=true')) {
@@ -106,7 +110,40 @@ export default function App() {
     } catch (e) {}
     return 'portada';
   });
-  const [mobileScannerSyncKey, setMobileScannerSyncKey] = useState<string | null>(null);
+  const [mobileScannerSyncKey, setMobileScannerSyncKey] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      return new URLSearchParams(window.location.search).get('syncKey');
+    }
+    return null;
+  });
+  const [mobileScannerSessionId, setMobileScannerSessionId] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      const p = new URLSearchParams(window.location.search);
+      return p.get('sessionId') || p.get('syncKey');
+    }
+    return null;
+  });
+  const [openPairingModalOnScanner, setOpenPairingModalOnScanner] = useState(false);
+  const [activeScannedRecord, setActiveScannedRecord] = useState<Inscripcio | null>(null);
+  const [previousAdminView, setPreviousAdminView] = useState<string>('admin-dashboard');
+
+  // React to URL changes (e.g. navigation or direct link clicks)
+  useEffect(() => {
+    const handleUrlChange = () => {
+      const searchParams = new URLSearchParams(window.location.search);
+      if (searchParams.get('mode') === 'mobile-scanner') {
+        const k = searchParams.get('syncKey');
+        const s = searchParams.get('sessionId') || k;
+        if (k) {
+          setMobileScannerSyncKey(k);
+          setMobileScannerSessionId(s);
+          setView('mobile-scanner');
+        }
+      }
+    };
+    window.addEventListener('popstate', handleUrlChange);
+    return () => window.removeEventListener('popstate', handleUrlChange);
+  }, []);
 
   // Security cleanup on boot: purge any sensitive legacy tokens from localStorage
   useEffect(() => {
@@ -1189,9 +1226,14 @@ export default function App() {
                 config={config}
                 onSelectInscripcio={(id) => {
                   setEditId(id);
+                  setPreviousAdminView('admin-dashboard');
                   setView('admin-ficha');
                 }}
-                onGoToScanner={() => setView('admin-scanner')}
+                onGoToScanner={(openPairing) => {
+                  setOpenPairingModalOnScanner(!!openPairing);
+                  setPreviousAdminView('admin-dashboard');
+                  setView('admin-scanner');
+                }}
                 onGoToConfig={() => setView('admin-config')}
                 onLogout={handleAdminLogout}
                 onAddLog={addLog}
@@ -1204,13 +1246,13 @@ export default function App() {
             )}
 
             {/* 5. Detail Auditor sheet views */}
-            {view === 'admin-ficha' && editId && inscripcions.find(i => i.id === editId) && (
+            {view === 'admin-ficha' && editId && (
               <AdminFicha 
-                registration={inscripcions.find(i => i.id === editId)!}
+                registration={activeScannedRecord && activeScannedRecord.id === editId ? activeScannedRecord : (inscripcions.find(i => i.id === editId) || activeScannedRecord!)}
                 config={config}
                 onBack={() => {
                   setEditId(null);
-                  setView('admin-dashboard');
+                  setView(previousAdminView || 'admin-dashboard');
                 }}
                 onSave={updateRegistration}
               />
@@ -1233,11 +1275,19 @@ export default function App() {
               <AdminScanner 
                 inscripcions={inscripcions}
                 config={config}
-                onSelectInscripcio={(id) => {
+                initialOpenPairing={openPairingModalOnScanner}
+                onSelectInscripcio={(id, record) => {
+                  if (record) {
+                    setActiveScannedRecord(record);
+                  }
                   setEditId(id);
+                  setPreviousAdminView('admin-scanner');
                   setView('admin-ficha');
                 }}
-                onBack={() => setView('admin-dashboard')}
+                onBack={() => {
+                  setOpenPairingModalOnScanner(false);
+                  setView('admin-dashboard');
+                }}
                 onAddLog={addLog}
                 onSaveInscripcio={updateRegistration}
               />
@@ -1247,7 +1297,7 @@ export default function App() {
             {view === 'mobile-scanner' && mobileScannerSyncKey && (
               <MobileRemoteScanner 
                 syncKey={mobileScannerSyncKey}
-                inscripcions={inscripcions}
+                sessionId={mobileScannerSessionId || mobileScannerSyncKey}
                 onBack={() => {
                   // clean URL parameters and go back to public
                   window.history.pushState({}, '', window.location.pathname);

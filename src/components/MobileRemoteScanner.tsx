@@ -11,86 +11,185 @@ import {
   RotateCw,
   AlertTriangle,
   ArrowLeft,
-  X,
   Zap,
-  UserCheck,
-  Search,
-  Check
+  Check,
+  Send,
+  Keyboard,
+  ShieldCheck,
+  X
 } from 'lucide-react';
 import { useLanguage } from '../LanguageContext';
-import { Inscripcio, CategoriaParella } from '../types';
+import { supabase } from '../supabaseClient';
 import jsQR from 'jsqr';
 
 interface MobileRemoteScannerProps {
   syncKey: string;
-  inscripcions: Inscripcio[];
+  sessionId: string;
   onBack: () => void;
 }
 
 export default function MobileRemoteScanner({ 
   syncKey, 
-  inscripcions, 
+  sessionId, 
   onBack 
 }: MobileRemoteScannerProps) {
-  const { language, t } = useLanguage();
+  const { language } = useLanguage();
+  
+  // Connection states: 'connecting' | 'connected' | 'expired' | 'error'
+  const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'expired' | 'error'>('connecting');
+  const [connectionError, setConnectionError] = useState<string | null>(null);
+
+  // Camera states
   const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
-  const [cameraErrorCode, setCameraErrorCode] = useState<string | null>(null);
+  const [cameraError, setCameraError] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(true);
-  const [status, setStatus] = useState<'ready' | 'syncing' | 'success' | 'error'>('ready');
-  const [lastScannedName, setLastScannedName] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'camera' | 'search'>('camera');
-  const [searchQuery, setSearchQuery] = useState('');
 
-  const errorMessage = cameraErrorCode === 'permission'
-    ? (language === 'ca'
-        ? "No s'ha pogut accedir a la càmera del mòbil. Si us plau, reviseu els permisos d'accés."
-        : "No se ha podido acceder a la cámara del móvil. Por favor, revise los permisos de acceso.")
-    : cameraErrorCode;
+  // Transmission states: 'ready' | 'transmitting' | 'success' | 'error'
+  const [transmitStatus, setTransmitStatus] = useState<'ready' | 'transmitting' | 'success' | 'error'>('ready');
+  const [lastScannedCode, setLastScannedCode] = useState<string | null>(null);
+  const [scannedCount, setScannedCount] = useState(0);
 
-  const statusText = status === 'ready'
-    ? (language === 'ca' ? 'En línia i a punt' : 'En línea y listo')
-    : status === 'syncing'
-    ? (language === 'ca' ? 'Sincronitzant amb el PC...' : 'Sincronizando con el PC...')
-    : status === 'success'
-    ? (language === 'ca' ? '✔ Enviat amb èxit al PC!' : '✔ ¡Enviado con éxito al PC!')
-    : (language === 'ca' ? '❌ Error en enviar dades' : '❌ Error al enviar datos');
+  // Manual fallback input
+  const [showManualInput, setShowManualInput] = useState(false);
+  const [manualCode, setManualCode] = useState('');
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const animationFrameId = useRef<number | null>(null);
+  const isComponentMounted = useRef(true);
+  const realtimeChannelRef = useRef<any>(null);
 
+  // 1. Establish session connection with server and Supabase Realtime
   useEffect(() => {
-    if (activeTab === 'camera') {
-      startCamera().catch(err => console.error("Unhandled error in startCamera:", err));
-    } else {
-      stopCamera();
+    isComponentMounted.current = true;
+    let pingInterval: any = null;
+
+    async function initSession() {
+      try {
+        setConnectionStatus('connecting');
+        const res = await fetch('/api/scanner-session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'mobile_connect',
+            sessionId,
+            syncKey
+          })
+        });
+
+        const data = await res.json();
+        if (!isComponentMounted.current) return;
+
+        if (res.ok && data.ok) {
+          setConnectionStatus('connected');
+          setConnectionError(null);
+        } else {
+          setConnectionStatus(data.status === 'sesion_caducada' ? 'expired' : 'error');
+          setConnectionError(data.error || (language === 'ca' ? 'Error en connectar a la sessió' : 'Error al conectar a la sesión'));
+        }
+      } catch (err: any) {
+        if (!isComponentMounted.current) return;
+        setConnectionStatus('error');
+        setConnectionError(err?.message || (language === 'ca' ? 'Error de xarxa en connectar' : 'Error de red al conectar'));
+      }
     }
+
+    initSession();
+
+    // Setup Supabase Realtime Channel if available
+    if (supabase) {
+      try {
+        const channel = supabase.channel(`remote-scanner:${sessionId}`);
+        realtimeChannelRef.current = channel;
+
+        channel.subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            channel.send({
+              type: 'broadcast',
+              event: 'mobile_status',
+              payload: { status: 'movil_conectado', syncKey, timestamp: Date.now() }
+            }).catch(() => {});
+          }
+        });
+      } catch (e) {
+        console.warn('Realtime channel subscription error:', e);
+      }
+    }
+
+    // Heartbeat ping every 12 seconds to keep connection alive
+    pingInterval = setInterval(async () => {
+      if (!isComponentMounted.current) return;
+      try {
+        const res = await fetch('/api/scanner-session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'mobile_ping',
+            sessionId,
+            syncKey
+          })
+        });
+        const data = await res.json();
+        if (data.status === 'sesion_caducada') {
+          setConnectionStatus('expired');
+        }
+      } catch (e) {
+        // network glitch
+      }
+    }, 12000);
+
+    return () => {
+      isComponentMounted.current = false;
+      if (pingInterval) clearInterval(pingInterval);
+      if (realtimeChannelRef.current && supabase) {
+        try {
+          realtimeChannelRef.current.send({
+            type: 'broadcast',
+            event: 'mobile_status',
+            payload: { status: 'movil_desconectado', syncKey, timestamp: Date.now() }
+          }).catch(() => {});
+          supabase.removeChannel(realtimeChannelRef.current);
+        } catch (e) {}
+      }
+    };
+  }, [sessionId, syncKey, language]);
+
+  // 2. Camera handling
+  useEffect(() => {
+    startCamera().catch(err => console.error("Unhandled error in startCamera:", err));
     return () => {
       stopCamera();
     };
-  }, [activeTab]);
+  }, []);
 
   const startCamera = async () => {
-    setCameraErrorCode(null);
+    setCameraError(null);
     try {
       if (streamRef.current) {
         stopCamera();
       }
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: 'environment' }, width: { ideal: 640 }, height: { ideal: 640 } }
+        video: { 
+          facingMode: { ideal: 'environment' }, 
+          width: { ideal: 1280 }, 
+          height: { ideal: 720 } 
+        }
       });
       streamRef.current = stream;
       setHasCameraPermission(true);
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        // Start loop analyzing frames
         animationFrameId.current = requestAnimationFrame(scanFrame);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error starting camera on mobile:', err);
       setHasCameraPermission(false);
-      setCameraErrorCode('permission');
+      setCameraError(
+        err?.name === 'NotAllowedError'
+          ? (language === 'ca' ? "Permís de càmera denegat. Permeteu l'accés a la càmera al navegador." : "Permiso de cámara denegado. Permita el acceso a la cámara en el navegador.")
+          : (language === 'ca' ? "No s'ha pogut iniciar la càmera del mòbil." : "No se ha podido iniciar la cámara del móvil.")
+      );
     }
   };
 
@@ -105,65 +204,12 @@ export default function MobileRemoteScanner({
     }
   };
 
-  const transmitScan = async (scannedId: string, customName?: string) => {
-    // Prevent immediate double scan of same item
-    setIsScanning(false);
-    setStatus('syncing');
-
-    // Try device vibration
-    if ('vibrate' in navigator) {
-      try {
-        navigator.vibrate(120);
-      } catch (e) {
-        // block
-      }
-    }
-
-    try {
-      const parentRecord = inscripcions.find(i => i.id === scannedId);
-      const name = parentRecord 
-        ? `${parentRecord.c1Nom} & ${parentRecord.c2Nom}` 
-        : customName || (language === 'ca' ? 'Parella desconeguda' : 'Pareja desconocida');
-
-      setLastScannedName(name);
-
-      // POST to ntfy-channel
-      await fetch(`https://ntfy.sh/tast_sync_${syncKey}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'text/plain',
-        },
-        body: JSON.stringify({ scannedId, timestamp: Date.now() }),
-      });
-
-      setStatus('success');
-      setTimeout(() => {
-        setLastScannedName(null);
-        setIsScanning(true);
-        setStatus('ready');
-        if (activeTab === 'camera') {
-          // Restart stream loop safely
-          if (videoRef.current && streamRef.current) {
-            animationFrameId.current = requestAnimationFrame(scanFrame);
-          } else {
-            startCamera();
-          }
-        }
-      }, 2500);
-
-    } catch (e) {
-      console.error(e);
-      setStatus('error');
-      setTimeout(() => {
-        setIsScanning(true);
-        setStatus('ready');
-      }, 2000);
-    }
-  };
-
+  // 3. QR Decoding Loop
   const scanFrame = () => {
     if (!videoRef.current || !streamRef.current || !isScanning) {
-      animationFrameId.current = requestAnimationFrame(scanFrame);
+      if (isScanning) {
+        animationFrameId.current = requestAnimationFrame(scanFrame);
+      }
       return;
     }
 
@@ -173,277 +219,412 @@ export default function MobileRemoteScanner({
         canvasRef.current = document.createElement('canvas');
       }
       const canvas = canvasRef.current;
-      const ctx = canvas.getContext('2d');
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
       if (ctx) {
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        
+
         try {
           const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
           const code = jsQR(imageData.data, imageData.width, imageData.height, {
             inversionAttempts: 'dontInvert'
           });
 
-          if (code && code.data) {
-            let decodedId = code.data.trim();
+          if (code && code.data && code.data.trim()) {
+            let cleanCode = code.data.trim();
 
-            // Support scanning full query parameter URLs or deep-links safely
-            if (decodedId.includes('://') || decodedId.includes('?')) {
+            // Extract tracking code or ID if formatted as URL query string
+            if (cleanCode.includes('://') || cleanCode.includes('?')) {
               try {
-                const urlObj = new URL(decodedId);
-                const idParam = urlObj.searchParams.get('id') || urlObj.searchParams.get('code') || urlObj.searchParams.get('codi');
-                if (idParam) {
-                  decodedId = idParam;
+                const urlObj = new URL(cleanCode);
+                const extracted = urlObj.searchParams.get('codi') || 
+                  urlObj.searchParams.get('code') || 
+                  urlObj.searchParams.get('id');
+                if (extracted) {
+                  cleanCode = extracted;
                 } else {
-                  // Fallback: take final segment
-                  const pieces = urlObj.pathname.split('/').filter(Boolean);
-                  if (pieces.length > 0) {
-                    decodedId = pieces[pieces.length - 1];
-                  }
+                  const parts = urlObj.pathname.split('/').filter(Boolean);
+                  if (parts.length > 0) cleanCode = parts[parts.length - 1];
                 }
-              } catch (e) {
-                // block
-              }
+              } catch (e) {}
             }
 
-            const match = inscripcions.find(i => i.id === decodedId || i.codiSeguiment === decodedId);
-            if (match) {
-              transmitScan(match.id);
-            } else {
-              // Always transmit unknown codes directly! 
-              // The PC database is the authoritative system and can read arbitrary parsed parameters/IDs
-              transmitScan(decodedId, `Nova Parella (Codi: ${decodedId})`);
+            if (cleanCode) {
+              handleCodeScanned(cleanCode);
+              return; // Stop scan loop while transmitting
             }
-            return; // Halt stream loop till completion transition
           }
         } catch (e) {
-          // catch context security errors
+          // ignore scan frame error
         }
       }
     }
-    // Keep looping
+
     animationFrameId.current = requestAnimationFrame(scanFrame);
   };
 
-  const filtered = inscripcions.filter(i => {
-    const query = searchQuery.toLowerCase();
-    return i.c1Nom.toLowerCase().includes(query) || 
-           i.c2Nom.toLowerCase().includes(query) || 
-           i.codiSeguiment.toLowerCase().includes(query);
-  });
+  // 4. Send scanned code to Desktop PC
+  const handleCodeScanned = async (codeToTransmit: string) => {
+    if (!codeToTransmit || !isScanning) return;
+
+    setIsScanning(false);
+    setTransmitStatus('transmitting');
+    setLastScannedCode(codeToTransmit);
+
+    // Haptic feedback if available on smartphone
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+      try {
+        navigator.vibrate([80, 40, 80]);
+      } catch (e) {}
+    }
+
+    // Audio beep
+    playBeepSound();
+
+    try {
+      // a) Broadcast via Supabase Realtime for instant zero-latency delivery
+      if (realtimeChannelRef.current) {
+        realtimeChannelRef.current.send({
+          type: 'broadcast',
+          event: 'scanned_code',
+          payload: {
+            code: codeToTransmit,
+            syncKey,
+            sessionId,
+            timestamp: Date.now()
+          }
+        }).catch(() => {});
+      }
+
+      // b) Send via Serverless Session API (resilient fallback)
+      const res = await fetch('/api/scanner-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'mobile_scan',
+          sessionId,
+          syncKey,
+          code: codeToTransmit
+        })
+      });
+
+      const data = await res.json();
+
+      if (res.ok && data.ok) {
+        setTransmitStatus('success');
+        setScannedCount(prev => prev + 1);
+
+        // Resume scanning automatically after 1.8 seconds WITHOUT having to re-link!
+        setTimeout(() => {
+          if (!isComponentMounted.current) return;
+          setTransmitStatus('ready');
+          setLastScannedCode(null);
+          setIsScanning(true);
+          animationFrameId.current = requestAnimationFrame(scanFrame);
+        }, 1800);
+      } else {
+        setTransmitStatus('error');
+        if (data.status === 'sesion_caducada') {
+          setConnectionStatus('expired');
+        }
+        setTimeout(() => {
+          if (!isComponentMounted.current) return;
+          setTransmitStatus('ready');
+          setIsScanning(true);
+          animationFrameId.current = requestAnimationFrame(scanFrame);
+        }, 2200);
+      }
+    } catch (err) {
+      console.error('Error transmitting code to PC:', err);
+      setTransmitStatus('error');
+      setTimeout(() => {
+        if (!isComponentMounted.current) return;
+        setTransmitStatus('ready');
+        setIsScanning(true);
+        animationFrameId.current = requestAnimationFrame(scanFrame);
+      }, 2200);
+    }
+  };
+
+  const playBeepSound = () => {
+    try {
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContextClass) return;
+      const ctx = new AudioContextClass();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(880, ctx.currentTime);
+      gain.gain.setValueAtTime(0.12, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.12);
+    } catch (e) {}
+  };
+
+  const handleManualSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!manualCode.trim()) return;
+    const code = manualCode.trim();
+    setManualCode('');
+    setShowManualInput(false);
+    handleCodeScanned(code);
+  };
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-white flex flex-col justify-between font-sans selection:bg-brand select-none" id="mobile-remote-scanner-root">
-      
-      {/* Header bar */}
-      <header className="bg-zinc-900 border-b border-zinc-800 p-4 flex items-center justify-between sticky top-0 z-30">
+    <div className="min-h-screen bg-zinc-950 text-white flex flex-col justify-between font-sans selection:bg-[#ff0090] select-none" id="mobile-remote-scanner-root">
+      {/* Top Navigation Bar */}
+      <header className="bg-zinc-900 border-b border-zinc-800 p-4 flex items-center justify-between sticky top-0 z-30 shadow-md">
         <button 
           onClick={onBack}
-          className="p-2 -ml-2 text-zinc-400 hover:text-white flex items-center gap-1 font-bold text-xs"
+          className="py-2 px-3 -ml-2 text-zinc-400 hover:text-white flex items-center gap-1.5 font-bold text-xs bg-zinc-800/80 rounded-xl transition"
           id="btn-mobile-exit"
         >
-          <ArrowLeft size={18} /> {language === 'ca' ? 'Sortir' : 'Salir'}
+          <ArrowLeft size={16} /> {language === 'ca' ? 'Tancar' : 'Cerrar'}
         </button>
 
-        <div className="text-center flex-1 pr-6">
-          <span className="font-mono text-[8px] text-[#ff0090] tracking-widest uppercase font-bold block">
-            {language === 'ca' ? "DISSENY ESCÀNER PORTÀTIL" : "DISEÑO ESCÁNER PORTÁTIL"}
+        <div className="text-center flex-1 px-2">
+          <span className="font-mono text-[9px] text-[#ff0090] tracking-widest uppercase font-bold block">
+            {language === 'ca' ? "TERMINAL MÒBIL REMOT" : "TERMINAL MÓVIL REMOTO"}
           </span>
-          <h2 className="text-xs font-black tracking-tight text-white flex items-center justify-center gap-1.5 uppercase">
-            {language === 'ca' ? "Mòbil Enllaçat ⇆ PC" : "Móvil Enlazado ⇆ PC"}
-          </h2>
+          <h1 className="text-sm font-black tracking-tight text-white uppercase flex items-center justify-center gap-1">
+            {language === 'ca' ? "Escàner QR mòbil" : "Escáner QR móvil"}
+          </h1>
         </div>
 
-        <div className="flex items-center gap-1">
-          <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-          <span className="text-[8px] font-mono text-zinc-400 uppercase tracking-tight">{syncKey.slice(0, 6)}</span>
+        <div className="flex items-center gap-1.5 bg-zinc-950 px-2.5 py-1 rounded-lg border border-zinc-800">
+          <span className={`w-2 h-2 rounded-full ${
+            connectionStatus === 'connected' ? 'bg-emerald-500 animate-pulse' :
+            connectionStatus === 'connecting' ? 'bg-amber-400 animate-spin' :
+            'bg-rose-500'
+          }`} />
+          <span className="text-[10px] font-mono text-zinc-300 font-bold">
+            {syncKey}
+          </span>
         </div>
       </header>
 
-      {/* Main interface content */}
+      {/* Main Container */}
       <main className="flex-1 max-w-md mx-auto w-full p-4 flex flex-col justify-between space-y-4">
         
         {/* Connection status banner */}
-        <div className="bg-zinc-900/60 rounded-2xl border border-[#ff0090]/10 p-3 flex items-center gap-3">
-          <div className="p-2 bg-[#ff0090]/10 text-[#ff0090] rounded-xl self-start">
-            <Smartphone size={20} className="animate-bounce" />
+        <div className={`rounded-2xl border p-3.5 flex items-center gap-3 transition-colors ${
+          connectionStatus === 'connected' ? 'bg-emerald-950/30 border-emerald-500/30 text-emerald-300' :
+          connectionStatus === 'connecting' ? 'bg-amber-950/30 border-amber-500/30 text-amber-300' :
+          'bg-rose-950/30 border-rose-500/30 text-rose-300'
+        }`} id="mobile-connection-status-card">
+          <div className={`p-2.5 rounded-xl ${
+            connectionStatus === 'connected' ? 'bg-emerald-500/20 text-emerald-400' :
+            connectionStatus === 'connecting' ? 'bg-amber-500/20 text-amber-400' :
+            'bg-rose-500/20 text-rose-400'
+          }`}>
+            <Smartphone size={22} className={connectionStatus === 'connected' ? '' : 'animate-pulse'} />
           </div>
           <div className="flex-1">
-            <h3 className="font-bold text-[11px] uppercase text-zinc-300 tracking-wide">
-              {language === 'ca' ? "Estat del Canal Síncron" : "Estado del Canal Síncro"}
+            <h3 className="font-bold text-[11px] uppercase tracking-wide opacity-80">
+              {language === 'ca' ? "Estat de connexió amb el PC" : "Estado de conexión con el PC"}
             </h3>
-            <p className="text-xs text-[#ff0090] font-bold mt-0.5 flex items-center gap-1 font-mono">
-              <Zap size={10} /> {statusText}
+            <p className="text-xs font-black mt-0.5 flex items-center gap-1.5 font-sans">
+              {connectionStatus === 'connected' && (
+                <>
+                  <Check size={14} className="stroke-[3] text-emerald-400" />
+                  {language === 'ca' ? "Mòbil connectat a l'ordinador" : "Móvil conectado al ordenador"}
+                </>
+              )}
+              {connectionStatus === 'connecting' && (
+                <>
+                  <RotateCw size={14} className="animate-spin text-amber-400" />
+                  {language === 'ca' ? "Connectant a la sessió..." : "Conectando a la sesión..."}
+                </>
+              )}
+              {connectionStatus === 'expired' && (
+                <>
+                  <AlertTriangle size={14} className="text-rose-400" />
+                  {language === 'ca' ? "Sessió caducada. Torneu a enllaçar" : "Sesión caducada. Vuelve a enlazar"}
+                </>
+              )}
+              {connectionStatus === 'error' && (
+                <>
+                  <AlertTriangle size={14} className="text-rose-400" />
+                  {connectionError || (language === 'ca' ? "Error de connexió" : "Error de conexión")}
+                </>
+              )}
             </p>
           </div>
         </div>
 
-        {/* View tab switches */}
-        <div className="flex border border-zinc-800 p-1 bg-zinc-900 rounded-2xl" id="mobile-tabs">
-          <button
-            type="button"
-            onClick={() => setActiveTab('camera')}
-            className={`flex-1 py-2 text-center text-xs font-bold rounded-xl transition ${
-              activeTab === 'camera' ? 'bg-[#ff0090] text-white' : 'text-zinc-400 hover:text-white'
-            }`}
-          >
-            <Camera size={14} className="inline mr-1" /> {language === 'ca' ? 'Utilitzar Càmera Mòbil' : 'Utilizar Cámara Móvil'}
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('search')}
-            className={`flex-1 py-1.5 text-center text-xs font-bold rounded-xl transition ${
-              activeTab === 'search' ? 'bg-[#ff0090] text-white' : 'text-zinc-400 hover:text-white'
-            }`}
-          >
-            <Search size={14} className="inline mr-1" /> {language === 'ca' ? 'Cercar i Cridar PC' : 'Buscar y Llamar PC'}
-          </button>
+        {/* Live Camera Scanner Viewport */}
+        <div className="flex-1 flex flex-col justify-center items-center">
+          <div className="relative w-full max-w-[320px] aspect-square bg-zinc-900 rounded-3xl overflow-hidden border-2 border-zinc-800 shadow-2xl flex flex-col items-center justify-center">
+            
+            {hasCameraPermission === null ? (
+              <div className="p-6 text-center space-y-3">
+                <RotateCw className="animate-spin mx-auto text-zinc-400" size={32} />
+                <p className="text-xs text-zinc-400 font-medium">
+                  {language === 'ca' ? 'Sol·licitant accés a la càmera...' : 'Solicitando acceso a la cámara...'}
+                </p>
+              </div>
+            ) : hasCameraPermission === false ? (
+              <div className="p-6 text-center space-y-3">
+                <AlertTriangle className="mx-auto text-rose-500 animate-pulse" size={36} />
+                <p className="text-xs text-zinc-300 font-medium leading-relaxed">
+                  {cameraError}
+                </p>
+                <button
+                  type="button"
+                  onClick={startCamera}
+                  className="px-4 py-2.5 bg-[#ff0090] hover:bg-[#e0007e] text-white rounded-xl text-xs font-bold transition shadow"
+                  id="btn-retry-camera"
+                >
+                  {language === 'ca' ? 'Tornar a provar càmera' : 'Reintentar cámara'}
+                </button>
+              </div>
+            ) : (
+              <div className="relative w-full h-full">
+                {/* Camera feed */}
+                <video 
+                  ref={videoRef} 
+                  autoPlay 
+                  playsInline 
+                  muted 
+                  className="w-full h-full object-cover" 
+                  id="mobile-video-stream"
+                />
+
+                {/* Target overlay */}
+                <div className="absolute inset-0 border-[36px] border-zinc-950/70 pointer-events-none">
+                  <div className="w-full h-full border-2 border-dashed border-[#ff0090] rounded-2xl relative shadow-inner">
+                    {/* Animated laser line */}
+                    {isScanning && (
+                      <div className="absolute left-1 right-1 h-0.5 bg-[#ff0090] shadow-[0_0_12px_#ff0090] animate-bounce top-1/2" />
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Instant HUD Status Banner when Code is Transmitted */}
+            {transmitStatus === 'transmitting' && (
+              <div className="absolute inset-0 bg-black/85 backdrop-blur-xs flex flex-col items-center justify-center text-center p-6 space-y-2 z-20 animate-in fade-in duration-100">
+                <RotateCw size={40} className="animate-spin text-[#ff0090]" />
+                <h4 className="font-bold text-sm text-white">
+                  {language === 'ca' ? "Enviant a l'ordinador..." : "Enviando al ordenador..."}
+                </h4>
+                <p className="text-xs font-mono text-[#ff0090] font-bold bg-[#ff0090]/10 px-3 py-1 rounded-lg">
+                  {lastScannedCode}
+                </p>
+              </div>
+            )}
+
+            {transmitStatus === 'success' && (
+              <div className="absolute inset-0 bg-black/90 backdrop-blur-xs flex flex-col items-center justify-center text-center p-6 space-y-3 z-20 animate-in zoom-in-95 duration-150">
+                <div className="w-16 h-16 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center shadow-lg border border-emerald-500/40">
+                  <CheckCircle size={36} className="animate-bounce" />
+                </div>
+                <div>
+                  <h4 className="font-black text-sm text-white uppercase tracking-wide">
+                    {language === 'ca' ? "Codi enviat correctament" : "Código enviado correctamente"}
+                  </h4>
+                  <p className="text-xs font-mono text-emerald-400 font-bold mt-1 bg-emerald-950/60 px-3 py-1 rounded-lg inline-block border border-emerald-500/30">
+                    {lastScannedCode}
+                  </p>
+                </div>
+                <p className="text-[11px] text-zinc-400 font-sans">
+                  {language === 'ca' ? "A punt per al següent escaneig..." : "Listo para el siguiente escaneo..."}
+                </p>
+              </div>
+            )}
+
+            {transmitStatus === 'error' && (
+              <div className="absolute inset-0 bg-black/90 backdrop-blur-xs flex flex-col items-center justify-center text-center p-6 space-y-2 z-20 animate-in zoom-in-95 duration-150">
+                <div className="w-14 h-14 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center">
+                  <AlertTriangle size={32} />
+                </div>
+                <h4 className="font-black text-xs text-white uppercase">
+                  {language === 'ca' ? "Error en enviar el codi" : "Error al enviar el código"}
+                </h4>
+                <p className="text-[11px] text-zinc-400">
+                  {language === 'ca' ? "Torneu-ho a provar" : "Vuelva a intentarlo"}
+                </p>
+              </div>
+            )}
+          </div>
+
+          <p className="text-xs text-zinc-400 text-center mt-3 max-w-xs leading-relaxed font-sans">
+            {language === 'ca'
+              ? "Apunta la càmera cap al codi QR del comprovant o email de la inscripció."
+              : "Apunta la cámara hacia el código QR del comprobante o email de la inscripción."}
+          </p>
+
+          {/* Scanned counter badge */}
+          {scannedCount > 0 && (
+            <div className="mt-2 inline-flex items-center gap-1.5 px-3 py-1 bg-zinc-900 border border-zinc-800 rounded-full text-[11px] text-zinc-400 font-mono">
+              <Check size={12} className="text-emerald-400 stroke-[3]" />
+              <span>{language === 'ca' ? `Codis enviats: ${scannedCount}` : `Códigos enviados: ${scannedCount}`}</span>
+            </div>
+          )}
         </div>
 
-        {/* Dynamic tabs container content */}
-        <div className="flex-1 flex flex-col justify-center min-h-[280px]">
-          {activeTab === 'camera' ? (
-            <div className="space-y-4 text-center">
-              {/* Virtual Scanner viewframe */}
-              <div className="relative w-full max-w-xs mx-auto aspect-square bg-zinc-900 rounded-3xl overflow-hidden border border-zinc-800 flex flex-col items-center justify-center">
-                {hasCameraPermission === null ? (
-                  <div className="p-4 space-y-2 text-zinc-500 text-xs">
-                    <RotateCw className="animate-spin mx-auto text-zinc-400" size={24} />
-                    <p>{language === 'ca' ? 'Iniciant càmera del mòbil...' : 'Iniciando cámara del móvil...'}</p>
-                  </div>
-                ) : hasCameraPermission === false ? (
-                  <div className="p-6 space-y-3 text-zinc-400 text-xs">
-                    <AlertTriangle className="mx-auto text-amber-500 animate-pulse" size={32} />
-                    <p>{errorMessage}</p>
-                    <button
-                      type="button"
-                      onClick={startCamera}
-                      className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white rounded-xl text-xs font-bold transition"
-                    >
-                      {language === 'ca' ? 'Tornar-ho a intentar' : 'Volver a intentar'}
-                    </button>
-                  </div>
-                ) : (
-                  <div className="relative w-full h-full">
-                    {/* Living WebCam device feed */}
-                    <video 
-                      ref={videoRef} 
-                      autoPlay 
-                      playsInline 
-                      muted 
-                      className="w-full h-full object-cover" 
-                      id="mobile-video-stream"
-                    />
-
-                    {/* Matrix targeted overlays matching screen focus */}
-                    <div className="absolute inset-0 border-[35px] border-zinc-950/70 pointer-events-none">
-                      <div className="w-full h-full border-2 border-dashed border-[#ff0090] rounded-xl relative">
-                        {/* Interactive scan light ray */}
-                        <div className="absolute left-0 right-0 h-0.5 bg-[#ff0090] shadow-md shadow-[#ff0090]/80 animate-bounce top-1/2" />
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Scanned popup notification HUD on camera stream */}
-                {lastScannedName && (
-                  <div className="absolute inset-0 bg-black/90 flex flex-col items-center justify-center text-center p-6 space-y-3 z-20 animate-in fade-in zoom-in-95 duration-150">
-                    <div className="p-3 bg-[#ff0090]/10 text-[#ff0090] rounded-full">
-                      <CheckCircle size={36} className="animate-bounce" />
-                    </div>
-                    <span className="font-mono text-[9px] uppercase tracking-widest text-[#ff0090] font-bold">
-                      {language === 'ca' ? "RECONEGUT CORRECTAMENT" : "RECONOCIDO CORRECTAMENTE"}
-                    </span>
-                    <h4 className="font-sans font-black text-sm text-white max-w-xs">{lastScannedName}</h4>
-                    <p className="text-[10px] text-zinc-500 font-mono">
-                      {language === 'ca' ? "Dades trameses a la secretaria..." : "Datos enviados a la secretaría..."}
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              <p className="text-[11px] text-zinc-400 max-w-xs mx-auto leading-relaxed">
-                {language === 'ca'
-                  ? "Apunta la càmera del mòbil cap al codi QR digital o imprès del comprovant del participant."
-                  : "Apunte la cámara del móvil hacia el código QR digital o impreso del comprobante del participante."}
-              </p>
-            </div>
+        {/* Manual Keyboard Input Option (Fallback) */}
+        <div className="border-t border-zinc-900 pt-3">
+          {!showManualInput ? (
+            <button
+              type="button"
+              onClick={() => setShowManualInput(true)}
+              className="w-full py-2.5 px-4 bg-zinc-900 hover:bg-zinc-850 text-zinc-400 hover:text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-2 border border-zinc-800 cursor-pointer"
+              id="btn-toggle-manual-input"
+            >
+              <Keyboard size={14} />
+              {language === 'ca' ? "Introduir codi manualment" : "Introducir código manualmente"}
+            </button>
           ) : (
-            /* Quick client simulator list or manual numeric override */
-            <div className="space-y-4 flex-1 flex flex-col justify-start">
-              <div className="relative">
-                <Search size={14} className="absolute left-3 top-3.5 text-zinc-500" />
+            <form onSubmit={handleManualSubmit} className="space-y-2 bg-zinc-900/80 p-3 rounded-2xl border border-zinc-800">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-zinc-300 uppercase tracking-wide">
+                  {language === 'ca' ? "Codi d'inscripció (ex: TAST-2027-0001)" : "Código de inscripción (ej: TAST-2027-0001)"}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowManualInput(false)}
+                  className="text-zinc-500 hover:text-white p-1"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+              <div className="flex gap-2">
                 <input
                   type="text"
-                  placeholder={language === 'ca' ? "Cerca per nom, cognom o codi..." : "Buscar por nombre, apellido o código..."}
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full bg-zinc-900 border border-zinc-800 rounded-2xl py-3 px-9 text-xs focus:ring-1 focus:ring-brand focus:outline-none"
-                  id="mobile-search-input"
+                  value={manualCode}
+                  onChange={(e) => setManualCode(e.target.value)}
+                  placeholder="TAST-2027-XXXX"
+                  className="flex-1 bg-zinc-950 border border-zinc-750 rounded-xl px-3 py-2 text-xs font-mono font-bold text-white focus:outline-none focus:border-[#ff0090]"
+                  id="mobile-manual-code-input"
+                  autoFocus
                 />
-                {searchQuery && (
-                  <button 
-                    onClick={() => setSearchQuery('')}
-                    className="absolute right-3 top-3.5 text-zinc-400 hover:text-white"
-                  >
-                    <X size={14} />
-                  </button>
-                )}
+                <button
+                  type="submit"
+                  disabled={!manualCode.trim() || transmitStatus === 'transmitting'}
+                  className="px-4 py-2 bg-[#ff0090] hover:bg-[#e0007e] disabled:opacity-50 text-white font-bold text-xs rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow"
+                  id="btn-submit-manual-code"
+                >
+                  <Send size={13} />
+                  {language === 'ca' ? "Enviar" : "Enviar"}
+                </button>
               </div>
-
-              {/* In-app Simulator layout section */}
-              <div className="flex-1 overflow-y-auto max-h-[300px] border border-zinc-900 rounded-2xl bg-zinc-900/10 p-2 space-y-1.5 scrollbar-thin">
-                {filtered.length === 0 ? (
-                  <p className="text-center text-zinc-500 text-[11px] py-12">
-                    {language === 'ca' ? "No s'han trobat parelles que coincideixin" : "No se han encontrado parejas que coincidan"}
-                  </p>
-                ) : (
-                  filtered.map(i => (
-                    <div 
-                      key={i.id}
-                      onClick={() => isScanning && transmitScan(i.id)}
-                      className={`p-3 bg-zinc-900 hover:bg-zinc-800 active:bg-zinc-750 rounded-xl transition cursor-pointer flex justify-between items-center text-xs border border-zinc-800/50 ${
-                        !isScanning ? 'opacity-50 pointer-events-none' : ''
-                      }`}
-                      id={`mobile-list-item-${i.id}`}
-                    >
-                      <div className="max-w-[70%]">
-                        <strong className="text-zinc-200 block truncate">{i.c1Nom} &amp; {i.c2Nom}</strong>
-                        <span className="text-[10px] font-mono text-zinc-500 uppercase">
-                          {i.categoria === CategoriaParella.ADULT 
-                            ? (language === 'ca' ? 'Adult' : 'Adulto') 
-                            : (language === 'ca' ? 'Juvenil' : 'Juvenil')}
-                        </span>
-                      </div>
-                      <div className="text-right">
-                        <span className="inline-block font-mono text-[9px] bg-white/5 text-zinc-300 font-bold px-2 py-0.5 rounded border border-white/5">
-                          {i.codiSeguiment}
-                        </span>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-
-              <p className="text-[10px] text-zinc-500 text-center font-sans tracking-tight">
-                {language === 'ca'
-                  ? "Simulador ràpid: premeu a sobre de qualsevol parella per comprovar l'intercanvi de dades live amb el PC."
-                  : "Simulador rápido: presione sobre cualquier pareja para comprobar el intercambio de datos en vivo con el PC."}
-              </p>
-            </div>
+            </form>
           )}
         </div>
 
       </main>
 
-      {/* Footer support credits */}
-      <footer className="bg-zinc-950 p-4 border-t border-zinc-900 text-center">
-        <p className="font-sans font-black text-[10px] text-zinc-400 flex items-center justify-center gap-1 uppercase tracking-tight">
-          {language === 'ca' ? "EL TAST SECRETARIS ⇆ mòbil enllaçat actiu" : "EL TAST SECRETARIOS ⇆ móvil enlazado activo"}
-        </p>
-        <p className="text-[9px] text-[#ff0090] font-mono mt-0.5 uppercase tracking-wide">
-          {language === 'ca' ? "canal síncron canònica actiu / ntfy broker" : "canal síncrono canónico activo / ntfy broker"}
+      {/* Footer */}
+      <footer className="bg-zinc-950 p-3 border-t border-zinc-900 text-center">
+        <p className="text-[10px] text-zinc-400 font-mono flex items-center justify-center gap-1.5 uppercase">
+          <ShieldCheck size={12} className="text-emerald-400" />
+          {language === 'ca' ? "Connexió segura encriptada amb PC de Secretaria" : "Conexión segura encriptada con PC de Secretaría"}
         </p>
       </footer>
     </div>

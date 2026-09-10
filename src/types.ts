@@ -205,3 +205,24 @@ export interface StaffMember {
   creadoEn: string;
   actiu: boolean;
 }
+
+export type RemoteScannerStatus = 
+  | 'esperando_conexion' 
+  | 'movil_conectado' 
+  | 'esperando_escaneo' 
+  | 'codigo_recibido' 
+  | 'sesion_caducada' 
+  | 'movil_desconectado';
+
+export interface RemoteScannerSession {
+  sessionId: string;
+  syncKey: string;
+  status: RemoteScannerStatus;
+  createdAt: number;
+  expiresAt: number;
+  lastPingPc: number;
+  lastPingMobile: number;
+  lastScannedCode?: string | null;
+  scannedAt?: number | null;
+}
+

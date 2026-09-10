@@ -518,6 +518,83 @@ export async function getSupabaseInscripcionById(id: string): Promise<Inscripcio
 }
 
 /**
+ * Searches and retrieves a single inscription by tracking code (codiSeguiment) or UUID/ID.
+ * Validates the format, queries Supabase securely, and returns the full parsed registration.
+ */
+export async function getSupabaseInscripcionByCodeOrId(codeOrId: string): Promise<Inscripcio | null> {
+  if (!supabase || !codeOrId) return null;
+  const clean = codeOrId.trim();
+  if (!clean) return null;
+
+  try {
+    // 1. Try finding by codiSeguiment in 'inscripciones'
+    let { data, error } = await supabase
+      .from('inscripciones')
+      .select('*')
+      .ilike('codiSeguiment', clean)
+      .maybeSingle();
+
+    // 2. Try finding by snake_case 'codi_seguiment'
+    if (!data) {
+      const resCodiSnake = await supabase
+        .from('inscripciones')
+        .select('*')
+        .ilike('codi_seguiment', clean)
+        .maybeSingle();
+      data = resCodiSnake.data;
+    }
+
+    // 3. Try finding by id
+    if (!data) {
+      const resId = await supabase
+        .from('inscripciones')
+        .select('*')
+        .eq('id', clean)
+        .maybeSingle();
+      data = resId.data;
+    }
+
+    // 4. Try fallback table 'inscripcions'
+    if (!data) {
+      const resFallback = await supabase
+        .from('inscripcions')
+        .select('*')
+        .ilike('codiSeguiment', clean)
+        .maybeSingle();
+      if (resFallback.data) {
+        data = resFallback.data;
+      } else {
+        const resFallbackSnake = await supabase
+          .from('inscripcions')
+          .select('*')
+          .ilike('codi_seguiment', clean)
+          .maybeSingle();
+        if (resFallbackSnake.data) {
+          data = resFallbackSnake.data;
+        } else {
+          const resFallbackId = await supabase
+            .from('inscripcions')
+            .select('*')
+            .eq('id', clean)
+            .maybeSingle();
+          data = resFallbackId.data;
+        }
+      }
+    }
+
+    if (data) {
+      const parsed = parseInscripcionesRows([data])[0];
+      return parsed || null;
+    }
+    return null;
+  } catch (err) {
+    console.error("Exception fetching inscription by code or ID:", err);
+    return null;
+  }
+}
+
+
+/**
  * Saves and updates a single inscription on the 'inscripciones' table (Supabase).
  * Uses robust attempts to handle standard schema types across camelCase and snake_case databases.
  */

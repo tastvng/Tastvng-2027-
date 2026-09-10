@@ -175,7 +175,8 @@ export default function Confirmation({ registration, onClear, onUpdate, config }
     };
   }, []);
 
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&color=e6007e&data=${encodeURIComponent(registration.id)}`;
+  const qrIdentifier = registration.codiSeguiment || registration.id;
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&color=e6007e&data=${encodeURIComponent(qrIdentifier)}`;
 
   const sendRealEmail = async () => {
     setSmtpStatus('sending');
@@ -255,7 +256,7 @@ export default function Confirmation({ registration, onClear, onUpdate, config }
           <!-- QR Container -->
           <div style="text-align: center; margin: 30px 0;">
             <div style="display: inline-block; padding: 15px; background-color: #f8f9fa; border: 1px solid #e1e1e6; border-radius: 20px;">
-              <img src="https://api.qrserver.com/v1/create-qr-code/?size=250x250&color=e6007e&data=${encodeURIComponent(registration.id)}" 
+              <img src="https://api.qrserver.com/v1/create-qr-code/?size=250x250&color=e6007e&data=${encodeURIComponent(qrIdentifier)}" 
                    alt="QR Code" width="180" height="180" style="display: block; border-radius: 10px;" />
             </div>
             <p style="font-size: 11px; color: #888890; margin-top: 10px; font-family: monospace; text-transform: uppercase; letter-spacing: 0.5px;">

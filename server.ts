@@ -12,6 +12,7 @@ import adminUsersListHandler from "./api/admin-users-list";
 import adminUserCreateHandler from "./api/admin-user-create";
 import adminUserUpdateHandler from "./api/admin-user-update";
 import adminUserDeleteHandler from "./api/admin-user-delete";
+import scannerSessionHandler from "./api/scanner-session";
 
 dotenv.config();
 
@@ -547,6 +548,7 @@ async function startServer() {
   app.all("/api/admin-user-delete", adminUserDeleteHandler);
   app.all("/api/admin/users", adminUsersHandler);
   app.all("/api/admin/users/:id", adminUsersHandler);
+  app.all("/api/scanner-session", scannerSessionHandler);
 
   // Base API healthcheck endpoint
   app.get("/api/health", (req, res) => {

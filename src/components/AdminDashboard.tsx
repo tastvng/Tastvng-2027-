@@ -55,7 +55,7 @@ interface AdminDashboardProps {
   inscripcions: Inscripcio[];
   config: SistemaConfig;
   onSelectInscripcio: (id: string) => void;
-  onGoToScanner: () => void;
+  onGoToScanner: (openPairing?: boolean) => void;
   onGoToConfig: () => void;
   onLogout: () => void;
   onAddLog?: (txt: string) => void;
@@ -1401,11 +1401,11 @@ export default function AdminDashboard({
 
         <div className="flex items-center flex-wrap gap-2">
           <button 
-            onClick={onGoToScanner}
-            className="text-xs bg-fuchsia-600 hover:bg-fuchsia-500 font-bold px-4 py-2.5 rounded-xl transition flex items-center gap-1.5 shadow cursor-pointer"
+            onClick={() => onGoToScanner(true)}
+            className="text-xs bg-[#ff0090] hover:bg-[#e0007e] text-white font-bold px-4 py-2.5 rounded-xl transition flex items-center gap-1.5 shadow-md shadow-[#ff0090]/20 cursor-pointer"
             id="btn-nav-scanner"
           >
-            <QrCode size={14} /> {language === 'ca' ? "Escàner Mòbil" : "Escáner Móvil"}
+            <Smartphone size={14} /> {language === 'ca' ? "ENLLAÇAR MÒBIL (QR)" : "ENLAZAR MÓVIL (QR)"}
           </button>
           
           <button 
