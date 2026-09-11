@@ -408,6 +408,7 @@ export default function Confirmation({ registration, onClear, onUpdate, config }
       }
 
       if (errorsList.length === 0) {
+        console.log('[EMAIL ok]:', { to: emailList, codi: registration.codiSeguiment });
         setSmtpStatus('success');
         if (onUpdate) {
           onUpdate({
@@ -419,8 +420,10 @@ export default function Confirmation({ registration, onClear, onUpdate, config }
           });
         }
       } else {
+        const errorMsg = errorsList.join(', ');
+        console.error('[EMAIL error]:', { to: emailList, codi: registration.codiSeguiment, error: errorMsg });
         setSmtpStatus('error');
-        setSmtpError(errorsList.join(', '));
+        setSmtpError(errorMsg);
         if (onUpdate) {
           onUpdate({
             ...registration,
@@ -432,7 +435,7 @@ export default function Confirmation({ registration, onClear, onUpdate, config }
         }
       }
     } catch (err: any) {
-      console.error("Error sending registration SMTP mail:", err);
+      console.error("[EMAIL error]:", { to: registration.emailContactoPareja, codi: registration.codiSeguiment, error: err?.message || err });
       setSmtpStatus('error');
       setSmtpError(err.message || 'Error de conexión');
       if (onUpdate) {
@@ -501,12 +504,14 @@ export default function Confirmation({ registration, onClear, onUpdate, config }
             <AlertTriangle className="text-red-500 shrink-0 mt-0.5" size={24} />
             <div>
               <p className="font-sans font-black text-red-950 text-sm">
-                {language === 'ca' ? "⚠️ El correu de confirmació no s'ha enviat" : "⚠️ El correo de confirmación no se ha enviado"}
+                {language === 'ca'
+                  ? "⚠️ Inscripció guardada correctament, però no s'ha pogut enviar el correu de confirmació"
+                  : "⚠️ Inscripción guardada correctamente, pero no se pudo enviar el correo de confirmación"}
               </p>
               <p className="font-sans text-xs text-red-800 mt-1 leading-relaxed">
                 {language === 'ca' 
-                  ? "S'ha trobat un error en el servidor de correu d'El Tast. Podeu provar de tornar-lo a enviar de forma manual ara."
-                  : "Se ha encontrado un error en el servidor de correo de El Tast. Podéis probar a volver a enviarlo de forma manual ahora."}
+                  ? "La vostra plaça està registrada i segura a la base de dades. Podeu prémer el botó per reintentar l'enviament del correu o descarregar el comprovant en PDF."
+                  : "Vuestra plaza está registrada y asegurada en la base de datos. Podéis pulsar el botón para reintentar el envío del correo o descargar el comprobante en PDF."}
               </p>
               <p className="text-[10px] font-mono text-red-650 mt-1 bg-red-100/40 px-2 py-1 rounded border border-red-200/30">
                 {language === 'ca' ? `Detalls de l'error: ${smtpError}` : `Detalles del error: ${smtpError}`}

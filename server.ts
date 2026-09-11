@@ -554,14 +554,18 @@ async function startServer() {
   app.all("/api/smtp-status", emailHandler);
   app.all("/api/test-smtp", emailHandler);
 
-  // 3. /api/scanner & aliases
+  // 3. /api/inscriptions
+  app.all("/api/inscriptions", inscriptionsHandler);
+  app.use("/api/inscriptions", inscriptionsHandler);
+
+  // 4. /api/scanner & aliases
   app.all("/api/scanner", scannerHandler);
   app.all("/api/scanner-session", scannerHandler);
 
-  // 4. /api/config & aliases
+  // 5. /api/config & aliases
   app.all("/api/config", configHandler);
 
-  // 5. /api/health
+  // 6. /api/health
   app.all("/api/health", healthHandler);
 
   // Lazy load GoogleGenAI client for translation

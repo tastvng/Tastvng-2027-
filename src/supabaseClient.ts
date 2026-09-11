@@ -403,29 +403,73 @@ const CAMEL_COLUMNS = "id, codiSeguiment, categoria, c1Nom, c1Cognoms, c1Email, 
 
 const SNAKE_COLUMNS = "id, codi_seguiment, categoria, c1_nom, c1_cognoms, c1_email, c1_telefon, c1_talla, c1_es_menor, c1_tutor_nom, c1_tutor_cognoms, c1_tutor_dni, c1_tutor_telefon, c1_uniforme_tipus, c2_nom, c2_cognoms, c2_email, c2_telefon, c2_talla, c2_es_menor, c2_tutor_nom, c2_tutor_cognoms, c2_tutor_dni, c2_tutor_telefon, c2_uniforme_tipus, respostes_cuestionari, seleccions_uniforme, preu_calculat, te_domas_balco, te_mocadors_extra, estat_pagament, metode_pagament, estat_dni, entrega_material, estat_inscripcio, posicio_global, bandera, creado_en, actualizado_en";
 
+export interface SaveInscripcionResult {
+  ok: boolean;
+  step?: string;
+  id?: string;
+  codiSeguiment?: string;
+  error?: string;
+  code?: string;
+  details?: any;
+  hint?: string;
+  data?: any;
+}
+
 /**
- * Downloads lightweight metadata of inscriptions from Supabase (excluding highly heavy Base64 DNI blobs).
+ * Downloads lightweight metadata of inscriptions directly from Supabase (excluding highly heavy Base64 DNI blobs).
+ * Reads directly from public.inscripciones using authoritative server API or direct Supabase client.
  */
 export async function getSupabaseInscripciones(): Promise<Inscripcio[]> {
+  // 1. Authoritative API route reading directly from public.inscripciones with Service Role
+  try {
+    const apiRes = await fetch('/api/inscriptions?action=list', {
+      cache: 'no-store'
+    });
+    if (apiRes.ok) {
+      const json = await apiRes.json();
+      if (json && json.ok && Array.isArray(json.data)) {
+        if (json.data.length === 0) {
+          console.log('[Secretaría SELECT]: 0 registres trobats a public.inscripciones.');
+        } else {
+          console.log(`[Secretaría SELECT ok]: table public.inscripciones, count: ${json.data.length}`);
+        }
+        return parseInscripcionesRows(json.data);
+      }
+    }
+  } catch (e) {
+    console.warn("Could not fetch /api/inscriptions?action=list, attempting direct Supabase client query:", e);
+  }
+
   if (!supabase) return [];
   try {
     // Attempt 1: Fetch using camelCase column list (excluding heavy DNI files) with safety limit of 2000
     const { data, error } = await supabase
       .from('inscripciones')
       .select(CAMEL_COLUMNS)
+      .order('creadoEn', { ascending: false })
       .limit(2000);
       
     if (!error && data) {
+      if (data.length === 0) {
+        console.log('[Secretaría SELECT]: 0 registres trobats a public.inscripciones.');
+      } else {
+        console.log(`[Secretaría SELECT ok]: table public.inscripciones, count: ${data.length}`);
+      }
       return parseInscripcionesRows(data);
     }
     
-    // Attempt 2: Fetch using snake_case column list for 'inscripciones' table silently
+    // Attempt 2: Fetch using snake_case column list for 'inscripciones' table
     const resSnake = await supabase
       .from('inscripciones')
       .select(SNAKE_COLUMNS)
       .limit(2000);
       
     if (!resSnake.error && resSnake.data) {
+      if (resSnake.data.length === 0) {
+        console.log('[Secretaría SELECT]: 0 registres trobats a public.inscripciones.');
+      } else {
+        console.log(`[Secretaría SELECT ok]: table public.inscripciones, count: ${resSnake.data.length}`);
+      }
       return parseInscripcionesRows(resSnake.data);
     }
     
@@ -449,39 +493,27 @@ export async function getSupabaseInscripciones(): Promise<Inscripcio[]> {
       return parseInscripcionesRows(resFallbackSnake.data);
     }
 
-    // Safe Fallback 1: Select '*' limited to 100 entries only from 'inscripciones'
+    // Safe Fallback 1: Select '*' from 'inscripciones'
     const resStar = await supabase
       .from('inscripciones')
       .select('*')
-      .limit(100);
+      .limit(2000);
       
     if (!resStar.error && resStar.data) {
       return parseInscripcionesRows(resStar.data);
     }
 
-    // Safe Fallback 2: Select '*' from fallback table 'inscripcions'
-    const resStarFallback = await supabase
-      .from('inscripcions')
-      .select('*')
-      .limit(100);
-      
-    if (!resStarFallback.error && resStarFallback.data) {
-      return parseInscripcionesRows(resStarFallback.data);
-    }
-
-    // If ALL attempts failed, log a single warning with details
-    console.warn("All column-specific and table fallback attempts for loading inscriptions from Supabase failed.", {
-      attempt1Error: error?.message || error,
-      attempt2Error: resSnake.error?.message || resSnake.error,
-      attempt3Error: resFallbackCamel.error?.message || resFallbackCamel.error,
-      attempt4Error: resFallbackSnake.error?.message || resFallbackSnake.error,
-      starError: resStar.error?.message || resStar.error,
-      starFallbackError: resStarFallback.error?.message || resStarFallback.error
+    console.error("[Secretaría SELECT error]:", {
+      table: "public.inscripciones",
+      message: error?.message || "Error desconegut consultant inscripciones",
+      code: error?.code,
+      details: error?.details,
+      hint: error?.hint
     });
 
     return [];
-  } catch (err) {
-    console.error("Exception fetching inscriptions from Supabase:", err);
+  } catch (err: any) {
+    console.error("[Secretaría SELECT error]:", err?.message || err);
     return [];
   }
 }
@@ -596,27 +628,78 @@ export async function getSupabaseInscripcionByCodeOrId(codeOrId: string): Promis
 
 /**
  * Saves and updates a single inscription on the 'inscripciones' table (Supabase).
- * Uses robust attempts to handle standard schema types across camelCase and snake_case databases.
+ * Uses the authoritative server API route (/api/inscriptions?action=create) with Service Role,
+ * preventing RLS rejection and returning the real Supabase error if the INSERT fails.
  */
-export async function saveSupabaseInscripcion(ins: Inscripcio): Promise<boolean> {
-  if (!supabase) return false;
-  
-  // Diagnòstic abans d'escriure a 'inscripciones'
+export async function saveSupabaseInscripcion(ins: Inscripcio): Promise<SaveInscripcionResult> {
+  const contactEmail = (ins.emailContactoPareja || ins.c1Email || ins.c2Email || '').trim();
+  const contactTelefon = (ins.telefonContactoPareja || ins.c1Telefon || ins.c2Telefon || '').trim();
+
+  // 1. Authoritative primary route via backend server (uses Service Role to bypass RLS)
+  try {
+    const apiRes = await fetch('/api/inscriptions?action=create', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ registration: ins })
+    });
+
+    const resJson = await apiRes.json().catch(() => null);
+
+    if (apiRes.ok && resJson?.ok) {
+      console.log(`[INSERT ok]: table public.inscripciones, id: ${resJson.id || ins.id}, codi: ${resJson.codiSeguiment || ins.codiSeguiment}, user: ${ins.c1Nom} & ${ins.c2Nom}`);
+      return {
+        ok: true,
+        step: 'database_insert',
+        id: resJson.id || ins.id,
+        codiSeguiment: resJson.codiSeguiment || ins.codiSeguiment,
+        data: resJson.data
+      };
+    }
+
+    if (resJson && resJson.ok === false) {
+      console.error("[INSERT error]:", {
+        table: "public.inscripciones",
+        step: resJson.step,
+        message: resJson.error,
+        code: resJson.code,
+        details: resJson.details,
+        hint: resJson.hint
+      });
+      return {
+        ok: false,
+        step: resJson.step || 'database_insert',
+        error: resJson.error || "Error en guardar la inscripció a la base de dades.",
+        code: resJson.code || String(apiRes.status),
+        details: resJson.details,
+        hint: resJson.hint
+      };
+    }
+  } catch (netErr: any) {
+    console.warn("Could not reach /api/inscriptions?action=create, trying direct client fallback:", netErr);
+  }
+
+  // 2. Direct client fallback (if backend API is unreachable)
+  if (!supabase) {
+    return {
+      ok: false,
+      step: 'database_insert',
+      error: "Supabase no està configurat ni disponible.",
+      code: "NO_CLIENT"
+    };
+  }
+
   await logSupabaseWriteDiagnostic('inscripciones', `UPSERT (id: ${ins.id}, codi: ${ins.codiSeguiment})`);
 
   try {
     const tableName = 'inscripciones';
-    const contactEmail = (ins.emailContactoPareja || ins.c1Email || ins.c2Email || '').trim();
-    const contactTelefon = (ins.telefonContactoPareja || ins.c1Telefon || ins.c2Telefon || '').trim();
-    
-    // Store common contact in dynamic responses as well for schema resiliency
     const enrichedRespostes = {
       ...(ins.respostesCuestionari || {}),
       emailContactoPareja: contactEmail,
       telefonContactoPareja: contactTelefon
     };
 
-    // Attempt 1: Best match using exact verified columns (CamelCase standard, snake_case for status & position)
     let response = await supabase
       .from(tableName)
       .upsert({
@@ -662,65 +745,41 @@ export async function saveSupabaseInscripcion(ins: Inscripcio): Promise<boolean>
         creadoEn: ins.creadoEn,
         actualizadoEn: ins.actualizadoEn
       });
-      
-    if (!response.error) return true;
-    let lastError = response.error;
-    
-    // Attempt 2: Full SnakeCase fallback columns
-    response = await supabase
-      .from(tableName)
-      .upsert({
+
+    if (!response.error) {
+      console.log(`[INSERT ok]: table public.inscripciones, id: ${ins.id}, codi: ${ins.codiSeguiment}, user: ${ins.c1Nom} & ${ins.c2Nom}`);
+      return {
+        ok: true,
+        step: 'database_insert',
         id: ins.id,
-        codi_seguiment: ins.codiSeguiment,
-        categoria: ins.categoria,
-        c1_nom: ins.c1Nom,
-        c1_cognoms: ins.c1Cognoms,
-        c1_email: contactEmail,
-        c1_telefon: contactTelefon,
-        c1_talla: ins.c1Talla,
-        c1_dni_url: ins.c1DniUrl,
-        c1_es_menor: ins.c1EsMenor || false,
-        c1_tutor_nom: ins.c1TutorNom || null,
-        c1_tutor_cognoms: ins.c1TutorCognoms || null,
-        c1_tutor_dni: ins.c1TutorDni || null,
-        c1_tutor_telefon: ins.c1TutorTelefon || null,
-        c1_uniforme_tipus: ins.c1UniformeTipus || null,
-        c2_nom: ins.c2Nom,
-        c2_cognoms: ins.c2Cognoms,
-        c2_email: contactEmail,
-        c2_telefon: contactTelefon,
-        c2_talla: ins.c2Talla,
-        c2_dni_url: ins.c2DniUrl,
-        c2_es_menor: ins.c2EsMenor || false,
-        c2_tutor_nom: ins.c2TutorNom || null,
-        c2_tutor_cognoms: ins.c2TutorCognoms || null,
-        c2_tutor_dni: ins.c2TutorDni || null,
-        c2_tutor_telefon: ins.c2TutorTelefon || null,
-        c2_uniforme_tipus: ins.c2UniformeTipus || null,
-        respostes_cuestionari: enrichedRespostes,
-        seleccions_uniforme: ins.seleccionsUniforme || {},
-        preu_calculat: ins.preuCalculat,
-        te_domas_balco: ins.teDomasBalco,
-        te_mocadors_extra: ins.teMocadorsExtra,
-        estat_pagament: ins.estatPagament,
-        metode_pagament: ins.metodePagament,
-        estat_dni: ins.estatDni,
-        entrega_material: ins.entregaMaterial,
-        estat_inscripcio: ins.estatInscripcio || 'obertes',
-        posicio_global: ins.posicioGlobal || null,
-        bandera: ins.bandera !== undefined ? ins.bandera : 0,
-        creado_en: ins.creadoEn,
-        actualizado_en: ins.actualizadoEn
-      });
+        codiSeguiment: ins.codiSeguiment
+      };
+    }
 
-    if (!response.error) return true;
-    lastError = response.error;
+    console.error("[INSERT error]:", {
+      table: "public.inscripciones",
+      message: response.error.message,
+      code: response.error.code,
+      details: response.error.details,
+      hint: response.error.hint
+    });
 
-    console.error("All adaptive column structure attempts for 'inscripciones' table failed:", lastError);
-    return false;
-  } catch (err) {
-    console.error("Exception saving inscription to Supabase:", err);
-    return false;
+    return {
+      ok: false,
+      step: 'database_insert',
+      error: response.error.message,
+      code: response.error.code,
+      details: response.error.details,
+      hint: response.error.hint
+    };
+  } catch (err: any) {
+    console.error("[INSERT error]: Exception saving inscription to Supabase:", err);
+    return {
+      ok: false,
+      step: 'database_insert',
+      error: err?.message || "Excepció no controlada registrant a Supabase.",
+      code: err?.code || "UNEXPECTED_ERROR"
+    };
   }
 }
 
@@ -728,6 +787,20 @@ export async function saveSupabaseInscripcion(ins: Inscripcio): Promise<boolean>
  * Removes an inscription by its ID.
  */
 export async function deleteSupabaseInscripcion(id: string): Promise<boolean> {
+  try {
+    const res = await fetch('/api/inscriptions?action=delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id })
+    });
+    if (res.ok) {
+      const json = await res.json();
+      if (json.ok) return true;
+    }
+  } catch (e) {
+    console.warn("API delete route unavailable, falling back to direct client:", e);
+  }
+
   if (!supabase) return false;
   await logSupabaseWriteDiagnostic('inscripciones', `DELETE (id: ${id})`);
   try {

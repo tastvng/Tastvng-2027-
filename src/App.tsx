@@ -496,12 +496,14 @@ export default function App() {
         try {
           const dbInscripcions = await getSupabaseInscripciones();
           if (dbInscripcions && dbInscripcions.length > 0) {
+            console.log(`[Secretaría SELECT ok]: Carregades ${dbInscripcions.length} inscripcions des de public.inscripciones.`);
             setInscripcions(dbInscripcions);
           } else {
+            console.log("[Secretaría SELECT ok]: 0 registres a public.inscripciones.");
             setInscripcions([]);
           }
-        } catch (e) {
-          console.error("Error loading inscriptions dynamically for session:", e);
+        } catch (e: any) {
+          console.error("[Secretaría SELECT error]: Error carregant inscripcions:", e);
           setInscripcions([]);
         }
       } else {
@@ -510,7 +512,7 @@ export default function App() {
     }
 
     loadInscripcions().catch(err => console.error("Unhandled error in loadInscripcions:", err));
-  }, [isAdminLoggedIn]);
+  }, [isAdminLoggedIn, view]);
 
   // Route guard: Prevent direct unauthorized access to admin views
   useEffect(() => {
@@ -667,7 +669,7 @@ export default function App() {
     return 'obertes';
   };
 
-  const addRegistration = async (newReg: Inscripcio) => {
+  const addRegistration = async (newReg: Inscripcio): Promise<{ ok: boolean; error?: string; code?: string; details?: any; hint?: string }> => {
     // 1. Determine local registration status directly from global setting
     const categoryStatus = await getEstatInscripcioGlobalFromDatabase();
     newReg.estatInscripcio = categoryStatus;
@@ -703,37 +705,42 @@ export default function App() {
     const seqNum = String(countCategory + 1).padStart(4, '0');
     newReg.codiSeguiment = `TAST-2027-${prefix}${seqNum}-${randomSuffix}`;
 
-    const updated = [newReg, ...inscripcions];
-    setInscripcions(updated);
-    syncWithGoogle(updated);
-    setActiveRegistration(newReg);
-    setView('confirmacio');
-    addLog(`Preinscripció realitzada amb èxit per a: ${newReg.c1Nom} & ${newReg.c2Nom}. Codi: ${newReg.codiSeguiment}`);
-    const contactEmail = newReg.emailContactoPareja || newReg.c1Email || newReg.c2Email || '';
-    addLog(language === 'ca'
-      ? `📧 SMTP: Correu de confirmació oficial enviat automàticament des de secretaria@eltast.cat a ${contactEmail}`
-      : `📧 SMTP: Correo de confirmación oficial enviado automáticamente desde secretaria@eltast.cat a ${contactEmail}`
-    );
+    // 3. PERSIST FIRST IN SUPABASE:
+    // Only proceed to confirmation if the DB insert completes with ok: true!
     if (isSupabaseConfigured) {
-      try {
-        await saveSupabaseInscripcion(newReg);
-        addLog(`✓ Inscripció registrada persistentment a Supabase.`);
+      const dbResult = await saveSupabaseInscripcion(newReg);
+      if (!dbResult.ok) {
+        console.error("[INSERT error]:", {
+          table: "public.inscripciones",
+          message: dbResult.error,
+          code: dbResult.code,
+          details: dbResult.details,
+          hint: dbResult.hint
+        });
         saveLogger.log(
           'Inscripción',
-          language === 'ca' ? `Nova inscripció: ${newReg.c1Nom} & ${newReg.c2Nom}` : `Nueva inscripción: ${newReg.c1Nom} & ${newReg.c2Nom}`,
-          'success',
-          language === 'ca' ? `Codi: ${newReg.codiSeguiment} - Registrada a Supabase` : `Código: ${newReg.codiSeguiment} - Registrada en Supabase`
-        );
-      } catch (err) {
-        console.error("Error saving inscription to Supabase:", err);
-        saveLogger.log(
-          'Inscripción',
-          language === 'ca' ? `Nova inscripció: ${newReg.c1Nom} & ${newReg.c2Nom}` : `Nueva inscripción: ${newReg.c1Nom} & ${newReg.c2Nom}`,
+          language === 'ca' ? `Error nova inscripció: ${newReg.c1Nom} & ${newReg.c2Nom}` : `Error nueva inscripción: ${newReg.c1Nom} & ${newReg.c2Nom}`,
           'error',
           undefined,
-          err instanceof Error ? err.message : String(err)
+          dbResult.error || 'Error inserint inscripció a Supabase'
         );
+        return {
+          ok: false,
+          error: dbResult.error || "No s'ha pogut guardar la inscripció a la base de dades.",
+          code: dbResult.code || "DB_INSERT_FAILED",
+          details: dbResult.details,
+          hint: dbResult.hint
+        };
       }
+
+      console.log(`[INSERT ok]: table public.inscripciones, id: ${newReg.id}, codi: ${newReg.codiSeguiment}, user: ${newReg.c1Nom} & ${newReg.c2Nom}`);
+      addLog(`✓ Inscripció registrada persistentment a Supabase: ${newReg.codiSeguiment}`);
+      saveLogger.log(
+        'Inscripción',
+        language === 'ca' ? `Nova inscripció: ${newReg.c1Nom} & ${newReg.c2Nom}` : `Nueva inscripción: ${newReg.c1Nom} & ${newReg.c2Nom}`,
+        'success',
+        language === 'ca' ? `Codi: ${newReg.codiSeguiment} - Registrada a Supabase` : `Código: ${newReg.codiSeguiment} - Registrada en Supabase`
+      );
     } else {
       saveLogger.log(
         'Inscripción',
@@ -742,6 +749,16 @@ export default function App() {
         language === 'ca' ? `Codi: ${newReg.codiSeguiment} - Desat localment` : `Código: ${newReg.codiSeguiment} - Guardado localmente`
       );
     }
+
+    // 4. Advance to confirmation view only after DB insert confirmation
+    const updated = [newReg, ...inscripcions];
+    setInscripcions(updated);
+    syncWithGoogle(updated);
+    setActiveRegistration(newReg);
+    setView('confirmacio');
+    addLog(`Preinscripció realitzada amb èxit per a: ${newReg.c1Nom} & ${newReg.c2Nom}. Codi: ${newReg.codiSeguiment}`);
+    
+    return { ok: true };
   };
 
   const addRegistrationManual = async (newReg: Inscripcio) => {
@@ -767,14 +784,25 @@ export default function App() {
     addLog(`Parella afegida manualment des del taulell: ${newReg.c1Nom} & ${newReg.c2Nom}. Codi: ${newReg.codiSeguiment}`);
     if (isSupabaseConfigured) {
       try {
-        await saveSupabaseInscripcion(newReg);
-        addLog(`✓ Inscripció manual registrada persistentment a Supabase.`);
-        saveLogger.log(
-          'Inscripción Manual',
-          language === 'ca' ? `Alta manual: ${newReg.c1Nom} & ${newReg.c2Nom}` : `Alta manual: ${newReg.c1Nom} & ${newReg.c2Nom}`,
-          'success',
-          language === 'ca' ? `Codi: ${newReg.codiSeguiment} - Sincronitzat amb Supabase` : `Código: ${newReg.codiSeguiment} - Sincronizado con Supabase`
-        );
+        const res = await saveSupabaseInscripcion(newReg);
+        if (res.ok) {
+          addLog(`✓ Inscripció manual registrada persistentment a Supabase.`);
+          saveLogger.log(
+            'Inscripción Manual',
+            language === 'ca' ? `Alta manual: ${newReg.c1Nom} & ${newReg.c2Nom}` : `Alta manual: ${newReg.c1Nom} & ${newReg.c2Nom}`,
+            'success',
+            language === 'ca' ? `Codi: ${newReg.codiSeguiment} - Sincronitzat amb Supabase` : `Código: ${newReg.codiSeguiment} - Sincronizado con Supabase`
+          );
+        } else {
+          console.error("Error saving manual inscription to Supabase:", res.error);
+          saveLogger.log(
+            'Inscripción Manual',
+            language === 'ca' ? `Alta manual: ${newReg.c1Nom} & ${newReg.c2Nom}` : `Alta manual: ${newReg.c1Nom} & ${newReg.c2Nom}`,
+            'error',
+            undefined,
+            res.error
+          );
+        }
       } catch (err) {
         console.error("Error saving manual inscription to Supabase:", err);
         saveLogger.log(

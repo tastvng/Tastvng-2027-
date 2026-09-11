@@ -11,6 +11,7 @@ import {
   Plus, 
   Minus, 
   AlertTriangle,
+  AlertCircle,
   ChevronRight,
   Sparkle,
   Database,
@@ -32,7 +33,7 @@ import { DEFAULT_CATEGORIA_DESCRIPTIONS } from '../data';
 
 interface PublicFormProps {
   config: SistemaConfig;
-  onSubmit: (registration: Inscripcio) => void;
+  onSubmit: (registration: Inscripcio) => Promise<{ ok: boolean; error?: string; code?: string; details?: any; hint?: string } | void> | void;
   onGoToLogin: () => void;
 }
 
@@ -41,6 +42,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
   const activeYear = useActiveYear();
 
   const [youtubeUrl, setYoutubeUrl] = useState('https://www.youtube.com/embed/dcY7s1F3jo0');
+  const [submitError, setSubmitError] = useState<{ message: string; code?: string; details?: any } | null>(null);
 
   useEffect(() => {
     const fetchYoutubeUrl = async () => {
@@ -931,8 +933,27 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
         console.warn("Server validation endpoint offline, proceeding with client verification:", e);
       }
 
-      setIsSubmitting(false);
-      onSubmit(novaInscripcio);
+      try {
+        setSubmitError(null);
+        const submitResult = await onSubmit(novaInscripcio);
+        setIsSubmitting(false);
+
+        if (submitResult && submitResult.ok === false) {
+          setSubmitError({
+            message: submitResult.error || "Error desant la inscripció a la base de dades.",
+            code: submitResult.code,
+            details: submitResult.details
+          });
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+      } catch (err: any) {
+        setIsSubmitting(false);
+        setSubmitError({
+          message: err?.message || "Error inesperat enviant la inscripció.",
+          code: "SUBMIT_EXCEPTION"
+        });
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
     }, 2000);
   };
 
@@ -950,8 +971,8 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
           >
             <div className="relative w-28 h-28 mb-8">
               <motion.div 
-                animate={{ rotate: 360 }}
-                transition={{ repeat: Infinity, duration: 1.5, ease: "linear" }}
+                animate={{ rotate: 360 }} 
+                transition={{ repeat: Infinity, duration: 1.5, ease: "linear" }} 
                 className="w-full h-full border-4 border-zinc-800 border-t-fuchsia-500 rounded-full"
               />
               <div className="absolute inset-0 flex items-center justify-center">
@@ -964,8 +985,8 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
             </h3>
             <p className="font-mono text-xs text-fuchsia-400 mb-6 max-w-sm">
               {language === 'ca'
-                ? "Comprimint i pujant imatges del DNI en format xifrat segur sota la norma RGPD..."
-                : "Comprimiendo y subiendo imágenes del DNI en formato cifrado seguro bajo la norma RGPD..."}
+                ? "Validant dades i registrant a la base de dades oficial..."
+                : "Validando datos y registrando en la base de datos oficial..."}
             </p>
 
             <div className="w-64 bg-zinc-800 rounded-full h-2 mb-2 overflow-hidden">
@@ -982,6 +1003,36 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Supabase Insert Error Alert */}
+      {submitError && (
+        <div id="form-submit-error-banner" className="mb-6 p-5 bg-red-50 border-2 border-red-500 rounded-2xl flex items-start gap-4 shadow-lg animate-in fade-in">
+          <AlertCircle className="text-red-600 shrink-0 mt-0.5" size={24} />
+          <div className="flex-1">
+            <h3 className="font-bold text-red-900 text-base">
+              {language === 'ca' ? "Error al registrar la preinscripció a la base de dades" : "Error al registrar la preinscripción en la base de datos"}
+            </h3>
+            <p className="text-red-700 text-sm mt-1">
+              {language === 'ca'
+                ? "La preinscripció no s'ha pogut guardar a Supabase. No s'ha enviat el correu per evitar registres inconsistents."
+                : "La preinscripción no se ha podido guardar en Supabase. No se ha enviado el correo para evitar registros inconsistentes."}
+            </p>
+            <div className="mt-2.5 p-3 bg-red-100/90 rounded-xl text-xs font-mono text-red-950 border border-red-200 break-all">
+              <strong>Error de Supabase:</strong> {submitError.message} {submitError.code ? `[Codi: ${submitError.code}]` : ''}
+              {submitError.details && (
+                <div className="mt-1 text-red-800">
+                  <strong>Detalls:</strong> {typeof submitError.details === 'object' ? JSON.stringify(submitError.details) : String(submitError.details)}
+                </div>
+              )}
+            </div>
+            <p className="text-xs text-red-800 mt-2 font-medium">
+              {language === 'ca'
+                ? "Si us plau, reviseu la connexió o les dades i torneu a prémer el botó de confirmació."
+                : "Por favor, revise la conexión o los datos y vuelva a pulsar el botón de confirmación."}
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8 pb-4 border-b border-zinc-200">
         <div>
