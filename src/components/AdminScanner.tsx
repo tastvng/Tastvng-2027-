@@ -174,6 +174,7 @@ export default function AdminScanner({
   // 3. Core Handler: Process a received tracking code or UUID from Mobile or PC Camera
   const handleProcessCode = useCallback(async (rawCode: string) => {
     if (!rawCode || isProcessingCode) return;
+    console.log('[SCANNER PC] QR received', rawCode);
 
     const validatedCode = extractAndValidateCode(rawCode);
     if (!validatedCode) {
@@ -301,6 +302,10 @@ export default function AdminScanner({
     let pollInterval: any = null;
 
     // Create session on serverless backend
+    console.log('[SCANNER PC] session created', { sessionId, syncKey });
+    console.log('[SCANNER PC] sync URL', pairingUrl);
+    console.log('[SCANNER PC] waiting for mobile', { sessionId, syncKey });
+
     apiCreateSession(sessionId, syncKey).then(session => {
       if (!isComponentMounted.current) return;
       if (session) {
@@ -322,6 +327,9 @@ export default function AdminScanner({
             if (!isComponentMounted.current) return;
             const newStatus = msg?.payload?.status;
             if (newStatus) {
+              if (newStatus === 'movil_conectado') {
+                console.log('[SCANNER PC] mobile connected', msg?.payload);
+              }
               setScannerStatus(newStatus);
             }
           })
@@ -354,7 +362,12 @@ export default function AdminScanner({
         if (res.ok) {
           // Update status
           if (res.status) {
-            setScannerStatus(res.status);
+            setScannerStatus(prev => {
+              if (prev !== 'movil_conectado' && res.status === 'movil_conectado') {
+                console.log('[SCANNER PC] mobile connected', { sessionId, syncKey });
+              }
+              return res.status;
+            });
           }
           // If a new code was delivered via serverless API
           if (res.code) {

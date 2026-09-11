@@ -43,6 +43,7 @@
     { "source": "/api/test-smtp", "destination": "/api/email?action=test" },
     { "source": "/api/upload-dni", "destination": "/api/inscriptions?action=upload-dni" },
     { "source": "/api/validate-inscription", "destination": "/api/inscriptions?action=validate" },
+    { "source": "/api/scanner", "destination": "/api/scanner" },
     { "source": "/api/scanner-session", "destination": "/api/scanner" },
     { "source": "/api/preguntes", "destination": "/api/config?action=preguntes" },
     { "source": "/api/admin/preguntes/:id", "destination": "/api/config?action=preguntes&id=:id" },

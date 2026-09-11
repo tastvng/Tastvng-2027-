@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { useLanguage } from '../LanguageContext';
 import { supabase } from '../supabaseClient';
+import { safeFetchJson } from '../utils/scannerSync';
 import jsQR from 'jsqr';
 
 interface MobileRemoteScannerProps {
@@ -74,10 +75,15 @@ export default function MobileRemoteScanner({
     isComponentMounted.current = true;
     let pingInterval: any = null;
 
+    console.log('[MOBILE SCANNER] session received', { sessionId, syncKey });
+
     async function initSession() {
       try {
         setConnectionStatus('connecting');
-        const res = await fetch('/api/scanner', {
+        console.log('[MOBILE SCANNER] registering mobile', { sessionId, syncKey });
+
+        const endpointUrl = '/api/scanner';
+        const res = await fetch(endpointUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -87,18 +93,34 @@ export default function MobileRemoteScanner({
           })
         });
 
+        const contentType = (res.headers.get('content-type') || '').toLowerCase();
+        console.log('[MOBILE SCANNER] registration response status', res.status);
+        console.log('[MOBILE SCANNER] registration response content-type', contentType);
+
+        if (!contentType.includes('application/json')) {
+          const rawText = await res.text();
+          const preview = rawText.length > 200 ? rawText.slice(0, 200) + '...' : rawText;
+          console.error(`[MOBILE SCANNER] Endpoint ${endpointUrl} returned non-JSON (${res.status}):`, preview);
+          if (!isComponentMounted.current) return;
+          setConnectionStatus('error');
+          setConnectionError(`Error tècnic (${res.status}) a ${endpointUrl}: ${preview}`);
+          return;
+        }
+
         const data = await res.json();
         if (!isComponentMounted.current) return;
 
         if (res.ok && data.ok) {
+          console.log('[MOBILE SCANNER] mobile connected', { sessionId, syncKey });
           setConnectionStatus('connected');
           setConnectionError(null);
         } else {
-          setConnectionStatus(data.status === 'sesion_caducada' ? 'expired' : 'error');
+          setConnectionStatus(data.status === 'sesion_caducada' || data.code === 'SESSION_EXPIRED' ? 'expired' : 'error');
           setConnectionError(data.error || (language === 'ca' ? 'Error en connectar a la sessió' : 'Error al conectar a la sesión'));
         }
       } catch (err: any) {
         if (!isComponentMounted.current) return;
+        console.error('[MOBILE SCANNER] registration network error:', err);
         setConnectionStatus('error');
         setConnectionError(err?.message || (language === 'ca' ? 'Error de xarxa en connectar' : 'Error de red al conectar'));
       }
@@ -109,7 +131,9 @@ export default function MobileRemoteScanner({
     // Setup Supabase Realtime Channel if available
     if (supabase) {
       try {
-        const channel = supabase.channel(`remote-scanner:${sessionId}`);
+        const channel = supabase.channel(`remote-scanner:${sessionId}`, {
+          config: { broadcast: { self: false } }
+        });
         realtimeChannelRef.current = channel;
 
         channel.subscribe((status) => {
@@ -117,8 +141,13 @@ export default function MobileRemoteScanner({
             channel.send({
               type: 'broadcast',
               event: 'mobile_status',
-              payload: { status: 'movil_conectado', syncKey, timestamp: Date.now() }
+              payload: { status: 'movil_conectado', syncKey, sessionId, timestamp: Date.now() }
             }).catch(() => {});
+            console.log('[MOBILE SCANNER] mobile connected (Realtime)', { sessionId, syncKey });
+            if (isComponentMounted.current) {
+              setConnectionStatus('connected');
+              setConnectionError(null);
+            }
           }
         });
       } catch (e) {
@@ -130,7 +159,7 @@ export default function MobileRemoteScanner({
     pingInterval = setInterval(async () => {
       if (!isComponentMounted.current) return;
       try {
-        const res = await fetch('/api/scanner', {
+        const res = await safeFetchJson<any>('/api/scanner', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -140,8 +169,7 @@ export default function MobileRemoteScanner({
             syncKey
           })
         });
-        const data = await res.json();
-        if (data.status === 'sesion_caducada') {
+        if (res.data?.status === 'sesion_caducada' || res.data?.code === 'SESSION_EXPIRED') {
           setConnectionStatus('expired');
           stopCamera();
         }
@@ -339,6 +367,8 @@ export default function MobileRemoteScanner({
     playBeepSound();
 
     try {
+      console.log('[MOBILE SCANNER] QR code sent', codeToTransmit);
+
       // a) Broadcast via Supabase Realtime for instant zero-latency delivery
       if (realtimeChannelRef.current) {
         realtimeChannelRef.current.send({
@@ -354,7 +384,7 @@ export default function MobileRemoteScanner({
       }
 
       // b) Send via Serverless Session API (resilient fallback)
-      const res = await fetch('/api/scanner', {
+      const res = await safeFetchJson<any>('/api/scanner', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -365,9 +395,7 @@ export default function MobileRemoteScanner({
         })
       });
 
-      const data = await res.json();
-
-      if (res.ok && data.ok) {
+      if (res.ok && res.data?.ok) {
         setTransmitStatus('success');
         setScannedCount(prev => prev + 1);
 
@@ -381,7 +409,7 @@ export default function MobileRemoteScanner({
         }, 1800);
       } else {
         setTransmitStatus('error');
-        if (data.status === 'sesion_caducada') {
+        if (res.data?.status === 'sesion_caducada' || res.status === 410) {
           setConnectionStatus('expired');
         }
         setTimeout(() => {
@@ -392,7 +420,7 @@ export default function MobileRemoteScanner({
         }, 2200);
       }
     } catch (err) {
-      console.error('Error transmitting code to PC:', err);
+      console.error('[MOBILE SCANNER] Error transmitting code to PC:', err);
       setTransmitStatus('error');
       setTimeout(() => {
         if (!isComponentMounted.current) return;
