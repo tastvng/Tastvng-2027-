@@ -66,6 +66,7 @@ interface AdminDashboardProps {
   noticies?: NoticiaXarxes[];
   onSaveNoticies?: (updatedNoticies: NoticiaXarxes[]) => void;
   onSaveInscripcio?: (updatedReg: Inscripcio) => void;
+  onRefreshInscripcions?: () => Promise<any>;
 }
 
 export default function AdminDashboard({ 
@@ -82,11 +83,36 @@ export default function AdminDashboard({
   onAddInscripcioManual,
   noticies = [],
   onSaveNoticies,
-  onSaveInscripcio
+  onSaveInscripcio,
+  onRefreshInscripcions
 }: AdminDashboardProps) {
   const { language, t } = useLanguage();
   const activeYear = useActiveYear();
   const { showToast } = useToast();
+  
+  // Refreshing state for inscriptions
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefresh = async () => {
+    if (!onRefreshInscripcions) return;
+    setIsRefreshing(true);
+    try {
+      const count = await onRefreshInscripcions();
+      showToast({
+        title: language === 'ca' ? "Dades actualitzades" : "Datos actualizados",
+        description: language === 'ca' ? `S'han recarregat ${count ?? inscripcions.length} inscripcions de Supabase.` : `Se han recargado ${count ?? inscripcions.length} inscripciones de Supabase.`,
+        type: 'success'
+      });
+    } catch (err: any) {
+      showToast({
+        title: language === 'ca' ? "Error d'actualització" : "Error de actualización",
+        description: err?.message || "No s'ha pogut refrescar.",
+        type: 'error'
+      });
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
   
   // Admin Tabs Navigation State
   const [activePanelTab, setActivePanelTab] = useState<'inscripcions' | 'smtp' | 'xarxes' | 'portada' | 'personalitzacio' | 'cierre'>('inscripcions');
@@ -1637,6 +1663,20 @@ export default function AdminDashboard({
                 >
                   <FileSpreadsheet size={15} /> {language === 'ca' ? "Exportar Excel" : "Exportar Excel"}
                 </button>
+
+                {onRefreshInscripcions && (
+                  <button 
+                    type="button"
+                    onClick={handleRefresh}
+                    disabled={isRefreshing}
+                    className="bg-white hover:bg-zinc-100 text-zinc-800 border border-zinc-200 font-bold text-xs px-4 py-3 rounded-2xl transition-all shadow-sm flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                    id="btn-refresh-inscriptions"
+                    title={language === 'ca' ? "Sincronitzar i recarregar dades des de Supabase" : "Sincronizar y recargar datos desde Supabase"}
+                  >
+                    <RefreshCw size={15} className={`text-fuchsia-600 ${isRefreshing ? 'animate-spin' : ''}`} />
+                    {language === 'ca' ? "Actualitzar" : "Actualizar"}
+                  </button>
+                )}
 
                 {selectedIds.length > 0 && (
                   <button 

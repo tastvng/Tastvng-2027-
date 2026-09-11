@@ -514,6 +514,21 @@ export default function App() {
     loadInscripcions().catch(err => console.error("Unhandled error in loadInscripcions:", err));
   }, [isAdminLoggedIn, view]);
 
+  const handleRefreshInscripcions = async (): Promise<number> => {
+    if (isSupabaseConfigured) {
+      try {
+        const dbInscripcions = await getSupabaseInscripciones();
+        if (dbInscripcions) {
+          setInscripcions(dbInscripcions);
+          return dbInscripcions.length;
+        }
+      } catch (e: any) {
+        console.error("[Secretaría SELECT error]:", e);
+      }
+    }
+    return inscripcions.length;
+  };
+
   // Route guard: Prevent direct unauthorized access to admin views
   useEffect(() => {
     if (!isAdminLoggedIn && ['admin-dashboard', 'admin-ficha', 'admin-config', 'admin-scanner'].includes(view)) {
@@ -1270,6 +1285,7 @@ export default function App() {
                 onClearAllInscripcions={clearAllRegistrations}
                 onAddInscripcioManual={addRegistrationManual}
                 onSaveInscripcio={updateRegistration}
+                onRefreshInscripcions={handleRefreshInscripcions}
               />
             )}
 
