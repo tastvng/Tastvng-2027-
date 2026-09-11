@@ -16,6 +16,7 @@ import {
   Send,
   Keyboard,
   ShieldCheck,
+  Square,
   X
 } from 'lucide-react';
 import { useLanguage } from '../LanguageContext';
@@ -49,6 +50,7 @@ export default function MobileRemoteScanner({
 
   // Camera states (strictly user-gesture driven - never auto-initiated on mount)
   const [cameraActive, setCameraActive] = useState<boolean>(false);
+  const [isRequestingCamera, setIsRequestingCamera] = useState<boolean>(false);
   const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [isPermissionDenied, setIsPermissionDenied] = useState(false);
@@ -203,36 +205,49 @@ export default function MobileRemoteScanner({
 
     setCameraError(null);
     setIsPermissionDenied(false);
+    setIsRequestingCamera(true);
 
     // Stop any existing stream
     stopCamera();
 
     try {
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      if (typeof window !== 'undefined' && !window.isSecureContext) {
         throw new Error(
           language === 'ca'
-            ? "El vostre navegador no suporta accés a la càmera."
-            : "Su navegador no soporta acceso a la cámara."
+            ? "La càmera requereix una connexió HTTPS segura."
+            : "La cámara requiere una conexión HTTPS segura."
         );
       }
 
-      // Constraints optimized for Xiaomi 12 and iPhone 11 Pro back camera
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error(
+          language === 'ca'
+            ? "Aquest navegador no permet càmera. Obre l'aplicació a Chrome o Safari utilitzant HTTPS."
+            : "Este navegador no permite cámara. Abre la aplicación en Chrome o Safari usando HTTPS."
+        );
+      }
+
+      // Constraints strictly matching camera specs: environment facing, 1280x720 ideal
       let stream: MediaStream;
       try {
         stream = await navigator.mediaDevices.getUserMedia({
           video: { 
-            facingMode: { ideal: 'environment' }, 
+            facingMode: { ideal: "environment" }, 
             width: { ideal: 1280 }, 
             height: { ideal: 720 } 
           },
           audio: false
         });
-      } catch (constraintErr) {
-        // Fallback for strict browser constraint profiles
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'environment' },
-          audio: false
-        });
+      } catch (constraintErr: any) {
+        console.warn('Initial camera constraints failed, attempting fallback...', constraintErr);
+        if (constraintErr?.name !== 'NotAllowedError' && constraintErr?.name !== 'SecurityError') {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { ideal: "environment" } },
+            audio: false
+          });
+        } else {
+          throw constraintErr;
+        }
       }
 
       streamRef.current = stream;
@@ -243,9 +258,7 @@ export default function MobileRemoteScanner({
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         videoRef.current.setAttribute('playsinline', 'true');
-        try {
-          await videoRef.current.play();
-        } catch (e) {}
+        await videoRef.current.play();
         animationFrameId.current = requestAnimationFrame(scanFrame);
       }
     } catch (err: any) {
@@ -257,17 +270,47 @@ export default function MobileRemoteScanner({
         setIsPermissionDenied(true);
         setCameraError(
           language === 'ca'
-            ? "Permís de càmera denegat a Safari / Chrome."
-            : "Permiso de cámara denegado en Safari / Chrome."
+            ? "Permís de càmera denegat. Activa'l a la configuració del navegador."
+            : "Permiso de cámara denegado. Actívalo en los ajustes del navegador."
+        );
+      } else if (err?.name === 'NotFoundError' || err?.name === 'DevicesNotFoundError') {
+        setIsPermissionDenied(false);
+        setCameraError(
+          language === 'ca'
+            ? "No s'ha trobat cap càmera."
+            : "No se ha encontrado ninguna cámara."
+        );
+      } else if (err?.name === 'NotReadableError' || err?.name === 'TrackStartError') {
+        setIsPermissionDenied(false);
+        setCameraError(
+          language === 'ca'
+            ? "La càmera està ocupada per una altra aplicació o bloquejada pel sistema."
+            : "La cámara está ocupada por otra aplicación o bloqueada por el sistema."
+        );
+      } else if (err?.name === 'SecurityError') {
+        setIsPermissionDenied(false);
+        setCameraError(
+          language === 'ca'
+            ? "La càmera requereix una connexió HTTPS segura."
+            : "La cámara requiere una conexión HTTPS segura."
+        );
+      } else if (err?.name === 'AbortError') {
+        setIsPermissionDenied(false);
+        setCameraError(
+          language === 'ca'
+            ? "Inicialització de la càmera interrompuda. Torna-ho a provar."
+            : "Inicialización de la cámara interrumpida. Vuelve a intentarlo."
         );
       } else {
         setIsPermissionDenied(false);
         setCameraError(
           err?.message || (language === 'ca' 
-            ? "No s'ha pogut iniciar la càmera. Verifiqueu que cap altra aplicació l'estigui utilitzant." 
-            : "No se ha podido iniciar la cámara. Compruebe que ninguna otra app la esté usando.")
+            ? "No s'ha pogut iniciar la càmera." 
+            : "No se ha podido iniciar la cámara.")
         );
       }
+    } finally {
+      setIsRequestingCamera(false);
     }
   };
 
@@ -583,113 +626,100 @@ export default function MobileRemoteScanner({
               {language === 'ca' ? "Tornar a escanear un QR nou" : "Volver a escanear un QR nuevo"}
             </button>
           </div>
-        ) : connectionStatus === 'connected' && !cameraActive ? (
-          <div className="space-y-4 my-auto">
-            {/* Explicit Camera Activation Prompt for iPhone & Xiaomi */}
-            <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 text-center space-y-4 shadow-xl">
-              <div className="w-16 h-16 rounded-2xl bg-[#ff0090]/15 text-[#ff0090] flex items-center justify-center mx-auto">
-                <Camera size={32} />
-              </div>
-              <div>
-                <h3 className="text-sm font-black text-white uppercase tracking-tight">
-                  {language === 'ca' ? "Càmera a punt per escanejar" : "Cámara lista para escanear"}
-                </h3>
-                <p className="text-xs text-zinc-400 mt-1 leading-relaxed font-sans">
-                  {language === 'ca'
-                    ? "Premeu el botó per activar la càmera i començar a llegir comprovants d'assistents."
-                    : "Pulse el botón para activar la cámara y empezar a leer comprobantes de asistentes."}
-                </p>
-              </div>
-
-              {/* Explicit user action button (strictly required by iOS Safari) */}
-              <button
-                type="button"
-                onClick={startCamera}
-                className="w-full py-3.5 px-5 bg-[#ff0090] hover:bg-[#e0007e] active:scale-[0.98] text-white font-black text-sm rounded-2xl transition flex items-center justify-center gap-2 shadow-lg shadow-[#ff0090]/30 cursor-pointer"
-                id="btn-activate-camera"
-              >
-                <Camera size={18} />
-                {language === 'ca' ? "Activar càmera" : "Activar cámara"}
-              </button>
-
-              {/* Safari instruction banner */}
-              <div className="bg-amber-950/40 border border-amber-500/30 p-2.5 rounded-xl text-left flex items-start gap-2">
-                <span className="text-sm">ℹ️</span>
-                <p className="text-[11px] text-amber-200/90 leading-tight font-sans">
-                  {language === 'ca' 
-                    ? "Pulsa 'Permetre' quan Safari sol·liciti accés a la càmera." 
-                    : "Pulsa 'Permitir' cuando Safari solicite acceso a la cámara."}
-                </p>
-              </div>
-            </div>
-
-            {/* Permission troubleshooting guide if previously blocked */}
-            {isPermissionDenied && (
-              <div className="bg-zinc-900 border border-rose-500/40 rounded-3xl p-5 text-left space-y-3 shadow-xl animate-in fade-in duration-200">
-                <div className="flex items-center gap-2 text-rose-400">
-                  <AlertTriangle size={18} />
-                  <h4 className="font-bold text-xs text-white uppercase tracking-wide">
-                    {language === 'ca' ? "Com reactivar la càmera a Safari (iOS)" : "Cómo reactivar la cámara en Safari (iOS)"}
-                  </h4>
-                </div>
-                <ol className="list-decimal list-inside space-y-1.5 text-xs text-zinc-300 pl-1 font-sans">
-                  <li>{language === 'ca' ? "Obre Ajustes a l'iPhone > Safari > Cámara." : "Abre Ajustes en el iPhone > Safari > Cámara."}</li>
-                  <li>{language === 'ca' ? "Selecciona 'Permetre' per al navegador." : "Selecciona 'Permitir' para el navegador."}</li>
-                  <li>{language === 'ca' ? "O toca la icona 'aA' a la barra d'adreces de Safari > Configuració del lloc web > Càmera: 'Permetre'." : "O toca el icono 'aA' en la barra de direcciones de Safari > Configuración del sitio web > Cámara: 'Permitir'."}</li>
-                </ol>
-                <button
-                  type="button"
-                  onClick={startCamera}
-                  className="w-full mt-2 py-2 px-3 bg-zinc-800 hover:bg-zinc-750 text-white font-bold text-xs rounded-xl transition flex items-center justify-center gap-1.5 border border-zinc-700 cursor-pointer"
-                  id="btn-retry-camera-permission"
-                >
-                  <RotateCw size={13} />
-                  {language === 'ca' ? "Tornar a provar" : "Volver a intentar"}
-                </button>
-              </div>
-            )}
-          </div>
         ) : (
           /* Live Camera Scanner Viewport */
           <div className="flex-1 flex flex-col justify-center items-center">
-            <div className="relative w-full max-w-[320px] aspect-square bg-zinc-900 rounded-3xl overflow-hidden border-2 border-zinc-800 shadow-2xl flex flex-col items-center justify-center">
+            {/* Scanner Box Container */}
+            <div className="relative w-full max-w-[340px] aspect-square bg-zinc-900 rounded-3xl overflow-hidden border-2 border-zinc-800 shadow-2xl flex flex-col items-center justify-center">
               
-              {hasCameraPermission === false ? (
-                <div className="p-6 text-center space-y-3">
-                  <AlertTriangle className="mx-auto text-rose-500 animate-pulse" size={36} />
-                  <p className="text-xs text-zinc-300 font-medium leading-relaxed font-sans">
-                    {cameraError}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={startCamera}
-                    className="px-4 py-2.5 bg-[#ff0090] hover:bg-[#e0007e] text-white rounded-xl text-xs font-bold transition shadow"
-                    id="btn-retry-camera"
-                  >
-                    {language === 'ca' ? 'Tornar a provar càmera' : 'Reintentar cámara'}
-                  </button>
-                </div>
-              ) : (
-                <div className="relative w-full h-full">
-                  {/* Camera feed */}
-                  <video 
-                    ref={videoRef} 
-                    autoPlay 
-                    playsInline 
-                    muted 
-                    className="w-full h-full object-cover" 
-                    id="mobile-video-stream"
-                  />
+              {/* Mandatory <video> element - always mounted in DOM */}
+              <video
+                ref={videoRef}
+                autoPlay
+                muted
+                playsInline
+                style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                id="mobile-video-stream"
+              />
 
-                  {/* Target overlay */}
-                  <div className="absolute inset-0 border-[36px] border-zinc-950/70 pointer-events-none">
-                    <div className="w-full h-full border-2 border-dashed border-[#ff0090] rounded-2xl relative shadow-inner">
-                      {/* Animated laser line */}
-                      {isScanning && (
-                        <div className="absolute left-1 right-1 h-0.5 bg-[#ff0090] shadow-[0_0_12px_#ff0090] animate-bounce top-1/2" />
-                      )}
-                    </div>
+              {/* Active Reticle & Laser Scanning Line */}
+              {cameraActive && (
+                <div className="absolute inset-0 border-[36px] border-zinc-950/70 pointer-events-none">
+                  <div className="w-full h-full border-2 border-dashed border-[#ff0090] rounded-2xl relative shadow-inner">
+                    {isScanning && (
+                      <div className="absolute left-1 right-1 h-0.5 bg-[#ff0090] shadow-[0_0_12px_#ff0090] animate-bounce top-1/2" />
+                    )}
                   </div>
+                </div>
+              )}
+
+              {/* Inactive, Requesting or Error Overlay directly INSIDE the scanner box */}
+              {!cameraActive && (
+                <div className="absolute inset-0 bg-zinc-950/92 backdrop-blur-xs flex flex-col items-center justify-center p-6 text-center z-10 space-y-3 animate-in fade-in duration-150">
+                  {isRequestingCamera ? (
+                    <>
+                      <div className="w-16 h-16 rounded-2xl bg-[#ff0090]/20 text-[#ff0090] flex items-center justify-center shadow-lg">
+                        <RotateCw size={32} className="animate-spin" />
+                      </div>
+                      <div>
+                        <h4 className="font-black text-sm text-white uppercase tracking-tight">
+                          {language === 'ca' ? "Sol·licitant permís de càmera..." : "Solicitando permiso de cámara..."}
+                        </h4>
+                        <p className="text-[11px] text-zinc-400 mt-1 font-sans">
+                          {language === 'ca' ? "Premeu 'Permetre' a la finestra del navegador." : "Pulsa 'Permitir' en la ventana del navegador."}
+                        </p>
+                      </div>
+                    </>
+                  ) : cameraError ? (
+                    <>
+                      <div className="w-14 h-14 rounded-2xl bg-rose-500/20 text-rose-400 flex items-center justify-center shadow">
+                        <AlertTriangle size={30} className="animate-pulse" />
+                      </div>
+                      <div className="px-2">
+                        <h4 className="font-black text-xs text-rose-300 uppercase tracking-wide">
+                          {language === 'ca' ? "Error de càmera" : "Error de cámara"}
+                        </h4>
+                        <p className="text-xs text-zinc-300 mt-1 leading-snug font-sans max-w-[260px]">
+                          {cameraError}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={startCamera}
+                        className="mt-1 py-3 px-6 bg-[#ff0090] hover:bg-[#e0007e] active:scale-95 text-white font-black text-xs rounded-xl transition flex items-center gap-2 shadow-lg shadow-[#ff0090]/30 cursor-pointer uppercase tracking-wider"
+                        id="btn-retry-camera"
+                      >
+                        <RotateCw size={14} />
+                        {language === 'ca' ? "Reintentar càmera" : "Reintentar cámara"}
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <div className="w-16 h-16 rounded-2xl bg-[#ff0090]/15 text-[#ff0090] flex items-center justify-center shadow">
+                        <Camera size={34} />
+                      </div>
+                      <div>
+                        <h4 className="font-black text-sm text-white uppercase tracking-tight">
+                          {language === 'ca' ? "Prem Activar càmera" : "Pulsa Activar cámara"}
+                        </h4>
+                        <p className="text-xs text-zinc-400 mt-1 max-w-[230px] font-sans leading-relaxed">
+                          {language === 'ca'
+                            ? "Activa la càmera posterior per començar a escanejar comprovants QR."
+                            : "Activa la cámara trasera para empezar a escanear comprobantes QR."}
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={startCamera}
+                        className="w-full py-3.5 px-5 bg-[#ff0090] hover:bg-[#e0007e] active:scale-[0.98] text-white font-black text-sm rounded-2xl transition flex items-center justify-center gap-2 shadow-lg shadow-[#ff0090]/30 cursor-pointer uppercase tracking-wider"
+                        id="btn-activate-camera"
+                      >
+                        <Camera size={18} />
+                        {language === 'ca' ? "Activar càmera" : "Activar cámara"}
+                      </button>
+                    </>
+                  )}
                 </div>
               )}
 
@@ -739,6 +769,80 @@ export default function MobileRemoteScanner({
                 </div>
               )}
             </div>
+
+            {/* Camera Controls Bar: Status badge + Detener/Reintentar */}
+            <div className="flex items-center justify-between gap-2 mt-3 w-full max-w-[340px]">
+              {cameraActive ? (
+                <>
+                  <div className="flex items-center gap-1.5 py-2 px-3 bg-zinc-900 border border-emerald-500/30 text-emerald-400 rounded-xl text-xs font-bold">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    <span>{language === 'ca' ? "Càmera activa" : "Cámara activa"}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={startCamera}
+                      className="py-2 px-3 bg-zinc-800 hover:bg-zinc-750 text-zinc-300 hover:text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 border border-zinc-700 cursor-pointer"
+                      id="btn-reintentar-camara"
+                    >
+                      <RotateCw size={13} />
+                      {language === 'ca' ? "Reintentar" : "Reintentar"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={stopCamera}
+                      className="py-2 px-3 bg-zinc-800 hover:bg-zinc-750 text-rose-400 hover:text-rose-300 rounded-xl text-xs font-bold transition flex items-center gap-1.5 border border-zinc-700 cursor-pointer"
+                      id="btn-stop-camera"
+                    >
+                      <Square size={12} className="fill-current" />
+                      {language === 'ca' ? "Detenir càmera" : "Detener cámara"}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="w-full flex items-center justify-between gap-2">
+                  <span className="text-[11px] text-zinc-500 font-sans">
+                    {language === 'ca' ? "Càmera aturada" : "Cámara detenida"}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={startCamera}
+                    disabled={isRequestingCamera}
+                    className="py-2 px-3.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 border border-zinc-800 cursor-pointer"
+                    id="btn-reintentar-camara-bottom"
+                  >
+                    <RotateCw size={13} className={isRequestingCamera ? "animate-spin" : ""} />
+                    {language === 'ca' ? "Reintentar càmera" : "Reintentar cámara"}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Permission troubleshooting guide if blocked */}
+            {isPermissionDenied && (
+              <div className="bg-zinc-900 border border-rose-500/40 rounded-3xl p-5 text-left space-y-3 shadow-xl w-full max-w-[340px] mt-3 animate-in fade-in duration-200">
+                <div className="flex items-center gap-2 text-rose-400">
+                  <AlertTriangle size={18} />
+                  <h4 className="font-bold text-xs text-white uppercase tracking-wide">
+                    {language === 'ca' ? "Com reactivar el permís de càmera" : "Cómo reactivar el permiso de cámara"}
+                  </h4>
+                </div>
+                <ol className="list-decimal list-inside space-y-1.5 text-xs text-zinc-300 pl-1 font-sans">
+                  <li>{language === 'ca' ? "Chrome / Android: Toca el cadenat a la barra d'adreces > Permisos > Càmera > Permetre." : "Chrome / Android: Toca el candado en la barra de direcciones > Permisos > Cámara > Permitir."}</li>
+                  <li>{language === 'ca' ? "iOS Safari: Obre Ajustes a l'iPhone > Safari > Cámara > Selecciona 'Permetre'." : "iOS Safari: Abre Ajustes en el iPhone > Safari > Cámara > Selecciona 'Permitir'."}</li>
+                  <li>{language === 'ca' ? "O toca la icona 'aA' a la barra de Safari > Configuració del lloc web > Càmera." : "O toca el icono 'aA' en la barra de Safari > Configuración del sitio web > Cámara."}</li>
+                </ol>
+                <button
+                  type="button"
+                  onClick={startCamera}
+                  className="w-full mt-2 py-2 px-3 bg-zinc-800 hover:bg-zinc-750 text-white font-bold text-xs rounded-xl transition flex items-center justify-center gap-1.5 border border-zinc-700 cursor-pointer"
+                  id="btn-retry-camera-permission"
+                >
+                  <RotateCw size={13} />
+                  {language === 'ca' ? "Reintentar" : "Reintentar"}
+                </button>
+              </div>
+            )}
 
             <p className="text-xs text-zinc-400 text-center mt-3 max-w-xs leading-relaxed font-sans">
               {language === 'ca'
