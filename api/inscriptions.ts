@@ -230,11 +230,10 @@ export default async function inscriptionsHandler(req: any, res: any) {
         });
       }
 
-      // 6. Perform INSERT into public.inscripciones
-      const { data: insertedRows, error: insertError } = await serverSupabase
+      // 6. Perform INSERT into public.inscripciones (without .select() to prevent 42501 RLS select violation)
+      const { error: insertError } = await serverSupabase
         .from('inscripciones')
-        .insert(insertRow)
-        .select();
+        .insert(insertRow);
 
       if (insertError) {
         console.error("[INSERT error]:", {
@@ -255,7 +254,7 @@ export default async function inscriptionsHandler(req: any, res: any) {
         });
       }
 
-      const confirmedRow = (insertedRows && insertedRows[0]) ? insertedRows[0] : insertRow;
+      const confirmedRow = insertRow;
       console.log(`[INSERT ok]: table public.inscripciones, id: ${confirmedRow.id}, codi: ${confirmedRow.codiSeguiment}, user: ${confirmedRow.c1Nom} & ${confirmedRow.c2Nom}`);
 
       return res.status(200).json({

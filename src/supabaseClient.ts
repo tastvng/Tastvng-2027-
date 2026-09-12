@@ -25,6 +25,21 @@ export const supabase = isSupabaseConfigured
     })
   : null;
 
+/**
+ * Public unauthenticated Supabase client.
+ * Guarantees role = 'anon' by not persisting or sending user session tokens.
+ * Used for public form submissions to ensure strict conformance with anon_insert_inscripciones RLS.
+ */
+export const publicAnonSupabase = isSupabaseConfigured
+  ? createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+      },
+    })
+  : null;
+
 // Clean logging
 if (isSupabaseConfigured) {
   console.log("Supabase client initialized successfully using config: " + (envUrl ? "ENV" : "LocalStorage"));
@@ -708,8 +723,9 @@ export async function saveSupabaseInscripcion(ins: Inscripcio): Promise<SaveInsc
     console.warn("Could not reach /api/inscriptions?action=create, trying direct client fallback:", netErr);
   }
 
-  // 2. Direct client fallback (if backend API is unreachable)
-  if (!supabase) {
+  // 2. Direct client fallback (using public anonymous client to strictly adhere to anon_insert_inscripciones RLS)
+  const insertClient = publicAnonSupabase || supabase;
+  if (!insertClient) {
     return {
       ok: false,
       step: 'database_insert',
@@ -718,7 +734,7 @@ export async function saveSupabaseInscripcion(ins: Inscripcio): Promise<SaveInsc
     };
   }
 
-  await logSupabaseWriteDiagnostic('inscripciones', `UPSERT (id: ${ins.id}, codi: ${ins.codiSeguiment})`);
+  await logSupabaseWriteDiagnostic('inscripciones', `INSERT (id: ${ins.id}, codi: ${ins.codiSeguiment})`);
 
   try {
     const tableName = 'inscripciones';
@@ -728,51 +744,55 @@ export async function saveSupabaseInscripcion(ins: Inscripcio): Promise<SaveInsc
       telefonContactoPareja: contactTelefon
     };
 
-    let response = await supabase
+    // Clean column mapping strictly adhering to public.inscripciones schema
+    // Note: NEVER use .upsert() or .select() here to ensure no 42501 RLS select/update violation occurs
+    const insertRow = {
+      id: ins.id,
+      codiSeguiment: ins.codiSeguiment,
+      categoria: ins.categoria,
+      c1Nom: ins.c1Nom,
+      c1Cognoms: ins.c1Cognoms,
+      c1Email: contactEmail,
+      c1Telefon: contactTelefon,
+      c1Talla: ins.c1Talla,
+      c1DniUrl: ins.c1DniUrl || null,
+      c1EsMenor: Boolean(ins.c1EsMenor),
+      c1TutorNom: ins.c1TutorNom || null,
+      c1TutorCognoms: ins.c1TutorCognoms || null,
+      c1TutorDni: ins.c1TutorDni || null,
+      c1TutorTelefon: ins.c1TutorTelefon || null,
+      c1UniformeTipus: ins.c1UniformeTipus || null,
+      c2Nom: ins.c2Nom,
+      c2Cognoms: ins.c2Cognoms,
+      c2Email: contactEmail,
+      c2Telefon: contactTelefon,
+      c2Talla: ins.c2Talla,
+      c2DniUrl: ins.c2DniUrl || null,
+      c2EsMenor: Boolean(ins.c2EsMenor),
+      c2TutorNom: ins.c2TutorNom || null,
+      c2TutorCognoms: ins.c2TutorCognoms || null,
+      c2TutorDni: ins.c2TutorDni || null,
+      c2TutorTelefon: ins.c2TutorTelefon || null,
+      c2UniformeTipus: ins.c2UniformeTipus || null,
+      respostesCuestionari: enrichedRespostes,
+      seleccionsUniforme: ins.seleccionsUniforme || {},
+      preuCalculat: Number(ins.preuCalculat || 0),
+      teDomasBalco: Boolean(ins.teDomasBalco),
+      teMocadorsExtra: Number(ins.teMocadorsExtra || 0),
+      estatPagament: ins.estatPagament || 'PENDENT',
+      metodePagament: ins.metodePagament || null,
+      estatDni: ins.estatDni || 'PENDENT',
+      entregaMaterial: ins.entregaMaterial || 'PENDENT',
+      estat_inscripcio: ins.estatInscripcio || 'obertes',
+      posicio_global: typeof ins.posicioGlobal === 'number' ? ins.posicioGlobal : null,
+      bandera: typeof ins.bandera === 'number' ? ins.bandera : 0,
+      creadoEn: ins.creadoEn || new Date().toISOString(),
+      actualizadoEn: ins.actualizadoEn || new Date().toISOString()
+    };
+
+    const response = await insertClient
       .from(tableName)
-      .upsert({
-        id: ins.id,
-        codiSeguiment: ins.codiSeguiment,
-        categoria: ins.categoria,
-        c1Nom: ins.c1Nom,
-        c1Cognoms: ins.c1Cognoms,
-        c1Email: contactEmail,
-        c1Telefon: contactTelefon,
-        c1Talla: ins.c1Talla,
-        c1DniUrl: ins.c1DniUrl,
-        c1EsMenor: ins.c1EsMenor || false,
-        c1TutorNom: ins.c1TutorNom || null,
-        c1TutorCognoms: ins.c1TutorCognoms || null,
-        c1TutorDni: ins.c1TutorDni || null,
-        c1TutorTelefon: ins.c1TutorTelefon || null,
-        c1UniformeTipus: ins.c1UniformeTipus || null,
-        c2Nom: ins.c2Nom,
-        c2Cognoms: ins.c2Cognoms,
-        c2Email: contactEmail,
-        c2Telefon: contactTelefon,
-        c2Talla: ins.c2Talla,
-        c2DniUrl: ins.c2DniUrl,
-        c2EsMenor: ins.c2EsMenor || false,
-        c2TutorNom: ins.c2TutorNom || null,
-        c2TutorCognoms: ins.c2TutorCognoms || null,
-        c2TutorDni: ins.c2TutorDni || null,
-        c2TutorTelefon: ins.c2TutorTelefon || null,
-        c2UniformeTipus: ins.c2UniformeTipus || null,
-        respostesCuestionari: enrichedRespostes,
-        seleccionsUniforme: ins.seleccionsUniforme || {},
-        preuCalculat: ins.preuCalculat,
-        teDomasBalco: ins.teDomasBalco,
-        teMocadorsExtra: ins.teMocadorsExtra,
-        estatPagament: ins.estatPagament,
-        metodePagament: ins.metodePagament,
-        estatDni: ins.estatDni,
-        entregaMaterial: ins.entregaMaterial,
-        estat_inscripcio: ins.estatInscripcio || 'obertes',
-        posicio_global: ins.posicioGlobal || null,
-        bandera: ins.bandera !== undefined ? ins.bandera : 0,
-        creadoEn: ins.creadoEn,
-        actualizadoEn: ins.actualizadoEn
-      });
+      .insert(insertRow);
 
     if (!response.error) {
       console.log(`[INSERT ok]: table public.inscripciones, id: ${ins.id}, codi: ${ins.codiSeguiment}, user: ${ins.c1Nom} & ${ins.c2Nom}`);
