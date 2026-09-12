@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
-import { applyCorsHeaders } from "./_cors";
-import { verifySupabaseAdminToken } from "./_supabase-auth";
-import { checkRateLimit, getClientIp } from "./_rate-limit";
+import { applyCorsHeaders } from "./_cors.ts";
+import { verifySupabaseAdminToken } from "./_supabase-auth.ts";
+import { checkRateLimit, getClientIp } from "./_rate-limit.ts";
 
 export interface SanitizedAdminUser {
   id: string;

@@ -402,6 +402,8 @@ export default function AdminDashboard({
             ...(adminToken ? { 'Authorization': `Bearer ${adminToken}` } : {})
           },
           body: JSON.stringify({
+            id: item.id,
+            inscriptionId: item.id,
             codiSeguiment: item.codiSeguiment,
             emailData: {
               to: emailTo,

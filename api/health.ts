@@ -1,4 +1,4 @@
-import { applyCorsHeaders } from "./_cors";
+import { applyCorsHeaders } from "./_cors.ts";
 
 /**
  * Health Check Serverless Handler: /api/health

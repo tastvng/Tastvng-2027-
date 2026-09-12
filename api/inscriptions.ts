@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import crypto from "crypto";
-import { applyCorsHeaders } from "./_cors";
-import { checkRateLimit, getClientIp } from "./_rate-limit";
+import { applyCorsHeaders } from "./_cors.ts";
+import { checkRateLimit, getClientIp } from "./_rate-limit.ts";
 
 /**
  * Validates binary magic bytes to strictly verify the real file type.

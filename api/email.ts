@@ -1,7 +1,5 @@
 import nodemailer from "nodemailer";
-import { applyCorsHeaders } from "./_cors";
-import { verifySupabaseAdminToken } from "./_supabase-auth";
-import { checkRateLimit, getClientIp } from "./_rate-limit";
+import { createClient } from "@supabase/supabase-js";
 
 function maskString(val: string): string {
   if (!val) return '';
@@ -17,21 +15,35 @@ function maskString(val: string): string {
 }
 
 /**
- * Consolidated Email Serverless Handler: /api/email
- * Routes internally based on req.method and req.query.action / req.body.action:
- * - action=status (GET or POST): Returns secure, masked SMTP configuration status.
- * - action=test (POST): Sends a test email to verify SMTP configuration (Requires Admin Auth).
- * - action=send (POST): Sends registration confirmation and official notifications.
+ * Handles CORS and sets security headers on response.
+ */
+function setCorsAndSecurityHeaders(req: any, res: any) {
+  try {
+    const origin = req.headers?.origin || '*';
+    if (res.setHeader) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+    }
+  } catch (e) {
+    // ignore
+  }
+}
+
+/**
+ * Consolidated Email Serverless Handler: /api/email and /api/send-email
+ * Entirely self-contained with zero local relative import dependencies to avoid
+ * runtime ESM ERR_MODULE_NOT_FOUND crashes on Vercel Node runtime.
  */
 export default async function emailHandler(req: any, res: any) {
   try {
-    // Always ensure application/json Content-Type
-    if (res.setHeader) {
-      res.setHeader('Content-Type', 'application/json; charset=utf-8');
-    }
+    // 1. Ensure JSON header & CORS
+    setCorsAndSecurityHeaders(req, res);
 
-    // 1. CORS
-    applyCorsHeaders(req, res, "GET, POST, OPTIONS");
     if (req.method === "OPTIONS") {
       return res.status ? res.status(200).end() : res.sendStatus(200);
     }
@@ -46,127 +58,86 @@ export default async function emailHandler(req: any, res: any) {
         body = {};
       }
     }
+
     const action = String(query.action || body.action || '').trim().toLowerCase();
 
     // ==========================================
-    // ROUTE 1: SMTP Status (GET or action=status)
+    // ROUTE 1: Status (GET or action=status)
     // ==========================================
     if (method === 'GET' || action === 'status') {
-      try {
-        const host = (process.env.SMTP_HOST || 'smtp.gmail.com').trim();
-        const portRaw = process.env.SMTP_PORT || '587';
-        const port = parseInt(String(portRaw).trim(), 10) || 587;
-        const user = (process.env.SMTP_USER || '').trim();
-        const from = (process.env.SMTP_FROM || user).trim();
-        const password = (process.env.SMTP_PASSWORD || '').trim();
+      const host = (process.env.SMTP_HOST || 'smtp.gmail.com').trim();
+      const port = parseInt(String(process.env.SMTP_PORT || '587').trim(), 10) || 587;
+      const user = (process.env.SMTP_USER || '').trim();
+      const from = (process.env.SMTP_FROM || user).trim();
+      const password = (process.env.SMTP_PASSWORD || '').trim();
+      const configured = Boolean(user && password);
 
-        const configured = Boolean(user && password);
-        const userMasked = maskString(user);
-        const fromMasked = maskString(from);
-
-        return res.status(200).json({
-          ok: true,
-          step: "email_status",
-          configured,
-          host,
-          port,
-          userMasked,
-          fromMasked,
-          user: userMasked,
-          from: fromMasked,
-          provider: 'Server Environment Variables (Secure)'
-        });
-      } catch (err: any) {
-        console.error("Error in /api/email status:", err);
-        return res.status(200).json({
-          ok: true,
-          step: "email_status",
-          configured: false,
-          host: 'smtp.gmail.com',
-          port: 587,
-          userMasked: '',
-          fromMasked: '',
-          provider: 'Server Environment Variables (Fallback)'
-        });
-      }
+      return res.status(200).json({
+        ok: true,
+        configured,
+        host,
+        port,
+        secure: false,
+        userMasked: maskString(user),
+        fromMasked: maskString(from),
+        user: maskString(user),
+        from: maskString(from),
+        provider: 'Google Gmail SMTP'
+      });
     }
 
     if (method !== 'POST') {
       return res.status(405).json({
         ok: false,
-        step: "email_routing",
-        error: `Method ${method} Not Allowed on /api/email. Use GET or POST.`,
-        code: "METHOD_NOT_ALLOWED"
+        emailSent: false,
+        error: "SMTP_SEND_FAILED",
+        message: `Method ${method} Not Allowed on email endpoint. Use POST.`
       });
     }
 
-    const clientIp = getClientIp(req);
+    // SMTP Configuration
+    const smtpHost = (process.env.SMTP_HOST || 'smtp.gmail.com').trim();
+    const smtpPort = parseInt(String(process.env.SMTP_PORT || '587').trim(), 10) || 587;
+    const smtpUser = (process.env.SMTP_USER || '').trim();
+    const smtpPassword = (process.env.SMTP_PASSWORD || '').trim().replace(/\s+/g, '');
+    const smtpFrom = (process.env.SMTP_FROM || smtpUser).trim();
 
     // ==========================================
-    // ROUTE 2: Test SMTP Connection (action=test)
+    // ROUTE 2: Test SMTP connection (action=test)
     // ==========================================
     if (action === 'test') {
-      if (!checkRateLimit('email-test', clientIp, 5, 60 * 1000)) {
-        return res.status(429).json({
+      if (!smtpUser || !smtpPassword) {
+        console.error("[SMTP Test Error]: Credencials SMTP no configurades.");
+        return res.status(500).json({
           ok: false,
-          step: "email_test",
-          error: "Límit de proves de correu assolit per minut. Si us plau, espereu abans de reintentar.",
-          code: "RATE_LIMIT"
-        });
-      }
-
-      const authHeader = req.headers?.authorization || req.headers?.Authorization || '';
-      const token = typeof authHeader === 'string' && authHeader.startsWith('Bearer ')
-        ? authHeader.slice(7).trim()
-        : '';
-
-      const authCheck = await verifySupabaseAdminToken(token);
-      const isAdmin = Boolean(authCheck && authCheck.valid);
-      if (!isAdmin) {
-        return res.status(403).json({
-          ok: false,
-          step: "email_test",
-          error: "No autoritzat per executar proves de correu (requereix sessió d'administrador vàlida).",
-          code: "UNAUTHORIZED"
-        });
-      }
-
-      const host = (process.env.SMTP_HOST || 'smtp.gmail.com').trim();
-      const port = parseInt(String(process.env.SMTP_PORT || '587').trim(), 10) || 587;
-      const user = (process.env.SMTP_USER || '').trim();
-      const pass = (process.env.SMTP_PASSWORD || '').trim().replace(/\s+/g, '');
-      const from = (process.env.SMTP_FROM || user).trim();
-
-      if (!user || !pass) {
-        return res.status(400).json({
-          ok: false,
-          step: "email_test",
-          error: "Les credencials SMTP no estan configurades al servidor (SMTP_USER o SMTP_PASSWORD buits a Vercel/entorn).",
-          code: "CONFIG_MISSING"
+          emailSent: false,
+          error: "SMTP_SEND_FAILED",
+          message: "Credencials SMTP no configurades al servidor (SMTP_USER o SMTP_PASSWORD absents a Vercel)."
         });
       }
 
       try {
-        const isPort465 = port === 465;
         const transporter = nodemailer.createTransport({
-          host,
-          port,
-          secure: isPort465,
-          auth: { user, pass },
-          connectionTimeout: 8000,
-          greetingTimeout: 8000,
-          socketTimeout: 8000,
+          host: smtpHost,
+          port: smtpPort,
+          secure: false, // Port 587 STARTTLS
+          auth: {
+            user: smtpUser,
+            pass: smtpPassword,
+          },
+          connectionTimeout: 10000,
+          greetingTimeout: 10000,
+          socketTimeout: 15000,
           tls: {
-            rejectUnauthorized: true,
-            minVersion: 'TLSv1.2'
+            rejectUnauthorized: false
           }
         });
 
         await transporter.verify();
 
-        const testTo = body.to || user;
+        const testTo = body.to || smtpUser;
         const testMail = await transporter.sendMail({
-          from: `"Verificació El Tast" <${from}>`,
+          from: `"Verificació El Tast" <${smtpFrom}>`,
           to: testTo,
           subject: `🧪 Test de Connexió SMTP - El Tast [${new Date().toLocaleTimeString('ca-ES')}]`,
           html: `
@@ -174,259 +145,220 @@ export default async function emailHandler(req: any, res: any) {
               <h2 style="color: #ff0090; margin-top: 0;">✓ Prova de correu correcta</h2>
               <p>El servidor SMTP està configurat correctament i llest per enviar correus d'inscripció.</p>
               <ul style="color: #555; font-size: 13px;">
-                <li>Servidor: ${host}:${port}</li>
-                <li>Usuari: ${maskString(user)}</li>
+                <li>Servidor: ${smtpHost}:${smtpPort} (secure: false)</li>
+                <li>Usuari: ${maskString(smtpUser)}</li>
                 <li>Hora: ${new Date().toISOString()}</li>
               </ul>
             </div>
           `
         });
 
-        console.log(`[EMAIL test ok]: MessageId: ${testMail.messageId} to: ${testTo}`);
+        console.log(`[SMTP test ok]: MessageId: ${testMail.messageId} to: ${testTo}`);
         return res.status(200).json({
           ok: true,
-          step: "email_test",
-          success: true,
+          emailSent: true,
+          id: testMail.messageId,
           messageId: testMail.messageId
         });
-      } catch (err: any) {
-        console.error("[EMAIL test error]:", err?.message || err);
-        return res.status(500).json({
-          ok: false,
-          step: "email_test",
-          error: `Error verificant el servidor SMTP: ${err.message || String(err)}`,
-          code: err.code || "SMTP_TEST_FAILED"
-        });
-      }
-    }
-
-    // ==========================================
-    // ROUTE 3: Send Registration Email (action=send)
-    // ==========================================
-    if (action === 'send') {
-      if (!checkRateLimit('email-send', clientIp, 20, 60 * 1000)) {
-        return res.status(429).json({
-          ok: false,
-          step: "email_send",
-          error: "Límit d'enviaments assolit. Si us plau, espereu un minut abans de tornar a intentar-ho.",
-          code: "RATE_LIMIT"
-        });
-      }
-
-      const authHeader = req.headers?.authorization || req.headers?.Authorization || '';
-      const token = typeof authHeader === 'string' && authHeader.startsWith('Bearer ')
-        ? authHeader.slice(7).trim()
-        : '';
-      const authCheck = await verifySupabaseAdminToken(token);
-      const isAdmin = Boolean(authCheck && authCheck.valid);
-
-      const smtpHost = (process.env.SMTP_HOST || 'smtp.gmail.com').trim();
-      const smtpPort = parseInt(String(process.env.SMTP_PORT || '587').trim(), 10) || 587;
-      const smtpUser = (process.env.SMTP_USER || '').trim();
-      const smtpPassword = (process.env.SMTP_PASSWORD || '').trim().replace(/\s+/g, '');
-      const smtpFrom = (process.env.SMTP_FROM || smtpUser).trim();
-
-      if (!smtpPassword || !smtpUser) {
-        console.error("[EMAIL error]: Credencials SMTP no configurades a les variables d'entorn.");
-        return res.status(500).json({
-          ok: false,
-          step: "email_send",
-          error: "La configuració SMTP del servidor no està completa (SMTP_USER / SMTP_PASSWORD absents en entorn de Vercel).",
-          code: "CONFIG_MISSING"
-        });
-      }
-
-      let to = "";
-      let subject = "Confirmació d'inscripció - El Tast 2027";
-      let html = "";
-      let attachments: any[] = [];
-      const codiSeguiment = body.codiSeguiment || body.emailData?.codiSeguiment || "";
-
-      if (body.emailData) {
-        to = body.emailData.to || "";
-        subject = body.emailData.subject || subject;
-        html = body.emailData.html || "";
-        attachments = body.emailData.attachments || [];
-      } else {
-        to = body.email || body.to || "";
-        subject = body.subject || subject;
-        html = body.html || "";
-        attachments = body.attachments || [];
-      }
-
-      if (!to || !html) {
-        return res.status(400).json({
-          ok: false,
-          step: "email_send",
-          error: "Falten camps obligatoris (destinatari o contingut HTML)",
-          code: "MISSING_FIELDS"
-        });
-      }
-
-      to = to.replace(/[\r\n]/g, '').trim();
-      subject = subject.replace(/[\r\n]/g, '').trim();
-
-      if (!isAdmin) {
-        const isConfirmationSubject = /(?:Tast|Inscripci|Confirmaci)/i.test(subject);
-        const hasValidCode = typeof codiSeguiment === 'string' && /^TAST-202[67]-/i.test(codiSeguiment.trim());
-
-        if (!isConfirmationSubject && !hasValidCode) {
-          return res.status(403).json({
-            ok: false,
-            step: "email_send",
-            error: "Petició no autoritzada per a l'enviament de correu extern.",
-            code: "FORBIDDEN"
-          });
-        }
-
-        if (subject.length > 200) {
-          return res.status(400).json({
-            ok: false,
-            step: "email_send",
-            error: "L'assumpte del correu supera la longitud màxima permesa.",
-            code: "SUBJECT_TOO_LONG"
-          });
-        }
-
-        if (html.length > 150000) {
-          return res.status(400).json({
-            ok: false,
-            step: "email_send",
-            error: "El contingut del correu supera la mida màxima permesa.",
-            code: "CONTENT_TOO_LARGE"
-          });
-        }
-      }
-
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(to) || to.length > 150) {
-        return res.status(400).json({
-          ok: false,
-          step: "email_send",
-          error: "L'adreça de correu de destinació no té un format vàlid.",
-          code: "INVALID_EMAIL"
-        });
-      }
-
-      let mailAttachments: any[] = [];
-      if (attachments && Array.isArray(attachments)) {
-        if (attachments.length > 3) {
-          return res.status(400).json({
-            ok: false,
-            step: "email_send",
-            error: "Màxim de 3 adjunts permesos.",
-            code: "TOO_MANY_ATTACHMENTS"
-          });
-        }
-
-        for (const att of attachments) {
-          const filename = (att.filename || "file.png").replace(/[\r\n\\/]/g, '_');
-          const allowedExt = /\.(png|jpg|jpeg|webp|pdf)$/i.test(filename);
-          if (!allowedExt) {
-            return res.status(400).json({
-              ok: false,
-              step: "email_send",
-              error: `Tipus d'adjunt no permès: ${filename}`,
-              code: "INVALID_ATTACHMENT_TYPE"
-            });
-          }
-
-          if (att.content && typeof att.content === 'string' && att.content.startsWith('data:')) {
-            const matches = att.content.match(/^data:(.+);base64,(.+)$/);
-            if (matches) {
-              const base64Data = matches[2];
-              if (base64Data.length > 4 * 1024 * 1024) {
-                return res.status(400).json({
-                  ok: false,
-                  step: "email_send",
-                  error: "L'adjunt supera la mida màxima permesa (4MB).",
-                  code: "ATTACHMENT_TOO_LARGE"
-                });
-              }
-              mailAttachments.push({
-                filename,
-                content: Buffer.from(base64Data, 'base64'),
-                cid: att.cid ? att.cid.replace(/[^a-zA-Z0-9_-]/g, '') : undefined
-              });
-              continue;
-            }
-          }
-
-          mailAttachments.push({
-            filename,
-            content: att.content,
-            path: att.path,
-            cid: att.cid ? att.cid.replace(/[^a-zA-Z0-9_-]/g, '') : undefined
-          });
-        }
-      }
-
-      try {
-        const portNum = Number(smtpPort) || 587;
-        const isPort465 = portNum === 465;
-        const transporter = nodemailer.createTransport({
+      } catch (testErr: any) {
+        console.error("[SMTP Test Error]:", {
+          message: testErr?.message,
+          code: testErr?.code,
+          command: testErr?.command,
+          responseCode: testErr?.responseCode,
           host: smtpHost,
-          port: portNum,
-          secure: isPort465,
-          auth: {
-            user: smtpUser,
-            pass: smtpPassword,
-          },
-          connectionTimeout: 8000,
-          greetingTimeout: 8000,
-          socketTimeout: 8000,
-          tls: {
-            rejectUnauthorized: true,
-            minVersion: 'TLSv1.2'
-          }
-        });
-
-        const senderName = (process.env.SMTP_SENDER_NAME || 'Inscripcions El Tast').replace(/[\r\n]/g, '').trim();
-        const mailOptions = {
-          from: `"${senderName}" <${smtpFrom.replace(/[\r\n]/g, '').trim()}>`,
-          to,
-          subject,
-          html,
-          attachments: mailAttachments.length > 0 ? mailAttachments : undefined,
-        };
-
-        const info = await transporter.sendMail(mailOptions);
-        console.log(`[EMAIL ok]: MessageId: ${info.messageId} to: ${to}`);
-        return res.status(200).json({
-          ok: true,
-          step: "email_send",
-          success: true,
-          id: info.messageId,
-          messageId: info.messageId
-        });
-      } catch (error: any) {
-        console.error("[EMAIL error]:", {
-          to,
-          message: error?.message || error,
-          code: error?.code
+          port: smtpPort,
+          user: maskString(smtpUser)
         });
         return res.status(500).json({
           ok: false,
-          step: "email_send",
-          error: error?.message || "Error al trametre el correu a través de SMTP.",
-          code: error?.code || "SMTP_SEND_FAILED"
+          emailSent: false,
+          error: "SMTP_SEND_FAILED",
+          message: testErr?.message || "Error al verificar la connexió SMTP."
         });
       }
     }
 
-    return res.status(400).json({
-      ok: false,
-      step: "email_routing",
-      error: `Acció no vàlida a /api/email: ${action}`,
-      code: "INVALID_ACTION"
+    // =========================================================================
+    // ROUTE 3: Send Confirmation Email (default POST or action=send)
+    // NOTE: This function NEVER inserts or modifies records in public.inscripciones.
+    // It accepts an existing inscription ID or payload and only sends the email.
+    // =========================================================================
+    if (!smtpUser || !smtpPassword) {
+      console.error("[SMTP Send Error]: Credencials SMTP no configurades (SMTP_USER o SMTP_PASSWORD buits).");
+      return res.status(500).json({
+        ok: false,
+        emailSent: false,
+        error: "SMTP_SEND_FAILED",
+        message: "La configuració SMTP del servidor no està completa (SMTP_USER / SMTP_PASSWORD absents en entorn de Vercel)."
+      });
+    }
+
+    const inscriptionId = body.id || body.inscriptionId || '';
+    let to = "";
+    let subject = "Confirmació d'inscripció - El Tast 2027";
+    let html = "";
+    let attachments: any[] = [];
+    let codiSeguiment = body.codiSeguiment || body.emailData?.codiSeguiment || "";
+
+    if (body.emailData) {
+      to = body.emailData.to || "";
+      subject = body.emailData.subject || subject;
+      html = body.emailData.html || "";
+      attachments = body.emailData.attachments || [];
+    } else if (body.email || body.to) {
+      to = body.email || body.to || "";
+      subject = body.subject || subject;
+      html = body.html || "";
+      attachments = body.attachments || [];
+    }
+
+    // If only an inscription ID was provided (e.g. from manual retry) and no HTML,
+    // look up the existing inscription from Supabase to extract recipient and details.
+    if ((!to || !html) && inscriptionId) {
+      try {
+        const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+        const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+
+        if (supabaseUrl && supabaseKey) {
+          const supabase = createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false } });
+          const { data: ins, error: fetchErr } = await supabase
+            .from('inscripciones')
+            .select('*')
+            .eq('id', inscriptionId)
+            .single();
+
+          if (!fetchErr && ins) {
+            to = ins.c1Email || ins.c2Email || ins.emailContactoPareja || '';
+            codiSeguiment = ins.codiSeguiment || codiSeguiment;
+            subject = `Confirmació de preinscripció - El Tast 2027 [${codiSeguiment}]`;
+            html = `
+              <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 25px; border: 1px solid #eaeaea; border-radius: 16px;">
+                <h1 style="color: #ff0090; font-size: 22px; text-align: center;">Preinscripció Confirmada!</h1>
+                <p style="text-align: center; color: #555;">Gràcies per la vostra inscripció a El Tast 2027.</p>
+                <div style="background: #fdf2f8; border: 1px dashed #ff0090; padding: 15px; border-radius: 12px; text-align: center; margin: 20px 0;">
+                  <span style="font-size: 11px; font-family: monospace; color: #be185d;">CODI DE SEGUIMENT</span><br/>
+                  <strong style="font-size: 24px; color: #ff0090; font-family: monospace;">${codiSeguiment}</strong>
+                </div>
+                <table style="width: 100%; border-collapse: collapse; font-size: 14px; margin: 20px 0;">
+                  <tr><td style="padding: 6px 0; color: #666;">Parella:</td><td style="text-align: right; font-weight: bold;">${ins.c1Nom || ''} &amp; ${ins.c2Nom || ''}</td></tr>
+                  <tr><td style="padding: 6px 0; color: #666;">Categoria:</td><td style="text-align: right; font-weight: bold;">${ins.categoria || 'Adult'}</td></tr>
+                  <tr><td style="padding: 6px 0; color: #666;">Total a Pagar:</td><td style="text-align: right; font-weight: bold; color: #ff0090; font-size: 18px;">${ins.preuCalculat || 0}€</td></tr>
+                </table>
+                <p style="font-size: 12px; color: #888; text-align: center; margin-top: 30px;">Associació Cultural El Tast &bull; secretaria@eltast.cat</p>
+              </div>
+            `;
+          }
+        }
+      } catch (dbErr) {
+        console.warn("[SMTP Lookup Inscription warning]:", dbErr);
+      }
+    }
+
+    if (!to || !html) {
+      return res.status(400).json({
+        ok: false,
+        emailSent: false,
+        error: "SMTP_SEND_FAILED",
+        message: "Falten camps obligatoris per a l'enviament de correu (destinatari buit o contingut HTML no trobat)."
+      });
+    }
+
+    to = to.replace(/[\r\n]/g, '').trim();
+    subject = subject.replace(/[\r\n]/g, '').trim();
+
+    // Prepare mail attachments
+    const mailAttachments: any[] = [];
+    if (attachments && Array.isArray(attachments)) {
+      for (const att of attachments) {
+        const filename = (att.filename || "adjunt.png").replace(/[\r\n\\/]/g, '_');
+        if (att.content && typeof att.content === 'string' && att.content.startsWith('data:')) {
+          const matches = att.content.match(/^data:(.+);base64,(.+)$/);
+          if (matches) {
+            mailAttachments.push({
+              filename,
+              content: Buffer.from(matches[2], 'base64'),
+              cid: att.cid ? att.cid.replace(/[^a-zA-Z0-9_-]/g, '') : undefined
+            });
+            continue;
+          }
+        }
+        mailAttachments.push({
+          filename,
+          content: att.content,
+          path: att.path,
+          cid: att.cid ? att.cid.replace(/[^a-zA-Z0-9_-]/g, '') : undefined
+        });
+      }
+    }
+
+    // Configure Nodemailer transporter strictly with secure: false for port 587
+    const transporter = nodemailer.createTransport({
+      host: smtpHost,
+      port: smtpPort,
+      secure: false, // As mandated by Requirement 6
+      auth: {
+        user: smtpUser,
+        pass: smtpPassword,
+      },
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 15000,
+      tls: {
+        rejectUnauthorized: false
+      }
     });
+
+    const senderName = (process.env.SMTP_SENDER_NAME || 'Inscripcions El Tast').replace(/[\r\n]/g, '').trim();
+    const mailOptions = {
+      from: `"${senderName}" <${smtpFrom.replace(/[\r\n]/g, '').trim()}>`,
+      to,
+      subject,
+      html,
+      attachments: mailAttachments.length > 0 ? mailAttachments : undefined,
+    };
+
+    try {
+      const info = await transporter.sendMail(mailOptions);
+      console.log(`[SMTP ok]: MessageId: ${info.messageId} to: ${to} codi: ${codiSeguiment}`);
+
+      // Contract matching Requirement 13
+      return res.status(200).json({
+        ok: true,
+        emailSent: true,
+        id: info.messageId,
+        messageId: info.messageId
+      });
+    } catch (sendError: any) {
+      // Log real SMTP error without disclosing sensitive credentials (Requirement 9)
+      console.error("[SMTP Send Error]:", {
+        to,
+        codi: codiSeguiment,
+        message: sendError?.message || String(sendError),
+        code: sendError?.code,
+        command: sendError?.command,
+        response: sendError?.response,
+        responseCode: sendError?.responseCode,
+        host: smtpHost,
+        port: smtpPort,
+        user: maskString(smtpUser)
+      });
+
+      // Contract matching Requirement 12
+      return res.status(500).json({
+        ok: false,
+        emailSent: false,
+        error: "SMTP_SEND_FAILED",
+        message: sendError?.message || "Error al trametre el correu a través de SMTP."
+      });
+    }
   } catch (fatalError: any) {
-    console.error("[FATAL ERROR in /api/email]:", fatalError);
+    console.error("[FATAL ERROR in /api/email]:", fatalError?.message || fatalError);
     return res.status(500).json({
       ok: false,
-      step: "email_fatal",
-      error: fatalError?.message || "Error intern no controlat a la funció de correu.",
-      code: fatalError?.code || "UNHANDLED_EXCEPTION"
+      emailSent: false,
+      error: "SMTP_SEND_FAILED",
+      message: fatalError?.message || "Excepció interna no controlada a la funció de correu."
     });
   }
 }

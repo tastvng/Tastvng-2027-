@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
-import { applyCorsHeaders } from "./_cors";
-import { verifySupabaseAdminToken } from "./_supabase-auth";
+import { applyCorsHeaders } from "./_cors.ts";
+import { verifySupabaseAdminToken } from "./_supabase-auth.ts";
 
 /**
  * Consolidated Config Serverless Handler: /api/config

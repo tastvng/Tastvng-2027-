@@ -363,6 +363,8 @@ export default function Confirmation({ registration, onClear, onUpdate, config }
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
+            id: registration.id,
+            inscriptionId: registration.id,
             codiSeguiment: registration.codiSeguiment,
             emailData: {
               to: emailTo,
@@ -377,7 +379,7 @@ export default function Confirmation({ registration, onClear, onUpdate, config }
           return {
             ok: false,
             status: 500,
-            text: async () => err.message || String(err)
+            text: async () => JSON.stringify({ ok: false, emailSent: false, error: 'SMTP_SEND_FAILED', message: err.message || String(err) })
           } as Response;
         });
       });
@@ -387,18 +389,15 @@ export default function Confirmation({ registration, onClear, onUpdate, config }
 
       for (let i = 0; i < results.length; i++) {
         const res = results[i];
-        if (!res.ok) {
+        let data: any = null;
+        try {
           const text = await res.text();
-          let errText = '';
-          try {
-            const data = JSON.parse(text);
-            errText = data.error || data.message || '';
-          } catch {
-            // Not JSON
-          }
-          if (!errText) {
-            errText = text.substring(0, 150) || `HTTP Error ${res.status}`;
-          }
+          data = JSON.parse(text);
+        } catch {
+          // Not JSON
+        }
+        if (!res.ok || data?.ok === false || data?.emailSent === false) {
+          const errText = data?.error || data?.message || `HTTP Error ${res.status}`;
           errorsList.push(`${emailList[i]}: ${errText}`);
         }
       }
