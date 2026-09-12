@@ -19,7 +19,10 @@ import {
   Save, 
   HelpCircle,
   AlertTriangle,
-  QrCode
+  QrCode,
+  Download,
+  ExternalLink,
+  RefreshCw
 } from 'lucide-react';
 import { useLanguage } from '../LanguageContext';
 import TranslatedText from './TranslatedText';
@@ -55,63 +58,170 @@ export default function AdminFicha({ registration, config, onBack, onSave }: Adm
     if (registration.entregaMocadors !== undefined) return registration.entregaMocadors;
     return registration.entregaMaterial === EstatInscripcio.ENTREGAT;
   });
+  const [entregaExtras, setEntregaExtras] = useState<Record<string, boolean>>(() => {
+    const initial: Record<string, boolean> = {};
+    (registration.extresSeleccionats || []).forEach(e => {
+      initial[e.id] = registration.entregaMaterial === EstatInscripcio.ENTREGAT;
+    });
+    return initial;
+  });
   const [llistaEspera, setLlistaEspera] = useState<boolean>(!!registration.llistaEspera);
   const [estatInscripcio, setEstatInscripcio] = useState<'obertes' | 'llista_espera' | undefined>(registration.estatInscripcio);
   const [bandera, setBandera] = useState<number>(registration.bandera || 0);
 
   // Lazy-load complete details including heavy DNI blobs only when viewing the individual card
-  const [c1DniUrl, setC1DniUrl] = useState<string>(registration.c1DniUrl || '');
-  const [c2DniUrl, setC2DniUrl] = useState<string>(registration.c2DniUrl || '');
+  const [c1RawPath, setC1RawPath] = useState<string>(registration.c1DniUrl || '');
+  const [c2RawPath, setC2RawPath] = useState<string>(registration.c2DniUrl || '');
+  const [c1DniUrl, setC1DniUrl] = useState<string>('');
+  const [c2DniUrl, setC2DniUrl] = useState<string>('');
+  const [loadingDni1, setLoadingDni1] = useState<boolean>(false);
+  const [loadingDni2, setLoadingDni2] = useState<boolean>(false);
+  const [dni1Error, setDni1Error] = useState<string | null>(null);
+  const [dni2Error, setDni2Error] = useState<string | null>(null);
+
+  const resolveDni1 = React.useCallback(async (path: string) => {
+    if (!path) {
+      setC1DniUrl('');
+      return;
+    }
+    if (path.startsWith('data:')) {
+      setC1DniUrl(path);
+      return;
+    }
+    setLoadingDni1(true);
+    setDni1Error(null);
+    try {
+      const { getDniSignedUrl } = await import('../supabaseClient');
+      const signed = await getDniSignedUrl(path);
+      if (signed) {
+        setC1DniUrl(signed);
+      } else {
+        setDni1Error("No s'ha pogut obtenir l'enllaç");
+      }
+    } catch (err: any) {
+      setDni1Error(err?.message || "Error generant enllaç signat");
+    } finally {
+      setLoadingDni1(false);
+    }
+  }, []);
+
+  const resolveDni2 = React.useCallback(async (path: string) => {
+    if (!path) {
+      setC2DniUrl('');
+      return;
+    }
+    if (path.startsWith('data:')) {
+      setC2DniUrl(path);
+      return;
+    }
+    setLoadingDni2(true);
+    setDni2Error(null);
+    try {
+      const { getDniSignedUrl } = await import('../supabaseClient');
+      const signed = await getDniSignedUrl(path);
+      if (signed) {
+        setC2DniUrl(signed);
+      } else {
+        setDni2Error("No s'ha pogut obtenir l'enllaç");
+      }
+    } catch (err: any) {
+      setDni2Error(err?.message || "Error generant enllaç signat");
+    } finally {
+      setLoadingDni2(false);
+    }
+  }, []);
 
   React.useEffect(() => {
     let active = true;
     const recordId = registration.id;
-
-    async function resolveDniSigned(url: string): Promise<string> {
-      if (!url) return '';
-      if (url.startsWith('data:') || url.startsWith('http')) return url;
-      try {
-        const { getDniSignedUrl } = await import('../supabaseClient');
-        return await getDniSignedUrl(url);
-      } catch {
-        return url;
-      }
-    }
 
     async function loadFullDni() {
       try {
         const { getSupabaseInscripcionById } = await import('../supabaseClient');
         const full = await getSupabaseInscripcionById(recordId);
         if (full && active) {
-          if (full.c1DniUrl) {
-            const resolved = await resolveDniSigned(full.c1DniUrl);
-            if (active) setC1DniUrl(resolved);
+          const p1 = full.c1DniUrl || registration.c1DniUrl || '';
+          const p2 = full.c2DniUrl || registration.c2DniUrl || '';
+          if (p1 && p1 !== c1RawPath) {
+            setC1RawPath(p1);
+            resolveDni1(p1);
           }
-          if (full.c2DniUrl) {
-            const resolved = await resolveDniSigned(full.c2DniUrl);
-            if (active) setC2DniUrl(resolved);
+          if (p2 && p2 !== c2RawPath) {
+            setC2RawPath(p2);
+            resolveDni2(p2);
           }
         }
       } catch (err) {
         console.warn("Could not lazy-load DNI images from Supabase:", err);
       }
     }
-    
-    // Resolve initial if it is a protected storage path
-    if (registration.c1DniUrl && !registration.c1DniUrl.startsWith('data:') && !registration.c1DniUrl.startsWith('http')) {
-      resolveDniSigned(registration.c1DniUrl).then(u => { if (active) setC1DniUrl(u); });
+
+    if (registration.c1DniUrl) {
+      resolveDni1(registration.c1DniUrl);
     }
-    if (registration.c2DniUrl && !registration.c2DniUrl.startsWith('data:') && !registration.c2DniUrl.startsWith('http')) {
-      resolveDniSigned(registration.c2DniUrl).then(u => { if (active) setC2DniUrl(u); });
+    if (registration.c2DniUrl) {
+      resolveDni2(registration.c2DniUrl);
     }
 
-    if (!registration.c1DniUrl || !registration.c2DniUrl || (!registration.c1DniUrl.startsWith('dnis/') && registration.c1DniUrl.length < 50)) {
-      loadFullDni();
-    }
+    loadFullDni();
+
     return () => {
       active = false;
     };
-  }, [registration.id, registration.c1DniUrl, registration.c2DniUrl]);
+  }, [registration.id, registration.c1DniUrl, registration.c2DniUrl, resolveDni1, resolveDni2]);
+
+  const openDniInNewTab = async (currentUrl: string, rawPath: string) => {
+    try {
+      let targetUrl = currentUrl;
+      if (!targetUrl || targetUrl.startsWith('data:') === false) {
+        const { getDniSignedUrl } = await import('../supabaseClient');
+        targetUrl = await getDniSignedUrl(rawPath || currentUrl);
+      }
+      if (targetUrl) {
+        window.open(targetUrl, '_blank', 'noopener,noreferrer');
+      }
+    } catch (e) {
+      console.warn("Could not open DNI:", e);
+      if (currentUrl) window.open(currentUrl, '_blank', 'noopener,noreferrer');
+    }
+  };
+
+  const downloadDniFile = async (currentUrl: string, rawPath: string, pNum: number, pName: string) => {
+    try {
+      let targetUrl = currentUrl;
+      if (!targetUrl) {
+        const { getDniSignedUrl } = await import('../supabaseClient');
+        targetUrl = await getDniSignedUrl(rawPath);
+      }
+      if (!targetUrl) return;
+
+      if (targetUrl.startsWith('data:')) {
+        const a = document.createElement('a');
+        a.href = targetUrl;
+        a.download = `DNI_P${pNum}_${registration.codiSeguiment}_${(pName || '').trim().replace(/\s+/g, '_')}.jpg`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        return;
+      }
+
+      const res = await fetch(targetUrl);
+      if (!res.ok) throw new Error("Error descarregant fitxer");
+      const blob = await res.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      const ext = blob.type.includes('png') ? 'png' : blob.type.includes('pdf') ? 'pdf' : 'jpg';
+      a.download = `DNI_P${pNum}_${registration.codiSeguiment}_${(pName || '').trim().replace(/\s+/g, '_')}.${ext}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      console.warn("Descàrrega directa fallada, obrint en pestanya nova:", err);
+      if (currentUrl) window.open(currentUrl, '_blank', 'noopener,noreferrer');
+    }
+  };
 
   // Participant Editable configurations
   const [emailContactoPareja, setEmailContactoPareja] = useState(
@@ -594,56 +704,7 @@ export default function AdminFicha({ registration, config, onBack, onSave }: Adm
                 {language === 'ca' ? "Complements o Marxandatge afegit" : "Complementos o Merchandising añadido"}
               </span>
               <div className="flex flex-wrap gap-2">
-                {(() => {
-                  const domasTarifa = config?.tarifesDinamiques?.find(t => t.id === 'domas' || t.tipus === 'extra_domas');
-                  const isDomasActive = domasTarifa ? domasTarifa.actiu : false;
-                  const domasName = domasTarifa?.nom 
-                    ? domasTarifa.nom.replace(/\s*\(€\)\s*/g, '').replace('Cànon ', '') 
-                    : (language === 'ca' ? "Domàs de Balcó" : "Cubrebalcón de balcón");
-
-                  if (registration.teDomasBalco) {
-                    return (
-                      <span className="bg-fuchsia-100 text-fuchsia-800 text-xs font-bold px-3 py-1.5 rounded-xl border border-fuchsia-200 flex items-center gap-1">
-                        💝 {language === 'ca' ? `${domasName} inclòs` : `${domasName} incluido`}
-                      </span>
-                    );
-                  } else if (isDomasActive) {
-                    return (
-                      <span className="bg-zinc-50 text-zinc-400 text-xs px-3 py-1.5 rounded-xl border border-zinc-200/50">
-                        {language === 'ca' ? `Sense ${domasName.toLowerCase()}` : `Sin ${domasName.toLowerCase()}`}
-                      </span>
-                    );
-                  }
-                  return null;
-                })()}
-
-                {(() => {
-                  const mocadorTarifa = config?.tarifesDinamiques?.find(t => t.id === 'mocador' || t.tipus === 'extra_mocador');
-                  const isMocadorActive = mocadorTarifa ? mocadorTarifa.actiu : false;
-                  const mocadorPreu = mocadorTarifa?.valor ?? 6;
-                  const mocadorName = mocadorTarifa?.nom 
-                    ? mocadorTarifa.nom.replace(/\s*\(€\)\s*/g, '').replace('Cànon ', '') 
-                    : (language === 'ca' ? "Mocador oficial extra" : "Pañuelo oficial extra");
-
-                  if (registration.teMocadorsExtra > 0) {
-                    return (
-                      <span className="bg-zinc-900 text-white text-xs font-bold px-3 py-1.5 rounded-xl flex items-center gap-1">
-                        🧣 {language === 'ca'
-                          ? `${registration.teMocadorsExtra} ${mocadorName.toLowerCase()}(s) extres ordenats (${registration.teMocadorsExtra * mocadorPreu}€)`
-                          : `${registration.teMocadorsExtra} ${mocadorName.toLowerCase()}(s) extras pedidos (${registration.teMocadorsExtra * mocadorPreu}€)`}
-                      </span>
-                    );
-                  } else if (isMocadorActive) {
-                    return (
-                      <span className="bg-zinc-50 text-zinc-400 text-xs px-3 py-1.5 rounded-xl border border-zinc-200/50">
-                        {language === 'ca' ? `Sense ${mocadorName.toLowerCase()}s extres` : `Sin ${mocadorName.toLowerCase()}s extras`}
-                      </span>
-                    );
-                  }
-                  return null;
-                })()}
-
-                {/* Dynamic generic extras badges */}
+                {/* Dynamic generic extras badges only */}
                 {(registration.extresSeleccionats || []).filter(e => e.quantitat > 0).map((ext) => (
                   <span 
                     key={ext.id}
@@ -653,56 +714,70 @@ export default function AdminFicha({ registration, config, onBack, onSave }: Adm
                     {ext.quantitat}x {ext.nom} <span className="font-mono text-[10px] text-fuchsia-600 font-normal">({ext.quantitat * ext.preuUnitari}€)</span>
                   </span>
                 ))}
+                {(!registration.extresSeleccionats || registration.extresSeleccionats.filter(e => e.quantitat > 0).length === 0) && (
+                  <span className="bg-zinc-50 text-zinc-400 text-xs px-3 py-1.5 rounded-xl border border-zinc-200/50">
+                    {language === 'ca' ? "Sense material addicional" : "Sin material adicional"}
+                  </span>
+                )}
               </div>
             </div>
 
             {/* Answers questionnaire block */}
-            {Object.keys(registration.respostesCuestionari).length > 0 && (
-              <div className="bg-zinc-50 p-5 rounded-2xl border border-zinc-100 space-y-4">
-                <span className="font-sans font-black text-xs text-zinc-505 uppercase tracking-wider block">
-                  {language === 'ca' ? "RESPOSTES AL CÜESTIONARI COMPARSILER:" : "RESPUESTAS AL CUESTIONARIO COMPARSILER:"}
-                </span>
-                <div className="divide-y divide-zinc-200/60 text-xs space-y-3 pt-1">
-                  {Object.entries(registration.respostesCuestionari).map(([key, value]) => {
-                    // Match key question text dynamically from config or use fallbacks
-                    let label = "";
-                    const configPregunta = config?.preguntesFormulari?.find(p => p.id === key);
-                    if (configPregunta) {
-                      label = configPregunta.titol;
-                    } else if (key === 'preg-1' || key === 'q-1') {
-                      label = language === 'ca' ? "Primera vegada tolerant amb El Tast?" : "¿Primera vez saliendo con El Tast?";
-                    } else if (key === 'preg-2' || key === 'q-2') {
-                      label = language === 'ca' ? "Participació al dinar de germanor de la colla?" : "¿Participación en la comida de hermandad de la colla?";
-                    } else if (key === 'preg-3' || key === 'q-3') {
-                      label = language === 'ca' ? "Intoleràncies alimentàries o comentaris dietètics:" : "Intolerancias alimentarias o comentarios dietéticos:";
-                    } else if (key === 'domas_qty') {
-                      label = language === 'ca' ? "Quantitat de Domassos:" : "Cantidad de Colgaduras:";
-                    } else if (key === 'mocadors_qty') {
-                      label = language === 'ca' ? "Quantitat de Mocadors Extra:" : "Cantidad de Pañuelos Extra:";
-                    } else if (key.startsWith('extra_qty_')) {
-                      const extraId = key.replace('extra_qty_', '');
-                      const foundExtra = config?.tarifesDinamiques?.find(t => t.id === extraId);
-                      label = foundExtra ? `${foundExtra.nom} (Quantitat):` : key;
-                    } else {
-                      label = key;
-                    }
-                    
-                    return (
-                      <div key={key} className="pt-2">
-                        <p className="font-bold text-zinc-800 mb-1 leading-relaxed">
-                          <TranslatedText text={label} />
-                        </p>
-                        <p className="text-zinc-600 font-mono italic">
-                          {value === true ? 'Sí' : value === false ? 'No' : (
-                            <TranslatedText text={String(value || (language === 'ca' ? 'Sense resposta' : 'Sin respuesta'))} />
-                          )}
-                        </p>
-                      </div>
-                    );
-                  })}
+            {(() => {
+              const FORBIDDEN_KEYS = new Set([
+                'estatCorreu', 'domas_qty', 'mocadors_qty', 'correuContacteParella',
+                'telefonContacteParella', 'emailContactoPareja', 'telefonContactoPareja',
+                'teDomasBalco', 'teMocadorsExtra', 'clavells_qty', 'corbati_qty', 'esmorzar_qty'
+              ]);
+              const rawAnswers = registration.respostesCuestionari || {};
+              const validEntries = Object.entries(rawAnswers).filter(([k, v]) => {
+                if (FORBIDDEN_KEYS.has(k) || k.startsWith('extra_qty_') || k.startsWith('_')) return false;
+                if (v === undefined || v === null || v === '') return false;
+                const s = String(v).trim().toLowerCase();
+                if (s === 'fallat' || s === 'sense resposta' || s === 'sin respuesta') return false;
+                return true;
+              });
+
+              if (validEntries.length === 0) return null;
+
+              return (
+                <div className="bg-zinc-50 p-5 rounded-2xl border border-zinc-100 space-y-4">
+                  <span className="font-sans font-black text-xs text-zinc-600 uppercase tracking-wider block">
+                    {language === 'ca' ? "RESPOSTES AL QÜESTIONARI COMPARSILER:" : "RESPUESTAS AL CUESTIONARIO COMPARSILER:"}
+                  </span>
+                  <div className="divide-y divide-zinc-200/60 text-xs space-y-3 pt-1">
+                    {validEntries.map(([key, value]) => {
+                      let label = "";
+                      const configPregunta = config?.preguntesFormulari?.find(p => p.id === key);
+                      if (configPregunta) {
+                        label = configPregunta.titol;
+                      } else if (key === 'preg-1' || key === 'q-1') {
+                        label = language === 'ca' ? "Primera vegada saltant amb El Tast?" : "¿Primera vez saliendo con El Tast?";
+                      } else if (key === 'preg-2' || key === 'q-2') {
+                        label = language === 'ca' ? "Participació al dinar de germanor de la colla?" : "¿Participación en la comida de hermandad de la colla?";
+                      } else if (key === 'preg-3' || key === 'q-3') {
+                        label = language === 'ca' ? "Intoleràncies alimentàries o comentaris dietètics:" : "Intolerancias alimentarias o comentarios dietéticos:";
+                      } else {
+                        label = key;
+                      }
+
+                      return (
+                        <div key={key} className="pt-2">
+                          <p className="font-bold text-zinc-800 mb-1 leading-relaxed">
+                            <TranslatedText text={label} />
+                          </p>
+                          <p className="text-zinc-600 font-mono italic">
+                            {value === true ? 'Sí' : value === false ? 'No' : (
+                              <TranslatedText text={String(value)} />
+                            )}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
           </div>
 
           {/* DNI auditing stage documents layout */}
@@ -713,83 +788,253 @@ export default function AdminFicha({ registration, config, onBack, onSave }: Adm
                 {language === 'ca' ? "Auditoria de Documents (DNI / NIE)" : "Auditoría de Documentos (DNI / NIE)"}
               </span>
               <span className="text-[10px] text-zinc-400 font-mono uppercase">
-                {language === 'ca' ? "Control de legibilitat" : "Control de legibilidad"}
+                {language === 'ca' ? "Control de legibilitat i descàrrega" : "Control de legibilidad y descarga"}
               </span>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* DNI Comparser 1 */}
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-zinc-800 font-bold font-mono">DNI Comparser 1 ({registration.c1Nom})</span>
-                  <div className="flex gap-1">
-                    <button 
-                      onClick={rotateImage1}
-                      className="p-1 px-1.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-600 rounded-md text-[10px] inline-flex items-center gap-1 transition"
-                      title={language === 'ca' ? "Rotar 90 graus" : "Rotar 90 grados"}
-                    >
-                      <RotateCw size={12} /> {language === 'ca' ? "Rotar" : "Rotar"}
-                    </button>
-                    <button 
-                      onClick={() => setActiveZoomUrl(c1DniUrl)}
-                      className="p-1 px-1.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-600 rounded-md text-[10px] inline-flex items-center gap-1 transition"
-                      title={language === 'ca' ? "Ampliar imatge" : "Ampliar imagen"}
-                    >
-                      <ZoomIn size={12} /> {language === 'ca' ? "Lupa" : "Lupa"}
-                    </button>
-                  </div>
+                  <span className="text-xs text-zinc-800 font-bold font-mono">
+                    DNI {registration.c1Nom} {registration.c1Cognoms}
+                  </span>
+                  {c1RawPath || c1DniUrl ? (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      <Check size={10} /> {language === 'ca' ? "DNI adjuntat" : "DNI adjuntado"}
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                      <AlertTriangle size={10} /> {language === 'ca' ? "DNI no adjuntat" : "DNI no adjuntado"}
+                    </span>
+                  )}
                 </div>
 
-                <div 
-                  className="aspect-[1.58] bg-zinc-150 rounded-2xl overflow-hidden border border-zinc-200 relative cursor-zoom-in flex items-center justify-center bg-zinc-900"
-                  onClick={() => setActiveZoomUrl(c1DniUrl)}
-                >
-                  <img 
-                    src={c1DniUrl} 
-                    alt="DNI Comparser 1" 
-                    style={{ transform: `rotate(${rotacio1}deg)` }}
-                    className="object-contain w-full h-full transition-transform duration-300"
-                    referrerPolicy="no-referrer"
-                  />
-                  <div className="absolute inset-0 bg-black/5 hover:bg-black/25 transition-colors" />
-                </div>
+                {/* Buttons for Participant 1 */}
+                {c1RawPath || c1DniUrl ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button 
+                      type="button"
+                      onClick={() => openDniInNewTab(c1DniUrl, c1RawPath)}
+                      className="p-1.5 px-3 bg-fuchsia-50 hover:bg-fuchsia-100 text-fuchsia-900 border border-fuchsia-200 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 transition shadow-2xs cursor-pointer"
+                      title={language === 'ca' ? "Obrir DNI en pestanya nova" : "Abrir DNI en pestaña nueva"}
+                    >
+                      <ExternalLink size={13} /> {language === 'ca' ? "Veure DNI participant 1" : "Ver DNI participante 1"}
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={() => downloadDniFile(c1DniUrl, c1RawPath, 1, c1Nom)}
+                      className="p-1.5 px-3 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 border border-zinc-200 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 transition shadow-2xs cursor-pointer"
+                      title={language === 'ca' ? "Descarregar document DNI" : "Descargar documento DNI"}
+                    >
+                      <Download size={13} /> {language === 'ca' ? "Descarregar DNI" : "Descargar DNI"}
+                    </button>
+                    <div className="ml-auto flex items-center gap-1">
+                      <button 
+                        type="button"
+                        onClick={rotateImage1}
+                        className="p-1.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-600 rounded-lg text-[10px] inline-flex items-center gap-1 transition"
+                        title={language === 'ca' ? "Rotar 90 graus" : "Rotar 90 grados"}
+                      >
+                        <RotateCw size={12} />
+                      </button>
+                      <button 
+                        type="button"
+                        onClick={() => setActiveZoomUrl(c1DniUrl)}
+                        className="p-1.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-600 rounded-lg text-[10px] inline-flex items-center gap-1 transition"
+                        title={language === 'ca' ? "Ampliar imatge" : "Ampliar imagen"}
+                      >
+                        <ZoomIn size={12} />
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+
+                {/* Preview Box 1 */}
+                {c1RawPath || c1DniUrl ? (
+                  <div 
+                    className="aspect-[1.58] bg-zinc-900 rounded-2xl overflow-hidden border border-zinc-200 relative cursor-zoom-in flex items-center justify-center"
+                    onClick={() => c1DniUrl && setActiveZoomUrl(c1DniUrl)}
+                  >
+                    {loadingDni1 ? (
+                      <div className="flex flex-col items-center gap-2 text-zinc-400 text-xs">
+                        <RefreshCw size={20} className="animate-spin text-fuchsia-500" />
+                        <span>{language === 'ca' ? "Carregant document..." : "Cargando documento..."}</span>
+                      </div>
+                    ) : dni1Error ? (
+                      <div className="flex flex-col items-center gap-2 text-center p-4">
+                        <span className="text-amber-400 text-xs">{dni1Error}</span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            resolveDni1(c1RawPath);
+                          }}
+                          className="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-[10px] font-bold inline-flex items-center gap-1"
+                        >
+                          <RefreshCw size={10} /> {language === 'ca' ? "Regenerar enllaç" : "Regenerar enlace"}
+                        </button>
+                      </div>
+                    ) : c1DniUrl ? (
+                      <>
+                        <img 
+                          src={c1DniUrl} 
+                          alt={`DNI ${c1Nom}`} 
+                          style={{ transform: `rotate(${rotacio1}deg)` }}
+                          className="object-contain w-full h-full transition-transform duration-300"
+                          referrerPolicy="no-referrer"
+                          onError={() => {
+                            setDni1Error(language === 'ca' ? "Enllaç caducat o imatge no disponible" : "Enlace caducado o imagen no disponible");
+                          }}
+                        />
+                        <div className="absolute inset-0 bg-black/5 hover:bg-black/25 transition-colors" />
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          resolveDni1(c1RawPath);
+                        }}
+                        className="px-3 py-1.5 bg-fuchsia-600 hover:bg-fuchsia-500 text-white text-xs font-bold rounded-xl flex items-center gap-1.5"
+                      >
+                        <RefreshCw size={12} /> {language === 'ca' ? "Carregar DNI" : "Cargar DNI"}
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="aspect-[1.58] bg-zinc-50 rounded-2xl border-2 border-dashed border-zinc-200 flex flex-col items-center justify-center p-4 text-center">
+                    <FileText size={32} className="text-zinc-300 mb-2" />
+                    <span className="text-xs font-bold text-zinc-600">
+                      {language === 'ca' ? "DNI no adjuntat" : "DNI no adjuntado"}
+                    </span>
+                    <span className="text-[11px] text-zinc-400 mt-0.5">
+                      {language === 'ca' ? "Aquest participant no ha pujat cap arxiu de document" : "Este participante no ha subido ningún archivo de documento"}
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* DNI Comparser 2 */}
-              <div className="space-y-2">
+              <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-zinc-800 font-bold font-mono">DNI Comparser 2 ({registration.c2Nom})</span>
-                  <div className="flex gap-1">
-                    <button 
-                      onClick={rotateImage2}
-                      className="p-1 px-1.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-600 rounded-md text-[10px] inline-flex items-center gap-1 transition"
-                      title={language === 'ca' ? "Rotar 90 graus" : "Rotar 90 grados"}
-                    >
-                      <RotateCw size={12} /> {language === 'ca' ? "Rotar" : "Rotar"}
-                    </button>
-                    <button 
-                      onClick={() => setActiveZoomUrl(c2DniUrl)}
-                      className="p-1 px-1.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-605 rounded-md text-[10px] inline-flex items-center gap-1 transition"
-                      title={language === 'ca' ? "Ampliar imatge" : "Ampliar imagen"}
-                    >
-                      <ZoomIn size={12} /> {language === 'ca' ? "Lupa" : "Lupa"}
-                    </button>
-                  </div>
+                  <span className="text-xs text-zinc-800 font-bold font-mono">
+                    DNI {registration.c2Nom} {registration.c2Cognoms}
+                  </span>
+                  {c2RawPath || c2DniUrl ? (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      <Check size={10} /> {language === 'ca' ? "DNI adjuntat" : "DNI adjuntado"}
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                      <AlertTriangle size={10} /> {language === 'ca' ? "DNI no adjuntat" : "DNI no adjuntado"}
+                    </span>
+                  )}
                 </div>
 
-                <div 
-                  className="aspect-[1.58] bg-zinc-150 rounded-2xl overflow-hidden border border-zinc-200 relative cursor-zoom-in flex items-center justify-center bg-zinc-900"
-                  onClick={() => setActiveZoomUrl(c2DniUrl)}
-                >
-                  <img 
-                    src={c2DniUrl} 
-                    alt="DNI Comparser 2" 
-                    style={{ transform: `rotate(${rotacio2}deg)` }}
-                    className="object-contain w-full h-full transition-transform duration-300"
-                    referrerPolicy="no-referrer"
-                  />
-                  <div className="absolute inset-0 bg-black/5 hover:bg-black/25 transition-colors" />
-                </div>
+                {/* Buttons for Participant 2 */}
+                {c2RawPath || c2DniUrl ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button 
+                      type="button"
+                      onClick={() => openDniInNewTab(c2DniUrl, c2RawPath)}
+                      className="p-1.5 px-3 bg-fuchsia-50 hover:bg-fuchsia-100 text-fuchsia-900 border border-fuchsia-200 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 transition shadow-2xs cursor-pointer"
+                      title={language === 'ca' ? "Obrir DNI en pestanya nova" : "Abrir DNI en pestaña nueva"}
+                    >
+                      <ExternalLink size={13} /> {language === 'ca' ? "Veure DNI participant 2" : "Ver DNI participante 2"}
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={() => downloadDniFile(c2DniUrl, c2RawPath, 2, c2Nom)}
+                      className="p-1.5 px-3 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 border border-zinc-200 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 transition shadow-2xs cursor-pointer"
+                      title={language === 'ca' ? "Descarregar document DNI" : "Descargar documento DNI"}
+                    >
+                      <Download size={13} /> {language === 'ca' ? "Descarregar DNI" : "Descargar DNI"}
+                    </button>
+                    <div className="ml-auto flex items-center gap-1">
+                      <button 
+                        type="button"
+                        onClick={rotateImage2}
+                        className="p-1.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-600 rounded-lg text-[10px] inline-flex items-center gap-1 transition"
+                        title={language === 'ca' ? "Rotar 90 graus" : "Rotar 90 grados"}
+                      >
+                        <RotateCw size={12} />
+                      </button>
+                      <button 
+                        type="button"
+                        onClick={() => setActiveZoomUrl(c2DniUrl)}
+                        className="p-1.5 bg-zinc-100 hover:bg-zinc-200 text-zinc-600 rounded-lg text-[10px] inline-flex items-center gap-1 transition"
+                        title={language === 'ca' ? "Ampliar imatge" : "Ampliar imagen"}
+                      >
+                        <ZoomIn size={12} />
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+
+                {/* Preview Box 2 */}
+                {c2RawPath || c2DniUrl ? (
+                  <div 
+                    className="aspect-[1.58] bg-zinc-900 rounded-2xl overflow-hidden border border-zinc-200 relative cursor-zoom-in flex items-center justify-center"
+                    onClick={() => c2DniUrl && setActiveZoomUrl(c2DniUrl)}
+                  >
+                    {loadingDni2 ? (
+                      <div className="flex flex-col items-center gap-2 text-zinc-400 text-xs">
+                        <RefreshCw size={20} className="animate-spin text-fuchsia-500" />
+                        <span>{language === 'ca' ? "Carregant document..." : "Cargando documento..."}</span>
+                      </div>
+                    ) : dni2Error ? (
+                      <div className="flex flex-col items-center gap-2 text-center p-4">
+                        <span className="text-amber-400 text-xs">{dni2Error}</span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            resolveDni2(c2RawPath);
+                          }}
+                          className="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-[10px] font-bold inline-flex items-center gap-1"
+                        >
+                          <RefreshCw size={10} /> {language === 'ca' ? "Regenerar enllaç" : "Regenerar enlace"}
+                        </button>
+                      </div>
+                    ) : c2DniUrl ? (
+                      <>
+                        <img 
+                          src={c2DniUrl} 
+                          alt={`DNI ${c2Nom}`} 
+                          style={{ transform: `rotate(${rotacio2}deg)` }}
+                          className="object-contain w-full h-full transition-transform duration-300"
+                          referrerPolicy="no-referrer"
+                          onError={() => {
+                            setDni2Error(language === 'ca' ? "Enllaç caducat o imatge no disponible" : "Enlace caducado o imagen no disponible");
+                          }}
+                        />
+                        <div className="absolute inset-0 bg-black/5 hover:bg-black/25 transition-colors" />
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          resolveDni2(c2RawPath);
+                        }}
+                        className="px-3 py-1.5 bg-fuchsia-600 hover:bg-fuchsia-500 text-white text-xs font-bold rounded-xl flex items-center gap-1.5"
+                      >
+                        <RefreshCw size={12} /> {language === 'ca' ? "Carregar DNI" : "Cargar DNI"}
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="aspect-[1.58] bg-zinc-50 rounded-2xl border-2 border-dashed border-zinc-200 flex flex-col items-center justify-center p-4 text-center">
+                    <FileText size={32} className="text-zinc-300 mb-2" />
+                    <span className="text-xs font-bold text-zinc-600">
+                      {language === 'ca' ? "DNI no adjuntat" : "DNI no adjuntado"}
+                    </span>
+                    <span className="text-[11px] text-zinc-400 mt-0.5">
+                      {language === 'ca' ? "Aquest participant no ha pujat cap arxiu de document" : "Este participante no ha subido ningún archivo de documento"}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -1072,49 +1317,25 @@ export default function AdminFicha({ registration, config, onBack, onSave }: Adm
                     </label>
                   )}
 
-                  {/* 3. Domàs de balcó */}
-                  {registration.teDomasBalco && (
-                    <label className="flex items-center gap-2.5 text-zinc-300 hover:text-white cursor-pointer select-none">
+                  {/* Dynamic extras materials from current configuration */}
+                  {(registration.extresSeleccionats || []).filter(e => e.quantitat > 0).map((ext) => (
+                    <label key={ext.id} className="flex items-center gap-2.5 text-zinc-300 hover:text-white cursor-pointer select-none">
                       <input 
                         type="checkbox"
-                        checked={entregaDomas}
+                        checked={entregaMaterial === EstatInscripcio.ENTREGAT || entregaExtras[ext.id] === true}
                         onChange={(e) => {
                           const val = e.target.checked;
-                          setEntregaDomas(val);
-                          const allChecked = (!c1Talla || entregaC1Uniforme) && (!c2Talla || entregaC2Uniforme) && val && (!(registration.teMocadorsExtra > 0) || entregaMocadors);
-                          setEntregaMaterial(allChecked ? EstatInscripcio.ENTREGAT : EstatInscripcio.PENDENT);
+                          setEntregaExtras(prev => ({ ...prev, [ext.id]: val }));
                         }}
                         className="rounded border-zinc-800 bg-[#121212] text-[#ff0090] focus:ring-0 focus:ring-offset-0 w-3.5 h-3.5 cursor-pointer accent-[#ff0090]"
-                        id="chk-entrega-domas"
+                        id={`chk-entrega-ext-${ext.id}`}
                       />
                       <span className="leading-tight">
-                        {language === 'ca' ? "🏡 Domàs de Balcó Oficial" : "🏡 Domás de Balcón Oficial"} 
-                        <span className="text-[10px] text-zinc-500 ml-1">(1 unitat)</span>
+                        🎁 {ext.nom}
+                        <strong className="text-[#ff0090] font-mono ml-1">({ext.quantitat} u.)</strong>
                       </span>
                     </label>
-                  )}
-
-                  {/* 4. Mocadors Extra */}
-                  {registration.teMocadorsExtra > 0 && (
-                    <label className="flex items-center gap-2.5 text-zinc-300 hover:text-white cursor-pointer select-none">
-                      <input 
-                        type="checkbox"
-                        checked={entregaMocadors}
-                        onChange={(e) => {
-                          const val = e.target.checked;
-                          setEntregaMocadors(val);
-                          const allChecked = (!c1Talla || entregaC1Uniforme) && (!c2Talla || entregaC2Uniforme) && (!registration.teDomasBalco || entregaDomas) && val;
-                          setEntregaMaterial(allChecked ? EstatInscripcio.ENTREGAT : EstatInscripcio.PENDENT);
-                        }}
-                        className="rounded border-zinc-800 bg-[#121212] text-[#ff0090] focus:ring-0 focus:ring-offset-0 w-3.5 h-3.5 cursor-pointer accent-[#ff0090]"
-                        id="chk-entrega-mocadors"
-                      />
-                      <span className="leading-tight">
-                        {language === 'ca' ? "🧣 Mocadors Extra de Colla" : "🧣 Pañuelos Extra de Colla"} 
-                        <strong className="text-[#ff0090] font-mono ml-1">({registration.teMocadorsExtra} u.)</strong>
-                      </span>
-                    </label>
-                  )}
+                  ))}
                 </div>
               </div>
             </div>

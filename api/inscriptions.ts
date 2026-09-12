@@ -151,9 +151,18 @@ export default async function inscriptionsHandler(req: any, res: any) {
         try { respostesCuestionari = JSON.parse(reg.respostesCuestionari); } catch { respostesCuestionari = {}; }
       }
 
-      // Store contact email & phone inside respostes for resilience
-      respostesCuestionari.emailContactoPareja = contactEmail;
-      respostesCuestionari.telefonContactoPareja = contactTelefon;
+      // Purge legacy, contact, and internal fields from questionnaire answers
+      const FORBIDDEN_RESPOSTES_KEYS = [
+        'estatCorreu', 'domas_qty', 'mocadors_qty', 'correuContacteParella',
+        'telefonContacteParella', 'emailContactoPareja', 'telefonContactoPareja',
+        'teDomasBalco', 'teMocadorsExtra', 'clavells_qty', 'corbati_qty'
+      ];
+      FORBIDDEN_RESPOSTES_KEYS.forEach(k => delete respostesCuestionari[k]);
+      Object.keys(respostesCuestionari).forEach(k => {
+        if (k.startsWith('extra_qty_')) {
+          delete respostesCuestionari[k];
+        }
+      });
 
       let seleccionsUniforme: Record<string, any> = {};
       if (typeof reg.seleccionsUniforme === 'object' && reg.seleccionsUniforme !== null) {
@@ -259,9 +268,53 @@ export default async function inscriptionsHandler(req: any, res: any) {
     }
 
     // ==========================================
-    // ROUTE 1: LIST INSCRIPTIONS FOR SECRETARÍA (action=list or GET /api/inscriptions)
+    // ROUTE: GET SINGLE INSCRIPTION (action=get or action=get-by-id)
     // ==========================================
-    if (action === 'list' || req.method === 'GET') {
+    if (action === 'get' || action === 'get-by-id') {
+      const serverSupabase = getServerSupabase();
+      if (!serverSupabase) {
+        return res.status(500).json({
+          ok: false,
+          error: "Supabase no configurat al servidor",
+          code: "CONFIG_MISSING"
+        });
+      }
+
+      const targetId = String(query.id || body.id || '').trim();
+      const targetCodi = String(query.codi || body.codi || '').trim();
+
+      if (!targetId && !targetCodi) {
+        return res.status(400).json({ ok: false, error: "ID o Codi de seguiment requerit." });
+      }
+
+      let q = serverSupabase.from('inscripciones').select('*');
+      if (targetId) {
+        q = q.eq('id', targetId);
+      } else {
+        q = q.eq('codiSeguiment', targetCodi);
+      }
+
+      const { data, error } = await q.maybeSingle();
+
+      if (error || !data) {
+        let qFallback = serverSupabase.from('inscripcions').select('*');
+        if (targetId) qFallback = qFallback.eq('id', targetId);
+        else qFallback = qFallback.eq('codiSeguiment', targetCodi);
+
+        const { data: fbData } = await qFallback.maybeSingle();
+        if (fbData) {
+          return res.status(200).json({ ok: true, data: fbData });
+        }
+        return res.status(404).json({ ok: false, error: "Inscripció no trobada" });
+      }
+
+      return res.status(200).json({ ok: true, data });
+    }
+
+    // ==========================================
+    // ROUTE 1: LIST INSCRIPTIONS FOR SECRETARÍA (action=list or GET with no specific action)
+    // ==========================================
+    if (action === 'list' || (!action && req.method === 'GET')) {
       const serverSupabase = getServerSupabase();
       if (!serverSupabase) {
         return res.status(500).json({
@@ -438,6 +491,57 @@ export default async function inscriptionsHandler(req: any, res: any) {
           step: "upload_dni",
           error: "Error intern processant el document DNI.",
           code: "STORAGE_EXCEPTION"
+        });
+      }
+    }
+
+    // ==========================================
+    // ROUTE: GENERATE SIGNED DNI URL (action=signed-dni-url or action=get-dni-url)
+    // ==========================================
+    if (action === 'signed-dni-url' || action === 'get-dni-url') {
+      try {
+        const rawPath = String(body.path || query.path || '').trim();
+        if (!rawPath) {
+          return res.status(400).json({ ok: false, error: "Ruta de fitxer requerida." });
+        }
+
+        if (rawPath.includes('..')) {
+          return res.status(400).json({ ok: false, error: "Ruta de fitxer no vàlida." });
+        }
+
+        const cleanPath = rawPath
+          .replace(/^https?:\/\/[^/]+\/storage\/v1\/object\/(?:public|sign)\/dnis\//, '')
+          .replace(/^storage:\/\/dnis\//, '')
+          .replace(/^dnis\//, '');
+
+        const serverSupabase = getServerSupabase();
+        if (!serverSupabase) {
+          return res.status(500).json({ ok: false, error: "Supabase no configurat al servidor." });
+        }
+
+        // Generate signed URL with 3600 seconds (1 hour) expiration
+        const { data: signedData, error: signError } = await serverSupabase.storage
+          .from('dnis')
+          .createSignedUrl(cleanPath, 3600);
+
+        if (signError || !signedData?.signedUrl) {
+          console.warn("[SIGNED DNI URL ERROR]:", signError?.message || signError);
+          return res.status(404).json({
+            ok: false,
+            error: signError?.message || "No s'ha pogut generar l'enllaç signat per al document DNI."
+          });
+        }
+
+        return res.status(200).json({
+          ok: true,
+          signedUrl: signedData.signedUrl,
+          expiresIn: 3600
+        });
+      } catch (dniErr: any) {
+        console.error("Error generating signed DNI URL:", dniErr);
+        return res.status(500).json({
+          ok: false,
+          error: dniErr?.message || "Error intern generant l'enllaç del DNI."
         });
       }
     }

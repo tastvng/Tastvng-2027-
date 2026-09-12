@@ -38,7 +38,14 @@ export default async function emailHandler(req: any, res: any) {
 
     const method = (req.method || 'GET').toUpperCase();
     const query = req.query || {};
-    const body = req.body || {};
+    let body = req.body || {};
+    if (typeof body === 'string') {
+      try {
+        body = JSON.parse(body);
+      } catch {
+        body = {};
+      }
+    }
     const action = String(query.action || body.action || '').trim().toLowerCase();
 
     // ==========================================
@@ -50,7 +57,7 @@ export default async function emailHandler(req: any, res: any) {
         const portRaw = process.env.SMTP_PORT || '587';
         const port = parseInt(String(portRaw).trim(), 10) || 587;
         const user = (process.env.SMTP_USER || '').trim();
-        const from = (process.env.SMTP_FROM || process.env.SMTP_USER || '').trim();
+        const from = (process.env.SMTP_FROM || user).trim();
         const password = (process.env.SMTP_PASSWORD || '').trim();
 
         const configured = Boolean(user && password);
@@ -113,7 +120,8 @@ export default async function emailHandler(req: any, res: any) {
         ? authHeader.slice(7).trim()
         : '';
 
-      const isAdmin = await verifySupabaseAdminToken(token);
+      const authCheck = await verifySupabaseAdminToken(token);
+      const isAdmin = Boolean(authCheck && authCheck.valid);
       if (!isAdmin) {
         return res.status(403).json({
           ok: false,
@@ -126,14 +134,14 @@ export default async function emailHandler(req: any, res: any) {
       const host = (process.env.SMTP_HOST || 'smtp.gmail.com').trim();
       const port = parseInt(String(process.env.SMTP_PORT || '587').trim(), 10) || 587;
       const user = (process.env.SMTP_USER || '').trim();
-      const pass = (process.env.SMTP_PASSWORD || '').trim();
+      const pass = (process.env.SMTP_PASSWORD || '').trim().replace(/\s+/g, '');
       const from = (process.env.SMTP_FROM || user).trim();
 
       if (!user || !pass) {
         return res.status(400).json({
           ok: false,
           step: "email_test",
-          error: "Les credencials SMTP no estan configurades al servidor (SMTP_USER o SMTP_PASSWORD buits).",
+          error: "Les credencials SMTP no estan configurades al servidor (SMTP_USER o SMTP_PASSWORD buits a Vercel/entorn).",
           code: "CONFIG_MISSING"
         });
       }
@@ -209,20 +217,21 @@ export default async function emailHandler(req: any, res: any) {
       const token = typeof authHeader === 'string' && authHeader.startsWith('Bearer ')
         ? authHeader.slice(7).trim()
         : '';
-      const isAdmin = await verifySupabaseAdminToken(token);
+      const authCheck = await verifySupabaseAdminToken(token);
+      const isAdmin = Boolean(authCheck && authCheck.valid);
 
-      const smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
-      const smtpPort = process.env.SMTP_PORT || '587';
-      const smtpUser = process.env.SMTP_USER || '';
-      const smtpPassword = process.env.SMTP_PASSWORD || '';
-      const smtpFrom = process.env.SMTP_FROM || process.env.SMTP_USER || '';
+      const smtpHost = (process.env.SMTP_HOST || 'smtp.gmail.com').trim();
+      const smtpPort = parseInt(String(process.env.SMTP_PORT || '587').trim(), 10) || 587;
+      const smtpUser = (process.env.SMTP_USER || '').trim();
+      const smtpPassword = (process.env.SMTP_PASSWORD || '').trim().replace(/\s+/g, '');
+      const smtpFrom = (process.env.SMTP_FROM || smtpUser).trim();
 
       if (!smtpPassword || !smtpUser) {
         console.error("[EMAIL error]: Credencials SMTP no configurades a les variables d'entorn.");
         return res.status(500).json({
           ok: false,
           step: "email_send",
-          error: "La configuració SMTP del servidor no està completa (SMTP_USER / SMTP_PASSWORD absents en entorn).",
+          error: "La configuració SMTP del servidor no està completa (SMTP_USER / SMTP_PASSWORD absents en entorn de Vercel).",
           code: "CONFIG_MISSING"
         });
       }
@@ -353,7 +362,7 @@ export default async function emailHandler(req: any, res: any) {
       }
 
       try {
-        const portNum = parseInt(smtpPort, 10) || 587;
+        const portNum = Number(smtpPort) || 587;
         const isPort465 = portNum === 465;
         const transporter = nodemailer.createTransport({
           host: smtpHost,

@@ -335,6 +335,24 @@ function parseInscripcionesRows(rows: any[]): Inscripcio[] {
       (rawC2Telefon && String(rawC2Telefon).trim().length > 0 ? rawC2Telefon : '') ||
       rawC1Telefon || rawC2Telefon || '';
 
+    const rawRespostes: Record<string, any> = typeof r.respostesCuestionari === 'object' && r.respostesCuestionari ? { ...r.respostesCuestionari } :
+                          typeof r.respostes_cuestionari === 'object' && r.respostes_cuestionari ? { ...r.respostes_cuestionari } :
+                          typeof r.respostes === 'object' && r.respostes ? { ...r.respostes } :
+                          parseJSON(r.respostesCuestionari || r.respostes_cuestionari || r.respostes || '{}');
+
+    // Purge legacy, contact, and internal fields from questionnaire answers
+    const FORBIDDEN_KEYS = [
+      'estatCorreu', 'domas_qty', 'mocadors_qty', 'correuContacteParella',
+      'telefonContacteParella', 'emailContactoPareja', 'telefonContactoPareja',
+      'teDomasBalco', 'teMocadorsExtra', 'clavells_qty', 'corbati_qty'
+    ];
+    FORBIDDEN_KEYS.forEach(k => delete rawRespostes[k]);
+    Object.keys(rawRespostes).forEach(k => {
+      if (k.startsWith('extra_qty_')) {
+        delete rawRespostes[k];
+      }
+    });
+
     // Standard column parse with snake_case and casing fallback modes
     return {
       id: r.id || r.key || '',
@@ -372,11 +390,8 @@ function parseInscripcionesRows(rows: any[]): Inscripcio[] {
       c2TutorTelefon: r.c2TutorTelefon !== undefined ? r.c2TutorTelefon : (r.c2_tutor_telefon || r.c2tutortelefon || ''),
       c2UniformeTipus: r.c2UniformeTipus !== undefined ? r.c2UniformeTipus : (r.c2_uniforme_tipus || r.c2uniformetipus || ''),
 
-      respostesCuestionari: typeof r.respostesCuestionari === 'object' && r.respostesCuestionari ? r.respostesCuestionari :
-                            typeof r.respostes_cuestionari === 'object' && r.respostes_cuestionari ? r.respostes_cuestionari :
-                            typeof r.respostes === 'object' && r.respostes ? r.respostes :
-                            parseJSON(r.respostesCuestionari || r.respostes_cuestionari || r.respostes || '{}'),
-      
+      respostesCuestionari: rawRespostes,
+    
       seleccionsUniforme: typeof r.seleccionsUniforme === 'object' && r.seleccionsUniforme ? r.seleccionsUniforme :
                           typeof r.seleccions_uniforme === 'object' && r.seleccions_uniforme ? r.seleccions_uniforme :
                           parseJSON(r.seleccionsUniforme || r.seleccions_uniforme || '{}'),
@@ -399,9 +414,9 @@ function parseInscripcionesRows(rows: any[]): Inscripcio[] {
   });
 }
 
-const CAMEL_COLUMNS = "id, codiSeguiment, categoria, c1Nom, c1Cognoms, c1Email, c1Telefon, c1Talla, c1EsMenor, c1TutorNom, c1TutorCognoms, c1TutorDni, c1TutorTelefon, c1UniformeTipus, c2Nom, c2Cognoms, c2Email, c2Telefon, c2Talla, c2EsMenor, c2TutorNom, c2TutorCognoms, c2TutorDni, c2TutorTelefon, c2UniformeTipus, respostesCuestionari, seleccionsUniforme, preuCalculat, teDomasBalco, teMocadorsExtra, estatPagament, metodePagament, estatDni, entregaMaterial, estat_inscripcio, posicio_global, bandera, creadoEn, actualizadoEn";
+const CAMEL_COLUMNS = "id, codiSeguiment, categoria, c1Nom, c1Cognoms, c1Email, c1Telefon, c1Talla, c1DniUrl, c1EsMenor, c1TutorNom, c1TutorCognoms, c1TutorDni, c1TutorTelefon, c1UniformeTipus, c2Nom, c2Cognoms, c2Email, c2Telefon, c2Talla, c2DniUrl, c2EsMenor, c2TutorNom, c2TutorCognoms, c2TutorDni, c2TutorTelefon, c2UniformeTipus, respostesCuestionari, seleccionsUniforme, preuCalculat, teDomasBalco, teMocadorsExtra, estatPagament, metodePagament, estatDni, entregaMaterial, estat_inscripcio, posicio_global, bandera, creadoEn, actualizadoEn";
 
-const SNAKE_COLUMNS = "id, codi_seguiment, categoria, c1_nom, c1_cognoms, c1_email, c1_telefon, c1_talla, c1_es_menor, c1_tutor_nom, c1_tutor_cognoms, c1_tutor_dni, c1_tutor_telefon, c1_uniforme_tipus, c2_nom, c2_cognoms, c2_email, c2_telefon, c2_talla, c2_es_menor, c2_tutor_nom, c2_tutor_cognoms, c2_tutor_dni, c2_tutor_telefon, c2_uniforme_tipus, respostes_cuestionari, seleccions_uniforme, preu_calculat, te_domas_balco, te_mocadors_extra, estat_pagament, metode_pagament, estat_dni, entrega_material, estat_inscripcio, posicio_global, bandera, creado_en, actualizado_en";
+const SNAKE_COLUMNS = "id, codi_seguiment, categoria, c1_nom, c1_cognoms, c1_email, c1_telefon, c1_talla, c1_dni_url, c1_es_menor, c1_tutor_nom, c1_tutor_cognoms, c1_tutor_dni, c1_tutor_telefon, c1_uniforme_tipus, c2_nom, c2_cognoms, c2_email, c2_telefon, c2_talla, c2_dni_url, c2_es_menor, c2_tutor_nom, c2_tutor_cognoms, c2_tutor_dni, c2_tutor_telefon, c2_uniforme_tipus, respostes_cuestionari, seleccions_uniforme, preu_calculat, te_domas_balco, te_mocadors_extra, estat_pagament, metode_pagament, estat_dni, entrega_material, estat_inscripcio, posicio_global, bandera, creado_en, actualizado_en";
 
 export interface SaveInscripcionResult {
   ok: boolean;
@@ -522,6 +537,19 @@ export async function getSupabaseInscripciones(): Promise<Inscripcio[]> {
  * Downloads a single inscription by ID with all details (including heavy binary DNI attachments).
  */
 export async function getSupabaseInscripcionById(id: string): Promise<Inscripcio | null> {
+  // Strategy 1: Server endpoint using Service Role (bypasses RLS issues for admin ficha)
+  try {
+    const res = await fetch(`/api/inscriptions?action=get&id=${encodeURIComponent(id)}`);
+    if (res.ok) {
+      const json = await res.json();
+      if (json.ok && json.data) {
+        return parseInscripcionesRows([json.data])[0] || null;
+      }
+    }
+  } catch (apiErr) {
+    console.warn("API get-by-id failed, falling back to direct client Supabase:", apiErr);
+  }
+
   if (!supabase) return null;
   try {
     const { data, error } = await supabase
@@ -919,24 +947,59 @@ export async function checkCurrentUserIsAdmin(userId?: string): Promise<boolean>
 
 /**
  * Resolves a signed URL for a protected DNI stored in the private 'dnis' bucket.
- * If already a data URL, http, or https URL, returns it directly.
+ * Uses server-side endpoint with service role credentials first, with fallback to client SDK.
  */
 export async function getDniSignedUrl(pathOrUrl: string): Promise<string> {
-  if (!pathOrUrl) return '';
-  if (pathOrUrl.startsWith('data:') || pathOrUrl.startsWith('http://') || pathOrUrl.startsWith('https://')) {
-    return pathOrUrl;
+  if (!pathOrUrl || typeof pathOrUrl !== 'string') return '';
+  const trimmed = pathOrUrl.trim();
+  if (!trimmed) return '';
+
+  if (trimmed.startsWith('data:') || trimmed.startsWith('blob:')) {
+    return trimmed;
   }
-  if (!supabase) return pathOrUrl;
+
+  // If already an external non-supabase storage URL, return it
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    const isSupabaseDniStorage = trimmed.includes('/storage/v1/object/') && trimmed.includes('/dnis/');
+    if (!isSupabaseDniStorage) {
+      return trimmed;
+    }
+  }
+
+  // 1. Try server endpoint first (uses service role, generates secure 1-hour signed URL)
   try {
-    const cleanPath = pathOrUrl.replace(/^storage:\/\/dnis\//, '').replace(/^dnis\//, '');
-    const { data, error } = await supabase.storage.from('dnis').createSignedUrl(cleanPath, 3600);
-    if (!error && data?.signedUrl) {
-      return data.signedUrl;
+    const res = await fetch('/api/inscriptions?action=signed-dni-url', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: trimmed })
+    });
+    if (res.ok) {
+      const json = await res.json();
+      if (json && json.ok && json.signedUrl) {
+        return json.signedUrl;
+      }
     }
   } catch (e) {
-    console.warn("Could not create signed URL for DNI:", e);
+    // fallback to client SDK
   }
-  return pathOrUrl;
+
+  // 2. Client SDK fallback
+  if (supabase) {
+    try {
+      const cleanPath = trimmed
+        .replace(/^https?:\/\/[^/]+\/storage\/v1\/object\/(?:public|sign)\/dnis\//, '')
+        .replace(/^storage:\/\/dnis\//, '')
+        .replace(/^dnis\//, '');
+      const { data, error } = await supabase.storage.from('dnis').createSignedUrl(cleanPath, 3600);
+      if (!error && data?.signedUrl) {
+        return data.signedUrl;
+      }
+    } catch (e) {
+      console.warn("Could not create signed URL for DNI via client SDK:", e);
+    }
+  }
+
+  return trimmed;
 }
 
 export interface SistemaConfigItem {

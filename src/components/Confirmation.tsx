@@ -201,11 +201,7 @@ export default function Confirmation({ registration, onClear, onUpdate, config }
         .map(ext => `<li>• ${ext.quantitat}x ${ext.nom} (${ext.quantitat * ext.preuUnitari}€)</li>`)
         .join('');
 
-      const extrasHtml = `
-        ${registration.teDomasBalco ? `<li>• 1x ${language === 'ca' ? 'Domàs de Balcó' : 'Colgadura de Balcón'}</li>` : ''}
-        ${registration.teMocadorsExtra > 0 ? `<li>• ${registration.teMocadorsExtra}x ${language === 'ca' ? 'Mocador oficial extra' : 'Pañuelo oficial extra'}</li>` : ''}
-        ${genericExtrasHtml}
-      `;
+      const extrasHtml = genericExtrasHtml;
 
       const emailBodyText = language === 'ca' ? subBodyCa : subBodyEs;
 
@@ -616,24 +612,12 @@ export default function Confirmation({ registration, onClear, onUpdate, config }
               </div>
             )}
 
-            {registration.teDomasBalco || registration.teMocadorsExtra > 0 || (registration.extresSeleccionats && registration.extresSeleccionats.filter(e => e.quantitat > 0).length > 0) ? (
+            {registration.extresSeleccionats && registration.extresSeleccionats.filter(e => e.quantitat > 0).length > 0 ? (
               <div className="flex justify-between items-start text-xs">
                 <span className="text-zinc-500 font-bold uppercase tracking-wide">
                   {language === 'ca' ? 'Material i Complements:' : 'Material y Complementos:'}
                 </span>
                 <span className="font-semibold text-zinc-800 text-right space-y-0.5 block">
-                  {registration.teDomasBalco && (
-                    <span className="block">
-                      {language === 'ca' ? '+1 Domàs de Balcó' : '+1 Colgadura de Balcón'}
-                    </span>
-                  )}
-                  {registration.teMocadorsExtra > 0 && (
-                    <span className="block">
-                      {language === 'ca' 
-                        ? `+${registration.teMocadorsExtra} Mocador oficial` 
-                        : `+${registration.teMocadorsExtra} Pañuelo oficial`}
-                    </span>
-                  )}
                   {(registration.extresSeleccionats || []).filter(e => e.quantitat > 0).map((ext) => (
                     <span key={ext.id} className="block text-[#ff0090] font-bold">
                       +{ext.quantitat} {ext.nom} ({ext.quantitat * ext.preuUnitari}€)

@@ -278,11 +278,7 @@ export default function AdminDashboard({
         .map(ext => `<li>• ${ext.quantitat}x ${ext.nom} (${ext.quantitat * ext.preuUnitari}€)</li>`)
         .join('');
 
-      const extrasHtml = `
-        ${item.teDomasBalco ? `<li>• 1x ${language === 'ca' ? 'Domàs de Balcó' : 'Colgadura de Balcón'}</li>` : ''}
-        ${item.teMocadorsExtra > 0 ? `<li>• ${item.teMocadorsExtra}x ${language === 'ca' ? 'Mocador oficial extra' : 'Pañuelo oficial extra'}</li>` : ''}
-        ${genericExtrasHtml}
-      `;
+      const extrasHtml = genericExtrasHtml;
 
       const emailHtml = `
         <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 30px; border: 1px solid #e1e1e6; border-radius: 24px; background-color: #ffffff; color: #111115;">
