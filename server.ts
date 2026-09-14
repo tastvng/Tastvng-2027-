@@ -1,4 +1,5 @@
 import express from "express";
+import http from "http";
 import path from "path";
 import { createClient } from "@supabase/supabase-js";
 import dotenv from "dotenv";
@@ -294,12 +295,17 @@ ${textToTranslate}
   // Vite development server / static production delivery
   const distPath = path.join(process.cwd(), 'dist');
   const isProduction = process.env.NODE_ENV !== "development";
+  const httpServer = http.createServer(app);
 
   if (!isProduction) {
     console.log("Starting server in development mode with Vite middleware...");
     const { createServer } = await eval('import("vite")');
+    const isHmrDisabled = process.env.DISABLE_HMR === 'true';
     const vite = await createServer({
-      server: { middlewareMode: true },
+      server: { 
+        middlewareMode: true,
+        hmr: isHmrDisabled ? false : { server: httpServer }
+      },
       appType: "spa",
     });
     app.use(vite.middlewares);
@@ -311,7 +317,7 @@ ${textToTranslate}
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
+  httpServer.listen(PORT, "0.0.0.0", () => {
     console.log(`Server listening on port ${PORT} with environment ${process.env.NODE_ENV || 'production'}`);
   });
 }

@@ -14,31 +14,55 @@ const supabaseAnonKey = envAnon || localAnon;
 
 export const isSupabaseConfigured = !!(supabaseUrl && supabaseAnonKey && supabaseUrl.startsWith('http'));
 
-export const supabase = isSupabaseConfigured
-  ? createClient(supabaseUrl, supabaseAnonKey, {
-      auth: {
-        persistSession: true,
-        autoRefreshToken: true,
-        detectSessionInUrl: true,
-        storage: typeof window !== 'undefined' ? window.localStorage : undefined,
-      },
-    })
-  : null;
+// Unique session storage key to prevent conflicting auth sessions
+export const SUPABASE_AUTH_STORAGE_KEY = 'tast_carnaval_supabase_auth_token';
+
+declare global {
+  interface Window {
+    __TAST_SUPABASE_SINGLETON__?: any;
+  }
+}
 
 /**
- * Public unauthenticated Supabase client.
- * Guarantees role = 'anon' by not persisting or sending user session tokens.
- * Used for public form submissions to ensure strict conformance with anon_insert_inscripciones RLS.
+ * Singleton factory: returns a single shared SupabaseClient instance
+ * across all frontend components and hooks, preventing duplicate GoTrueClient instances.
  */
-export const publicAnonSupabase = isSupabaseConfigured
-  ? createClient(supabaseUrl, supabaseAnonKey, {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-        detectSessionInUrl: false,
+function getOrCreateSupabaseSingleton(): any {
+  if (!isSupabaseConfigured) return null;
+
+  if (typeof window !== 'undefined' && window.__TAST_SUPABASE_SINGLETON__) {
+    return window.__TAST_SUPABASE_SINGLETON__;
+  }
+
+  const client = createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+      storageKey: SUPABASE_AUTH_STORAGE_KEY,
+      storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+    },
+    realtime: {
+      params: {
+        eventsPerSecond: 10,
       },
-    })
-  : null;
+    },
+  });
+
+  if (typeof window !== 'undefined') {
+    window.__TAST_SUPABASE_SINGLETON__ = client;
+  }
+
+  return client;
+}
+
+export const supabase = getOrCreateSupabaseSingleton();
+
+/**
+ * Shared singleton reference for anonymous operations.
+ * Reuses the single SupabaseClient instance, eliminating duplicate GoTrueClient warnings.
+ */
+export const publicAnonSupabase = supabase;
 
 // Clean logging
 if (isSupabaseConfigured) {

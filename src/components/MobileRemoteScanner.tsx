@@ -237,21 +237,28 @@ export default function MobileRemoteScanner({
       isComponentMounted.current = false;
       if (pingInterval) clearInterval(pingInterval);
       stopCamera();
-      if (realtimeChannelRef.current && supabase) {
+      const channel = realtimeChannelRef.current;
+      if (channel && supabase) {
         try {
-          realtimeChannelRef.current.send({
-            type: 'broadcast',
-            event: 'mobile_status',
-            payload: { 
-              status: 'movil_desconectado', 
-              syncKey, 
-              sessionId,
-              mobileId,
-              timestamp: Date.now() 
-            }
-          }).catch(() => {});
-          supabase.removeChannel(realtimeChannelRef.current);
-        } catch (e) {}
+          if (channel.state === 'joined') {
+            channel.send({
+              type: 'broadcast',
+              event: 'mobile_status',
+              payload: { 
+                status: 'movil_desconectado', 
+                syncKey, 
+                sessionId,
+                mobileId,
+                timestamp: Date.now() 
+              }
+            }).catch(() => {});
+          }
+          supabase.removeChannel(channel);
+        } catch (e) {
+          // silent cleanup
+        } finally {
+          realtimeChannelRef.current = null;
+        }
       }
     };
   }, [sessionId, syncKey, mobileId, mobileName, language]);

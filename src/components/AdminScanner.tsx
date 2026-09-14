@@ -512,7 +512,11 @@ export default function AdminScanner({
                 handleIncomingScan(code, mName, mId, scanId);
               }
             })
-            .subscribe();
+            .subscribe((status) => {
+              if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+                console.warn(`[SCANNER PC] Realtime status ${status} for channel ${channelId}`);
+              }
+            });
         } catch (e) {
           console.warn('Realtime channel subscription error:', e);
         }
@@ -526,7 +530,7 @@ export default function AdminScanner({
     for (const [sId, ch] of realtimeChannelsRef.current.entries()) {
       if (!sessions.has(sId)) {
         try {
-          if (supabase) supabase.removeChannel(ch);
+          if (supabase && ch) supabase.removeChannel(ch);
         } catch (e) {}
         realtimeChannelsRef.current.delete(sId);
       }

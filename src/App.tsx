@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Sparkles, 
@@ -431,74 +431,79 @@ export default function App() {
   }, []);
 
   // Maintain session via Supabase Auth with strict Role verification
+  const viewRef = useRef(view);
   useEffect(() => {
-    if (isSupabaseConfigured && supabase) {
-      // Check current session and verify admin role in public.profiles
-      supabase.auth.getSession().then(async ({ data: { session }, error: sessionErr }) => {
-        console.log('[App.tsx Diagnostic Session Check]:', {
-          sessionExists: !!session,
-          uid: session?.user?.id || null,
-          email: session?.user?.email || null,
-          error: sessionErr?.message || null
-        });
-        if (!session) {
-          setIsAdminLoggedIn(false);
-          return;
-        }
-        const isAdmin = await checkCurrentUserIsAdmin(session.user?.id);
-        console.log('[App.tsx Diagnostic Admin Check]:', {
-          uid: session.user.id,
-          email: session.user.email,
-          isAdmin
-        });
-        setIsAdminLoggedIn(isAdmin);
-        if (!isAdmin && ['admin-dashboard', 'admin-ficha', 'admin-config', 'admin-scanner'].includes(view)) {
+    viewRef.current = view;
+  }, [view]);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured || !supabase) return;
+
+    // Check current session once on mount and verify admin role in public.profiles
+    supabase.auth.getSession().then(async ({ data: { session }, error: sessionErr }) => {
+      console.log('[App.tsx Diagnostic Session Check]:', {
+        sessionExists: !!session,
+        uid: session?.user?.id || null,
+        email: session?.user?.email || null,
+        error: sessionErr?.message || null
+      });
+      if (!session) {
+        setIsAdminLoggedIn(false);
+        return;
+      }
+      const isAdmin = await checkCurrentUserIsAdmin(session.user?.id);
+      console.log('[App.tsx Diagnostic Admin Check]:', {
+        uid: session.user.id,
+        email: session.user.email,
+        isAdmin
+      });
+      setIsAdminLoggedIn(isAdmin);
+      if (!isAdmin && ['admin-dashboard', 'admin-ficha', 'admin-config', 'admin-scanner'].includes(viewRef.current)) {
+        setView('login');
+      }
+    }).catch(err => {
+      console.warn("Failed to get Supabase session:", err);
+      setIsAdminLoggedIn(false);
+    });
+
+    // Listen to auth changes with clean subscription (single listener on mount)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log(`[App.tsx Auth Event: ${event}]`, {
+        sessionExists: !!session,
+        uid: session?.user?.id || null,
+        email: session?.user?.email || null
+      });
+      if (!session) {
+        setIsAdminLoggedIn(false);
+        if (['admin-dashboard', 'admin-ficha', 'admin-config', 'admin-scanner'].includes(viewRef.current)) {
           setView('login');
         }
-      }).catch(err => {
-        console.warn("Failed to get Supabase session:", err);
-        setIsAdminLoggedIn(false);
+        return;
+      }
+
+      const isAdmin = await checkCurrentUserIsAdmin(session.user?.id);
+      console.log('[App.tsx Auth Event Admin Check]:', {
+        uid: session.user.id,
+        email: session.user.email,
+        isAdmin
       });
-
-      // Listen to auth changes
-      const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-        console.log(`[App.tsx Auth Event: ${event}]`, {
-          sessionExists: !!session,
-          uid: session?.user?.id || null,
-          email: session?.user?.email || null
-        });
-        if (!session) {
-          setIsAdminLoggedIn(false);
-          if (['admin-dashboard', 'admin-ficha', 'admin-config', 'admin-scanner'].includes(view)) {
-            setView('login');
-          }
-          return;
+      setIsAdminLoggedIn(isAdmin);
+      if (isAdmin) {
+        if (viewRef.current === 'login') {
+          setView('admin-dashboard');
         }
-
-        const isAdmin = await checkCurrentUserIsAdmin(session.user?.id);
-        console.log('[App.tsx Auth Event Admin Check]:', {
-          uid: session.user.id,
-          email: session.user.email,
-          isAdmin
-        });
-        setIsAdminLoggedIn(isAdmin);
-        if (isAdmin) {
-          if (view === 'login') {
-            setView('admin-dashboard');
-          }
-        } else {
-          // Authenticated but NOT admin
-          if (['admin-dashboard', 'admin-ficha', 'admin-config', 'admin-scanner'].includes(view)) {
-            setView('login');
-          }
+      } else {
+        // Authenticated but NOT admin
+        if (['admin-dashboard', 'admin-ficha', 'admin-config', 'admin-scanner'].includes(viewRef.current)) {
+          setView('login');
         }
-      });
+      }
+    });
 
-      return () => {
-        subscription.unsubscribe();
-      };
-    }
-  }, [view, portadaConfig.activa]);
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
 
   // Lazy-load inscriptions ONLY when logged in to protect participant privacy
   useEffect(() => {
