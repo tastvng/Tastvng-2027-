@@ -1155,11 +1155,15 @@ export interface AdminUserRecord {
   id: string;
   email: string;
   name: string;
+  nombre?: string;
   role: 'admin' | 'staff';
+  rol?: 'admin' | 'staff';
   created_at: string;
+  fecha_creacion?: string;
   updated_at?: string;
   last_sign_in_at?: string | null;
   actiu: boolean;
+  estado?: 'actiu' | 'inactiu';
   isCurrentCaller?: boolean;
 }
 
@@ -1179,25 +1183,31 @@ export async function getAdminAccessToken(): Promise<string | null> {
 
 /**
  * Safely executes a fetch request expecting a JSON response.
- * Strictly verifies response.ok, Content-Type, and extracts text first to avoid
- * syntax errors like "Unexpected token < in JSON at position 0" if the server returns HTML.
+ * Strictly verifies response.ok and Content-Type before executing any JSON parsing.
+ * Extracts text first to avoid syntax errors like "Unexpected token < in JSON at position 0"
+ * if the server returns HTML or plain text (e.g. FUNCTION_INVOCATION_FAILED).
  */
 async function safeFetchJson<T = any>(
   url: string,
   options: RequestInit
-): Promise<{ ok: boolean; status: number; data?: T; error?: string }> {
+): Promise<{ ok: boolean; status: number; data?: T; error?: string; rawBody?: string }> {
   try {
     const res = await fetch(url, options);
     const contentType = (res.headers.get('content-type') || '').toLowerCase();
     const rawText = await res.text();
 
+    // Check if the response is not JSON
     if (!contentType.includes('application/json')) {
-      const snippet = rawText.trim().slice(0, 160).replace(/\s+/g, ' ');
-      const isHtml = rawText.includes('<html') || rawText.includes('<!DOCTYPE') || rawText.includes('The page');
+      const snippet = rawText.trim().slice(0, 180).replace(/\s+/g, ' ');
+      const isHtml = rawText.includes('<html') || rawText.includes('<!DOCTYPE') || rawText.includes('The page') || rawText.includes('FUNCTION_INVOCATION_FAILED');
+      const errDetail = isHtml
+        ? `El servidor ha retornat un error intern (HTTP ${res.status}): ${snippet || 'Servei no disponible'}`
+        : `El servidor no ha retornat JSON (HTTP ${res.status}): "${snippet || 'buit'}"`;
       return {
         ok: false,
         status: res.status,
-        error: `[Error ${res.status}] Petició a '${url}' ha retornat ${isHtml ? 'HTML' : 'text no-JSON'} (${contentType || 'sense content-type'}): "${snippet || 'buit'}"`
+        rawBody: rawText,
+        error: errDetail
       };
     }
 
@@ -1209,16 +1219,19 @@ async function safeFetchJson<T = any>(
       return {
         ok: false,
         status: res.status,
-        error: `Error de format JSON des de '${url}': ${parseErr.message}. Contingut: "${snippet}"`
+        rawBody: rawText,
+        error: `Error de format JSON en la resposta del servidor (HTTP ${res.status}): ${parseErr.message}. Contingut: "${snippet}"`
       };
     }
 
-    if (!res.ok) {
+    // Check standard response errors (HTTP error or JSON payload with ok: false)
+    if (!res.ok || parsed?.ok === false) {
+      const serverErrMsg = parsed?.message || parsed?.error || `Error del servidor (HTTP ${res.status})`;
       return {
         ok: false,
         status: res.status,
         data: parsed,
-        error: parsed?.error || `Error HTTP ${res.status} al servidor`
+        error: typeof serverErrMsg === 'string' ? serverErrMsg : JSON.stringify(serverErrMsg)
       };
     }
 
@@ -1254,7 +1267,14 @@ export async function fetchAdminUsers(): Promise<{ users: AdminUserRecord[]; err
       return { users: [], error: "No s'ha trobat cap sessió d'administrador activa (token no disponible)." };
     }
 
-    const res = await safeFetchJson<{ success: boolean; users?: AdminUserRecord[]; error?: string }>('/api/admin?action=list', {
+    const res = await safeFetchJson<{
+      ok?: boolean;
+      success?: boolean;
+      data?: { users?: any[]; count?: number };
+      users?: any[];
+      error?: string;
+      message?: string;
+    }>('/api/admin?action=list', {
       headers: {
         'Authorization': `Bearer ${token}`
       }
@@ -1264,7 +1284,33 @@ export async function fetchAdminUsers(): Promise<{ users: AdminUserRecord[]; err
       return { users: [], error: res.error || `Error HTTP ${res.status} al sol·licitar /api/admin` };
     }
 
-    return { users: res.data.users || [] };
+    const rawList: any[] = res.data.data?.users || res.data.users || (Array.isArray(res.data.data) ? res.data.data : []);
+
+    const normalizedUsers: AdminUserRecord[] = rawList.map((u: any) => {
+      const name = String(u.nombre || u.name || (u.email ? u.email.split('@')[0] : 'Usuari')).trim();
+      const role: 'admin' | 'staff' = (u.rol === 'admin' || u.role === 'admin') ? 'admin' : 'staff';
+      const isActiu = u.actiu !== undefined
+        ? Boolean(u.actiu)
+        : (u.estado === 'actiu' || u.estado === 'activo' || u.estado !== 'inactiu');
+
+      return {
+        id: String(u.id),
+        email: String(u.email || ''),
+        name,
+        nombre: name,
+        role,
+        rol: role,
+        created_at: u.created_at || u.fecha_creacion || '',
+        fecha_creacion: u.fecha_creacion || u.created_at || '',
+        updated_at: u.updated_at,
+        last_sign_in_at: u.last_sign_in_at || null,
+        actiu: isActiu,
+        estado: isActiu ? 'actiu' : 'inactiu',
+        isCurrentCaller: Boolean(u.isCurrentCaller)
+      };
+    });
+
+    return { users: normalizedUsers };
   } catch (err: any) {
     console.error("fetchAdminUsers failed:", err);
     return { users: [], error: err?.message || "Error de connexió amb el servidor" };
@@ -1288,7 +1334,14 @@ export async function createAdminUser(params: {
       return { success: false, error: "Cal tenir una sessió activa d'administrador per donar d'alta personal." };
     }
 
-    const res = await safeFetchJson<{ success: boolean; user?: AdminUserRecord; error?: string }>('/api/admin?action=create', {
+    const res = await safeFetchJson<{
+      ok?: boolean;
+      success?: boolean;
+      data?: { user?: any; message?: string };
+      user?: any;
+      error?: string;
+      message?: string;
+    }>('/api/admin?action=create', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -1301,7 +1354,32 @@ export async function createAdminUser(params: {
       return { success: false, error: res.error || `Error HTTP ${res.status} al crear usuari` };
     }
 
-    return { success: true, user: res.data.user };
+    const rawUser = res.data.data?.user || res.data.user;
+    if (!rawUser) {
+      return { success: true };
+    }
+
+    const name = String(rawUser.nombre || rawUser.name || params.nom).trim();
+    const role: 'admin' | 'staff' = (rawUser.rol === 'admin' || rawUser.role === 'admin' || params.role === 'admin') ? 'admin' : 'staff';
+    const isActiu = rawUser.actiu !== undefined ? Boolean(rawUser.actiu) : true;
+
+    const normalizedUser: AdminUserRecord = {
+      id: String(rawUser.id),
+      email: String(rawUser.email || params.email),
+      name,
+      nombre: name,
+      role,
+      rol: role,
+      created_at: rawUser.created_at || rawUser.fecha_creacion || new Date().toISOString(),
+      fecha_creacion: rawUser.fecha_creacion || rawUser.created_at || new Date().toISOString(),
+      updated_at: rawUser.updated_at,
+      last_sign_in_at: rawUser.last_sign_in_at || null,
+      actiu: isActiu,
+      estado: isActiu ? 'actiu' : 'inactiu',
+      isCurrentCaller: false
+    };
+
+    return { success: true, user: normalizedUser };
   } catch (err: any) {
     console.error("createAdminUser failed:", err);
     return { success: false, error: err?.message || "Error de connexió en crear l'usuari" };
@@ -1321,13 +1399,13 @@ export async function updateAdminUserRole(
       return { success: false, error: "Cal tenir una sessió activa d'administrador." };
     }
 
-    const res = await safeFetchJson<{ success: boolean; error?: string }>('/api/admin?action=update', {
+    const res = await safeFetchJson<{ ok?: boolean; success?: boolean; error?: string; message?: string }>('/api/admin?action=update', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`
       },
-      body: JSON.stringify({ id, role })
+      body: JSON.stringify({ id, role, rol: role })
     });
 
     if (!res.ok) {
@@ -1354,13 +1432,13 @@ export async function toggleAdminUserActive(
       return { success: false, error: "Cal tenir una sessió activa d'administrador." };
     }
 
-    const res = await safeFetchJson<{ success: boolean; error?: string }>('/api/admin?action=update', {
+    const res = await safeFetchJson<{ ok?: boolean; success?: boolean; error?: string; message?: string }>('/api/admin?action=update', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`
       },
-      body: JSON.stringify({ id, actiu })
+      body: JSON.stringify({ id, actiu, estado: actiu ? 'actiu' : 'inactiu' })
     });
 
     if (!res.ok) {
@@ -1385,7 +1463,7 @@ export async function deleteAdminUser(id: string): Promise<{ success: boolean; e
       return { success: false, error: "Cal tenir una sessió activa d'administrador." };
     }
 
-    const res = await safeFetchJson<{ success: boolean; error?: string }>('/api/admin?action=delete', {
+    const res = await safeFetchJson<{ ok?: boolean; success?: boolean; error?: string; message?: string }>('/api/admin?action=delete', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
