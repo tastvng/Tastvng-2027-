@@ -27,6 +27,7 @@ import {
 import { useLanguage } from '../LanguageContext';
 import TranslatedText from './TranslatedText';
 import { Inscripcio, EstatPagament, EstatVerificacio, EstatInscripcio, MetodePagament, CategoriaParella, SistemaConfig } from '../types';
+import { calculateInscriptionOrderBreakdown, validateInscriptionTotal } from '../utils/orderCalculations';
 
 interface AdminFichaProps {
   registration: Inscripcio;
@@ -37,6 +38,11 @@ interface AdminFichaProps {
 
 export default function AdminFicha({ registration, config, onBack, onSave }: AdminFichaProps) {
   const { language, t } = useLanguage();
+
+  // Single Source of Truth Order Breakdown and Validation
+  const breakdown = calculateInscriptionOrderBreakdown(registration, config, language);
+  const validation = validateInscriptionTotal(registration, config, language);
+
   // State variables replicating the sheet parameters
   const [estatPagament, setEstatPagament] = useState<EstatPagament>(registration.estatPagament);
   const [metodePagament, setMetodePagament] = useState<MetodePagament | null>(registration.metodePagament);
@@ -50,18 +56,10 @@ export default function AdminFicha({ registration, config, onBack, onSave }: Adm
     if (registration.entregaC2Uniforme !== undefined) return registration.entregaC2Uniforme;
     return registration.entregaMaterial === EstatInscripcio.ENTREGAT;
   });
-  const [entregaDomas, setEntregaDomas] = useState<boolean>(() => {
-    if (registration.entregaDomas !== undefined) return registration.entregaDomas;
-    return registration.entregaMaterial === EstatInscripcio.ENTREGAT;
-  });
-  const [entregaMocadors, setEntregaMocadors] = useState<boolean>(() => {
-    if (registration.entregaMocadors !== undefined) return registration.entregaMocadors;
-    return registration.entregaMaterial === EstatInscripcio.ENTREGAT;
-  });
   const [entregaExtras, setEntregaExtras] = useState<Record<string, boolean>>(() => {
     const initial: Record<string, boolean> = {};
-    (registration.extresSeleccionats || []).forEach(e => {
-      initial[e.id] = registration.entregaMaterial === EstatInscripcio.ENTREGAT;
+    breakdown.materials.forEach(m => {
+      initial[m.id] = registration.entregaMaterial === EstatInscripcio.ENTREGAT;
     });
     return initial;
   });
@@ -318,14 +316,13 @@ export default function AdminFicha({ registration, config, onBack, onSave }: Adm
       c2TutorCognoms: c2TutorCognoms.trim(),
       c2TutorDni: c2TutorDni.trim(),
       c2TutorTelefon: c2TutorTelefon.trim(),
+      preuCalculat: breakdown.totalCalculat,
       estatPagament,
       metodePagament: estatPagament === EstatPagament.PAGAT ? metodePagament : null,
       estatDni,
       entregaMaterial,
       entregaC1Uniforme,
       entregaC2Uniforme,
-      entregaDomas,
-      entregaMocadors,
       llistaEspera,
       estatInscripcio,
       bandera,
@@ -698,27 +695,78 @@ export default function AdminFicha({ registration, config, onBack, onSave }: Adm
               </div>
             </div>
 
-            {/* Extras ordered details indicator list */}
+            {/* Official Itemized Breakdown Table (Single Source of Truth) */}
             <div className="space-y-3 border-t border-zinc-100 pt-5">
-              <span className="font-sans font-bold text-zinc-700 text-sm block">
-                {language === 'ca' ? "Complements o Marxandatge afegit" : "Complementos o Merchandising añadido"}
-              </span>
-              <div className="flex flex-wrap gap-2">
-                {/* Dynamic generic extras badges only */}
-                {(registration.extresSeleccionats || []).filter(e => e.quantitat > 0).map((ext) => (
-                  <span 
-                    key={ext.id}
-                    className="bg-fuchsia-50 text-fuchsia-900 text-xs font-bold px-3 py-1.5 rounded-xl border border-fuchsia-200 flex items-center gap-1.5 shadow-2xs"
-                  >
-                    <span className="w-2 h-2 rounded-full bg-[#ff0090]"></span>
-                    {ext.quantitat}x {ext.nom} <span className="font-mono text-[10px] text-fuchsia-600 font-normal">({ext.quantitat * ext.preuUnitari}€)</span>
-                  </span>
-                ))}
-                {(!registration.extresSeleccionats || registration.extresSeleccionats.filter(e => e.quantitat > 0).length === 0) && (
-                  <span className="bg-zinc-50 text-zinc-400 text-xs px-3 py-1.5 rounded-xl border border-zinc-200/50">
-                    {language === 'ca' ? "Sense material addicional" : "Sin material adicional"}
-                  </span>
-                )}
+              <div className="flex justify-between items-center">
+                <span className="font-sans font-bold text-zinc-800 text-sm block">
+                  {language === 'ca' ? "Desglossament Oficial de Materials i Quota" : "Desglose Oficial de Materiales y Cuota"}
+                </span>
+                <span className="text-xs font-mono font-bold text-fuchsia-600 bg-fuchsia-50 px-2.5 py-1 rounded-lg border border-fuchsia-200">
+                  {breakdown.totalCalculat}€ Total
+                </span>
+              </div>
+
+              {!validation.valid && (
+                <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl text-xs text-amber-900 flex items-start gap-2">
+                  <AlertTriangle size={16} className="text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <strong className="block font-bold">
+                      {language === 'ca' ? "Avís de discrepància de preu:" : "Aviso de discrepancia de precio:"}
+                    </strong>
+                    <span>{validation.errorMessage}</span>
+                  </div>
+                </div>
+              )}
+
+              <div className="border border-zinc-200 rounded-2xl overflow-hidden shadow-2xs">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-zinc-50 border-b border-zinc-200 text-[10px] text-zinc-500 uppercase font-mono tracking-wider">
+                      <th className="py-2.5 px-3">{language === 'ca' ? 'Concepte / Material' : 'Concepto / Material'}</th>
+                      <th className="py-2.5 px-2 text-center">{language === 'ca' ? 'Quant.' : 'Cant.'}</th>
+                      <th className="py-2.5 px-2 text-center">{language === 'ca' ? 'Modalitat' : 'Modalidad'}</th>
+                      <th className="py-2.5 px-2 text-right">{language === 'ca' ? 'Preu unitari' : 'Precio unitario'}</th>
+                      <th className="py-2.5 px-3 text-right">Subtotal</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-100">
+                    <tr>
+                      <td className="py-2.5 px-3 font-bold text-zinc-900">
+                        {language === 'ca' ? 'Quota d’inscripció' : 'Cuota de inscripción'} <span className="font-normal text-zinc-500 text-[11px]">({breakdown.categoriaNom})</span>
+                      </td>
+                      <td className="py-2.5 px-2 text-center font-mono">1</td>
+                      <td className="py-2.5 px-2 text-center text-zinc-500 text-[11px]">{language === 'ca' ? 'Oficial' : 'Oficial'}</td>
+                      <td className="py-2.5 px-2 text-right font-mono text-zinc-600">{breakdown.categoriaQuotaBase}€</td>
+                      <td className="py-2.5 px-3 text-right font-mono font-bold text-zinc-900">{breakdown.categoriaQuotaBase}€</td>
+                    </tr>
+                    {breakdown.materials.map(mat => (
+                      <tr key={mat.id}>
+                        <td className="py-2.5 px-3 font-semibold text-zinc-800">{mat.nom}</td>
+                        <td className="py-2.5 px-2 text-center font-mono font-bold text-fuchsia-600">{mat.quantitat}</td>
+                        <td className="py-2.5 px-2 text-center text-zinc-500 text-[11px]">{mat.modalitat}</td>
+                        <td className="py-2.5 px-2 text-right font-mono text-zinc-600">{mat.preuUnitari}€</td>
+                        <td className="py-2.5 px-3 text-right font-mono font-bold text-zinc-900">{mat.subtotal}€</td>
+                      </tr>
+                    ))}
+                    {breakdown.materials.length === 0 && (
+                      <tr>
+                        <td colSpan={5} className="py-2.5 px-3 text-center text-zinc-400 italic text-[11px]">
+                          {language === 'ca' ? "Sense materials o complements addicionals seleccionats" : "Sin materiales o complementos adicionales seleccionados"}
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                  <tfoot>
+                    <tr className="bg-fuchsia-50/70 border-t-2 border-fuchsia-500 text-zinc-900 font-bold">
+                      <td colSpan={4} className="py-2.5 px-3 uppercase tracking-wider text-xs font-black">
+                        {language === 'ca' ? 'TOTAL CALCULAT:' : 'TOTAL CALCULADO:'}
+                      </td>
+                      <td className="py-2.5 px-3 text-right font-mono font-black text-base text-fuchsia-600">
+                        {breakdown.totalCalculat}€
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
               </div>
             </div>
 
@@ -1146,9 +1194,16 @@ export default function AdminFicha({ registration, config, onBack, onSave }: Adm
                 <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider font-mono">
                   {language === 'ca' ? "Estat del Pagament" : "Estado del Pago"}
                 </label>
-                <span className="font-mono text-xs text-zinc-500 font-bold">
-                  {language === 'ca' ? "Import Total" : "Importe Total"}: {registration.preuCalculat}€
-                </span>
+                <div className="text-right">
+                  <span className="font-mono text-xs text-zinc-300 font-bold block">
+                    {language === 'ca' ? "Import Total" : "Importe Total"}: <strong className="text-fuchsia-400">{breakdown.totalCalculat}€</strong>
+                  </span>
+                  {registration.preuCalculat !== breakdown.totalCalculat && (
+                    <span className="text-[10px] font-mono text-amber-400 block">
+                      ⚠️ Registrat: {registration.preuCalculat}€
+                    </span>
+                  )}
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-2">
@@ -1170,7 +1225,6 @@ export default function AdminFicha({ registration, config, onBack, onSave }: Adm
                   type="button"
                   onClick={() => {
                     setEstatPagament(EstatPagament.PAGAT);
-                    // Default to Bizum if none selected yet
                     if (!metodePagament) setMetodePagament(MetodePagament.BIZUM);
                   }}
                   className={`py-2.5 rounded-xl text-center text-xs font-bold transition-all ${
@@ -1217,10 +1271,10 @@ export default function AdminFicha({ registration, config, onBack, onSave }: Adm
               )}
             </div>
 
-            {/* Segment 3: Material Delivery */}
+            {/* Segment 3: Material Delivery (Derived strictly from selected materials) */}
             <div className="space-y-2 border-t border-zinc-900 pt-4" id="segment-material-delivery">
               <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider font-mono">
-                {language === 'ca' ? "Lliurament de Fulard / Mocador / Armilla" : "Entrega de Pañuelo / Pañoleta / Chaleco"}
+                {language === 'ca' ? "Lliurament de Materials i Complements" : "Entrega de Materiales y Complementos"}
               </label>
               <div className="grid grid-cols-2 gap-2">
                 <button
@@ -1229,8 +1283,9 @@ export default function AdminFicha({ registration, config, onBack, onSave }: Adm
                     setEntregaMaterial(EstatInscripcio.PENDENT);
                     setEntregaC1Uniforme(false);
                     setEntregaC2Uniforme(false);
-                    setEntregaDomas(false);
-                    setEntregaMocadors(false);
+                    const resetExtras: Record<string, boolean> = {};
+                    breakdown.materials.forEach(m => { resetExtras[m.id] = false; });
+                    setEntregaExtras(resetExtras);
                   }}
                   className={`py-2 rounded-xl text-xs font-bold transition-all ${
                     entregaMaterial === EstatInscripcio.PENDENT 
@@ -1247,8 +1302,9 @@ export default function AdminFicha({ registration, config, onBack, onSave }: Adm
                     setEntregaMaterial(EstatInscripcio.ENTREGAT);
                     setEntregaC1Uniforme(true);
                     setEntregaC2Uniforme(true);
-                    setEntregaDomas(true);
-                    setEntregaMocadors(true);
+                    const allExtras: Record<string, boolean> = {};
+                    breakdown.materials.forEach(m => { allExtras[m.id] = true; });
+                    setEntregaExtras(allExtras);
                     if (estatDni === EstatVerificacio.PENDENT) {
                       setEstatDni(EstatVerificacio.VALIDAT);
                     }
@@ -1264,25 +1320,20 @@ export default function AdminFicha({ registration, config, onBack, onSave }: Adm
                 </button>
               </div>
 
-              {/* Checklist details matching ordered elements */}
+              {/* Checklist details matching active ordered materials */}
               <div className="mt-2 text-xs bg-zinc-950/60 p-3 rounded-2xl border border-zinc-900 space-y-2">
                 <span className="block text-[9px] font-mono font-bold text-zinc-500 uppercase tracking-widest">
                   {language === 'ca' ? "DETALL DE LA COMANDA A LLIURAR:" : "DETALLE DEL PEDIDO A ENTREGAR:"}
                 </span>
 
                 <div className="space-y-2 text-[11px]">
-                  {/* 1. Comparser 1 size */}
+                  {/* Comparser 1 size if present */}
                   {c1Talla && (
                     <label className="flex items-center gap-2.5 text-zinc-300 hover:text-white cursor-pointer select-none">
                       <input 
                         type="checkbox"
-                        checked={entregaC1Uniforme}
-                        onChange={(e) => {
-                          const val = e.target.checked;
-                          setEntregaC1Uniforme(val);
-                          const allChecked = val && (!c2Talla || entregaC2Uniforme) && (!registration.teDomasBalco || entregaDomas) && (!(registration.teMocadorsExtra > 0) || entregaMocadors);
-                          setEntregaMaterial(allChecked ? EstatInscripcio.ENTREGAT : EstatInscripcio.PENDENT);
-                        }}
+                        checked={entregaMaterial === EstatInscripcio.ENTREGAT || entregaC1Uniforme}
+                        onChange={(e) => setEntregaC1Uniforme(e.target.checked)}
                         className="rounded border-zinc-800 bg-[#121212] text-[#ff0090] focus:ring-0 focus:ring-offset-0 w-3.5 h-3.5 cursor-pointer accent-[#ff0090]"
                         id="chk-entrega-c1"
                       />
@@ -1294,18 +1345,13 @@ export default function AdminFicha({ registration, config, onBack, onSave }: Adm
                     </label>
                   )}
 
-                  {/* 2. Comparser 2 size */}
+                  {/* Comparser 2 size if present */}
                   {c2Talla && (
                     <label className="flex items-center gap-2.5 text-zinc-300 hover:text-white cursor-pointer select-none">
                       <input 
                         type="checkbox"
-                        checked={entregaC2Uniforme}
-                        onChange={(e) => {
-                          const val = e.target.checked;
-                          setEntregaC2Uniforme(val);
-                          const allChecked = (!c1Talla || entregaC1Uniforme) && val && (!registration.teDomasBalco || entregaDomas) && (!(registration.teMocadorsExtra > 0) || entregaMocadors);
-                          setEntregaMaterial(allChecked ? EstatInscripcio.ENTREGAT : EstatInscripcio.PENDENT);
-                        }}
+                        checked={entregaMaterial === EstatInscripcio.ENTREGAT || entregaC2Uniforme}
+                        onChange={(e) => setEntregaC2Uniforme(e.target.checked)}
                         className="rounded border-zinc-800 bg-[#121212] text-[#ff0090] focus:ring-0 focus:ring-offset-0 w-3.5 h-3.5 cursor-pointer accent-[#ff0090]"
                         id="chk-entrega-c2"
                       />
@@ -1317,25 +1363,31 @@ export default function AdminFicha({ registration, config, onBack, onSave }: Adm
                     </label>
                   )}
 
-                  {/* Dynamic extras materials from current configuration */}
-                  {(registration.extresSeleccionats || []).filter(e => e.quantitat > 0).map((ext) => (
-                    <label key={ext.id} className="flex items-center gap-2.5 text-zinc-300 hover:text-white cursor-pointer select-none">
+                  {/* Real selected materials from breakdown */}
+                  {breakdown.materials.map((mat) => (
+                    <label key={mat.id} className="flex items-center gap-2.5 text-zinc-300 hover:text-white cursor-pointer select-none">
                       <input 
                         type="checkbox"
-                        checked={entregaMaterial === EstatInscripcio.ENTREGAT || entregaExtras[ext.id] === true}
+                        checked={entregaMaterial === EstatInscripcio.ENTREGAT || entregaExtras[mat.id] === true}
                         onChange={(e) => {
                           const val = e.target.checked;
-                          setEntregaExtras(prev => ({ ...prev, [ext.id]: val }));
+                          setEntregaExtras(prev => ({ ...prev, [mat.id]: val }));
                         }}
                         className="rounded border-zinc-800 bg-[#121212] text-[#ff0090] focus:ring-0 focus:ring-offset-0 w-3.5 h-3.5 cursor-pointer accent-[#ff0090]"
-                        id={`chk-entrega-ext-${ext.id}`}
+                        id={`chk-entrega-mat-${mat.id}`}
                       />
                       <span className="leading-tight">
-                        🎁 {ext.nom}
-                        <strong className="text-[#ff0090] font-mono ml-1">({ext.quantitat} u.)</strong>
+                        📦 {mat.nom}
+                        <strong className="text-[#ff0090] font-mono ml-1">({mat.quantitat} u. &bull; {mat.modalitat})</strong>
                       </span>
                     </label>
                   ))}
+
+                  {breakdown.materials.length === 0 && !c1Talla && !c2Talla && (
+                    <p className="text-zinc-500 text-[10px] italic">
+                      {language === 'ca' ? "No hi ha materials pendents de lliurar." : "No hay materiales pendientes de entregar."}
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
