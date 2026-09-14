@@ -123,6 +123,18 @@ export default function App() {
     }
     return null;
   });
+  const [mobileScannerMobileId, setMobileScannerMobileId] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      return new URLSearchParams(window.location.search).get('mobileId') || 'mob_1';
+    }
+    return null;
+  });
+  const [mobileScannerMobileName, setMobileScannerMobileName] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      return new URLSearchParams(window.location.search).get('mobileName') || 'Mòbil 1';
+    }
+    return null;
+  });
   const [openPairingModalOnScanner, setOpenPairingModalOnScanner] = useState(false);
   const [activeScannedRecord, setActiveScannedRecord] = useState<Inscripcio | null>(null);
   const [previousAdminView, setPreviousAdminView] = useState<string>('admin-dashboard');
@@ -134,9 +146,13 @@ export default function App() {
       if (searchParams.get('mode') === 'mobile-scanner') {
         const k = searchParams.get('syncKey');
         const s = searchParams.get('sessionId') || k;
+        const mid = searchParams.get('mobileId') || 'mob_1';
+        const mname = searchParams.get('mobileName') || 'Mòbil 1';
         if (k) {
           setMobileScannerSyncKey(k);
           setMobileScannerSessionId(s);
+          setMobileScannerMobileId(mid);
+          setMobileScannerMobileName(mname);
           setView('mobile-scanner');
         }
       }
@@ -1342,6 +1358,8 @@ export default function App() {
               <MobileRemoteScanner 
                 syncKey={mobileScannerSyncKey}
                 sessionId={mobileScannerSessionId || mobileScannerSyncKey}
+                mobileId={mobileScannerMobileId || 'mob_1'}
+                mobileName={mobileScannerMobileName || 'Mòbil 1'}
                 onBack={() => {
                   // clean URL parameters and go back to public
                   window.history.pushState({}, '', window.location.pathname);

@@ -22,17 +22,35 @@ import {
   Euro, 
   Package, 
   FileText,
-  Clock,
+  Clock, 
   ShieldCheck,
-  ChevronRight
+  ChevronRight,
+  Plus,
+  Trash2,
+  PowerOff,
+  Bell
 } from 'lucide-react';
 import { useLanguage } from '../LanguageContext';
-import { Inscripcio, SistemaConfig, RemoteScannerStatus, CategoriaParella, EstatPagament, EstatInscripcio, EstatVerificacio } from '../types';
+import { 
+  Inscripcio, 
+  SistemaConfig, 
+  CategoriaParella, 
+  EstatPagament, 
+  MobileScannerSession, 
+  MobileConnectionStatus 
+} from '../types';
 import { useActiveYear } from '../hooks/useActiveYear';
 import { supabase, getSupabaseInscripcionByCodeOrId, getDniSignedUrl } from '../supabaseClient';
-import { buildMobilePairingUrl, extractAndValidateCode, apiCreateSession, apiPollSession, apiRenewSession, apiInvalidateSession } from '../utils/scannerSync';
+import { 
+  buildMobilePairingUrl, 
+  extractAndValidateCode, 
+  apiCreateSession, 
+  apiPollSession, 
+  apiDisconnectMobile
+} from '../utils/scannerSync';
 import QRCode from 'qrcode';
 import jsQR from 'jsqr';
+import AdminFicha from './AdminFicha';
 
 interface AdminScannerProps {
   inscripcions: Inscripcio[];
@@ -42,6 +60,36 @@ interface AdminScannerProps {
   onBack: () => void;
   onAddLog?: (txt: string) => void;
   onSaveInscripcio?: (updatedRecord: Inscripcio) => void;
+}
+
+interface QueuedScanItem {
+  scanId: string;
+  code: string;
+  mobileName: string;
+  mobileId: string;
+  timestamp: number;
+  record?: Inscripcio | null;
+}
+
+const SESSIONS_STORAGE_KEY = 'tast_multi_mobile_scanner_sessions_v1';
+
+function createNewMobileSession(index: number): MobileScannerSession {
+  const mobileId = `mob_${index}_${Math.random().toString(36).substring(2, 6)}`;
+  const syncKey = Math.random().toString(36).substring(2, 8).toUpperCase();
+  const sessionId = `sess_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  const now = Date.now();
+  return {
+    sessionId,
+    mobileId,
+    mobileName: `Mòbil ${index}`,
+    syncKey,
+    status: 'esperant_connexio',
+    createdAt: now,
+    expiresAt: now + 60 * 60 * 1000, // 60 minutes TTL
+    lastPingPc: now,
+    lastPingMobile: 0,
+    scansCount: 0
+  };
 }
 
 export default function AdminScanner({ 
@@ -56,101 +104,90 @@ export default function AdminScanner({
   const { language } = useLanguage();
   const activeYear = useActiveYear();
 
-  // 1. Ephemeral Session Keys
-  const [syncKey, setSyncKey] = useState<string>(() => {
+  // 1. Multi-Mobile Sessions State (Map<string, MobileScannerSession> by sessionId)
+  const [sessions, setSessions] = useState<Map<string, MobileScannerSession>>(() => {
+    const map = new Map<string, MobileScannerSession>();
     try {
-      const savedKey = sessionStorage.getItem('tast_scanner_sync_key');
-      if (savedKey && savedKey.trim().length === 6) {
-        return savedKey.trim().toUpperCase();
+      const raw = sessionStorage.getItem(SESSIONS_STORAGE_KEY);
+      if (raw) {
+        const parsed: MobileScannerSession[] = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          parsed.forEach((s: MobileScannerSession) => map.set(s.sessionId, s));
+          return map;
+        }
       }
     } catch (e) {}
-    const newKey = Math.random().toString(36).substring(2, 8).toUpperCase();
-    try { sessionStorage.setItem('tast_scanner_sync_key', newKey); } catch (e) {}
-    return newKey;
+
+    // Default: initialize Mobile 1
+    const mob1 = createNewMobileSession(1);
+    map.set(mob1.sessionId, mob1);
+    return map;
   });
 
-  const [sessionId, setSessionId] = useState<string>(() => {
-    return `sess_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  // Keep a ref of sessions for event listeners & timers to access fresh state
+  const sessionsRef = useRef<Map<string, MobileScannerSession>>(sessions);
+  useEffect(() => {
+    sessionsRef.current = sessions;
+    try {
+      const arr: MobileScannerSession[] = Array.from(sessions.values());
+      sessionStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify(arr));
+    } catch (e) {}
+  }, [sessions]);
+
+  // Active mobile selected for QR display in pairing modal
+  const [selectedMobileForPairing, setSelectedMobileForPairing] = useState<string>(() => {
+    const initialArr: MobileScannerSession[] = Array.from(sessions.values());
+    return initialArr[0]?.sessionId || '';
   });
 
-  // 2. States & Realtime Status
-  const [scannerStatus, setScannerStatus] = useState<RemoteScannerStatus>('esperando_conexion');
   const [showPairingModal, setShowPairingModal] = useState<boolean>(initialOpenPairing);
-  const [sessionExpiresAt, setSessionExpiresAt] = useState<number | null>(null);
-  const [qrDataUrl, setQrDataUrl] = useState<string>('');
-  const [copiedLink, setCopiedLink] = useState(false);
+  const [pairingQrUrls, setPairingQrUrls] = useState<Record<string, string>>({});
+  const [copiedLinkFor, setCopiedLinkFor] = useState<string | null>(null);
 
-  const showPairingModalRef = useRef(showPairingModal);
-  useEffect(() => {
-    showPairingModalRef.current = showPairingModal;
-  }, [showPairingModal]);
+  // 2. Scan Queue & Deduplication
+  const processedScanIdsRef = useRef<Set<string>>(new Set());
+  const [scanQueue, setScanQueue] = useState<QueuedScanItem[]>([]);
+  const [activeFichaRecord, setActiveFichaRecord] = useState<Inscripcio | null>(null);
 
-  const pairingUrl = buildMobilePairingUrl(syncKey, sessionId);
+  // 3. Standby / Scanned Record Preview State (when ficha is not expanded)
+  const [standbyRecord, setStandbyRecord] = useState<Inscripcio | null>(null);
+  const [lastScanInfo, setLastScanInfo] = useState<{
+    code: string;
+    mobileName: string;
+    time: string;
+    success: boolean;
+  } | null>(null);
 
-  // Generate crisp, high-contrast B&W QR code (minimum 320x320 px, margin 4, high error correction 'H')
-  useEffect(() => {
-    let active = true;
-    QRCode.toDataURL(pairingUrl, {
-      errorCorrectionLevel: 'H',
-      margin: 4, // Ample white quiet zone for Xiaomi 12 & iPhone 11 Pro camera detection
-      width: 360,
-      color: {
-        dark: '#000000', // Pure black modules
-        light: '#FFFFFF' // Pure white background
-      }
-    }).then(url => {
-      if (active) {
-        setQrDataUrl(url);
-      }
-    }).catch(err => {
-      console.error('Error generating pairing QR data URL:', err);
-    });
-
-    return () => {
-      active = false;
-    };
-  }, [pairingUrl]);
-
-  // Format expiry time display (e.g. 18:45)
-  const formatExpiryTime = (timestamp: number | null) => {
-    if (!timestamp) return null;
-    const d = new Date(timestamp);
-    const h = String(d.getHours()).padStart(2, '0');
-    const m = String(d.getMinutes()).padStart(2, '0');
-    return `${h}:${m}`;
-  };
-
-  // Active scanned result & preview
-  const [activeRecord, setActiveRecord] = useState<Inscripcio | null>(null);
-  const [isProcessingCode, setIsProcessingCode] = useState(false);
   const [feedback, setFeedback] = useState<{
     type: 'success' | 'error' | 'warning' | 'info';
     message: string;
     code?: string;
+    mobileName?: string;
   } | null>(null);
 
   // Recent scans activity log
   const [scanHistory, setScanHistory] = useState<Array<{
     code: string;
     name: string;
+    mobileName: string;
     time: string;
     success: boolean;
   }>>([]);
 
-  // Manual fallback input
+  // Manual search fallback input
   const [manualCodeInput, setManualCodeInput] = useState('');
 
   // Local PC Webcam fallback
   const [usePcCamera, setUsePcCamera] = useState(false);
-  const [hasPcCameraPermission, setHasPcCameraPermission] = useState<boolean | null>(null);
   const [pcCameraError, setPcCameraError] = useState<string | null>(null);
-
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const pcStreamRef = useRef<MediaStream | null>(null);
   const pcAnimFrameId = useRef<number | null>(null);
+
+  // Realtime channels map: Map<sessionId, channel>
+  const realtimeChannelsRef = useRef<Map<string, any>>(new Map());
   const isComponentMounted = useRef(true);
-  const realtimeChannelRef = useRef<any>(null);
 
   // Helper sound effect
   const playBeep = (frequency = 880, duration = 0.12, type: OscillatorType = 'sine') => {
@@ -171,260 +208,492 @@ export default function AdminScanner({
     } catch (e) {}
   };
 
-  // 3. Core Handler: Process a received tracking code or UUID from Mobile or PC Camera
-  const handleProcessCode = useCallback(async (rawCode: string) => {
-    if (!rawCode || isProcessingCode) return;
-    console.log('[SCANNER PC] QR received', rawCode);
+  // Generate QR data URL for a given session
+  const generateQrForSession = useCallback(async (session: MobileScannerSession) => {
+    const url = buildMobilePairingUrl(session.syncKey, session.sessionId, session.mobileId, session.mobileName);
+    try {
+      const dataUrl = await QRCode.toDataURL(url, {
+        errorCorrectionLevel: 'H',
+        margin: 4,
+        width: 360,
+        color: {
+          dark: '#000000',
+          light: '#FFFFFF'
+        }
+      });
+      setPairingQrUrls(prev => ({ ...prev, [session.sessionId]: dataUrl }));
+    } catch (err) {
+      console.error('Error generating pairing QR:', err);
+    }
+  }, []);
+
+  // Update QR codes whenever sessions change
+  useEffect(() => {
+    sessions.forEach((sess: MobileScannerSession) => {
+      if (!pairingQrUrls[sess.sessionId]) {
+        generateQrForSession(sess);
+      }
+    });
+  }, [sessions, generateQrForSession, pairingQrUrls]);
+
+  // Format expiry time display (e.g. 18:45)
+  const formatExpiryTime = (timestamp: number | null) => {
+    if (!timestamp) return null;
+    const d = new Date(timestamp);
+    const h = String(d.getHours()).padStart(2, '0');
+    const m = String(d.getMinutes()).padStart(2, '0');
+    return `${h}:${m}`;
+  };
+
+  // 4. Core Registration Lookup
+  const findRegistration = useCallback(async (codeToFind: string): Promise<Inscripcio | null> => {
+    // 1. Try in-memory list first
+    let record: Inscripcio | null = inscripcions.find(
+      i => i.codiSeguiment.toLowerCase() === codeToFind.toLowerCase() ||
+           i.id.toLowerCase() === codeToFind.toLowerCase()
+    ) || null;
+
+    // 2. Query Supabase for complete record
+    try {
+      const freshFromDb = await getSupabaseInscripcionByCodeOrId(codeToFind);
+      if (freshFromDb) {
+        record = freshFromDb;
+      }
+    } catch (err) {
+      console.warn("Database lookup error:", err);
+    }
+
+    if (record) {
+      // Resolve signed URLs for DNI documents if necessary
+      if (record.c1DniUrl && !record.c1DniUrl.startsWith('http') && !record.c1DniUrl.startsWith('data:')) {
+        try {
+          const signed = await getDniSignedUrl(record.c1DniUrl);
+          record.c1DniUrl = signed;
+        } catch (e) {}
+      }
+      if (record.c2DniUrl && !record.c2DniUrl.startsWith('http') && !record.c2DniUrl.startsWith('data:')) {
+        try {
+          const signed = await getDniSignedUrl(record.c2DniUrl);
+          record.c2DniUrl = signed;
+        } catch (e) {}
+      }
+    }
+
+    return record;
+  }, [inscripcions]);
+
+  // 5. Process an incoming scan from any connected mobile
+  const handleIncomingScan = useCallback(async (
+    rawCode: string, 
+    mobileName: string, 
+    mobileId: string, 
+    scanId: string
+  ) => {
+    if (!rawCode) return;
+
+    // Deduplicate: If this scanId was already handled, ignore duplicate
+    if (processedScanIdsRef.current.has(scanId)) {
+      console.log('[SCANNER PC] Duplicate scan ignored:', scanId);
+      return;
+    }
+    processedScanIdsRef.current.add(scanId);
+    if (processedScanIdsRef.current.size > 500) {
+      const firstEntries = Array.from(processedScanIdsRef.current).slice(0, 100);
+      firstEntries.forEach(id => processedScanIdsRef.current.delete(id));
+    }
+
+    console.log('[SCANNER PC] Processing scan:', { rawCode, mobileName, scanId });
 
     const validatedCode = extractAndValidateCode(rawCode);
+    const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
     if (!validatedCode) {
+      playBeep(320, 0.25, 'sawtooth');
       setFeedback({
         type: 'error',
-        message: language === 'ca' ? "Format de codi QR invàlid" : "Formato de código QR inválido",
-        code: rawCode
+        message: language === 'ca' ? `Format invàlid rebut de ${mobileName}` : `Formato inválido recibido de ${mobileName}`,
+        code: rawCode,
+        mobileName
       });
-      playBeep(320, 0.25, 'sawtooth');
       return;
     }
 
-    setIsProcessingCode(true);
-    setScannerStatus('codigo_recibido');
+    // Lookup registration
+    const record = await findRegistration(validatedCode);
 
-    try {
-      // 1. Try finding in loaded local list first for instant display
-      let record: Inscripcio | null = inscripcions.find(
-        i => i.codiSeguiment.toLowerCase() === validatedCode.toLowerCase() ||
-             i.id.toLowerCase() === validatedCode.toLowerCase()
-      ) || null;
-
-      // 2. Query Supabase for the freshest, complete record with all fields
-      try {
-        const freshFromDb = await getSupabaseInscripcionByCodeOrId(validatedCode);
-        if (freshFromDb) {
-          record = freshFromDb;
+    // Update session metrics in Map
+    setSessions(prev => {
+      const next = new Map<string, MobileScannerSession>(prev);
+      next.forEach((sess: MobileScannerSession, sId: string) => {
+        if (sess.mobileId === mobileId || sess.mobileName === mobileName) {
+          next.set(sId, {
+            ...sess,
+            scansCount: sess.scansCount + 1,
+            lastScan: {
+              code: validatedCode,
+              scanId,
+              timestamp: Date.now()
+            }
+          });
         }
-      } catch (err) {
-        console.warn("Database lookup error:", err);
-      }
-
-      const nowStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-
-      if (record) {
-        // Success: Found matching registration!
-        playBeep(980, 0.15);
-        setTimeout(() => playBeep(1320, 0.12), 100);
-
-        // Resolve signed URLs for DNI documents if necessary
-        if (record.c1DniUrl && !record.c1DniUrl.startsWith('http') && !record.c1DniUrl.startsWith('data:')) {
-          try {
-            const signed = await getDniSignedUrl(record.c1DniUrl);
-            record.c1DniUrl = signed;
-          } catch (e) {}
-        }
-        if (record.c2DniUrl && !record.c2DniUrl.startsWith('http') && !record.c2DniUrl.startsWith('data:')) {
-          try {
-            const signed = await getDniSignedUrl(record.c2DniUrl);
-            record.c2DniUrl = signed;
-          } catch (e) {}
-        }
-
-        setActiveRecord(record);
-        setFeedback({
-          type: 'success',
-          message: language === 'ca' 
-            ? `Inscripció trobada: ${record.c1Nom} & ${record.c2Nom}` 
-            : `Inscripción encontrada: ${record.c1Nom} & ${record.c2Nom}`,
-          code: record.codiSeguiment
-        });
-
-        // Add to history
-        setScanHistory(prev => [
-          {
-            code: record!.codiSeguiment,
-            name: `${record!.c1Nom} & ${record!.c2Nom}`,
-            time: nowStr,
-            success: true
-          },
-          ...prev.slice(0, 19)
-        ]);
-
-        if (onAddLog) {
-          onAddLog(`Escàner mòbil: ${record.codiSeguiment} (${record.c1Nom} & ${record.c2Nom})`);
-        }
-
-        // Close/minimize pairing modal if open
-        setShowPairingModal(false);
-
-        // Requirement D & F: Automatically open the full AdminFicha sheet!
-        setTimeout(() => {
-          if (onSelectInscripcio && record) {
-            onSelectInscripcio(record.id, record);
-          }
-        }, 500);
-
-      } else {
-        // Not found
-        playBeep(300, 0.3, 'square');
-        setFeedback({
-          type: 'error',
-          message: language === 'ca'
-            ? `No s'ha trobat cap inscripció amb el codi: "${validatedCode}"`
-            : `No se ha encontrado ninguna inscripción con el código: "${validatedCode}"`,
-          code: validatedCode
-        });
-
-        setScanHistory(prev => [
-          {
-            code: validatedCode,
-            name: language === 'ca' ? "Inscripció no trobada" : "Inscripción no encontrada",
-            time: nowStr,
-            success: false
-          },
-          ...prev.slice(0, 19)
-        ]);
-      }
-    } catch (err: any) {
-      console.error("Error processing code on PC:", err);
-      setFeedback({
-        type: 'error',
-        message: language === 'ca' ? "Error en cercar la inscripció" : "Error al buscar la inscripción"
       });
-    } finally {
-      setIsProcessingCode(false);
-      // Return status to waiting next scan
-      setScannerStatus(prev => prev === 'codigo_recibido' ? 'movil_conectado' : prev);
-    }
-  }, [inscripcions, isProcessingCode, language, onAddLog, onSelectInscripcio]);
-
-  // 4. Initialize Ephemeral Session & Supabase Realtime Channel
-  useEffect(() => {
-    isComponentMounted.current = true;
-    let pollInterval: any = null;
-
-    // Create session on serverless backend
-    console.log('[SCANNER PC] session created', { sessionId, syncKey });
-    console.log('[SCANNER PC] sync URL', pairingUrl);
-    console.log('[SCANNER PC] waiting for mobile', { sessionId, syncKey });
-
-    apiCreateSession(sessionId, syncKey).then(session => {
-      if (!isComponentMounted.current) return;
-      if (session) {
-        setScannerStatus(session.status);
-        if (session.expiresAt) {
-          setSessionExpiresAt(session.expiresAt);
-        }
-      }
+      return next;
     });
 
-    // Supabase Realtime Broadcast Subscription
-    if (supabase) {
-      try {
-        const channel = supabase.channel(`remote-scanner:${sessionId}`);
-        realtimeChannelRef.current = channel;
+    if (record) {
+      // Success sound
+      playBeep(980, 0.15);
+      setTimeout(() => playBeep(1320, 0.12), 100);
 
-        channel
-          .on('broadcast', { event: 'mobile_status' }, (msg: any) => {
-            if (!isComponentMounted.current) return;
-            const newStatus = msg?.payload?.status;
-            if (newStatus) {
-              if (newStatus === 'movil_conectado') {
-                console.log('[SCANNER PC] mobile connected', msg?.payload);
-              }
-              setScannerStatus(newStatus);
-            }
-          })
-          .on('broadcast', { event: 'scanned_code' }, (msg: any) => {
-            if (!isComponentMounted.current) return;
-            const code = msg?.payload?.code;
-            if (code) {
-              handleProcessCode(code);
-            }
-          })
-          .subscribe();
-      } catch (err) {
-        console.warn("Supabase Realtime subscription error:", err);
+      // Add to history
+      setScanHistory(prev => [
+        {
+          code: record.codiSeguiment,
+          name: `${record.c1Nom} & ${record.c2Nom}`,
+          mobileName,
+          time: nowStr,
+          success: true
+        },
+        ...prev.slice(0, 19)
+      ]);
+
+      if (onAddLog) {
+        onAddLog(`[${mobileName}] Escaneig rebut: ${record.codiSeguiment} (${record.c1Nom} & ${record.c2Nom})`);
       }
-    }
 
-    // High-frequency polling fallback (every 1500ms)
-    // Pass showPairingModalRef.current to renew TTL dynamically while pairing modal is open
-    pollInterval = setInterval(async () => {
-      if (!isComponentMounted.current) return;
-      try {
-        const isModalOpen = showPairingModalRef.current;
-        const res = await apiPollSession(sessionId, syncKey, isModalOpen);
-        if (!isComponentMounted.current) return;
+      setLastScanInfo({
+        code: record.codiSeguiment,
+        mobileName,
+        time: nowStr,
+        success: true
+      });
 
-        if (res.expiresAt) {
-          setSessionExpiresAt(res.expiresAt);
-        }
+      setFeedback({
+        type: 'success',
+        message: language === 'ca' 
+          ? `[${mobileName}] Inscripció trobada: ${record.c1Nom} & ${record.c2Nom}` 
+          : `[${mobileName}] Inscripción encontrada: ${record.c1Nom} & ${record.c2Nom}`,
+        code: record.codiSeguiment,
+        mobileName
+      });
 
-        if (res.ok) {
-          // Update status
-          if (res.status) {
-            setScannerStatus(prev => {
-              if (prev !== 'movil_conectado' && res.status === 'movil_conectado') {
-                console.log('[SCANNER PC] mobile connected', { sessionId, syncKey });
-              }
-              return res.status;
-            });
-          }
-          // If a new code was delivered via serverless API
-          if (res.code) {
-            handleProcessCode(res.code);
-          }
-        } else if (res.status === 'sesion_caducada') {
-          setScannerStatus('sesion_caducada');
-        }
-      } catch (err) {
-        // network offline silent
-      }
-    }, 1500);
-
-    return () => {
-      isComponentMounted.current = false;
-      if (pollInterval) clearInterval(pollInterval);
-      if (realtimeChannelRef.current && supabase) {
-        try {
-          supabase.removeChannel(realtimeChannelRef.current);
-        } catch (e) {}
-      }
-    };
-  }, [sessionId, syncKey, handleProcessCode]);
-
-  // Extend TTL immediately whenever the pairing modal is opened
-  useEffect(() => {
-    if (showPairingModal) {
-      apiRenewSession(sessionId, syncKey).then(res => {
-        if (!isComponentMounted.current) return;
-        if (res.ok && res.expiresAt) {
-          setSessionExpiresAt(res.expiresAt);
-          setScannerStatus(prev => prev === 'sesion_caducada' ? 'esperando_conexion' : prev);
+      // If a ficha is ALREADY open, enqueue this scan so the secretary doesn't lose current work!
+      setActiveFichaRecord(currentFicha => {
+        if (currentFicha) {
+          console.log('[SCANNER PC] Ficha is currently open; adding scan to queue:', validatedCode);
+          setScanQueue(prev => [
+            ...prev,
+            { scanId, code: validatedCode, mobileName, mobileId, timestamp: Date.now(), record }
+          ]);
+          return currentFicha;
+        } else {
+          // No ficha currently open: open directly!
+          setStandbyRecord(record);
+          return record;
         }
       });
+
+    } else {
+      // Not found in database
+      playBeep(300, 0.3, 'square');
+      setFeedback({
+        type: 'error',
+        message: language === 'ca'
+          ? `[${mobileName}] No s'ha trobat cap inscripció amb el codi: "${validatedCode}"`
+          : `[${mobileName}] No se ha encontrado ninguna inscripción con el código: "${validatedCode}"`,
+        code: validatedCode,
+        mobileName
+      });
+
+      setScanHistory(prev => [
+        {
+          code: validatedCode,
+          name: language === 'ca' ? "Inscripció no trobada" : "Inscripción no encontrada",
+          mobileName,
+          time: nowStr,
+          success: false
+        },
+        ...prev.slice(0, 19)
+      ]);
     }
-  }, [showPairingModal, sessionId, syncKey]);
+  }, [findRegistration, language, onAddLog]);
 
-  // 5. Generate New Session & Regenerate QR
-  const handleGenerateNewSession = async () => {
-    // Invalidate old session on server
-    apiInvalidateSession(sessionId, syncKey);
+  // 6. Handle Closing a Ficha
+  // CRITICAL REQUIREMENT: Closing or saving a ficha MUST NOT disconnect any mobile!
+  // It returns to "Esperant següent escaneig", keeps Realtime listener alive, and processes next queued scan if any!
+  const handleCloseFicha = useCallback(() => {
+    setActiveFichaRecord(null);
 
-    const newKey = Math.random().toString(36).substring(2, 8).toUpperCase();
-    const newSessId = `sess_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-    try { sessionStorage.setItem('tast_scanner_sync_key', newKey); } catch (e) {}
-    setSyncKey(newKey);
-    setSessionId(newSessId);
-    setScannerStatus('esperando_conexion');
-    setFeedback(null);
+    // If there is an item in the queue, open it immediately
+    setScanQueue(prev => {
+      if (prev.length > 0) {
+        const [nextItem, ...remaining] = prev;
+        setTimeout(() => {
+          if (nextItem.record) {
+            setActiveFichaRecord(nextItem.record);
+            setStandbyRecord(nextItem.record);
+          }
+        }, 150);
+        return remaining;
+      }
+      return prev;
+    });
+  }, []);
 
-    const session = await apiCreateSession(newSessId, newKey);
-    if (session && session.expiresAt) {
-      setSessionExpiresAt(session.expiresAt);
+  const handleSaveFicha = useCallback((updatedRecord: Inscripcio) => {
+    if (onSaveInscripcio) {
+      onSaveInscripcio(updatedRecord);
+    }
+    setStandbyRecord(updatedRecord);
+    handleCloseFicha();
+  }, [onSaveInscripcio, handleCloseFicha]);
+
+  // 7. Subscribe to Supabase Realtime channels for all sessions in Map
+  useEffect(() => {
+    isComponentMounted.current = true;
+
+    sessions.forEach((session: MobileScannerSession) => {
+      const channelId = `remote-scanner:${session.sessionId}`;
+      if (realtimeChannelsRef.current.has(session.sessionId)) {
+        return; // already subscribed
+      }
+
+      if (supabase) {
+        try {
+          console.log('[SCANNER PC] Subscribing to channel:', channelId, session.mobileName);
+          const channel = supabase.channel(channelId);
+          realtimeChannelsRef.current.set(session.sessionId, channel);
+
+          channel
+            .on('broadcast', { event: 'mobile_status' }, (msg: any) => {
+              if (!isComponentMounted.current) return;
+              const payload = msg?.payload;
+              const newStatus = payload?.status;
+              const sMobileId = payload?.mobileId || session.mobileId;
+              const sMobileName = payload?.mobileName || session.mobileName;
+
+              console.log('[SCANNER PC] Status broadcast received:', { newStatus, sMobileId, sMobileName });
+
+              setSessions(prev => {
+                const next = new Map<string, MobileScannerSession>(prev);
+                const curr: MobileScannerSession | undefined = next.get(session.sessionId);
+                if (curr) {
+                  let mappedStatus: MobileConnectionStatus = 'esperant_connexio';
+                  if (newStatus === 'movil_conectado') mappedStatus = 'connectat';
+                  else if (newStatus === 'movil_desconectado') mappedStatus = 'desconnectat';
+                  else if (newStatus === 'reconnecting') mappedStatus = 'reconnectant';
+
+                  next.set(session.sessionId, {
+                    ...curr,
+                    status: mappedStatus,
+                    lastPingMobile: Date.now(),
+                    connectedAt: mappedStatus === 'connectat' ? (curr.connectedAt || Date.now()) : curr.connectedAt
+                  });
+                }
+                return next;
+              });
+            })
+            .on('broadcast', { event: 'scanned_code' }, (msg: any) => {
+              if (!isComponentMounted.current) return;
+              const payload = msg?.payload;
+              const code = payload?.code;
+              const sId = payload?.sessionId || session.sessionId;
+              const mId = payload?.mobileId || session.mobileId;
+              const mName = payload?.mobileName || session.mobileName;
+              const scanId = payload?.scanId || `scan_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+
+              // Security check: only accept scans matching this session's syncKey or sessionId
+              if (payload?.syncKey && payload.syncKey !== session.syncKey) {
+                console.warn('[SCANNER PC] Rejected scan with mismatched syncKey');
+                return;
+              }
+
+              if (code) {
+                handleIncomingScan(code, mName, mId, scanId);
+              }
+            })
+            .subscribe();
+        } catch (e) {
+          console.warn('Realtime channel subscription error:', e);
+        }
+      }
+
+      // Also register session on serverless backend
+      apiCreateSession(session.sessionId, session.syncKey, session.mobileId, session.mobileName);
+    });
+
+    // Cleanup: remove channels for sessions that were deleted from Map
+    for (const [sId, ch] of realtimeChannelsRef.current.entries()) {
+      if (!sessions.has(sId)) {
+        try {
+          if (supabase) supabase.removeChannel(ch);
+        } catch (e) {}
+        realtimeChannelsRef.current.delete(sId);
+      }
+    }
+  }, [sessions, handleIncomingScan]);
+
+  // High-frequency polling fallback (every 1800ms) across all active sessions
+  useEffect(() => {
+    const pollInterval = setInterval(async () => {
+      if (!isComponentMounted.current) return;
+
+      const currentSessions: MobileScannerSession[] = Array.from(sessionsRef.current.values());
+      for (const sess of currentSessions) {
+        try {
+          const res = await apiPollSession(sess.sessionId, sess.syncKey, false);
+          if (!isComponentMounted.current) return;
+
+          if (res.ok) {
+            // Update status if serverless has newer status
+            if (res.status) {
+              setSessions(prev => {
+                const next = new Map<string, MobileScannerSession>(prev);
+                const cur: MobileScannerSession | undefined = next.get(sess.sessionId);
+                if (cur) {
+                  let mappedStatus: MobileConnectionStatus = cur.status;
+                  if (res.status === 'movil_conectado') mappedStatus = 'connectat';
+                  else if (res.status === 'movil_desconectado') mappedStatus = 'desconnectat';
+                  else if (res.status === 'sesion_caducada') mappedStatus = 'caducat';
+
+                  if (mappedStatus !== cur.status) {
+                    next.set(sess.sessionId, { ...cur, status: mappedStatus });
+                  }
+                }
+                return next;
+              });
+            }
+
+            // Process any scans from serverless scan queue
+            if (Array.isArray(res.scans) && res.scans.length > 0) {
+              for (const queued of res.scans) {
+                const scanId = queued.scanId || `queued_${queued.code}_${queued.timestamp}`;
+                const mName = sess.mobileName;
+                const mId = queued.mobileId || sess.mobileId;
+                handleIncomingScan(queued.code, mName, mId, scanId);
+              }
+            } else if (res.code) {
+              const scanId = `api_scan_${Date.now()}_${res.code}`;
+              handleIncomingScan(res.code, sess.mobileName, sess.mobileId, scanId);
+            }
+          }
+        } catch (e) {
+          // network offline silent
+        }
+      }
+    }, 1800);
+
+    return () => {
+      clearInterval(pollInterval);
+    };
+  }, [handleIncomingScan]);
+
+  // Clean all channels ONLY when exiting the entire scanner panel to return to Dashboard!
+  useEffect(() => {
+    return () => {
+      isComponentMounted.current = false;
+      stopPcCamera();
+      if (supabase) {
+        realtimeChannelsRef.current.forEach(ch => {
+          try { supabase.removeChannel(ch); } catch (e) {}
+        });
+        realtimeChannelsRef.current.clear();
+      }
+    };
+  }, []);
+
+  // 8. Management Actions: Add Mobile, Disconnect Mobile, Disconnect All
+  const handleAddNewMobile = () => {
+    const newIndex = sessions.size + 1;
+    const newSession = createNewMobileSession(newIndex);
+    setSessions(prev => {
+      const next = new Map<string, MobileScannerSession>(prev);
+      next.set(newSession.sessionId, newSession);
+      return next;
+    });
+    setSelectedMobileForPairing(newSession.sessionId);
+    setShowPairingModal(true);
+  };
+
+  const handleDisconnectSingleMobile = async (sessionId: string) => {
+    const sess = sessions.get(sessionId);
+    if (!sess) return;
+
+    // Broadcast disconnect signal on this mobile's channel
+    const channel = realtimeChannelsRef.current.get(sessionId);
+    if (channel) {
+      try {
+        channel.send({
+          type: 'broadcast',
+          event: 'disconnect_mobile',
+          payload: { sessionId, mobileId: sess.mobileId, timestamp: Date.now() }
+        }).catch(() => {});
+      } catch (e) {}
+    }
+
+    // Call API disconnect
+    apiDisconnectMobile(sessionId, sess.syncKey, sess.mobileId);
+
+    // Update status in map
+    setSessions(prev => {
+      const next = new Map<string, MobileScannerSession>(prev);
+      const target: MobileScannerSession | undefined = next.get(sessionId);
+      if (target) {
+        next.set(sessionId, { ...target, status: 'desconnectat' });
+      }
+      return next;
+    });
+
+    if (onAddLog) {
+      onAddLog(`[${sess.mobileName}] Desconnectat pel PC de Secretaria.`);
     }
   };
 
-  // 6. Local PC Webcam scanning logic
+  const handleDisconnectAllMobiles = async () => {
+    const sessionIds = Array.from(sessions.keys()) as string[];
+    for (const sessionId of sessionIds) {
+      handleDisconnectSingleMobile(sessionId);
+    }
+  };
+
+  const handleRemoveMobile = (sessionId: string) => {
+    if (sessions.size <= 1) return; // Keep at least one
+    handleDisconnectSingleMobile(sessionId);
+    setSessions(prev => {
+      const next = new Map<string, MobileScannerSession>(prev);
+      next.delete(sessionId);
+      return next;
+    });
+    if (selectedMobileForPairing === sessionId) {
+      const remaining = (Array.from(sessions.keys()) as string[]).filter((id: string) => id !== sessionId);
+      if (remaining.length > 0) setSelectedMobileForPairing(remaining[0]);
+    }
+  };
+
+  const handleReconnectMobile = async (sessionId: string) => {
+    const sess = sessions.get(sessionId);
+    if (!sess) return;
+    const newKey = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const updated: MobileScannerSession = {
+      ...sess,
+      syncKey: newKey,
+      status: 'esperant_connexio',
+      expiresAt: Date.now() + 60 * 60 * 1000
+    };
+
+    setSessions(prev => {
+      const next = new Map<string, MobileScannerSession>(prev);
+      next.set(sessionId, updated);
+      return next;
+    });
+
+    await apiCreateSession(sessionId, newKey, sess.mobileId, sess.mobileName);
+    generateQrForSession(updated);
+    setSelectedMobileForPairing(sessionId);
+    setShowPairingModal(true);
+  };
+
+  // 9. Local PC Webcam scanning logic
   const startPcCamera = async () => {
     setPcCameraError(null);
     try {
@@ -433,13 +702,11 @@ export default function AdminScanner({
         video: { facingMode: 'environment' }
       });
       pcStreamRef.current = stream;
-      setHasPcCameraPermission(true);
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         pcAnimFrameId.current = requestAnimationFrame(scanPcFrame);
       }
     } catch (e: any) {
-      setHasPcCameraPermission(false);
       setPcCameraError(language === 'ca' ? "Càmera no disponible o permís denegat." : "Cámara no disponible o permiso denegado.");
     }
   };
@@ -474,7 +741,8 @@ export default function AdminScanner({
           const code = jsQR(imgData.data, imgData.width, imgData.height, { inversionAttempts: 'dontInvert' });
           if (code && code.data && code.data.trim()) {
             stopPcCamera();
-            handleProcessCode(code.data.trim());
+            const scanId = `pc_cam_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+            handleIncomingScan(code.data.trim(), 'PC Webcam', 'pc_cam', scanId);
             return;
           }
         } catch (e) {}
@@ -488,60 +756,89 @@ export default function AdminScanner({
     if (!manualCodeInput.trim()) return;
     const code = manualCodeInput.trim();
     setManualCodeInput('');
-    handleProcessCode(code);
+    const scanId = `manual_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    handleIncomingScan(code, 'Teclat PC', 'manual', scanId);
   };
 
-  // Status visual configurations
-  const getStatusConfig = () => {
-    switch (scannerStatus) {
-      case 'movil_conectado':
-        return {
-          label: language === 'ca' ? "Mòbil connectat" : "Móvil conectado",
-          sublabel: language === 'ca' ? "A punt per rebre codis QR" : "Listo para recibir códigos QR",
-          badgeBg: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
-          dotColor: 'bg-emerald-500 animate-pulse'
-        };
-      case 'esperando_escaneo':
-        return {
-          label: language === 'ca' ? "Esperant escaneig" : "Esperando escaneo",
-          sublabel: language === 'ca' ? "Càmera del mòbil activa" : "Cámara del móvil activa",
-          badgeBg: 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20',
-          dotColor: 'bg-emerald-400 animate-pulse'
-        };
-      case 'codigo_recibido':
-        return {
-          label: language === 'ca' ? "Codi rebut" : "Código recibido",
-          sublabel: language === 'ca' ? "Processant inscripció..." : "Procesando inscripción...",
-          badgeBg: 'bg-[#ff0090]/15 text-[#ff0090] border-[#ff0090]/30',
-          dotColor: 'bg-[#ff0090] animate-ping'
-        };
-      case 'sesion_caducada':
-        return {
-          label: language === 'ca' ? "Sessió caducada" : "Sesión caducada",
-          sublabel: language === 'ca' ? "Genereu un nou codi QR" : "Genere un nuevo código QR",
-          badgeBg: 'bg-rose-500/10 text-rose-400 border-rose-500/20',
-          dotColor: 'bg-rose-500'
-        };
-      case 'movil_desconectado':
-        return {
-          label: language === 'ca' ? "Mòbil desconnectat" : "Móvil desconectado",
-          sublabel: language === 'ca' ? "Torneu a enllaçar el telèfon" : "Vuelve a enlazar el teléfono",
-          badgeBg: 'bg-rose-500/10 text-rose-400 border-rose-500/20',
-          dotColor: 'bg-rose-500'
-        };
-      case 'esperando_conexion':
-      default:
-        return {
-          label: language === 'ca' ? "Esperant connexió" : "Esperando conexión",
-          sublabel: language === 'ca' ? "Escanegeu el QR d'enllaç amb el mòbil" : "Escanee el QR de enlace con el móvil",
-          badgeBg: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
-          dotColor: 'bg-amber-400 animate-pulse'
-        };
-    }
-  };
+  // Status helper for active mobile sessions summary
+  const sessionsArray: MobileScannerSession[] = Array.from(sessions.values());
+  const connectedCount = sessionsArray.filter((s: MobileScannerSession) => s.status === 'connectat').length;
+  const currentPairingSession: MobileScannerSession = sessions.get(selectedMobileForPairing) || sessionsArray[0];
 
-  const statusConfig = getStatusConfig();
+  // ================= RENDER IF FULL FICHA IS CURRENTLY ACTIVE =================
+  // By rendering AdminFicha right here, AdminScanner NEVER unmounts, Realtime channels stay continuous,
+  // and mobile cameras never pause or lose connection!
+  if (activeFichaRecord) {
+    return (
+      <div className="space-y-4" id="admin-scanner-ficha-view">
+        {/* Floating Multi-Mobile Notification Bar on top of active ficha */}
+        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-3 flex flex-wrap items-center justify-between gap-3 text-white shadow-lg sticky top-2 z-40">
+          <div className="flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+            <span className="font-mono text-xs font-bold text-emerald-400">
+              {language === 'ca' 
+                ? `${connectedCount} ${connectedCount === 1 ? 'mòbil connectat' : 'mòbils connectats'} a punt` 
+                : `${connectedCount} ${connectedCount === 1 ? 'móvil conectado' : 'móviles conectados'} listos`}
+            </span>
+            <span className="text-zinc-600">•</span>
+            <span className="text-xs text-zinc-400">
+              {language === 'ca' 
+                ? "Els mòbils segueixen amb la càmera activa i poden continuar escanejant." 
+                : "Los móviles siguen con la cámara activa y pueden seguir escaneando."}
+            </span>
+          </div>
 
+          {/* If there are queued scans waiting */}
+          {scanQueue.length > 0 && (
+            <div className="flex items-center gap-2 bg-[#ff0090]/20 border border-[#ff0090]/40 px-3 py-1.5 rounded-xl animate-pulse">
+              <Bell size={14} className="text-[#ff0090]" />
+              <span className="text-xs font-bold text-white">
+                {language === 'ca' 
+                  ? `Nou escaneig de ${scanQueue[0].mobileName}: ${scanQueue[0].code}` 
+                  : `Nuevo escaneo de ${scanQueue[0].mobileName}: ${scanQueue[0].code}`}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  const next = scanQueue[0];
+                  setScanQueue(prev => prev.slice(1));
+                  if (next.record) {
+                    setActiveFichaRecord(next.record);
+                  }
+                }}
+                className="text-[11px] font-bold bg-[#ff0090] text-white px-2 py-0.5 rounded-md hover:bg-[#e0007e] transition cursor-pointer"
+              >
+                {language === 'ca' ? "Obrir ara" : "Abrir ahora"}
+              </button>
+              <span className="text-[10px] text-[#ff0090] font-mono font-bold">
+                ({scanQueue.length} {language === 'ca' ? 'en cua' : 'en cola'})
+              </span>
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={handleCloseFicha}
+            className="text-xs bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white px-3 py-1.5 rounded-xl font-bold transition flex items-center gap-1.5 cursor-pointer ml-auto"
+            id="btn-return-scanner-from-ficha"
+          >
+            <ArrowLeft size={13} />
+            {language === 'ca' ? "Tornar a l'escàner" : "Volver al escáner"}
+          </button>
+        </div>
+
+        {/* Embedded AdminFicha */}
+        <AdminFicha 
+          registration={activeFichaRecord}
+          config={config}
+          onBack={handleCloseFicha}
+          onSave={handleSaveFicha}
+        />
+      </div>
+    );
+  }
+
+  // ================= MAIN MULTI-MOBILE SCANNER DASHBOARD =================
   return (
     <div className="space-y-6 max-w-6xl mx-auto pb-16 font-sans select-none" id="admin-scanner-root">
       
@@ -562,58 +859,47 @@ export default function AdminScanner({
 
           <button
             type="button"
-            onClick={() => setShowPairingModal(true)}
-            className="text-xs bg-[#ff0090] hover:bg-[#e0007e] text-white font-bold px-4 py-2.5 rounded-xl transition flex items-center gap-1.5 shadow-md shadow-[#ff0090]/20 cursor-pointer animate-pulse"
-            id="btn-enllaçar-mobil-qr"
+            onClick={handleAddNewMobile}
+            className="text-xs bg-[#ff0090] hover:bg-[#e0007e] text-white font-bold px-4 py-2.5 rounded-xl transition flex items-center gap-1.5 shadow-md shadow-[#ff0090]/20 cursor-pointer"
+            id="btn-add-another-mobile"
           >
-            <Smartphone size={15} /> {language === 'ca' ? "ENLLAÇAR MÒBIL (QR)" : "ENLAZAR MÓVIL (QR)"}
+            <Plus size={15} /> {language === 'ca' ? "+ ENLLAÇAR NOU MÒBIL" : "+ ENLAZAR NUEVO MÓVIL"}
           </button>
+
+          {connectedCount > 0 && (
+            <button
+              type="button"
+              onClick={handleDisconnectAllMobiles}
+              className="text-xs bg-zinc-800 hover:bg-rose-950/60 hover:text-rose-400 text-zinc-400 font-bold px-3 py-2.5 rounded-xl transition flex items-center gap-1.5 border border-zinc-700 cursor-pointer"
+              id="btn-disconnect-all-mobiles"
+              title={language === 'ca' ? "Desconnectar tots els mòbils a la vegada" : "Desconectar todos los móviles a la vez"}
+            >
+              <PowerOff size={13} /> {language === 'ca' ? "Desconnectar tots" : "Desconectar todos"}
+            </button>
+          )}
         </div>
 
         <div className="text-center">
           <span className="font-mono text-[9px] text-[#ff0090] tracking-widest uppercase font-bold block">
-            {language === 'ca' ? "PANEL DE SECRETARIA • VALIDACIÓ DE PASSOS" : "PANEL DE SECRETARÍA • VALIDACIÓN DE PASES"}
+            {language === 'ca' ? "PANEL DE SECRETARIA • VALIDACIÓ MULTI-MÒBIL" : "PANEL DE SECRETARÍA • VALIDACIÓN MULTI-MÓVIL"}
           </span>
           <h2 className="font-sans font-black text-sm tracking-tight text-white flex items-center justify-center gap-1.5 mt-0.5">
-            {language === 'ca' ? "Escàner Mòbil Remot ⇆ PC Secretaria" : "Escáner Móvil Remoto ⇆ PC Secretaría"}
+            {language === 'ca' ? "Escàners Mòbils Simultanis ⇆ PC Secretaria" : "Escáneres Móviles Simultáneos ⇆ PC Secretaría"}
           </h2>
         </div>
 
-        {/* Live Status Badge */}
+        {/* Global Multi-Mobile Counter Badge */}
         <div className="flex items-center gap-2">
-          <div className={`px-3 py-1.5 rounded-xl font-mono text-xs font-bold border flex items-center gap-2 ${statusConfig.badgeBg}`}>
-            <span className={`w-2 h-2 rounded-full ${statusConfig.dotColor}`} />
-            <span>{statusConfig.label}</span>
+          <div className={`px-3 py-1.5 rounded-xl font-mono text-xs font-bold border flex items-center gap-2 ${
+            connectedCount > 0 
+              ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+              : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+          }`}>
+            <span className={`w-2 h-2 rounded-full ${connectedCount > 0 ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400'}`} />
+            <span>{connectedCount} {connectedCount === 1 ? 'Mòbil actiu' : 'Mòbils actius'}</span>
           </div>
         </div>
       </div>
-
-      {/* Disconnection Warning Alert */}
-      {scannerStatus === 'movil_desconectado' && (
-        <div className="bg-rose-950/40 border-2 border-rose-500/40 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-white animate-in fade-in duration-200">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-rose-500/20 text-rose-400 rounded-xl">
-              <AlertTriangle size={20} />
-            </div>
-            <div>
-              <h4 className="font-bold text-xs uppercase text-rose-300">
-                {language === 'ca' ? "El mòbil s'ha desconnectat" : "El móvil se ha desconectado"}
-              </h4>
-              <p className="text-xs text-zinc-300">
-                {language === 'ca' ? "El mòbil s'ha desconnectat. Vuelve a enlazarlo." : "El móvil se ha desconectado. Vuelve a enlazarlo."}
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={() => setShowPairingModal(true)}
-            className="px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs rounded-xl transition shrink-0"
-            id="btn-relink-mobile"
-          >
-            {language === 'ca' ? "Tornar a enllaçar" : "Volver a enlazar"}
-          </button>
-        </div>
-      )}
 
       {/* Dynamic Feedback Banner */}
       {feedback && (
@@ -640,12 +926,156 @@ export default function AdminScanner({
           <button 
             type="button"
             onClick={() => setFeedback(null)}
-            className="p-1 hover:bg-white/10 rounded-lg text-zinc-400 hover:text-white"
+            className="p-1 hover:bg-white/10 rounded-lg text-zinc-400 hover:text-white cursor-pointer"
           >
             <X size={15} />
           </button>
         </div>
       )}
+
+      {/* ================= MULTI-MOBILE SESSIONS STATUS PANEL ================= */}
+      <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 text-white space-y-4 shadow-lg" id="multi-mobile-management-section">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 border-b border-zinc-800 pb-3">
+          <div className="flex items-center gap-2">
+            <Smartphone size={18} className="text-[#ff0090]" />
+            <h3 className="font-bold text-xs uppercase tracking-wide">
+              {language === 'ca' ? "Terminals Mòbils Connectats" : "Terminales Móviles Conectados"}
+            </h3>
+            <span className="font-mono text-[11px] bg-zinc-950 px-2 py-0.5 rounded text-zinc-400 border border-zinc-800">
+              {sessions.size} {language === 'ca' ? "configurats" : "configurados"}
+            </span>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleAddNewMobile}
+            className="text-xs text-[#ff0090] hover:text-[#e0007e] font-bold flex items-center gap-1 transition cursor-pointer"
+            id="btn-add-mobile-link-inline"
+          >
+            <Plus size={14} />
+            {language === 'ca' ? "Enllaçar un altre telèfon" : "Enlazar otro teléfono"}
+          </button>
+        </div>
+
+        {/* Grid of connected mobiles */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+          {sessionsArray.map((sess: MobileScannerSession) => {
+            const isConnected = sess.status === 'connectat';
+            const isReconnecting = sess.status === 'reconnectant';
+            const isDisconnected = sess.status === 'desconnectat';
+
+            return (
+              <div 
+                key={sess.sessionId}
+                className={`p-4 rounded-2xl border transition-all flex flex-col justify-between space-y-3 ${
+                  isConnected 
+                    ? 'bg-zinc-950 border-emerald-500/40 shadow-sm shadow-emerald-500/5' 
+                    : isDisconnected
+                    ? 'bg-zinc-950/70 border-zinc-800 text-zinc-400'
+                    : 'bg-zinc-950 border-amber-500/30'
+                }`}
+                id={`mobile-card-${sess.mobileId}`}
+              >
+                {/* Mobile Title & Badge */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Smartphone size={16} className={isConnected ? "text-emerald-400" : "text-zinc-500"} />
+                    <strong className="text-xs font-black text-white">{sess.mobileName}</strong>
+                  </div>
+
+                  <span className={`px-2 py-0.5 rounded-full font-mono text-[10px] font-bold flex items-center gap-1.5 border ${
+                    isConnected 
+                      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                      : isReconnecting
+                      ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                      : isDisconnected
+                      ? 'bg-rose-500/10 text-rose-400 border-rose-500/30'
+                      : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                  }`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${
+                      isConnected ? 'bg-emerald-400 animate-pulse' :
+                      isReconnecting ? 'bg-amber-400 animate-spin' :
+                      'bg-rose-400'
+                    }`} />
+                    {isConnected ? (language === 'ca' ? "Connectat" : "Conectado") :
+                     isReconnecting ? (language === 'ca' ? "Reconnectant" : "Reconectando") :
+                     isDisconnected ? (language === 'ca' ? "Desconnectat" : "Desconectado") :
+                     (language === 'ca' ? "Esperant" : "Esperando")}
+                  </span>
+                </div>
+
+                {/* Session Info */}
+                <div className="text-[11px] space-y-1 font-mono">
+                  <div className="flex justify-between text-zinc-400">
+                    <span>{language === 'ca' ? "Clau:" : "Clave:"}</span>
+                    <span className="text-white font-bold">{sess.syncKey}</span>
+                  </div>
+                  <div className="flex justify-between text-zinc-400">
+                    <span>{language === 'ca' ? "Escanejos:" : "Escaneos:"}</span>
+                    <span className="text-emerald-400 font-bold">{sess.scansCount}</span>
+                  </div>
+                  {sess.lastScan && (
+                    <div className="flex justify-between text-zinc-400">
+                      <span>{language === 'ca' ? "Últim:" : "Último:"}</span>
+                      <span className="text-[#ff0090] font-bold truncate max-w-[130px]">{sess.lastScan.code}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Actions per mobile */}
+                <div className="pt-2 border-t border-zinc-850 flex items-center justify-between gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedMobileForPairing(sess.sessionId);
+                      setShowPairingModal(true);
+                    }}
+                    className="flex-1 py-1.5 px-2 bg-zinc-900 hover:bg-zinc-800 text-white font-bold text-[10px] rounded-lg transition flex items-center justify-center gap-1 border border-zinc-800 cursor-pointer"
+                    id={`btn-view-qr-${sess.mobileId}`}
+                  >
+                    <QrCode size={12} className="text-[#ff0090]" />
+                    {language === 'ca' ? "Veure QR" : "Ver QR"}
+                  </button>
+
+                  {isConnected ? (
+                    <button
+                      type="button"
+                      onClick={() => handleDisconnectSingleMobile(sess.sessionId)}
+                      className="py-1.5 px-2.5 bg-rose-950/40 hover:bg-rose-900/50 text-rose-300 font-bold text-[10px] rounded-lg transition border border-rose-800/40 cursor-pointer"
+                      id={`btn-disconnect-${sess.mobileId}`}
+                      title={language === 'ca' ? "Desconnectar aquest mòbil" : "Desconectar este móvil"}
+                    >
+                      {language === 'ca' ? "Desconnectar" : "Desconectar"}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => handleReconnectMobile(sess.sessionId)}
+                      className="py-1.5 px-2.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 font-bold text-[10px] rounded-lg transition border border-zinc-800 cursor-pointer flex items-center gap-1"
+                      id={`btn-reconnect-${sess.mobileId}`}
+                    >
+                      <RefreshCw size={11} />
+                      {language === 'ca' ? "Reenllaçar" : "Reenlazar"}
+                    </button>
+                  )}
+
+                  {sessions.size > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveMobile(sess.sessionId)}
+                      className="p-1.5 text-zinc-500 hover:text-rose-400 hover:bg-zinc-900 rounded-lg transition cursor-pointer"
+                      title={language === 'ca' ? "Eliminar aquest terminal" : "Eliminar este terminal"}
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  )}
+                </div>
+
+              </div>
+            );
+          })}
+        </div>
+      </div>
 
       {/* Main Grid: Left Side Controls & Right Side Monitor */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
@@ -653,62 +1083,6 @@ export default function AdminScanner({
         {/* ================= LEFT COLUMN: Link State & Manual Controls ================= */}
         <div className="lg:col-span-4 space-y-4">
           
-          {/* Linked Session Info Card */}
-          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 text-white space-y-4 shadow-md">
-            <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
-              <div className="flex items-center gap-2">
-                <Smartphone size={18} className="text-[#ff0090]" />
-                <h3 className="font-bold text-xs uppercase tracking-wide">
-                  {language === 'ca' ? "Sessió de Sincronització" : "Sesión de Sincronización"}
-                </h3>
-              </div>
-              <span className="font-mono text-[10px] bg-zinc-950 text-[#ff0090] font-bold px-2 py-0.5 rounded border border-zinc-800">
-                TAST-{syncKey}
-              </span>
-            </div>
-
-            <div className="space-y-2">
-              <div className="flex justify-between text-xs">
-                <span className="text-zinc-400">{language === 'ca' ? "Estat:" : "Estado:"}</span>
-                <span className="font-bold font-mono text-zinc-200">{statusConfig.label}</span>
-              </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-zinc-400">{language === 'ca' ? "Mecanisme:" : "Mecanismo:"}</span>
-                <span className="font-mono text-[11px] text-zinc-300">Supabase Realtime + API</span>
-              </div>
-              <div className="flex justify-between text-xs">
-                <span className="text-zinc-400">{language === 'ca' ? "Caducitat:" : "Caducidad:"}</span>
-                <span className="font-mono text-[11px] text-emerald-400">
-                  {sessionExpiresAt 
-                    ? `${language === 'ca' ? 'Fins a les' : 'Hasta las'} ${formatExpiryTime(sessionExpiresAt)}` 
-                    : (language === 'ca' ? '30 min (renovable)' : '30 min (renovable)')}
-                </span>
-              </div>
-            </div>
-
-            <div className="pt-2 flex flex-col gap-2">
-              <button
-                type="button"
-                onClick={() => setShowPairingModal(true)}
-                className="w-full py-2 px-3 bg-zinc-800 hover:bg-zinc-750 text-white font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 border border-zinc-700 cursor-pointer"
-                id="btn-show-qr-pairing"
-              >
-                <QrCode size={14} className="text-[#ff0090]" />
-                {language === 'ca' ? "Veure QR d'enllaç" : "Ver QR de enlace"}
-              </button>
-
-              <button
-                type="button"
-                onClick={handleGenerateNewSession}
-                className="w-full py-2 px-3 bg-zinc-950 hover:bg-zinc-850 text-zinc-400 hover:text-white font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 border border-zinc-800 cursor-pointer"
-                id="btn-new-session"
-              >
-                <RefreshCw size={13} />
-                {language === 'ca' ? "Generar nova clau" : "Generar nueva clave"}
-              </button>
-            </div>
-          </div>
-
           {/* Manual Code Entry & PC Webcam Fallback */}
           <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 text-white space-y-4 shadow-md">
             <h3 className="font-bold text-xs uppercase tracking-wide flex items-center gap-2 text-zinc-300 border-b border-zinc-800 pb-3">
@@ -731,7 +1105,7 @@ export default function AdminScanner({
                 />
                 <button
                   type="submit"
-                  disabled={!manualCodeInput.trim() || isProcessingCode}
+                  disabled={!manualCodeInput.trim()}
                   className="px-4 py-2 bg-[#ff0090] hover:bg-[#e0007e] disabled:opacity-50 text-white font-bold text-xs rounded-xl transition cursor-pointer"
                   id="btn-scanner-submit-manual"
                 >
@@ -751,7 +1125,7 @@ export default function AdminScanner({
                   <button
                     type="button"
                     onClick={stopPcCamera}
-                    className="w-full py-2 bg-zinc-800 text-zinc-300 hover:text-white rounded-xl text-xs font-bold transition"
+                    className="w-full py-2 bg-zinc-800 text-zinc-300 hover:text-white rounded-xl text-xs font-bold transition cursor-pointer"
                   >
                     {language === 'ca' ? "Aturar càmera PC" : "Detener cámara PC"}
                   </button>
@@ -764,7 +1138,7 @@ export default function AdminScanner({
                   id="btn-activate-pc-cam"
                 >
                   <Camera size={14} className="text-[#ff0090]" />
-                  {language === 'ca' ? "Activar càmera integrada del PC" : "Activar cámara integrada del PC"}
+                  {language === 'ca' ? "Usar càmera integrada del PC" : "Usar cámara integrada del PC"}
                 </button>
               )}
               {pcCameraError && (
@@ -773,22 +1147,28 @@ export default function AdminScanner({
             </div>
           </div>
 
-          {/* Recent Scans Mini History */}
+          {/* Recent Scans Activity Log */}
           {scanHistory.length > 0 && (
             <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-5 text-white space-y-3 shadow-md">
               <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5 border-b border-zinc-800 pb-2">
                 <Clock size={13} />
-                {language === 'ca' ? "Historial recent d'escaneig" : "Historial reciente de escaneo"}
+                {language === 'ca' ? "Historial d'escanejos" : "Historial de escaneos"}
               </h4>
-              <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+              <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
                 {scanHistory.map((item, idx) => (
                   <div 
                     key={idx}
-                    onClick={() => handleProcessCode(item.code)}
+                    onClick={async () => {
+                      const rec = await findRegistration(item.code);
+                      if (rec) setActiveFichaRecord(rec);
+                    }}
                     className="p-2 bg-zinc-950 hover:bg-zinc-850 rounded-xl text-xs flex justify-between items-center cursor-pointer border border-zinc-850 transition"
                   >
                     <div className="truncate max-w-[170px]">
-                      <span className="font-mono font-bold text-white text-[11px] block">{item.code}</span>
+                      <div className="flex items-center gap-1">
+                        <span className="font-mono font-bold text-white text-[11px] block">{item.code}</span>
+                        <span className="text-[9px] font-mono text-[#ff0090] bg-[#ff0090]/10 px-1 rounded">{item.mobileName}</span>
+                      </div>
                       <span className="text-[10px] text-zinc-400 truncate block">{item.name}</span>
                     </div>
                     <span className="text-[10px] font-mono text-zinc-500">{item.time}</span>
@@ -802,8 +1182,8 @@ export default function AdminScanner({
 
         {/* ================= RIGHT COLUMN: Radar / Live Registration Card ================= */}
         <div className="lg:col-span-8">
-          {activeRecord ? (
-            /* ACTIVE REGISTRATION CARD FOUND VIA QR SCAN */
+          {standbyRecord ? (
+            /* LAST SCANNED REGISTRATION CARD PREVIEW */
             <div className="bg-zinc-900 border-2 border-emerald-500/40 rounded-3xl p-6 text-white space-y-6 shadow-2xl animate-in fade-in duration-150" id="scanned-registration-card">
               
               {/* Header Banner */}
@@ -811,22 +1191,27 @@ export default function AdminScanner({
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="bg-emerald-500/20 text-emerald-400 font-mono text-xs font-black px-3 py-1 rounded-lg border border-emerald-500/30">
-                      {activeRecord.codiSeguiment}
+                      {standbyRecord.codiSeguiment}
                     </span>
                     <span className="bg-fuchsia-950 text-fuchsia-300 font-bold text-[10px] px-2.5 py-1 rounded-lg uppercase tracking-wider">
-                      {activeRecord.categoria === CategoriaParella.ADULT 
+                      {standbyRecord.categoria === CategoriaParella.ADULT 
                         ? (language === 'ca' ? "Parella Adulta" : "Pareja Adulta")
                         : (language === 'ca' ? "Parella Juvenil" : "Pareja Juvenil")}
                     </span>
+                    {lastScanInfo && (
+                      <span className="bg-zinc-800 text-zinc-300 text-[10px] font-mono px-2 py-0.5 rounded">
+                        {lastScanInfo.mobileName} • {lastScanInfo.time}
+                      </span>
+                    )}
                   </div>
                   <h3 className="text-xl font-black mt-2 text-white tracking-tight">
-                    {activeRecord.c1Nom} {activeRecord.c1Cognoms} &amp; {activeRecord.c2Nom} {activeRecord.c2Cognoms}
+                    {standbyRecord.c1Nom} {standbyRecord.c1Cognoms} &amp; {standbyRecord.c2Nom} {standbyRecord.c2Cognoms}
                   </h3>
                 </div>
 
                 <button
                   type="button"
-                  onClick={() => onSelectInscripcio(activeRecord.id, activeRecord)}
+                  onClick={() => setActiveFichaRecord(standbyRecord)}
                   className="px-5 py-2.5 bg-[#ff0090] hover:bg-[#e0007e] text-white font-bold text-xs rounded-xl transition flex items-center gap-2 shadow-lg shadow-[#ff0090]/25 cursor-pointer shrink-0"
                   id="btn-open-full-ficha"
                 >
@@ -848,11 +1233,11 @@ export default function AdminScanner({
                   <div className="space-y-1 text-xs">
                     <p className="text-zinc-300">
                       <strong className="text-zinc-400 font-normal">{language === 'ca' ? "Email:" : "Email:"}</strong>{' '}
-                      {activeRecord.emailContactoPareja || activeRecord.c1Email || activeRecord.c2Email || '—'}
+                      {standbyRecord.emailContactoPareja || standbyRecord.c1Email || standbyRecord.c2Email || '—'}
                     </p>
                     <p className="text-zinc-300">
                       <strong className="text-zinc-400 font-normal">{language === 'ca' ? "Telèfon:" : "Teléfono:"}</strong>{' '}
-                      {activeRecord.telefonContactoPareja || activeRecord.c1Telefon || activeRecord.c2Telefon || '—'}
+                      {standbyRecord.telefonContactoPareja || standbyRecord.c1Telefon || standbyRecord.c2Telefon || '—'}
                     </p>
                   </div>
                 </div>
@@ -865,14 +1250,14 @@ export default function AdminScanner({
                   </h4>
                   <div className="flex items-center justify-between text-xs">
                     <span className="font-bold text-lg text-emerald-400 font-sans">
-                      {activeRecord.preuCalculat || 0}€
+                      {standbyRecord.preuCalculat || 0}€
                     </span>
                     <span className={`px-2.5 py-1 rounded-lg font-bold uppercase text-[10px] ${
-                      activeRecord.estatPagament === EstatPagament.PAGAT
+                      standbyRecord.estatPagament === EstatPagament.PAGAT
                         ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
                         : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
                     }`}>
-                      {activeRecord.estatPagament === EstatPagament.PAGAT
+                      {standbyRecord.estatPagament === EstatPagament.PAGAT
                         ? (language === 'ca' ? "PAGAT" : "PAGADO")
                         : (language === 'ca' ? "PENDENT DE PAGAMENT" : "PENDIENTE DE PAGO")}
                     </span>
@@ -888,19 +1273,19 @@ export default function AdminScanner({
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
                     <div className="bg-zinc-900 p-2.5 rounded-xl border border-zinc-800">
                       <span className="text-zinc-500 text-[10px] block font-mono">ARMILLA</span>
-                      <strong className="text-zinc-200">{activeRecord.c1TallaArmilla || '—'} / {activeRecord.c2TallaArmilla || '—'}</strong>
+                      <strong className="text-zinc-200">{standbyRecord.c1TallaArmilla || '—'} / {standbyRecord.c2TallaArmilla || '—'}</strong>
                     </div>
                     <div className="bg-zinc-900 p-2.5 rounded-xl border border-zinc-800">
                       <span className="text-zinc-500 text-[10px] block font-mono">CORBATÍ</span>
-                      <strong className="text-zinc-200">{activeRecord.teCorbati ? (language === 'ca' ? "Sí" : "Sí") : "No"}</strong>
+                      <strong className="text-zinc-200">{standbyRecord.teCorbati ? "Sí" : "No"}</strong>
                     </div>
                     <div className="bg-zinc-900 p-2.5 rounded-xl border border-zinc-800">
                       <span className="text-zinc-500 text-[10px] block font-mono">MOCADORS</span>
-                      <strong className="text-zinc-200">{activeRecord.teMocadorsExtra || 0} extra</strong>
+                      <strong className="text-zinc-200">{standbyRecord.teMocadorsExtra || 0} extra</strong>
                     </div>
                     <div className="bg-zinc-900 p-2.5 rounded-xl border border-zinc-800">
                       <span className="text-zinc-500 text-[10px] block font-mono">DOMÀS BALCÓ</span>
-                      <strong className="text-zinc-200">{activeRecord.teDomasBalco ? (language === 'ca' ? "Sí" : "Sí") : "No"}</strong>
+                      <strong className="text-zinc-200">{standbyRecord.teDomasBalco ? "Sí" : "No"}</strong>
                     </div>
                   </div>
                 </div>
@@ -911,12 +1296,12 @@ export default function AdminScanner({
               <div className="pt-2 flex justify-between items-center border-t border-zinc-800">
                 <span className="text-xs text-zinc-400 font-sans">
                   {language === 'ca' 
-                    ? "A punt per al següent escaneig des del mòbil." 
-                    : "Listo para el siguiente escaneo desde el móvil."}
+                    ? "Esperant següent escaneig des de qualsevol mòbil..." 
+                    : "Esperando siguiente escaneo desde cualquier móvil..."}
                 </span>
                 <button
                   type="button"
-                  onClick={() => onSelectInscripcio(activeRecord.id, activeRecord)}
+                  onClick={() => setActiveFichaRecord(standbyRecord)}
                   className="text-xs text-[#ff0090] hover:underline font-bold flex items-center gap-1 cursor-pointer"
                 >
                   {language === 'ca' ? "Validar entrega a la fitxa →" : "Validar entrega en la ficha →"}
@@ -937,23 +1322,29 @@ export default function AdminScanner({
               </div>
 
               <h3 className="text-base font-black text-white mt-6 tracking-tight relative z-10">
-                {statusConfig.label}
+                {connectedCount > 0 
+                  ? (language === 'ca' ? "Esperant següent escaneig" : "Esperando siguiente escaneo")
+                  : (language === 'ca' ? "Esperant connexió de terminals mòbils" : "Esperando conexión de terminales móviles")}
               </h3>
               
               <p className="text-xs text-zinc-400 max-w-sm mx-auto mt-2 leading-relaxed relative z-10 font-sans">
-                {scannerStatus === 'movil_conectado' || scannerStatus === 'esperando_escaneo'
+                {connectedCount > 0
                   ? (language === 'ca' 
-                      ? "El mòbil està connectat i preparat. Escanegeu el codi QR del comprovant o email per mostrar la fitxa automàticament." 
-                      : "El móvil está conectado y preparado. Escanee el código QR del comprobante o email para mostrar la ficha automáticamente.")
+                      ? `${connectedCount} mòbil(s) connectat(s). Els terminals tenen la càmera activa i estan a punt per escanejar comprovants QR simultàniament.` 
+                      : `${connectedCount} móvil(es) conectado(s). Los terminales tienen la cámara activa y están listos para escanear comprobantes QR simultáneamente.`)
                   : (language === 'ca'
-                      ? "Premeu “ENLAZAR MÓVIL (QR)” per vincular el vostre smartphone com a lector remot autònom."
-                      : "Pulse “ENLAZAR MÓVIL (QR)” para vincular su smartphone como lector remoto autónomo.")}
+                      ? "Escanegeu el codi QR d'enllaç amb un o diversos telèfons per utilitzar-los com a lectors remots autònoms."
+                      : "Escanee el código QR de enlace con uno o varios teléfonos para utilizarlos como lectores remotos autónomos.")}
               </p>
 
               <div className="mt-6 flex flex-wrap gap-3 justify-center relative z-10">
                 <button
                   type="button"
-                  onClick={() => setShowPairingModal(true)}
+                  onClick={() => {
+                    const firstWaiting: MobileScannerSession | undefined = sessionsArray.find((s: MobileScannerSession) => s.status !== 'connectat');
+                    setSelectedMobileForPairing(firstWaiting?.sessionId || sessionsArray[0].sessionId);
+                    setShowPairingModal(true);
+                  }}
                   className="px-5 py-2.5 bg-[#ff0090] hover:bg-[#e0007e] text-white font-bold text-xs rounded-xl transition flex items-center gap-2 shadow-lg shadow-[#ff0090]/20 cursor-pointer"
                   id="btn-radar-pair-phone"
                 >
@@ -978,10 +1369,10 @@ export default function AdminScanner({
 
       </div>
 
-      {/* ================= PAIRING MODAL: Display Secure HTTPS QR Code ================= */}
-      {showPairingModal && (
+      {/* ================= PAIRING MODAL: Display QR Code per Mobile ================= */}
+      {showPairingModal && currentPairingSession && (
         <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-150" id="pairing-modal-overlay">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden p-6 space-y-5 text-white animate-in zoom-in-95 duration-150">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden p-6 space-y-4 text-white animate-in zoom-in-95 duration-150">
             
             {/* Modal Header */}
             <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
@@ -991,58 +1382,66 @@ export default function AdminScanner({
                 </div>
                 <div>
                   <h3 className="font-sans font-black text-sm text-white uppercase tracking-tight">
-                    {language === 'ca' ? "Enllaçar Mòbil (QR)" : "Enlazar Móvil (QR)"}
+                    {language === 'ca' ? `Enllaçar ${currentPairingSession.mobileName} (QR)` : `Enlazar ${currentPairingSession.mobileName} (QR)`}
                   </h3>
                   <p className="text-[9px] text-[#ff0090] font-mono font-bold uppercase tracking-wider">
-                    {language === 'ca' ? "CANAL SEGUR DE TRANSMISSIÓ" : "CANAL SEGURO DE TRANSMISIÓN"}
+                    {language === 'ca' ? "CANAL REALTIME INDEPENDENT" : "CANAL REALTIME INDEPENDIENTE"}
                   </p>
                 </div>
               </div>
+
               <button 
                 type="button"
                 onClick={() => setShowPairingModal(false)}
-                className="text-zinc-500 hover:text-white p-1.5 hover:bg-zinc-800 rounded-xl transition"
+                className="text-zinc-500 hover:text-white p-1.5 hover:bg-zinc-800 rounded-xl transition cursor-pointer"
                 id="btn-close-pairing-modal"
               >
                 <X size={18} />
               </button>
             </div>
 
+            {/* Mobile Selector Tabs if multiple mobiles configured */}
+            <div className="flex items-center gap-1.5 bg-zinc-950 p-1.5 rounded-xl border border-zinc-800 overflow-x-auto">
+              {sessionsArray.map((sess: MobileScannerSession) => (
+                <button
+                  key={sess.sessionId}
+                  type="button"
+                  onClick={() => setSelectedMobileForPairing(sess.sessionId)}
+                  className={`px-3 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shrink-0 ${
+                    selectedMobileForPairing === sess.sessionId
+                      ? 'bg-[#ff0090] text-white shadow'
+                      : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
+                  }`}
+                >
+                  <span className={`w-1.5 h-1.5 rounded-full ${sess.status === 'connectat' ? 'bg-emerald-400' : 'bg-zinc-500'}`} />
+                  {sess.mobileName}
+                </button>
+              ))}
+
+              <button
+                type="button"
+                onClick={handleAddNewMobile}
+                className="px-2.5 py-1 text-xs text-[#ff0090] hover:text-white hover:bg-[#ff0090]/20 rounded-lg transition font-bold flex items-center gap-1 shrink-0 ml-auto cursor-pointer"
+              >
+                <Plus size={12} /> {language === 'ca' ? "Nou" : "Nuevo"}
+              </button>
+            </div>
+
             {/* Modal Instructions */}
             <p className="text-xs text-zinc-300 leading-relaxed font-sans">
               {language === 'ca' 
-                ? "Escanegeu aquest codi QR amb la càmera del vostre telèfon per obrir el lector. Quan escanegeu el QR del comprovant d'un participant, la fitxa completa s'obrirà automàticament en aquest ordinador." 
-                : "Escanee este código QR con la cámara de su teléfono para abrir el lector. Cuando escanee el QR del comprobante de un participante, la ficha completa se abrirá automáticamente en este ordenador."}
+                ? `Escanegeu aquest QR amb el telèfon que actuarà com a ${currentPairingSession.mobileName}. Quan llegeixi el comprovant d'una parella, la fitxa s'obrirà automàticament en aquest PC.` 
+                : `Escanee este QR con el teléfono que actuará como ${currentPairingSession.mobileName}. Cuando lea el comprobante de una pareja, la ficha se abrirá automáticamente en este PC.`}
             </p>
 
-            {/* QR Code Container (High Contrast B&W, 320x320 px minimum, Quiet Zone Margin) */}
-            <div className="flex flex-col items-center justify-center bg-zinc-950 p-6 rounded-2xl border border-zinc-800">
-              <div className="p-4 bg-white rounded-2xl shadow-2xl flex items-center justify-center min-w-[320px] min-h-[320px] w-[320px] h-[320px] border border-zinc-300" id="qr-code-frame">
-                {scannerStatus === 'sesion_caducada' ? (
-                  <div className="flex flex-col items-center justify-center text-center p-4">
-                    <AlertTriangle size={48} className="text-rose-500 mb-2 animate-bounce" />
-                    <h4 className="font-black text-sm text-zinc-900 uppercase">
-                      {language === 'ca' ? "Sessió caducada" : "Sesión caducada"}
-                    </h4>
-                    <p className="text-xs text-zinc-600 mt-1 max-w-[240px]">
-                      {language === 'ca' 
-                        ? "Aquest codi ha caducat per seguretat. Premeu el botó per regenerar-lo." 
-                        : "Este código ha caducado por seguridad. Pulse el botón para regenerarlo."}
-                    </p>
-                    <button
-                      type="button"
-                      onClick={handleGenerateNewSession}
-                      className="mt-4 px-4 py-2 bg-[#ff0090] hover:bg-[#e0007e] text-white font-bold text-xs rounded-xl transition shadow"
-                      id="btn-regenerate-expired-qr"
-                    >
-                      {language === 'ca' ? "Regenerar QR" : "Regenerar QR"}
-                    </button>
-                  </div>
-                ) : qrDataUrl ? (
+            {/* QR Code Container */}
+            <div className="flex flex-col items-center justify-center bg-zinc-950 p-5 rounded-2xl border border-zinc-800">
+              <div className="p-4 bg-white rounded-2xl shadow-2xl flex items-center justify-center min-w-[300px] min-h-[300px] w-[300px] h-[300px] border border-zinc-300" id="qr-code-frame">
+                {pairingQrUrls[currentPairingSession.sessionId] ? (
                   <img 
-                    src={qrDataUrl}
-                    alt="Pairing QR code for remote mobile scanner"
-                    className="w-[288px] h-[288px] block object-contain select-none"
+                    src={pairingQrUrls[currentPairingSession.sessionId]}
+                    alt={`Pairing QR for ${currentPairingSession.mobileName}`}
+                    className="w-[268px] h-[268px] block object-contain select-none"
                     id="admin-pairing-qr-img"
                   />
                 ) : (
@@ -1053,85 +1452,96 @@ export default function AdminScanner({
               {/* Status and Expiry inside modal */}
               <div className="mt-4 flex flex-col items-center gap-2 text-center w-full">
                 <div className="flex flex-wrap items-center justify-center gap-2">
-                  <div className={`px-3 py-1 rounded-full font-mono text-xs font-bold border flex items-center gap-1.5 ${statusConfig.badgeBg}`}>
-                    <span className={`w-2 h-2 rounded-full ${statusConfig.dotColor}`} />
-                    <span>{statusConfig.label}</span>
+                  <div className={`px-3 py-1 rounded-full font-mono text-xs font-bold border flex items-center gap-1.5 ${
+                    currentPairingSession.status === 'connectat'
+                      ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                      : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                  }`}>
+                    <span className={`w-2 h-2 rounded-full ${currentPairingSession.status === 'connectat' ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+                    <span>
+                      {currentPairingSession.status === 'connectat' 
+                        ? (language === 'ca' ? `${currentPairingSession.mobileName}: Connectat` : `${currentPairingSession.mobileName}: Conectado`)
+                        : (language === 'ca' ? "Esperant escaneig del QR..." : "Esperando escaneo del QR...")}
+                    </span>
                   </div>
 
-                  {sessionExpiresAt && (
+                  {currentPairingSession.expiresAt && (
                     <div className="flex items-center gap-1.5 text-xs text-emerald-400 font-mono bg-emerald-950/50 border border-emerald-500/30 px-3 py-1 rounded-xl">
                       <Clock size={12} />
-                      <span>
-                        {language === 'ca'
-                          ? `Caduca a les ${formatExpiryTime(sessionExpiresAt)}`
-                          : `Caduca a las ${formatExpiryTime(sessionExpiresAt)}`}
-                      </span>
+                      <span>{language === 'ca' ? "Caduca a les" : "Caduca a las"} {formatExpiryTime(currentPairingSession.expiresAt)}</span>
                     </div>
                   )}
                 </div>
 
                 <div className="flex items-center justify-between w-full px-2 pt-1">
                   <span className="font-mono text-[11px] text-zinc-400 select-all">
-                    {language === 'ca' ? "CLAU" : "CLAVE"}: <strong className="text-white">TAST-{syncKey}</strong>
+                    {language === 'ca' ? "CLAU" : "CLAVE"}: <strong className="text-white">TAST-{currentPairingSession.syncKey}</strong>
                   </span>
 
                   <button
                     type="button"
-                    onClick={handleGenerateNewSession}
+                    onClick={() => handleReconnectMobile(currentPairingSession.sessionId)}
                     className="px-3 py-1 bg-zinc-850 hover:bg-zinc-750 text-zinc-300 hover:text-white font-bold text-xs rounded-lg transition flex items-center gap-1.5 border border-zinc-700 cursor-pointer"
                     id="btn-modal-regenerate-qr"
                   >
                     <RefreshCw size={12} />
-                    {language === 'ca' ? "Regenerar QR" : "Regenerar QR"}
+                    {language === 'ca' ? "Regenerar clau" : "Regenerar clave"}
                   </button>
                 </div>
               </div>
             </div>
 
             {/* Action Buttons */}
-            <div className="flex flex-col gap-2 pt-1">
-              <button
-                type="button"
-                onClick={() => {
-                  if (navigator.clipboard && navigator.clipboard.writeText) {
-                    navigator.clipboard.writeText(pairingUrl).then(() => {
-                      setCopiedLink(true);
-                      setTimeout(() => setCopiedLink(false), 2000);
-                    }).catch(() => {
-                      setCopiedLink(true);
-                      setTimeout(() => setCopiedLink(false), 2000);
-                    });
-                  }
-                }}
-                className="w-full py-2.5 px-4 bg-zinc-800 hover:bg-zinc-750 text-white font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 border border-zinc-700 cursor-pointer"
-                id="btn-copy-pairing-link"
-              >
-                {copiedLink ? (
-                  <>
-                    <Check size={14} className="text-emerald-400 stroke-[3]" />
-                    <span>{language === 'ca' ? "Enllaç copiat al porta-retalls!" : "¡Enlace copiado al portapapeles!"}</span>
-                  </>
-                ) : (
-                  <>
-                    <Copy size={14} />
-                    <span>{language === 'ca' ? "Copiar enllaç directe" : "Copiar enlace directo"}</span>
-                  </>
-                )}
-              </button>
+            {(() => {
+              const url = buildMobilePairingUrl(
+                currentPairingSession.syncKey, 
+                currentPairingSession.sessionId, 
+                currentPairingSession.mobileId, 
+                currentPairingSession.mobileName
+              );
 
-              <button
-                type="button"
-                onClick={() => {
-                  window.open(pairingUrl, '_blank');
-                  // We do NOT close the modal immediately so the user can verify the status change to "Móvil conectado" in real-time!
-                }}
-                className="w-full py-2 px-4 bg-zinc-950 hover:bg-zinc-850 text-zinc-300 hover:text-white font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 border border-dashed border-zinc-800 cursor-pointer text-center"
-                id="btn-open-mobile-tab"
-              >
-                <ExternalLink size={14} />
-                <span>{language === 'ca' ? "Provar en una pestanya nova (Simulador)" : "Probar en una pestaña nueva (Simulador)"}</span>
-              </button>
-            </div>
+              return (
+                <div className="flex flex-col gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (navigator.clipboard && navigator.clipboard.writeText) {
+                        navigator.clipboard.writeText(url).then(() => {
+                          setCopiedLinkFor(currentPairingSession.sessionId);
+                          setTimeout(() => setCopiedLinkFor(null), 2000);
+                        });
+                      }
+                    }}
+                    className="w-full py-2 px-4 bg-zinc-800 hover:bg-zinc-750 text-white font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 border border-zinc-700 cursor-pointer"
+                    id="btn-copy-pairing-link"
+                  >
+                    {copiedLinkFor === currentPairingSession.sessionId ? (
+                      <>
+                        <Check size={14} className="text-emerald-400 stroke-[3]" />
+                        <span>{language === 'ca' ? "Enllaç copiat!" : "¡Enlace copiado!"}</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy size={14} />
+                        <span>{language === 'ca' ? `Copiar enllaç directe per a ${currentPairingSession.mobileName}` : `Copiar enlace directo para ${currentPairingSession.mobileName}`}</span>
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      window.open(url, '_blank');
+                    }}
+                    className="w-full py-2 px-4 bg-zinc-950 hover:bg-zinc-850 text-zinc-300 hover:text-white font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 border border-dashed border-zinc-800 cursor-pointer text-center"
+                    id="btn-open-mobile-tab"
+                  >
+                    <ExternalLink size={14} />
+                    <span>{language === 'ca' ? `Obrir ${currentPairingSession.mobileName} en pestanya nova (Simulador)` : `Abrir ${currentPairingSession.mobileName} en pestaña nueva (Simulador)`}</span>
+                  </button>
+                </div>
+              );
+            })()}
 
             <div className="pt-1 text-center">
               <p className="text-[10px] text-zinc-500 font-mono flex items-center justify-center gap-1">

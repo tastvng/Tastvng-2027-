@@ -226,3 +226,44 @@ export interface RemoteScannerSession {
   scannedAt?: number | null;
 }
 
+export type MobileConnectionStatus = 
+  | 'esperant_connexio'
+  | 'connectat'
+  | 'esperant_escaneig'
+  | 'reconnectant'
+  | 'desconnectat'
+  | 'caducat';
+
+export interface MobileScannerSession {
+  sessionId: string;
+  mobileId: string;
+  mobileName: string;
+  syncKey: string;
+  status: MobileConnectionStatus;
+  createdAt: number;
+  expiresAt: number;
+  lastPingPc: number;
+  lastPingMobile: number;
+  connectedAt?: number;
+  lastScannedCode?: string | null;
+  lastScanTime?: number | null;
+  lastScan?: {
+    code: string;
+    scanId: string;
+    timestamp: number;
+  };
+  scansCount: number;
+  deviceInfo?: string;
+  qrDataUrl?: string;
+}
+
+export interface MobileScanEventPayload {
+  sessionId: string;
+  mobileId: string;
+  mobileName?: string;
+  scanId: string;
+  code: string;
+  timestamp: number;
+  syncKey: string;
+}
+

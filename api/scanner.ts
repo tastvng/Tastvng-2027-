@@ -10,20 +10,24 @@
 export interface EphemeralSession {
   sessionId: string;
   syncKey: string;
+  mobileId?: string;
+  mobileName?: string;
   createdAt: number;
   expiresAt: number;
   status: 'esperando_conexion' | 'movil_conectado' | 'esperando_escaneo' | 'codigo_recibido' | 'sesion_caducada' | 'movil_desconectado';
   lastPingPc: number;
   lastPingMobile: number;
   lastScannedCode: string | null;
+  lastScanId?: string | null;
   scannedAt: number | null;
+  scanQueue?: Array<{ scanId: string; code: string; mobileId: string; timestamp: number }>;
 }
 
 // In-memory sessions store (ephemeral, temporary, auto-expiring)
 const activeSessions = new Map<string, EphemeralSession>();
 
-// Minimum session duration: 30 minutes
-const MIN_SESSION_DURATION_MS = 30 * 60 * 1000;
+// Minimum session duration: 60 minutes
+const MIN_SESSION_DURATION_MS = 60 * 60 * 1000;
 
 /**
  * Self-contained CORS helper to prevent module resolution failures in Vercel ESM
@@ -130,7 +134,7 @@ export default async function scannerHandler(req: any, res: any) {
       }
     }
 
-    const { action, sessionId, syncKey, code, renewModal } = payload || {};
+    const { action, sessionId, syncKey, code, scanId, mobileId, mobileName, renewModal } = payload || {};
 
     if (!sessionId || typeof sessionId !== 'string') {
       return sendJson(res, 400, {
@@ -142,6 +146,8 @@ export default async function scannerHandler(req: any, res: any) {
 
     const cleanSessionId = sessionId.trim().slice(0, 64);
     const cleanSyncKey = typeof syncKey === 'string' ? syncKey.trim().toUpperCase().slice(0, 16) : '';
+    const cleanMobileId = typeof mobileId === 'string' ? mobileId.trim().slice(0, 32) : 'mob_1';
+    const cleanMobileName = typeof mobileName === 'string' ? mobileName.trim().slice(0, 64) : 'Mòbil';
     const now = Date.now();
 
     // 1. Action: create (Desktop PC initializes or renews session)
@@ -157,13 +163,17 @@ export default async function scannerHandler(req: any, res: any) {
       const session: EphemeralSession = {
         sessionId: cleanSessionId,
         syncKey: cleanSyncKey,
+        mobileId: cleanMobileId,
+        mobileName: cleanMobileName,
         createdAt: now,
         expiresAt: now + MIN_SESSION_DURATION_MS,
         status: 'esperando_conexion',
         lastPingPc: now,
         lastPingMobile: 0,
         lastScannedCode: null,
-        scannedAt: null
+        lastScanId: null,
+        scannedAt: null,
+        scanQueue: []
       };
 
       activeSessions.set(cleanSessionId, session);
@@ -173,6 +183,8 @@ export default async function scannerHandler(req: any, res: any) {
         connected: false,
         sessionId: cleanSessionId,
         syncKey: cleanSyncKey,
+        mobileId: cleanMobileId,
+        mobileName: cleanMobileName,
         status: 'esperando_conexion',
         expiresAt: session.expiresAt
       });
@@ -188,13 +200,17 @@ export default async function scannerHandler(req: any, res: any) {
         session = {
           sessionId: cleanSessionId,
           syncKey: cleanSyncKey,
+          mobileId: cleanMobileId,
+          mobileName: cleanMobileName,
           createdAt: now,
           expiresAt: now + MIN_SESSION_DURATION_MS,
           status: action === 'mobile_connect' ? 'movil_conectado' : 'esperando_conexion',
           lastPingPc: now,
           lastPingMobile: action === 'mobile_connect' ? now : 0,
           lastScannedCode: null,
-          scannedAt: null
+          lastScanId: null,
+          scannedAt: null,
+          scanQueue: []
         };
         activeSessions.set(cleanSessionId, session);
       } else {
@@ -265,15 +281,25 @@ export default async function scannerHandler(req: any, res: any) {
     if (action === 'pc_poll' || (req.method === 'GET' && action === 'poll')) {
       session.lastPingPc = now;
 
-      // Check mobile timeout
-      if (session.status !== 'esperando_conexion' && session.lastPingMobile > 0 && now - session.lastPingMobile > 45000) {
+      // Check mobile timeout (extend to 60s for tolerance)
+      if (session.status !== 'esperando_conexion' && session.lastPingMobile > 0 && now - session.lastPingMobile > 60000) {
         session.status = 'movil_desconectado';
       }
 
-      if (session.status === 'codigo_recibido' && session.lastScannedCode) {
-        const receivedCode = session.lastScannedCode;
+      // Check if there are queued scans
+      const queuedScans = (session.scanQueue && session.scanQueue.length > 0) ? [...session.scanQueue] : [];
+      if (queuedScans.length > 0) {
+        session.scanQueue = [];
+      }
+
+      if (session.status === 'codigo_recibido' || queuedScans.length > 0) {
+        const receivedCode = session.lastScannedCode || (queuedScans[0]?.code ?? null);
+        const receivedScanId = session.lastScanId || (queuedScans[0]?.scanId ?? null);
+        const receivedMobileId = session.mobileId || (queuedScans[0]?.mobileId ?? cleanMobileId);
+        
         session.status = 'esperando_escaneo';
         session.lastScannedCode = null;
+        session.lastScanId = null;
 
         return sendJson(res, 200, {
           ok: true,
@@ -282,6 +308,9 @@ export default async function scannerHandler(req: any, res: any) {
           syncKey: session.syncKey,
           status: 'codigo_recibido',
           code: receivedCode,
+          scanId: receivedScanId,
+          mobileId: receivedMobileId,
+          scans: queuedScans,
           expiresAt: session.expiresAt
         });
       }
@@ -291,6 +320,8 @@ export default async function scannerHandler(req: any, res: any) {
         connected: session.status === 'movil_conectado' || session.status === 'esperando_escaneo',
         sessionId: cleanSessionId,
         syncKey: session.syncKey,
+        mobileId: session.mobileId || cleanMobileId,
+        mobileName: session.mobileName || cleanMobileName,
         status: session.status,
         expiresAt: session.expiresAt
       });
@@ -307,10 +338,26 @@ export default async function scannerHandler(req: any, res: any) {
       }
 
       const cleanCode = code.trim().slice(0, 100);
+      const cleanScanId = typeof scanId === 'string' ? scanId.trim().slice(0, 64) : `scan_${now}_${Math.random().toString(36).substring(2, 7)}`;
+      
       session.lastPingMobile = now;
       session.lastScannedCode = cleanCode;
+      session.lastScanId = cleanScanId;
       session.scannedAt = now;
       session.status = 'codigo_recibido';
+      
+      if (!session.scanQueue) {
+        session.scanQueue = [];
+      }
+      session.scanQueue.push({
+        scanId: cleanScanId,
+        code: cleanCode,
+        mobileId: session.mobileId || cleanMobileId,
+        timestamp: now
+      });
+      if (session.scanQueue.length > 50) {
+        session.scanQueue.shift();
+      }
 
       return sendJson(res, 200, {
         ok: true,
@@ -319,6 +366,8 @@ export default async function scannerHandler(req: any, res: any) {
         syncKey: session.syncKey,
         status: 'codigo_recibido',
         code: cleanCode,
+        scanId: cleanScanId,
+        mobileId: session.mobileId || cleanMobileId,
         message: 'Codi enviat correctament a l’ordinador.',
         expiresAt: session.expiresAt
       });

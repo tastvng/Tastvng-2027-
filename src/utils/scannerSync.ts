@@ -113,10 +113,22 @@ export function getPublicScannerOrigin(): string {
 /**
  * Constructs the pairing URL for the remote mobile scanner
  */
-export function buildMobilePairingUrl(syncKey: string, sessionId: string): string {
+export function buildMobilePairingUrl(
+  syncKey: string, 
+  sessionId: string, 
+  mobileId?: string, 
+  mobileName?: string
+): string {
   const origin = getPublicScannerOrigin();
   const path = typeof window !== 'undefined' ? window.location.pathname : '/';
-  return `${origin}${path}?mode=mobile-scanner&syncKey=${encodeURIComponent(syncKey)}&sessionId=${encodeURIComponent(sessionId)}`;
+  let url = `${origin}${path}?mode=mobile-scanner&syncKey=${encodeURIComponent(syncKey)}&sessionId=${encodeURIComponent(sessionId)}`;
+  if (mobileId) {
+    url += `&mobileId=${encodeURIComponent(mobileId)}`;
+  }
+  if (mobileName) {
+    url += `&mobileName=${encodeURIComponent(mobileName)}`;
+  }
+  return url;
 }
 
 /**
@@ -159,14 +171,21 @@ export function extractAndValidateCode(raw: string): string | null {
 /**
  * Desktop PC creates or renews an ephemeral session on the serverless API.
  */
-export async function apiCreateSession(sessionId: string, syncKey: string): Promise<RemoteScannerSession | null> {
+export async function apiCreateSession(
+  sessionId: string, 
+  syncKey: string, 
+  mobileId?: string, 
+  mobileName?: string
+): Promise<RemoteScannerSession | null> {
   const res = await safeFetchJson<any>('/api/scanner', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       action: 'create',
       sessionId,
-      syncKey
+      syncKey,
+      mobileId,
+      mobileName
     })
   });
 
@@ -178,6 +197,7 @@ export async function apiCreateSession(sessionId: string, syncKey: string): Prom
   console.log('[SCANNER PC] session created', {
     sessionId: res.data.sessionId || sessionId,
     syncKey: res.data.syncKey || syncKey,
+    mobileId: res.data.mobileId || mobileId,
     status: res.data.status
   });
 
@@ -185,7 +205,7 @@ export async function apiCreateSession(sessionId: string, syncKey: string): Prom
     sessionId: res.data.sessionId || sessionId,
     syncKey: res.data.syncKey || syncKey,
     createdAt: Date.now(),
-    expiresAt: res.data.expiresAt || (Date.now() + 30 * 60 * 1000),
+    expiresAt: res.data.expiresAt || (Date.now() + 60 * 60 * 1000),
     status: res.data.status || 'esperando_conexion',
     lastPingPc: Date.now(),
     lastPingMobile: 0,
@@ -195,13 +215,22 @@ export async function apiCreateSession(sessionId: string, syncKey: string): Prom
 
 /**
  * Desktop PC polls the ephemeral session for status updates and unconsumed scanned codes.
- * If renewModal is true, server automatically extends the 30-min TTL.
+ * If renewModal is true, server automatically extends the TTL.
  */
 export async function apiPollSession(
   sessionId: string, 
   syncKey: string,
   renewModal: boolean = false
-): Promise<{ ok: boolean; status: RemoteScannerStatus; code?: string; expiresAt?: number; error?: string }> {
+): Promise<{ 
+  ok: boolean; 
+  status: RemoteScannerStatus; 
+  code?: string; 
+  scanId?: string;
+  mobileId?: string;
+  scans?: Array<{ scanId: string; code: string; mobileId: string; timestamp: number }>;
+  expiresAt?: number; 
+  error?: string 
+}> {
   const res = await safeFetchJson<any>('/api/scanner', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -225,8 +254,57 @@ export async function apiPollSession(
     ok: true,
     status: data.status || 'esperando_conexion',
     code: data.code,
+    scanId: data.scanId,
+    mobileId: data.mobileId,
+    scans: data.scans,
     expiresAt: data.expiresAt
   };
+}
+
+/**
+ * Sends a scan from mobile to serverless API
+ */
+export async function apiSendScan(
+  sessionId: string,
+  syncKey: string,
+  mobileId: string,
+  scanId: string,
+  code: string
+): Promise<{ ok: boolean; error?: string }> {
+  const res = await safeFetchJson<any>('/api/scanner', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      action: 'mobile_scan',
+      sessionId,
+      syncKey,
+      mobileId,
+      scanId,
+      code
+    })
+  });
+  return { ok: res.ok && res.data?.ok, error: res.error };
+}
+
+/**
+ * Disconnects a mobile from PC
+ */
+export async function apiDisconnectMobile(
+  sessionId: string, 
+  syncKey: string, 
+  mobileId?: string
+): Promise<boolean> {
+  const res = await safeFetchJson<any>('/api/scanner', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      action: 'disconnect',
+      sessionId,
+      syncKey,
+      mobileId
+    })
+  });
+  return res.ok;
 }
 
 /**
@@ -262,3 +340,4 @@ export async function apiInvalidateSession(sessionId: string, syncKey: string): 
   });
   return res.ok;
 }
+

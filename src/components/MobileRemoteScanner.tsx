@@ -27,18 +27,25 @@ import jsQR from 'jsqr';
 interface MobileRemoteScannerProps {
   syncKey: string;
   sessionId: string;
+  mobileId?: string;
+  mobileName?: string;
   onBack: () => void;
 }
 
 export default function MobileRemoteScanner({ 
   syncKey, 
-  sessionId, 
+  sessionId,
+  mobileId = 'mob_1',
+  mobileName = 'Mòbil 1',
   onBack 
 }: MobileRemoteScannerProps) {
   const { language } = useLanguage();
   
-  // Connection states: 'connecting' | 'connected' | 'expired' | 'error'
-  const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'expired' | 'error'>('connecting');
+  // Independent localStorage key per mobile session
+  const STORAGE_KEY = `remote_scanner_session_${sessionId}`;
+
+  // Connection states: 'connecting' | 'connected' | 'reconnecting' | 'expired' | 'disconnected' | 'error'
+  const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'reconnecting' | 'expired' | 'disconnected' | 'error'>('connecting');
   const [connectionError, setConnectionError] = useState<string | null>(null);
 
   // HTTPS check (mandatory for getUserMedia on iOS and modern Android)
@@ -61,6 +68,10 @@ export default function MobileRemoteScanner({
   const [lastScannedCode, setLastScannedCode] = useState<string | null>(null);
   const [scannedCount, setScannedCount] = useState(0);
 
+  // Cooldown tracker to avoid re-scanning the exact same code repeatedly
+  const lastScannedCodeRef = useRef<string | null>(null);
+  const lastScannedTimeRef = useRef<number>(0);
+
   // Manual fallback input
   const [showManualInput, setShowManualInput] = useState(false);
   const [manualCode, setManualCode] = useState('');
@@ -72,17 +83,30 @@ export default function MobileRemoteScanner({
   const isComponentMounted = useRef(true);
   const realtimeChannelRef = useRef<any>(null);
 
+  // Save mobile session metadata in independent localStorage key
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        sessionId,
+        syncKey,
+        mobileId,
+        mobileName,
+        lastActive: Date.now()
+      }));
+    } catch (e) {}
+  }, [STORAGE_KEY, sessionId, syncKey, mobileId, mobileName]);
+
   // 1. Establish session connection with server and Supabase Realtime
   useEffect(() => {
     isComponentMounted.current = true;
     let pingInterval: any = null;
 
-    console.log('[MOBILE SCANNER] session received', { sessionId, syncKey });
+    console.log('[MOBILE SCANNER] session received', { sessionId, syncKey, mobileId, mobileName });
 
     async function initSession() {
       try {
         setConnectionStatus('connecting');
-        console.log('[MOBILE SCANNER] registering mobile', { sessionId, syncKey });
+        console.log('[MOBILE SCANNER] registering mobile', { sessionId, syncKey, mobileId });
 
         const endpointUrl = '/api/scanner';
         const res = await fetch(endpointUrl, {
@@ -91,14 +115,13 @@ export default function MobileRemoteScanner({
           body: JSON.stringify({
             action: 'mobile_connect',
             sessionId,
-            syncKey
+            syncKey,
+            mobileId,
+            mobileName
           })
         });
 
         const contentType = (res.headers.get('content-type') || '').toLowerCase();
-        console.log('[MOBILE SCANNER] registration response status', res.status);
-        console.log('[MOBILE SCANNER] registration response content-type', contentType);
-
         if (!contentType.includes('application/json')) {
           const rawText = await res.text();
           const preview = rawText.length > 200 ? rawText.slice(0, 200) + '...' : rawText;
@@ -113,7 +136,7 @@ export default function MobileRemoteScanner({
         if (!isComponentMounted.current) return;
 
         if (res.ok && data.ok) {
-          console.log('[MOBILE SCANNER] mobile connected', { sessionId, syncKey });
+          console.log('[MOBILE SCANNER] mobile connected', { sessionId, syncKey, mobileId });
           setConnectionStatus('connected');
           setConnectionError(null);
         } else {
@@ -123,7 +146,7 @@ export default function MobileRemoteScanner({
       } catch (err: any) {
         if (!isComponentMounted.current) return;
         console.error('[MOBILE SCANNER] registration network error:', err);
-        setConnectionStatus('error');
+        setConnectionStatus('reconnecting');
         setConnectionError(err?.message || (language === 'ca' ? 'Error de xarxa en connectar' : 'Error de red al conectar'));
       }
     }
@@ -138,20 +161,42 @@ export default function MobileRemoteScanner({
         });
         realtimeChannelRef.current = channel;
 
-        channel.subscribe((status) => {
-          if (status === 'SUBSCRIBED') {
-            channel.send({
-              type: 'broadcast',
-              event: 'mobile_status',
-              payload: { status: 'movil_conectado', syncKey, sessionId, timestamp: Date.now() }
-            }).catch(() => {});
-            console.log('[MOBILE SCANNER] mobile connected (Realtime)', { sessionId, syncKey });
-            if (isComponentMounted.current) {
-              setConnectionStatus('connected');
-              setConnectionError(null);
+        channel
+          .on('broadcast', { event: 'disconnect_mobile' }, (msg: any) => {
+            if (!isComponentMounted.current) return;
+            const targetSession = msg?.payload?.sessionId;
+            const targetMobile = msg?.payload?.mobileId;
+            if (!targetSession || targetSession === sessionId || targetMobile === mobileId) {
+              console.log('[MOBILE SCANNER] Received disconnect from PC');
+              setConnectionStatus('disconnected');
+              stopCamera();
             }
-          }
-        });
+          })
+          .subscribe((status) => {
+            if (status === 'SUBSCRIBED') {
+              channel.send({
+                type: 'broadcast',
+                event: 'mobile_status',
+                payload: { 
+                  status: 'movil_conectado', 
+                  syncKey, 
+                  sessionId, 
+                  mobileId,
+                  mobileName,
+                  timestamp: Date.now() 
+                }
+              }).catch(() => {});
+              console.log('[MOBILE SCANNER] mobile connected (Realtime)', { sessionId, syncKey, mobileId });
+              if (isComponentMounted.current) {
+                setConnectionStatus('connected');
+                setConnectionError(null);
+              }
+            } else if (status === 'TIMED_OUT' || status === 'CHANNEL_ERROR') {
+              if (isComponentMounted.current) {
+                setConnectionStatus('reconnecting');
+              }
+            }
+          });
       } catch (e) {
         console.warn('Realtime channel subscription error:', e);
       }
@@ -168,15 +213,23 @@ export default function MobileRemoteScanner({
             action: 'ping',
             from: 'mobile',
             sessionId,
-            syncKey
+            syncKey,
+            mobileId
           })
         });
         if (res.data?.status === 'sesion_caducada' || res.data?.code === 'SESSION_EXPIRED') {
           setConnectionStatus('expired');
           stopCamera();
+        } else if (res.data?.status === 'movil_desconectado') {
+          setConnectionStatus('disconnected');
+          stopCamera();
+        } else if (res.ok && connectionStatus === 'reconnecting') {
+          setConnectionStatus('connected');
         }
       } catch (e) {
-        // network glitch
+        if (isComponentMounted.current && connectionStatus === 'connected') {
+          setConnectionStatus('reconnecting');
+        }
       }
     }, 12000);
 
@@ -189,13 +242,19 @@ export default function MobileRemoteScanner({
           realtimeChannelRef.current.send({
             type: 'broadcast',
             event: 'mobile_status',
-            payload: { status: 'movil_desconectado', syncKey, timestamp: Date.now() }
+            payload: { 
+              status: 'movil_desconectado', 
+              syncKey, 
+              sessionId,
+              mobileId,
+              timestamp: Date.now() 
+            }
           }).catch(() => {});
           supabase.removeChannel(realtimeChannelRef.current);
         } catch (e) {}
       }
     };
-  }, [sessionId, syncKey, language]);
+  }, [sessionId, syncKey, mobileId, mobileName, language]);
 
   // 2. Camera Handling (Exclusively initiated via explicit user click/tap for iOS Safari & Android)
   const startCamera = async () => {
@@ -395,6 +454,17 @@ export default function MobileRemoteScanner({
   const handleCodeScanned = async (codeToTransmit: string) => {
     if (!codeToTransmit || !isScanning) return;
 
+    // Fast anti-double-scan debounce for identical QR within 1.5s
+    const now = Date.now();
+    if (lastScannedCodeRef.current === codeToTransmit && (now - lastScannedTimeRef.current < 1500)) {
+      return;
+    }
+    lastScannedCodeRef.current = codeToTransmit;
+    lastScannedTimeRef.current = now;
+
+    // Generate unique scanId for reliable deduplication on PC
+    const scanId = `scan_${now}_${Math.random().toString(36).substring(2, 7)}`;
+
     setIsScanning(false);
     setTransmitStatus('transmitting');
     setLastScannedCode(codeToTransmit);
@@ -410,7 +480,7 @@ export default function MobileRemoteScanner({
     playBeepSound();
 
     try {
-      console.log('[MOBILE SCANNER] QR code sent', codeToTransmit);
+      console.log('[MOBILE SCANNER] QR code sent', { codeToTransmit, mobileId, scanId });
 
       // a) Broadcast via Supabase Realtime for instant zero-latency delivery
       if (realtimeChannelRef.current) {
@@ -421,7 +491,10 @@ export default function MobileRemoteScanner({
             code: codeToTransmit,
             syncKey,
             sessionId,
-            timestamp: Date.now()
+            mobileId,
+            mobileName,
+            scanId,
+            timestamp: now
           }
         }).catch(() => {});
       }
@@ -434,6 +507,9 @@ export default function MobileRemoteScanner({
           action: 'mobile_scan',
           sessionId,
           syncKey,
+          mobileId,
+          mobileName,
+          scanId,
           code: codeToTransmit
         })
       });
@@ -442,14 +518,16 @@ export default function MobileRemoteScanner({
         setTransmitStatus('success');
         setScannedCount(prev => prev + 1);
 
-        // Resume scanning automatically after 1.8 seconds WITHOUT having to re-link!
+        // Resume scanning automatically after 1.2s WITHOUT stopping camera stream or resetting connection
         setTimeout(() => {
           if (!isComponentMounted.current) return;
           setTransmitStatus('ready');
           setLastScannedCode(null);
           setIsScanning(true);
-          animationFrameId.current = requestAnimationFrame(scanFrame);
-        }, 1800);
+          if (cameraActive && videoRef.current) {
+            animationFrameId.current = requestAnimationFrame(scanFrame);
+          }
+        }, 1200);
       } else {
         setTransmitStatus('error');
         if (res.data?.status === 'sesion_caducada' || res.status === 410) {
@@ -459,8 +537,10 @@ export default function MobileRemoteScanner({
           if (!isComponentMounted.current) return;
           setTransmitStatus('ready');
           setIsScanning(true);
-          animationFrameId.current = requestAnimationFrame(scanFrame);
-        }, 2200);
+          if (cameraActive && videoRef.current) {
+            animationFrameId.current = requestAnimationFrame(scanFrame);
+          }
+        }, 1800);
       }
     } catch (err) {
       console.error('[MOBILE SCANNER] Error transmitting code to PC:', err);
@@ -469,9 +549,41 @@ export default function MobileRemoteScanner({
         if (!isComponentMounted.current) return;
         setTransmitStatus('ready');
         setIsScanning(true);
-        animationFrameId.current = requestAnimationFrame(scanFrame);
-      }, 2200);
+        if (cameraActive && videoRef.current) {
+          animationFrameId.current = requestAnimationFrame(scanFrame);
+        }
+      }, 1800);
     }
+  };
+
+  const handleDisconnectMobile = async () => {
+    stopCamera();
+    try {
+      if (realtimeChannelRef.current) {
+        realtimeChannelRef.current.send({
+          type: 'broadcast',
+          event: 'mobile_status',
+          payload: { 
+            status: 'movil_desconectado', 
+            syncKey, 
+            sessionId,
+            mobileId,
+            timestamp: Date.now() 
+          }
+        }).catch(() => {});
+      }
+      await safeFetchJson<any>('/api/scanner', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'mobile_disconnect',
+          sessionId,
+          syncKey,
+          mobileId
+        })
+      });
+    } catch (e) {}
+    onBack();
   };
 
   const playBeepSound = () => {
@@ -504,34 +616,40 @@ export default function MobileRemoteScanner({
   return (
     <div className="min-h-screen bg-zinc-950 text-white flex flex-col justify-between font-sans selection:bg-[#ff0090] select-none" id="mobile-remote-scanner-root">
       {/* Top Navigation Bar */}
-      <header className="bg-zinc-900 border-b border-zinc-800 p-4 flex items-center justify-between sticky top-0 z-30 shadow-md">
+      <header className="bg-zinc-900 border-b border-zinc-800 p-3.5 flex items-center justify-between sticky top-0 z-30 shadow-md">
         <button 
-          onClick={onBack}
-          className="py-2 px-3 -ml-2 text-zinc-400 hover:text-white flex items-center gap-1.5 font-bold text-xs bg-zinc-800/80 rounded-xl transition"
+          onClick={handleDisconnectMobile}
+          className="py-1.5 px-2.5 text-zinc-400 hover:text-white flex items-center gap-1.5 font-bold text-xs bg-zinc-800/80 rounded-xl transition"
           id="btn-mobile-exit"
         >
-          <ArrowLeft size={16} /> {language === 'ca' ? 'Tancar' : 'Cerrar'}
+          <ArrowLeft size={15} /> {language === 'ca' ? 'Tancar' : 'Cerrar'}
         </button>
 
         <div className="text-center flex-1 px-2">
-          <span className="font-mono text-[9px] text-[#ff0090] tracking-widest uppercase font-bold block">
-            {language === 'ca' ? "TERMINAL MÒBIL REMOT" : "TERMINAL MÓVIL REMOTO"}
-          </span>
-          <h1 className="text-sm font-black tracking-tight text-white uppercase flex items-center justify-center gap-1">
+          <div className="flex items-center justify-center gap-1.5">
+            <span className="font-mono text-[9px] text-[#ff0090] tracking-widest uppercase font-bold">
+              {mobileName}
+            </span>
+            <span className="text-zinc-600 text-[9px]">•</span>
+            <span className="font-mono text-[9px] text-zinc-400 font-bold">
+              {syncKey}
+            </span>
+          </div>
+          <h1 className="text-xs font-black tracking-tight text-white uppercase flex items-center justify-center gap-1 mt-0.5">
             {language === 'ca' ? "Escàner QR mòbil" : "Escáner QR móvil"}
           </h1>
         </div>
 
-        <div className="flex items-center gap-1.5 bg-zinc-950 px-2.5 py-1 rounded-lg border border-zinc-800">
-          <span className={`w-2 h-2 rounded-full ${
-            connectionStatus === 'connected' ? 'bg-emerald-500 animate-pulse' :
-            connectionStatus === 'connecting' ? 'bg-amber-400 animate-spin' :
-            'bg-rose-500'
-          }`} />
-          <span className="text-[10px] font-mono text-zinc-300 font-bold">
-            {syncKey}
-          </span>
-        </div>
+        <button
+          type="button"
+          onClick={handleDisconnectMobile}
+          className="py-1.5 px-2.5 bg-rose-950/40 hover:bg-rose-900/50 text-rose-300 border border-rose-800/40 rounded-xl text-[11px] font-bold transition flex items-center gap-1"
+          id="btn-disconnect-mobile-top"
+          title={language === 'ca' ? "Desconnectar mòbil" : "Desconectar móvil"}
+        >
+          <X size={13} />
+          <span className="hidden sm:inline">{language === 'ca' ? 'Desconnectar' : 'Desconectar'}</span>
+        </button>
       </header>
 
       {/* Main Container */}
@@ -557,19 +675,20 @@ export default function MobileRemoteScanner({
         {/* Connection status banner */}
         <div className={`rounded-2xl border p-3.5 flex items-center gap-3 transition-colors ${
           connectionStatus === 'connected' ? 'bg-emerald-950/30 border-emerald-500/30 text-emerald-300' :
-          connectionStatus === 'connecting' ? 'bg-amber-950/30 border-amber-500/30 text-amber-300' :
+          connectionStatus === 'connecting' || connectionStatus === 'reconnecting' ? 'bg-amber-950/30 border-amber-500/30 text-amber-300' :
           'bg-rose-950/30 border-rose-500/30 text-rose-300'
         }`} id="mobile-connection-status-card">
           <div className={`p-2.5 rounded-xl ${
             connectionStatus === 'connected' ? 'bg-emerald-500/20 text-emerald-400' :
-            connectionStatus === 'connecting' ? 'bg-amber-500/20 text-amber-400' :
+            connectionStatus === 'connecting' || connectionStatus === 'reconnecting' ? 'bg-amber-500/20 text-amber-400' :
             'bg-rose-500/20 text-rose-400'
           }`}>
             <Smartphone size={22} className={connectionStatus === 'connected' ? '' : 'animate-pulse'} />
           </div>
           <div className="flex-1">
-            <h3 className="font-bold text-[11px] uppercase tracking-wide opacity-80">
-              {language === 'ca' ? "Estat de connexió amb el PC" : "Estado de conexión con el PC"}
+            <h3 className="font-bold text-[11px] uppercase tracking-wide opacity-80 flex items-center justify-between">
+              <span>{language === 'ca' ? "Estat de connexió amb el PC" : "Estado de conexión con el PC"}</span>
+              <span className="font-mono text-[10px] text-zinc-400 lowercase">{mobileName}</span>
             </h3>
             <p className="text-xs font-black mt-0.5 flex items-center gap-1.5 font-sans">
               {connectionStatus === 'connected' && (
@@ -582,6 +701,18 @@ export default function MobileRemoteScanner({
                 <>
                   <RotateCw size={14} className="animate-spin text-amber-400" />
                   {language === 'ca' ? "Connectant a la sessió..." : "Conectando a la sesión..."}
+                </>
+              )}
+              {connectionStatus === 'reconnecting' && (
+                <>
+                  <RotateCw size={14} className="animate-spin text-amber-400" />
+                  {language === 'ca' ? "Reconnectant amb el PC..." : "Reconectando con el PC..."}
+                </>
+              )}
+              {connectionStatus === 'disconnected' && (
+                <>
+                  <AlertTriangle size={14} className="text-rose-400" />
+                  {language === 'ca' ? "Mòbil desconnectat" : "Móvil desconectado"}
                 </>
               )}
               {connectionStatus === 'expired' && (
@@ -601,7 +732,32 @@ export default function MobileRemoteScanner({
         </div>
 
         {/* Viewport & Camera Workflow States */}
-        {connectionStatus === 'expired' ? (
+        {connectionStatus === 'disconnected' ? (
+          <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 text-center space-y-4 shadow-xl my-auto">
+            <div className="w-16 h-16 rounded-full bg-zinc-800 text-zinc-400 flex items-center justify-center mx-auto">
+              <Smartphone size={32} />
+            </div>
+            <div>
+              <h3 className="text-base font-black text-white uppercase tracking-tight">
+                {language === 'ca' ? "Mòbil desconnectat" : "Móvil desconectado"}
+              </h3>
+              <p className="text-xs text-zinc-400 mt-2 leading-relaxed max-w-xs mx-auto font-sans">
+                {language === 'ca'
+                  ? "Aquest terminal mòbil s'ha desconnectat. Podeu tornar-lo a connectar escanejant el codi QR del PC."
+                  : "Este terminal móvil ha sido desconectado. Puede volver a conectarlo escaneando el código QR del PC."}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onBack}
+              className="w-full py-3 px-4 bg-[#ff0090] hover:bg-[#e0007e] text-white font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 shadow cursor-pointer"
+              id="btn-reconnect-disconnected"
+            >
+              <Camera size={16} />
+              {language === 'ca' ? "Tornar a començar" : "Volver a empezar"}
+            </button>
+          </div>
+        ) : connectionStatus === 'expired' ? (
           <div className="bg-zinc-900 border border-rose-500/40 rounded-3xl p-6 text-center space-y-4 shadow-xl my-auto">
             <div className="w-16 h-16 rounded-full bg-rose-500/20 text-rose-400 flex items-center justify-center mx-auto">
               <AlertTriangle size={36} />
