@@ -39,6 +39,7 @@ import {
   Sparkles,
   Share2,
   AlertCircle,
+  AlertTriangle,
   ExternalLink,
   Globe,
   EyeOff,
@@ -54,6 +55,8 @@ import { calculateDailySummaries } from '../dailySummary';
 interface AdminDashboardProps {
   inscripcions: Inscripcio[];
   config: SistemaConfig;
+  isLoadingInscripcions?: boolean;
+  inscripcionsError?: string | null;
   onSelectInscripcio: (id: string) => void;
   onGoToScanner: (openPairing?: boolean) => void;
   onGoToConfig: () => void;
@@ -72,6 +75,8 @@ interface AdminDashboardProps {
 export default function AdminDashboard({ 
   inscripcions, 
   config,
+  isLoadingInscripcions = false,
+  inscripcionsError = null,
   onSelectInscripcio, 
   onGoToScanner, 
   onGoToConfig, 
@@ -849,55 +854,87 @@ export default function AdminDashboard({
 
   const dnisValidads = inscripcions.filter(i => i.estatDni === EstatVerificacio.VALIDAT).length;
 
-  // Filtered registrations list
+  // Reset all filters to default 'ALL' / empty
+  const handleResetFilters = () => {
+    setSearchQuery('');
+    setFilterCategoria('ALL');
+    setFilterPagament('ALL');
+    setFilterDni('ALL');
+    setFilterEntrega('ALL');
+    setFilterEstat('ALL');
+    setFilterBandera('ALL');
+  };
+
+  // Filtered registrations list with complete null-safety and no obsolete fields
   const filteredInscripcions = inscripcions.filter((item) => {
-    // Text search
+    // Safe text search: ensure every element is guaranteed to be a string
     const textFields = [
-      item.codiSeguiment,
+      item.codiSeguiment || '',
       item.emailContactoPareja || '',
       item.telefonContactoPareja || '',
-      item.c1Nom,
-      item.c1Cognoms,
+      item.c1Nom || '',
+      item.c1Cognoms || '',
       item.c1Email || '',
       item.c1Telefon || '',
-      item.c2Nom,
-      item.c2Cognoms,
+      item.c2Nom || '',
+      item.c2Cognoms || '',
       item.c2Email || '',
       item.c2Telefon || '',
       item.c1UniformeTipus || 'compra',
       item.c2UniformeTipus || 'compra',
       (item.c1UniformeTipus === 'lloguer' ? 'lloguer alquiler renta rent' : 'compra venta sale buy'),
       (item.c2UniformeTipus === 'lloguer' ? 'lloguer alquiler renta rent' : 'compra venta sale buy')
-    ].map(f => f.toLowerCase());
+    ].map(f => String(f || '').toLowerCase());
     
-    const matchesSearch = searchQuery.trim() === '' || textFields.some(f => f.includes(searchQuery.toLowerCase()));
+    const query = searchQuery.trim().toLowerCase();
+    const matchesSearch = query === '' || textFields.some(f => f.includes(query));
 
-    // Categoria filter
-    const matchesCategoria = filterCategoria === 'ALL' || item.categoria === filterCategoria;
+    // Categoria filter: case-insensitive match
+    const matchesCategoria = filterCategoria === 'ALL' || 
+      String(item.categoria || '').toUpperCase() === String(filterCategoria).toUpperCase();
 
     // Pagament filter
-    const matchesPagament = filterPagament === 'ALL' || item.estatPagament === filterPagament;
+    const matchesPagament = filterPagament === 'ALL' || 
+      String(item.estatPagament || '').toUpperCase() === String(filterPagament).toUpperCase();
 
     // DNI filter
-    const matchesDni = filterDni === 'ALL' || item.estatDni === filterDni;
+    const matchesDni = filterDni === 'ALL' || 
+      String(item.estatDni || '').toUpperCase() === String(filterDni).toUpperCase();
 
     // Entrega filter
-    const matchesEntrega = filterEntrega === 'ALL' || item.entregaMaterial === filterEntrega;
+    const matchesEntrega = filterEntrega === 'ALL' || 
+      String(item.entregaMaterial || '').toUpperCase() === String(filterEntrega).toUpperCase();
 
-    // Estat filter
+    // Estat filter: never drop records based on unknown status or non-existent fields
+    const rawEstat = String(item.estatInscripcio || '').toLowerCase();
     const matchesEstat = filterEstat === 'ALL' || 
-      (filterEstat === 'OBERTA' && (item.estatInscripcio === 'obertes' || (!item.estatInscripcio && !item.llistaEspera))) ||
-      (filterEstat === 'ESPERA' && (item.estatInscripcio === 'llista_espera' || (!item.estatInscripcio && item.llistaEspera)));
+      (filterEstat === 'OBERTA' && (rawEstat === 'obertes' || rawEstat === 'oberta' || !rawEstat)) ||
+      (filterEstat === 'ESPERA' && (rawEstat === 'llista_espera' || rawEstat === 'espera'));
 
     // Bandera filter
-    const matchesBandera = filterBandera === 'ALL' ||
-      (filterBandera === '0' && (!item.bandera || item.bandera === 0)) ||
-      (filterBandera === '1' && item.bandera === 1) ||
-      (filterBandera === '2' && item.bandera === 2) ||
-      (filterBandera === '3' && item.bandera === 3);
+    const rawBandera = Number(item.bandera ?? 0);
+    const matchesBandera = filterBandera === 'ALL' || rawBandera === Number(filterBandera);
 
     return matchesSearch && matchesCategoria && matchesPagament && matchesDni && matchesEntrega && matchesEstat && matchesBandera;
   });
+
+  // Diagnostic log for active filters and resulting dataset
+  useEffect(() => {
+    console.log('[Secretaría Filter]:', {
+      tabla: 'public.inscripciones',
+      totalInscripciones: inscripcions.length,
+      filasFiltradas: filteredInscripcions.length,
+      filtrosAplicados: {
+        cerca: searchQuery,
+        categoria: filterCategoria,
+        pagament: filterPagament,
+        dni: filterDni,
+        entrega: filterEntrega,
+        estat: filterEstat,
+        bandera: filterBandera
+      }
+    });
+  }, [inscripcions.length, filteredInscripcions.length, searchQuery, filterCategoria, filterPagament, filterDni, filterEntrega, filterEstat, filterBandera]);
 
   const isAllVisibleSelected = filteredInscripcions.length > 0 && filteredInscripcions.every(item => selectedIds.includes(item.id));
 
@@ -1804,11 +1841,73 @@ export default function AdminDashboard({
 
           {/* Primary Data Listing Grid */}
           <div className="overflow-x-auto">
-            {filteredInscripcions.length === 0 ? (
+            {inscripcionsError ? (
+              <div className="p-10 text-center bg-rose-50/70 border border-rose-200 rounded-2xl m-4 text-rose-900">
+                <AlertTriangle className="mx-auto text-rose-500 mb-3" size={44} />
+                <h4 className="font-sans font-black text-lg text-rose-950">
+                  {language === 'ca' ? "Error carregant les inscripcions" : "Error cargando las inscripciones"}
+                </h4>
+                <p className="text-xs text-rose-700 mt-2 max-w-lg mx-auto font-mono bg-white/80 p-3 rounded-xl border border-rose-200/80 break-all">
+                  {inscripcionsError}
+                </p>
+                <p className="text-[11px] text-rose-600 mt-2 font-mono">
+                  {language === 'ca' ? 'Taula consultada' : 'Tabla consultada'}: <span className="font-bold">public.inscripciones</span>
+                </p>
+                <button
+                  type="button"
+                  onClick={handleRefresh}
+                  disabled={isRefreshing}
+                  className="mt-4 px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl transition-all inline-flex items-center gap-2 shadow-md hover:shadow-rose-600/20 cursor-pointer"
+                >
+                  <RefreshCw size={14} className={isRefreshing ? "animate-spin" : ""} />
+                  {language === 'ca' ? "Reintentar connexió" : "Reintentar conexión"}
+                </button>
+              </div>
+            ) : isLoadingInscripcions ? (
+              <div className="p-16 text-center text-zinc-400">
+                <RefreshCw className="mx-auto text-fuchsia-600 animate-spin mb-3" size={36} />
+                <p className="font-sans font-bold text-sm text-zinc-700">
+                  {language === 'ca' ? "Carregant inscripcions de public.inscripciones..." : "Cargando inscripciones de public.inscripciones..."}
+                </p>
+              </div>
+            ) : inscripcions.length === 0 ? (
               <div className="p-12 text-center text-zinc-400">
                 <Users className="mx-auto text-zinc-300 mb-3" size={48} />
-                <p className="font-sans font-bold text-lg text-zinc-700">{language === 'ca' ? "No s'ha trobat cap parella registrada" : "No se ha encontrado ninguna pareja registrada"}</p>
-                <p className="text-sm text-zinc-400 mt-1 max-w-sm mx-auto">{language === 'ca' ? "Comproveu els criteris de cerca o els filtres seleccionats actualment." : "Compruebe los criterios de búsqueda o los filtros seleccionados actualmente."}</p>
+                <p className="font-sans font-bold text-lg text-zinc-700">
+                  {language === 'ca' ? "No s'ha trobat cap parella registrada" : "No se ha encontrado ninguna pareja registrada"}
+                </p>
+                <p className="text-sm text-zinc-400 mt-1 max-w-sm mx-auto">
+                  {language === 'ca' ? "La taula public.inscripciones no conté registres actualment." : "La tabla public.inscripciones no contiene registros actualmente."}
+                </p>
+                <button
+                  type="button"
+                  onClick={handleRefresh}
+                  disabled={isRefreshing}
+                  className="mt-4 px-4 py-2 bg-zinc-900 hover:bg-fuchsia-600 text-white text-xs font-bold rounded-xl transition-all inline-flex items-center gap-2 cursor-pointer"
+                >
+                  <RefreshCw size={14} className={isRefreshing ? "animate-spin" : ""} />
+                  {language === 'ca' ? "Actualitzar ara" : "Actualizar ahora"}
+                </button>
+              </div>
+            ) : filteredInscripcions.length === 0 ? (
+              <div className="p-12 text-center text-zinc-400">
+                <Filter className="mx-auto text-zinc-300 mb-3" size={48} />
+                <p className="font-sans font-bold text-lg text-zinc-700">
+                  {language === 'ca' ? "Cap parella coincideix amb els filtres" : "Ninguna pareja coincide con los filtros"}
+                </p>
+                <p className="text-sm text-zinc-400 mt-1 max-w-sm mx-auto">
+                  {language === 'ca'
+                    ? `Hi ha ${inscripcions.length} ${inscripcions.length === 1 ? 'parella' : 'parelles'} a la base de dades, però no coincideix(en) amb els filtres seleccionats.`
+                    : `Hay ${inscripcions.length} ${inscripcions.length === 1 ? 'pareja' : 'parejas'} en la base de datos, pero no coincide(n) con los filtros seleccionados.`}
+                </p>
+                <button
+                  type="button"
+                  onClick={handleResetFilters}
+                  className="mt-4 px-4 py-2 bg-zinc-900 hover:bg-[#ff0090] text-white text-xs font-bold rounded-xl transition-all inline-flex items-center gap-2 cursor-pointer"
+                >
+                  <RefreshCw size={14} />
+                  {language === 'ca' ? "Restablir tots els filtres a \"Tots\"" : "Restablecer todos los filtros a \"Todos\""}
+                </button>
               </div>
             ) : (
               <table className="w-full text-left border-collapse table-auto">

@@ -145,14 +145,20 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
   // Load existing registrations for live duplicate detection
   const [existingInscripcions, setExistingInscripcions] = useState<Inscripcio[]>([]);
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem('tast_inscripcions_2026');
-      if (saved) {
-        setExistingInscripcions(JSON.parse(saved));
+    async function loadInscripcions() {
+      try {
+        const { getSupabaseInscripciones, isSupabaseConfigured } = await import('../supabaseClient');
+        if (isSupabaseConfigured) {
+          const list = await getSupabaseInscripciones();
+          if (list && list.length > 0) {
+            setExistingInscripcions(list);
+          }
+        }
+      } catch (e) {
+        console.error("Error loading existing inscriptions in PublicForm:", e);
       }
-    } catch (e) {
-      console.error("Error loading existing inscriptions in PublicForm:", e);
     }
+    loadInscripcions();
   }, []);
 
   // sistema_config data state for category descriptions and settings
@@ -644,12 +650,9 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
     if (!acceptaRGPD) tempErrors.rgpd = language === 'ca' ? "Heu d'acceptar els termes de privadesa" : "Debe aceptar los términos de privacidad";
     if (!acceptaPresencial) tempErrors.presencial = language === 'ca' ? "Heu d'acceptar pagar i recollir de manera presencial" : "Debe aceptar pagar y recoger de forma presencial";
 
-    // Check duplicates in the database ('tast_inscripcions_2026')
+    // Check duplicates against existing registrations
     try {
-      const savedInscripcions = localStorage.getItem('tast_inscripcions_2026');
-      if (savedInscripcions) {
-        const existingInscripcions: Inscripcio[] = JSON.parse(savedInscripcions);
-        
+      if (existingInscripcions && existingInscripcions.length > 0) {
         const c1NomNormalized = c1Nom.trim().toLowerCase().replace(/\s+/g, ' ');
         const c1CognomsNormalized = c1Cognoms.trim().toLowerCase().replace(/\s+/g, ' ');
         

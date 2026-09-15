@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { Inscripcio } from './types';
+import { Inscripcio, CategoriaParella } from './types';
 
 const metaEnv = (import.meta as any).env || {};
 const envUrl = metaEnv.VITE_SUPABASE_URL || '';
@@ -392,44 +392,60 @@ function parseInscripcionesRows(rows: any[]): Inscripcio[] {
       }
     });
 
+    // Safe status normalization that never drops records on unknown or missing values
+    const rawPagament = String(r.estatPagament || r.estat_pagament || r.estatpagament || 'PENDENT').toUpperCase();
+    const estatPagament = rawPagament === 'PAGAT' ? 'PAGAT' : 'PENDENT';
+
+    const rawDni = String(r.estatDni || r.estat_dni || r.estatdni || 'PENDENT').toUpperCase();
+    const estatDni = rawDni === 'VALIDAT' ? 'VALIDAT' : (rawDni === 'REBUTJAT' ? 'REBUTJAT' : 'PENDENT');
+
+    const rawEntrega = String(r.entregaMaterial || r.entrega_material || r.entregamaterial || 'PENDENT').toUpperCase();
+    const entregaMaterial = rawEntrega === 'ENTREGAT' ? 'ENTREGAT' : 'PENDENT';
+
+    const rawEstat = String(r.estatInscripcio || r.estat_inscripcio || r.estatinscripcio || 'obertes').toLowerCase();
+    const estatInscripcio = rawEstat.includes('espera') ? 'llista_espera' : 'obertes';
+
+    const rawCategoria = String(r.categoria || 'ADULT').toUpperCase();
+    const categoria = rawCategoria === 'JUVENIL' ? CategoriaParella.JUVENIL : CategoriaParella.ADULT;
+
     // Standard column parse with snake_case and casing fallback modes
     return {
-      id: r.id || r.key || '',
-      codiSeguiment: r.codiSeguiment !== undefined ? r.codiSeguiment 
-                    : (r.codi_seguiment || r.codiseguiment || ''),
-      categoria: r.categoria || 'ADULT',
+      id: String(r.id || r.key || ''),
+      codiSeguiment: String(r.codiSeguiment !== undefined ? r.codiSeguiment 
+                    : (r.codi_seguiment || r.codiseguiment || '')),
+      categoria,
 
       // Single couple contact
-      emailContactoPareja,
-      telefonContactoPareja,
+      emailContactoPareja: String(emailContactoPareja || ''),
+      telefonContactoPareja: String(telefonContactoPareja || ''),
       
-      c1Nom: r.c1Nom !== undefined ? r.c1Nom : (r.c1_nom || r.c1nom || ''),
-      c1Cognoms: r.c1Cognoms !== undefined ? r.c1Cognoms : (r.c1_cognoms || r.c1cognoms || ''),
-      c1Email: emailContactoPareja,
-      c1Telefon: telefonContactoPareja,
-      c1Talla: r.c1Talla !== undefined ? r.c1Talla : (r.c1_talla || r.c1talla || ''),
-      c1DniUrl: r.c1DniUrl !== undefined ? r.c1DniUrl : (r.c1_dni_url || r.c1dni_url || r.c1_dni || r.c1dni || ''),
+      c1Nom: String(r.c1Nom !== undefined ? r.c1Nom : (r.c1_nom || r.c1nom || '')),
+      c1Cognoms: String(r.c1Cognoms !== undefined ? r.c1Cognoms : (r.c1_cognoms || r.c1cognoms || '')),
+      c1Email: String(emailContactoPareja || ''),
+      c1Telefon: String(telefonContactoPareja || ''),
+      c1Talla: String(r.c1Talla !== undefined ? r.c1Talla : (r.c1_talla || r.c1talla || '')),
+      c1DniUrl: String(r.c1DniUrl !== undefined ? r.c1DniUrl : (r.c1_dni_url || r.c1dni_url || r.c1_dni || r.c1dni || '')),
       c1EsMenor: r.c1EsMenor !== undefined ? !!r.c1EsMenor : !!(r.c1_es_menor || r.c1esmenor),
-      c1TutorNom: r.c1TutorNom !== undefined ? r.c1TutorNom : (r.c1_tutor_nom || r.c1tutornom || ''),
-      c1TutorCognoms: r.c1TutorCognoms !== undefined ? r.c1TutorCognoms : (r.c1_tutor_cognoms || r.c1tutorcognoms || ''),
-      c1TutorDni: r.c1TutorDni !== undefined ? r.c1TutorDni : (r.c1_tutor_dni || r.c1tutordni || ''),
-      c1TutorTelefon: r.c1TutorTelefon !== undefined ? r.c1TutorTelefon : (r.c1_tutor_telefon || r.c1tutortelefon || ''),
-      c1UniformeTipus: r.c1UniformeTipus !== undefined ? r.c1UniformeTipus : (r.c1_uniforme_tipus || r.c1uniformetipus || ''),
+      c1TutorNom: r.c1TutorNom ? String(r.c1TutorNom) : '',
+      c1TutorCognoms: r.c1TutorCognoms ? String(r.c1TutorCognoms) : '',
+      c1TutorDni: r.c1TutorDni ? String(r.c1TutorDni) : '',
+      c1TutorTelefon: r.c1TutorTelefon ? String(r.c1TutorTelefon) : '',
+      c1UniformeTipus: String(r.c1UniformeTipus !== undefined ? r.c1UniformeTipus : (r.c1_uniforme_tipus || r.c1uniformetipus || 'compra')),
 
-      c2Nom: r.c2Nom !== undefined ? r.c2Nom : (r.c2_nom || r.c2nom || ''),
-      c2Cognoms: r.c2Cognoms !== undefined ? r.c2Cognoms : (r.c2_cognoms || r.c2cognoms || ''),
-      c2Email: emailContactoPareja,
-      c2Telefon: telefonContactoPareja,
-      c2Talla: r.c2Talla !== undefined ? r.c2Talla : (r.c2_talla || r.c2talla || ''),
-      c2DniUrl: r.c2DniUrl !== undefined ? r.c2DniUrl : (r.c2_dni_url || r.c2dni_url || r.c2_dni || r.c2dni || ''),
+      c2Nom: String(r.c2Nom !== undefined ? r.c2Nom : (r.c2_nom || r.c2nom || '')),
+      c2Cognoms: String(r.c2Cognoms !== undefined ? r.c2Cognoms : (r.c2_cognoms || r.c2cognoms || '')),
+      c2Email: String(emailContactoPareja || ''),
+      c2Telefon: String(telefonContactoPareja || ''),
+      c2Talla: String(r.c2Talla !== undefined ? r.c2Talla : (r.c2_talla || r.c2talla || '')),
+      c2DniUrl: String(r.c2DniUrl !== undefined ? r.c2DniUrl : (r.c2_dni_url || r.c2dni_url || r.c2_dni || r.c2dni || '')),
       c2EsMenor: r.c2EsMenor !== undefined ? !!r.c2EsMenor : !!(r.c2_es_menor || r.c2esmenor),
-      c2TutorNom: r.c2TutorNom !== undefined ? r.c2TutorNom : (r.c2_tutor_nom || r.c2tutornom || ''),
-      c2TutorCognoms: r.c2TutorCognoms !== undefined ? r.c2TutorCognoms : (r.c2_tutor_cognoms || r.c2tutorcognoms || ''),
-      c2TutorDni: r.c2TutorDni !== undefined ? r.c2TutorDni : (r.c2_tutor_dni || r.c2tutordni || ''),
-      c2TutorTelefon: r.c2TutorTelefon !== undefined ? r.c2TutorTelefon : (r.c2_tutor_telefon || r.c2tutortelefon || ''),
-      c2UniformeTipus: r.c2UniformeTipus !== undefined ? r.c2UniformeTipus : (r.c2_uniforme_tipus || r.c2uniformetipus || ''),
+      c2TutorNom: r.c2TutorNom ? String(r.c2TutorNom) : '',
+      c2TutorCognoms: r.c2TutorCognoms ? String(r.c2TutorCognoms) : '',
+      c2TutorDni: r.c2TutorDni ? String(r.c2TutorDni) : '',
+      c2TutorTelefon: r.c2TutorTelefon ? String(r.c2TutorTelefon) : '',
+      c2UniformeTipus: String(r.c2UniformeTipus !== undefined ? r.c2UniformeTipus : (r.c2_uniforme_tipus || r.c2uniformetipus || 'compra')),
 
-      respostesCuestionari: rawRespostes,
+      respostesCuestionari: rawRespostes || {},
     
       seleccionsUniforme: typeof r.seleccionsUniforme === 'object' && r.seleccionsUniforme ? r.seleccionsUniforme :
                           typeof r.seleccions_uniforme === 'object' && r.seleccions_uniforme ? r.seleccions_uniforme :
@@ -439,16 +455,16 @@ function parseInscripcionesRows(rows: any[]): Inscripcio[] {
       teDomasBalco: r.teDomasBalco !== undefined ? !!r.teDomasBalco : !!(r.te_domas_balco || r.tedomasbalco),
       teMocadorsExtra: Number(r.teMocadorsExtra !== undefined ? r.teMocadorsExtra : (r.te_mocadors_extra || r.temocadorsextra || 0)),
 
-      estatPagament: r.estatPagament || r.estat_pagament || r.estatpagament || 'PENDENT',
+      estatPagament: estatPagament as any,
       metodePagament: r.metodePagament || r.metode_pagament || r.metodepagament || null,
-      estatDni: r.estatDni || r.estat_dni || r.estatdni || 'PENDENT',
-      entregaMaterial: r.entregaMaterial || r.entrega_material || r.entregamaterial || 'PENDENT',
-      estatInscripcio: r.estatInscripcio || r.estat_inscripcio || r.estatinscripcio || 'obertes',
+      estatDni: estatDni as any,
+      entregaMaterial: entregaMaterial as any,
+      estatInscripcio,
       posicioGlobal: r.posicioGlobal !== undefined ? Number(r.posicioGlobal) : (r.posicio_global !== undefined ? Number(r.posicio_global) : undefined),
-      bandera: r.bandera !== undefined ? Number(r.bandera) : (r.bandera !== undefined ? Number(r.bandera) : 0),
+      bandera: r.bandera !== undefined ? Number(r.bandera) : 0,
 
-      creadoEn: r.creadoEn || r.creado_en || r.created_at || new Date().toISOString(),
-      actualizadoEn: r.actualizadoEn || r.actualizado_en || r.updated_at || new Date().toISOString()
+      creadoEn: String(r.creadoEn || r.creado_en || r.created_at || new Date().toISOString()),
+      actualizadoEn: String(r.actualizadoEn || r.actualizado_en || r.updated_at || new Date().toISOString())
     };
   });
 }
@@ -456,6 +472,16 @@ function parseInscripcionesRows(rows: any[]): Inscripcio[] {
 const CAMEL_COLUMNS = "id, codiSeguiment, categoria, c1Nom, c1Cognoms, c1Email, c1Telefon, c1Talla, c1DniUrl, c1EsMenor, c1TutorNom, c1TutorCognoms, c1TutorDni, c1TutorTelefon, c1UniformeTipus, c2Nom, c2Cognoms, c2Email, c2Telefon, c2Talla, c2DniUrl, c2EsMenor, c2TutorNom, c2TutorCognoms, c2TutorDni, c2TutorTelefon, c2UniformeTipus, respostesCuestionari, seleccionsUniforme, preuCalculat, teDomasBalco, teMocadorsExtra, estatPagament, metodePagament, estatDni, entregaMaterial, estat_inscripcio, posicio_global, bandera, creadoEn, actualizadoEn";
 
 const SNAKE_COLUMNS = "id, codi_seguiment, categoria, c1_nom, c1_cognoms, c1_email, c1_telefon, c1_talla, c1_dni_url, c1_es_menor, c1_tutor_nom, c1_tutor_cognoms, c1_tutor_dni, c1_tutor_telefon, c1_uniforme_tipus, c2_nom, c2_cognoms, c2_email, c2_telefon, c2_talla, c2_dni_url, c2_es_menor, c2_tutor_nom, c2_tutor_cognoms, c2_tutor_dni, c2_tutor_telefon, c2_uniforme_tipus, respostes_cuestionari, seleccions_uniforme, preu_calculat, te_domas_balco, te_mocadors_extra, estat_pagament, metode_pagament, estat_dni, entrega_material, estat_inscripcio, posicio_global, bandera, creado_en, actualizado_en";
+
+export interface InscripcionesQueryResult {
+  ok: boolean;
+  table: string;
+  data: Inscripcio[];
+  count: number;
+  error?: string | null;
+  code?: string | null;
+  details?: any;
+}
 
 export interface SaveInscripcionResult {
   ok: boolean;
@@ -472,8 +498,11 @@ export interface SaveInscripcionResult {
 /**
  * Downloads lightweight metadata of inscriptions directly from Supabase (excluding highly heavy Base64 DNI blobs).
  * Reads directly from public.inscripciones using authoritative server API or direct Supabase client.
+ * Returns both the normalized inscriptions array and detailed diagnostic metadata.
  */
-export async function getSupabaseInscripciones(): Promise<Inscripcio[]> {
+export async function getSupabaseInscripcionesResult(): Promise<InscripcionesQueryResult> {
+  const table = 'public.inscripciones';
+
   // 1. Authoritative API route reading directly from public.inscripciones with Service Role
   try {
     const apiRes = await fetch('/api/inscriptions?action=list', {
@@ -482,94 +511,105 @@ export async function getSupabaseInscripciones(): Promise<Inscripcio[]> {
     if (apiRes.ok) {
       const json = await apiRes.json();
       if (json && json.ok && Array.isArray(json.data)) {
-        if (json.data.length === 0) {
-          console.log('[Secretaría SELECT]: 0 registres trobats a public.inscripciones.');
-        } else {
-          console.log(`[Secretaría SELECT ok]: table public.inscripciones, count: ${json.data.length}`);
-        }
-        return parseInscripcionesRows(json.data);
+        const parsed = parseInscripcionesRows(json.data);
+        console.log('[Secretaría SELECT ok]:', {
+          tabla: table,
+          filasDevueltas: parsed.length,
+          errorRealSupabase: null
+        });
+        return {
+          ok: true,
+          table,
+          data: parsed,
+          count: parsed.length,
+          error: null
+        };
+      } else if (json && json.error) {
+        console.warn('[Secretaría SELECT api error response]:', {
+          tabla: table,
+          errorRealSupabase: json.error,
+          code: json.code
+        });
       }
     }
-  } catch (e) {
-    console.warn("Could not fetch /api/inscriptions?action=list, attempting direct Supabase client query:", e);
+  } catch (e: any) {
+    console.warn("Could not fetch /api/inscriptions?action=list, attempting direct Supabase client query:", e?.message || e);
   }
 
-  if (!supabase) return [];
+  // 2. Direct Supabase Client Query from public.inscripciones
+  if (!supabase) {
+    const err = "El client de Supabase no està inicialitzat";
+    console.error('[Secretaría SELECT error]:', { tabla: table, errorRealSupabase: err });
+    return {
+      ok: false,
+      table,
+      data: [],
+      count: 0,
+      error: err
+    };
+  }
+
   try {
-    // Attempt 1: Fetch using camelCase column list (excluding heavy DNI files) with safety limit of 2000
     const { data, error } = await supabase
       .from('inscripciones')
-      .select(CAMEL_COLUMNS)
-      .order('creadoEn', { ascending: false })
-      .limit(2000);
-      
-    if (!error && data) {
-      if (data.length === 0) {
-        console.log('[Secretaría SELECT]: 0 registres trobats a public.inscripciones.');
-      } else {
-        console.log(`[Secretaría SELECT ok]: table public.inscripciones, count: ${data.length}`);
-      }
-      return parseInscripcionesRows(data);
-    }
-    
-    // Attempt 2: Fetch using snake_case column list for 'inscripciones' table
-    const resSnake = await supabase
-      .from('inscripciones')
-      .select(SNAKE_COLUMNS)
-      .limit(2000);
-      
-    if (!resSnake.error && resSnake.data) {
-      if (resSnake.data.length === 0) {
-        console.log('[Secretaría SELECT]: 0 registres trobats a public.inscripciones.');
-      } else {
-        console.log(`[Secretaría SELECT ok]: table public.inscripciones, count: ${resSnake.data.length}`);
-      }
-      return parseInscripcionesRows(resSnake.data);
-    }
-    
-    // Attempt 3: Try fallback table 'inscripcions' with camelCase columns silently
-    const resFallbackCamel = await supabase
-      .from('inscripcions')
-      .select(CAMEL_COLUMNS)
-      .limit(2000);
-      
-    if (!resFallbackCamel.error && resFallbackCamel.data) {
-      return parseInscripcionesRows(resFallbackCamel.data);
-    }
-
-    // Attempt 4: Try fallback table 'inscripcions' with snake_case columns silently
-    const resFallbackSnake = await supabase
-      .from('inscripcions')
-      .select(SNAKE_COLUMNS)
-      .limit(2000);
-      
-    if (!resFallbackSnake.error && resFallbackSnake.data) {
-      return parseInscripcionesRows(resFallbackSnake.data);
-    }
-
-    // Safe Fallback 1: Select '*' from 'inscripciones'
-    const resStar = await supabase
-      .from('inscripciones')
       .select('*')
-      .limit(2000);
-      
-    if (!resStar.error && resStar.data) {
-      return parseInscripcionesRows(resStar.data);
+      .order('creadoEn', { ascending: false })
+      .limit(3000);
+
+    if (error) {
+      console.error('[Secretaría SELECT error]:', {
+        tabla: table,
+        errorRealSupabase: {
+          message: error.message,
+          code: error.code,
+          details: error.details,
+          hint: error.hint
+        }
+      });
+      return {
+        ok: false,
+        table,
+        data: [],
+        count: 0,
+        error: error.message || "Error desconegut consultant public.inscripciones",
+        code: error.code,
+        details: error.details
+      };
     }
 
-    console.error("[Secretaría SELECT error]:", {
-      table: "public.inscripciones",
-      message: error?.message || "Error desconegut consultant inscripciones",
-      code: error?.code,
-      details: error?.details,
-      hint: error?.hint
+    const parsed = parseInscripcionesRows(data || []);
+    console.log('[Secretaría SELECT ok]:', {
+      tabla: table,
+      filasDevueltas: parsed.length,
+      errorRealSupabase: null
     });
 
-    return [];
+    return {
+      ok: true,
+      table,
+      data: parsed,
+      count: parsed.length,
+      error: null
+    };
   } catch (err: any) {
-    console.error("[Secretaría SELECT error]:", err?.message || err);
-    return [];
+    const msg = err?.message || String(err);
+    console.error('[Secretaría SELECT exception]:', {
+      tabla: table,
+      errorRealSupabase: msg
+    });
+    return {
+      ok: false,
+      table,
+      data: [],
+      count: 0,
+      error: msg
+    };
   }
+}
+
+export async function getSupabaseInscripciones(): Promise<Inscripcio[]> {
+  const result = await getSupabaseInscripcionesResult();
+  return result.data;
 }
 
 /**

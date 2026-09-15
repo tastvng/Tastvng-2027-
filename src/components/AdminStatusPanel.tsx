@@ -1,23 +1,35 @@
 import React, { useState, useEffect } from 'react';
 import { saveLogger, SaveLog } from '../services/SaveLogger';
 import { useLanguage } from '../LanguageContext';
-import { Settings, Trash2, Play, Pause, RefreshCw, CheckCircle, AlertCircle, X } from 'lucide-react';
+import { Settings, Trash2, Play, Pause, RefreshCw, CheckCircle, AlertCircle, X, AlertTriangle } from 'lucide-react';
 import { singularPlural } from '../utils/singularPlural';
+import { Inscripcio } from '../types';
 
 interface AdminStatusPanelProps {
   isAdmin: boolean;
+  inscripcions?: Inscripcio[];
+  isLoading?: boolean;
+  error?: string | null;
+  onRefresh?: () => Promise<any>;
 }
 
-export const AdminStatusPanel: React.FC<AdminStatusPanelProps> = ({ isAdmin }) => {
+export const AdminStatusPanel: React.FC<AdminStatusPanelProps> = ({ 
+  isAdmin,
+  inscripcions = [],
+  isLoading = false,
+  error = null,
+  onRefresh
+}) => {
   const { language } = useLanguage();
   const [isOpen, setIsOpen] = useState(false);
   const [logs, setLogs] = useState<SaveLog[]>([]);
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // Real-time counter states
-  const [totalInscrits, setTotalInscrits] = useState(0);
+  // Real-time counter states unified with single source of truth (public.inscripciones)
+  const totalInscrits = inscripcions.length;
+  const numRespuestas = inscripcions.filter(i => i.respostesCuestionari && Object.keys(i.respostesCuestionari).length > 0).length;
   const [numPreguntes, setNumPreguntes] = useState(0);
-  const [numRespuestas, setNumRespuestas] = useState(0);
 
   const loadLogs = () => {
     setLogs(saveLogger.getRecentLogs(20));
@@ -45,57 +57,34 @@ export const AdminStatusPanel: React.FC<AdminStatusPanelProps> = ({ isAdmin }) =
     };
   }, [isAdmin, autoRefresh]);
 
-  // Load real-time counters
+  // Load questions count from official questions API
   useEffect(() => {
     if (!isAdmin || !isOpen) return;
 
-    const fetchStats = async () => {
+    const fetchPreguntes = async () => {
       try {
-        const { getSupabaseInscripciones, isSupabaseConfigured } = await import('../supabaseClient');
         const { cargarPreguntes } = await import('../api/questionnaireApi');
-
-        let inscritsCount = 0;
-        let preguntesCount = 0;
-        let respuestasCount = 0;
-
-        if (isSupabaseConfigured) {
-          const inscritsData = await getSupabaseInscripciones();
-          inscritsCount = inscritsData.length;
-
-          const preguntesData = await cargarPreguntes();
-          preguntesCount = preguntesData ? preguntesData.length : 0;
-
-          // Count completed questionnaires / responses
-          respuestasCount = inscritsData.filter(i => i.respostesCuestionari && Object.keys(i.respostesCuestionari).length > 0).length;
-        } else {
-          // Local fallback
-          const localInscrits = localStorage.getItem('tast_inscripciones');
-          const inscritsArray = localInscrits ? JSON.parse(localInscrits) : [];
-          inscritsCount = inscritsArray.length;
-
-          const localPreguntes = localStorage.getItem('tast_preguntes');
-          const preguntesArray = localPreguntes ? JSON.parse(localPreguntes) : [];
-          preguntesCount = preguntesArray.length;
-
-          respuestasCount = inscritsArray.filter((i: any) => i.respostesCuestionari && Object.keys(i.respostesCuestionari).length > 0).length;
-        }
-
-        setTotalInscrits(inscritsCount);
-        setNumPreguntes(preguntesCount);
-        setNumRespuestas(respuestasCount);
+        const preguntesData = await cargarPreguntes();
+        setNumPreguntes(preguntesData ? preguntesData.length : 0);
       } catch (err) {
-        console.error('Error fetching stats for AdminStatusPanel:', err);
+        console.error('Error fetching questions count for AdminStatusPanel:', err);
       }
     };
 
-    fetchStats().catch(err => console.error('Error on initial fetchStats:', err));
-    
-    // Also update stats when logs update or on interval
-    const statsInterval = setInterval(() => {
-      fetchStats().catch(err => console.error('Error on interval fetchStats:', err));
-    }, 4000);
-    return () => clearInterval(statsInterval);
-  }, [isAdmin, isOpen, logs]);
+    fetchPreguntes();
+  }, [isAdmin, isOpen]);
+
+  const handleManualRefresh = async () => {
+    if (!onRefresh) return;
+    setIsRefreshing(true);
+    try {
+      await onRefresh();
+    } catch (e) {
+      console.error('Error on manual refresh from AdminStatusPanel:', e);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   if (!isAdmin) return null;
 
@@ -103,7 +92,6 @@ export const AdminStatusPanel: React.FC<AdminStatusPanelProps> = ({ isAdmin }) =
     saveLogger.clearLogs();
     loadLogs();
   };
-
 
   return (
     <div className="fixed bottom-4 left-4 z-[9999] font-sans">
@@ -122,13 +110,13 @@ export const AdminStatusPanel: React.FC<AdminStatusPanelProps> = ({ isAdmin }) =
           {language === 'ca' ? 'Estat' : 'Estado'}
         </span>
         <span className={`flex items-center justify-center min-w-[20px] h-5 px-1 text-[10px] font-mono font-bold rounded-full ${
-          logs.some(l => l.status === 'error')
+          error || logs.some(l => l.status === 'error')
             ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
             : logs.length > 0
             ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30'
             : 'bg-zinc-800 text-zinc-400'
         }`}>
-          {logs.length}
+          {totalInscrits}
         </span>
       </button>
 
@@ -146,26 +134,51 @@ export const AdminStatusPanel: React.FC<AdminStatusPanelProps> = ({ isAdmin }) =
                   {language === 'ca' ? 'Panel de Sincronització' : 'Panel de Sincronización'}
                 </h3>
                 <p className="text-[10px] text-zinc-500">
-                  {language === 'ca' ? 'Registre de desades en temps real' : 'Registro de guardados en tiempo real'}
+                  {language === 'ca' ? 'Font: public.inscripciones' : 'Fuente: public.inscripciones'}
                 </p>
               </div>
             </div>
-            <button
-              onClick={() => setIsOpen(false)}
-              className="text-zinc-500 hover:text-zinc-300 p-1 rounded-lg hover:bg-zinc-800/50 transition-colors"
-            >
-              <X className="w-4 h-4" />
-            </button>
+            <div className="flex items-center gap-1.5">
+              {onRefresh && (
+                <button
+                  onClick={handleManualRefresh}
+                  disabled={isRefreshing || isLoading}
+                  title={language === 'ca' ? "Actualitzar dades de Supabase" : "Actualizar datos de Supabase"}
+                  className="text-zinc-400 hover:text-purple-400 p-1.5 rounded-lg hover:bg-zinc-800/50 transition-colors disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${(isRefreshing || isLoading) ? 'animate-spin text-purple-400' : ''}`} />
+                </button>
+              )}
+              <button
+                onClick={() => setIsOpen(false)}
+                className="text-zinc-500 hover:text-zinc-300 p-1 rounded-lg hover:bg-zinc-800/50 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
           </div>
 
-          {/* Counters Section */}
+          {/* Database Error Banner if query failed */}
+          {error && (
+            <div className="px-4 py-2 bg-rose-500/15 border-b border-rose-500/30 flex items-center gap-2 text-rose-300 text-xs">
+              <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400" />
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-[11px] leading-tight truncate">
+                  {language === 'ca' ? 'Error consultant Supabase' : 'Error consultando Supabase'}
+                </p>
+                <p className="text-[9px] text-rose-400/80 font-mono truncate">{error}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Counters Section: strictly unified with public.inscripciones */}
           <div className="px-4 py-2.5 bg-zinc-900/10 border-b border-zinc-800/50 grid grid-cols-3 gap-2 shrink-0">
             <div className="bg-zinc-950/40 border border-zinc-900 p-2 rounded-xl text-center">
               <span className="text-[9px] font-mono font-bold text-zinc-500 uppercase tracking-wider block">
                 {language === 'ca' ? 'Inscrits' : 'Inscritos'}
               </span>
               <p className="text-xs font-black text-purple-400 mt-0.5">
-                {totalInscrits} {singularPlural(totalInscrits, 'inscrit', 'inscrits')}
+                {isLoading ? '...' : `${totalInscrits} ${singularPlural(totalInscrits, 'inscrit', 'inscrits')}`}
               </p>
             </div>
             <div className="bg-zinc-950/40 border border-zinc-900 p-2 rounded-xl text-center">
@@ -181,7 +194,7 @@ export const AdminStatusPanel: React.FC<AdminStatusPanelProps> = ({ isAdmin }) =
                 {language === 'ca' ? 'Respostes' : 'Respuestas'}
               </span>
               <p className="text-xs font-black text-purple-400 mt-0.5">
-                {numRespuestas} {singularPlural(numRespuestas, 'respuesta', 'respuestas')}
+                {isLoading ? '...' : `${numRespuestas} ${singularPlural(numRespuestas, 'respuesta', 'respuestas')}`}
               </p>
             </div>
           </div>

@@ -60,6 +60,7 @@ import {
   getSupabaseSetting, 
   saveSupabaseSetting, 
   getSupabaseInscripciones, 
+  getSupabaseInscripcionesResult,
   saveSupabaseInscripcion, 
   deleteSupabaseInscripcion, 
   deleteMultipleSupabaseInscripciones, 
@@ -223,6 +224,8 @@ export default function App() {
   // Persistence States
   const [config, setConfig] = useState<SistemaConfig>(CONFIG_INICIAL);
   const [inscripcions, setInscripcions] = useState<Inscripcio[]>([]);
+  const [isLoadingInscripcions, setIsLoadingInscripcions] = useState<boolean>(false);
+  const [inscripcionsError, setInscripcionsError] = useState<string | null>(null);
   const [noticies, setNoticies] = useState<NoticiaXarxes[]>([]);
   const [activeRegistration, setActiveRegistration] = useState<Inscripcio | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
@@ -510,25 +513,40 @@ export default function App() {
     async function loadInscripcions() {
       if (!isAdminLoggedIn) {
         setInscripcions([]);
+        setInscripcionsError(null);
         return;
       }
       
+      setIsLoadingInscripcions(true);
+      setInscripcionsError(null);
+
       if (isSupabaseConfigured) {
         try {
-          const dbInscripcions = await getSupabaseInscripciones();
-          if (dbInscripcions && dbInscripcions.length > 0) {
-            console.log(`[Secretaría SELECT ok]: Carregades ${dbInscripcions.length} inscripcions des de public.inscripciones.`);
-            setInscripcions(dbInscripcions);
+          const queryRes = await getSupabaseInscripcionesResult();
+          console.log(`[Secretaría SELECT query]:`, {
+            tabla: queryRes.table,
+            filasDevueltas: queryRes.count,
+            ok: queryRes.ok,
+            errorRealSupabase: queryRes.error || null
+          });
+
+          if (queryRes.ok) {
+            setInscripcions(queryRes.data);
+            setInscripcionsError(null);
           } else {
-            console.log("[Secretaría SELECT ok]: 0 registres a public.inscripciones.");
-            setInscripcions([]);
+            console.error(`[Secretaría SELECT failed]: ${queryRes.error}`);
+            setInscripcionsError(queryRes.error || "Error desconegut consultant public.inscripciones");
           }
         } catch (e: any) {
-          console.error("[Secretaría SELECT error]: Error carregant inscripcions:", e);
-          setInscripcions([]);
+          const msg = e?.message || String(e);
+          console.error("[Secretaría SELECT error]: Error carregant inscripcions:", msg);
+          setInscripcionsError(msg);
+        } finally {
+          setIsLoadingInscripcions(false);
         }
       } else {
         setInscripcions([]);
+        setIsLoadingInscripcions(false);
       }
     }
 
@@ -536,17 +554,36 @@ export default function App() {
   }, [isAdminLoggedIn, view]);
 
   const handleRefreshInscripcions = async (): Promise<number> => {
+    setIsLoadingInscripcions(true);
+    setInscripcionsError(null);
     if (isSupabaseConfigured) {
       try {
-        const dbInscripcions = await getSupabaseInscripciones();
-        if (dbInscripcions) {
-          setInscripcions(dbInscripcions);
-          return dbInscripcions.length;
+        const queryRes = await getSupabaseInscripcionesResult();
+        console.log(`[Secretaría SELECT manual refresh]:`, {
+          tabla: queryRes.table,
+          filasDevueltas: queryRes.count,
+          ok: queryRes.ok,
+          errorRealSupabase: queryRes.error || null
+        });
+
+        if (queryRes.ok) {
+          setInscripcions(queryRes.data);
+          setInscripcionsError(null);
+          return queryRes.count;
+        } else {
+          setInscripcionsError(queryRes.error || "Error consultant Supabase");
+          throw new Error(queryRes.error || "Error consultant Supabase");
         }
       } catch (e: any) {
-        console.error("[Secretaría SELECT error]:", e);
+        const msg = e?.message || String(e);
+        console.error("[Secretaría SELECT refresh error]:", msg);
+        setInscripcionsError(msg);
+        throw e;
+      } finally {
+        setIsLoadingInscripcions(false);
       }
     }
+    setIsLoadingInscripcions(false);
     return inscripcions.length;
   };
 
@@ -718,15 +755,6 @@ export default function App() {
       } catch (err) {
         console.error("Error fetching dynamic registrations from Supabase:", err);
       }
-    } else {
-      try {
-        const savedInscripcions = localStorage.getItem('tast_inscripcions_2026');
-        if (savedInscripcions) {
-          latestInscripcions = JSON.parse(savedInscripcions);
-        }
-      } catch (e) {
-        console.error("Error loading inscriptions from localStorage:", e);
-      }
     }
 
     const maxPos = latestInscripcions.reduce((max, ins) => {
@@ -815,7 +843,6 @@ export default function App() {
 
     const updated = [newReg, ...inscripcions];
     setInscripcions(updated);
-    localStorage.setItem('tast_inscripcions_2026', JSON.stringify(updated));
     syncWithGoogle(updated);
     addLog(`Parella afegida manualment des del taulell: ${newReg.c1Nom} & ${newReg.c2Nom}. Codi: ${newReg.codiSeguiment}`);
     if (isSupabaseConfigured) {
@@ -863,7 +890,6 @@ export default function App() {
     const itemToDelete = inscripcions.find(i => i.id === id);
     const updated = inscripcions.filter(i => i.id !== id);
     setInscripcions(updated);
-    localStorage.setItem('tast_inscripcions_2026', JSON.stringify(updated));
     syncWithGoogle(updated);
     addLog(`S'ha eliminat la inscripció de la parella: ${itemToDelete ? `${itemToDelete.c1Nom} & ${itemToDelete.c2Nom}` : id}`);
     if (isSupabaseConfigured) {
@@ -899,7 +925,6 @@ export default function App() {
   const deleteMultipleRegistrations = async (ids: string[]) => {
     const updated = inscripcions.filter(i => !ids.includes(i.id));
     setInscripcions(updated);
-    localStorage.setItem('tast_inscripcions_2026', JSON.stringify(updated));
     syncWithGoogle(updated);
     addLog(`S'han eliminat ${ids.length} inscripcions de forma massiva.`);
     if (isSupabaseConfigured) {
@@ -914,7 +939,6 @@ export default function App() {
 
   const clearAllRegistrations = async () => {
     setInscripcions([]);
-    localStorage.setItem('tast_inscripcions_2026', JSON.stringify([]));
     syncWithGoogle([]);
     addLog(`S'ha buidat completament la base de dades d'inscripcions.`);
     if (isSupabaseConfigured) {
@@ -966,7 +990,6 @@ export default function App() {
   const updateRegistration = async (updatedReg: Inscripcio) => {
     const updated = inscripcions.map(i => i.id === updatedReg.id ? updatedReg : i);
     setInscripcions(updated);
-    localStorage.setItem('tast_inscripcions_2026', JSON.stringify(updated));
     syncWithGoogle(updated);
     addLog(`Ficha d'inscripció actualitzada del parella: ${updatedReg.c1Nom} (${updatedReg.codiSeguiment})`);
     if (isSupabaseConfigured) {
@@ -1288,6 +1311,8 @@ export default function App() {
               <AdminDashboard 
                 inscripcions={inscripcions}
                 config={config}
+                isLoadingInscripcions={isLoadingInscripcions}
+                inscripcionsError={inscripcionsError}
                 onSelectInscripcio={(id) => {
                   setEditId(id);
                   setPreviousAdminView('admin-dashboard');
@@ -1389,7 +1414,13 @@ export default function App() {
       </footer>
 
       {/* Floating System Status logs panel (Visible to logged-in admins) */}
-      <AdminStatusPanel isAdmin={isAdminLoggedIn} />
+      <AdminStatusPanel 
+        isAdmin={isAdminLoggedIn} 
+        inscripcions={inscripcions}
+        isLoading={isLoadingInscripcions}
+        error={inscripcionsError}
+        onRefresh={handleRefreshInscripcions}
+      />
     </div>
   );
 }
