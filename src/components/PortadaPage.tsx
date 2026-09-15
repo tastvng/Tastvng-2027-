@@ -10,8 +10,10 @@ export interface PortadaConfig {
   activa: boolean;
   titolCA: string;
   titolES: string;
-  subtitolCA: string;
-  subtitolES: string;
+  subtitolCA?: string;
+  subtitolES?: string;
+  benvingudaCA?: string;
+  benvingudaES?: string;
   descripcioCA: string;
   descripcioES: string;
   
@@ -89,6 +91,7 @@ export interface PortadaConfig {
   cuestionariActiu?: boolean;
   ca?: {
     heading?: string;
+    subtitol?: string;
     welcome?: string;
     description?: string;
     buttonText?: string;
@@ -97,6 +100,7 @@ export interface PortadaConfig {
   };
   es?: {
     heading?: string;
+    subtitol?: string;
     welcome?: string;
     description?: string;
     buttonText?: string;
@@ -225,56 +229,45 @@ export default function PortadaPage({
   const currentLang = (language === 'es' ? 'es' : 'ca') as 'ca' | 'es';
   const langData = liveConfig[currentLang] || (currentLang === 'ca' ? DEFAULT_PORTADA_DATA.ca : DEFAULT_PORTADA_DATA.es);
 
-  // 1. Heading (always in currentLang)
-  let rawHeading = currentLang === 'ca'
-    ? (langData?.heading || liveConfig.titolCA || DEFAULT_PORTADA_DATA.ca.heading)
-    : (langData?.heading || liveConfig.titolES || DEFAULT_PORTADA_DATA.es.heading);
-  if (currentLang === 'ca' && rawHeading.toLowerCase().startsWith('inscripciones')) {
-    rawHeading = DEFAULT_PORTADA_DATA.ca.heading;
-  } else if (currentLang === 'es' && rawHeading.toLowerCase().startsWith('inscripcions')) {
-    rawHeading = DEFAULT_PORTADA_DATA.es.heading;
-  }
-  const titol = rawHeading.replace(/2026/g, activeYear).replace(/2027/g, activeYear);
+  // 1. Heading / Títol principal (always in currentLang)
+  const titol = currentLang === 'ca'
+    ? (liveConfig.titolCA || langData?.heading || DEFAULT_PORTADA_DATA.ca.heading)
+    : (liveConfig.titolES || langData?.heading || DEFAULT_PORTADA_DATA.es.heading);
 
-  // 2. Subtitle / Welcome (always in currentLang)
-  let rawSubtitol = currentLang === 'ca'
-    ? (langData?.welcome || liveConfig.subtitolCA || DEFAULT_PORTADA_DATA.ca.welcome)
-    : (langData?.welcome || liveConfig.subtitolES || DEFAULT_PORTADA_DATA.es.welcome);
-  if (currentLang === 'ca' && (rawSubtitol.toLowerCase().includes('bienvenido') || rawSubtitol.toLowerCase().includes('bienvenidos'))) {
-    rawSubtitol = DEFAULT_PORTADA_DATA.ca.welcome;
-  } else if (currentLang === 'es' && (rawSubtitol.toLowerCase().includes('benvingut') || rawSubtitol.toLowerCase().includes('benvinguts'))) {
-    rawSubtitol = DEFAULT_PORTADA_DATA.es.welcome;
-  }
-  const subtitol = rawSubtitol.replace(/2026/g, activeYear).replace(/2027/g, activeYear);
+  // 2. Welcome text / Text de benvinguda (always in currentLang)
+  const benvinguda = currentLang === 'ca'
+    ? (liveConfig.benvingudaCA || langData?.welcome || DEFAULT_PORTADA_DATA.ca.welcome)
+    : (liveConfig.benvingudaES || langData?.welcome || DEFAULT_PORTADA_DATA.es.welcome);
 
-  // 3. Description (always in currentLang)
-  let rawDescripcio = currentLang === 'ca'
-    ? (langData?.description || liveConfig.descripcioCA || DEFAULT_PORTADA_DATA.ca.description)
-    : (langData?.description || liveConfig.descripcioES || DEFAULT_PORTADA_DATA.es.description);
-  if (currentLang === 'ca' && (rawDescripcio.toLowerCase().includes('este año') || rawDescripcio.toLowerCase().includes('asociación'))) {
-    rawDescripcio = DEFAULT_PORTADA_DATA.ca.description;
-  } else if (currentLang === 'es' && (rawDescripcio.toLowerCase().includes('enguany') || rawDescripcio.toLowerCase().includes('associació'))) {
-    rawDescripcio = DEFAULT_PORTADA_DATA.es.description;
-  }
-  const descripcio = rawDescripcio.replace(/2026/g, activeYear).replace(/2027/g, activeYear);
+  // 3. Subtítol / Subtítulo (optional, always in currentLang)
+  const subtitol = currentLang === 'ca'
+    ? (liveConfig.subtitolCA || langData?.subtitol || '')
+    : (liveConfig.subtitolES || langData?.subtitol || '');
 
-  // 4. Button Text (always in currentLang)
-  let rawBotoText = currentLang === 'ca'
-    ? (langData?.buttonText || liveConfig.botoTextCA || DEFAULT_PORTADA_DATA.ca.buttonText)
-    : (langData?.buttonText || liveConfig.botoTextES || DEFAULT_PORTADA_DATA.es.buttonText);
-  const botoText = rawBotoText.replace(/2026/g, activeYear).replace(/2027/g, activeYear);
+  // 4. Description / Text descriptiu (always in currentLang)
+  const descripcio = currentLang === 'ca'
+    ? (liveConfig.descripcioCA || langData?.description || DEFAULT_PORTADA_DATA.ca.description)
+    : (liveConfig.descripcioES || langData?.description || DEFAULT_PORTADA_DATA.es.description);
 
-  // 5. Badge Text (always in currentLang)
-  const rawBadgeText = globalEstatInscripcions === 'tancades'
+  // 5. Button Text / Text del botó (always in currentLang)
+  const botoText = currentLang === 'ca'
+    ? (liveConfig.botoTextCA || langData?.buttonText || DEFAULT_PORTADA_DATA.ca.buttonText)
+    : (liveConfig.botoTextES || langData?.buttonText || DEFAULT_PORTADA_DATA.es.buttonText);
+
+  // 6. Badge Text / Etiqueta de l'esdeveniment (always in currentLang)
+  const badgeText = globalEstatInscripcions === 'tancades'
     ? (currentLang === 'ca' ? 'Inscripcions Tancades' : 'Inscripciones Cerradas')
     : globalEstatInscripcions === 'espera'
       ? (currentLang === 'ca' ? `Llista d'Espera ${activeYear}` : `Lista de Espera ${activeYear}`)
-      : (langData?.badgeText || (currentLang === 'ca' ? liveConfig.badgeTextCA : liveConfig.badgeTextES) || DEFAULT_PORTADA_DATA[currentLang].badgeText);
-  const badgeText = rawBadgeText.replace(/2026/g, activeYear).replace(/2027/g, activeYear);
+      : (currentLang === 'ca'
+          ? (liveConfig.badgeTextCA || langData?.badgeText || DEFAULT_PORTADA_DATA.ca.badgeText)
+          : (liveConfig.badgeTextES || langData?.badgeText || DEFAULT_PORTADA_DATA.es.badgeText));
 
-  // 6. Footer Text (always in currentLang)
-  const rawFooterText = langData?.footerText || (currentLang === 'ca' ? liveConfig.footerTextCA : liveConfig.footerTextES) || DEFAULT_PORTADA_DATA[currentLang].footerText;
-  const footerText = rawFooterText.replace(/2026/g, activeYear).replace(/2027/g, activeYear);
+  // 7. Footer Text (always in currentLang)
+  const footerText = (currentLang === 'ca'
+    ? (liveConfig.footerTextCA || langData?.footerText || DEFAULT_PORTADA_DATA.ca.footerText)
+    : (liveConfig.footerTextES || langData?.footerText || DEFAULT_PORTADA_DATA.es.footerText)
+  ).replace(/2026/g, activeYear).replace(/2027/g, activeYear);
 
   // 7. Footer Links
   const footerLink1Label = currentLang === 'ca'
@@ -589,37 +582,53 @@ export default function PortadaPage({
             })()}
           </div>
 
-          {subtitol && (
+          {benvinguda && (
             <motion.p
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ duration: 0.5, delay: 0.2 }}
-              className="text-xs md:text-sm font-semibold tracking-widest uppercase font-mono"
+              className="text-xs md:text-sm font-semibold tracking-widest uppercase font-mono break-words"
+              style={{ color: subtitolColor }}
+            >
+              {benvinguda}
+            </motion.p>
+          )}
+
+          {titol && (
+            <motion.h2
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.3 }}
+              className="font-sans font-black text-3xl md:text-5xl lg:text-6xl tracking-tight leading-tight break-words"
+              style={{ color: titolColor }}
+            >
+              {titol}
+            </motion.h2>
+          )}
+
+          {subtitol && (
+            <motion.p
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.6, delay: 0.35 }}
+              className="font-sans text-sm md:text-base font-semibold leading-snug break-words text-zinc-300"
               style={{ color: subtitolColor }}
             >
               {subtitol}
             </motion.p>
           )}
 
-          <motion.h2
-            initial={{ opacity: 0, y: 15 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.3 }}
-            className="font-sans font-black text-3xl md:text-5xl lg:text-6xl tracking-tight leading-tight"
-            style={{ color: titolColor }}
-          >
-            {titol}
-          </motion.h2>
-
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.6, delay: 0.4 }}
-            className="font-sans text-xs md:text-sm leading-relaxed max-w-2xl whitespace-pre-wrap"
-            style={{ color: descripcioColor }}
-          >
-            {descripcio}
-          </motion.p>
+          {descripcio && (
+            <motion.p
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.6, delay: 0.4 }}
+              className="font-sans text-xs md:text-sm leading-relaxed max-w-2xl whitespace-pre-wrap break-words"
+              style={{ color: descripcioColor }}
+            >
+              {descripcio}
+            </motion.p>
+          )}
 
           <motion.div
             initial={{ opacity: 0, y: 10 }}
@@ -633,8 +642,8 @@ export default function PortadaPage({
               style={botoStyle}
               id="btn-portada-jump-to-form"
             >
-              {botoText}
-              <ChevronRight size={16} className="group-hover:translate-x-1.5 transition-transform" />
+              <span className="break-words">{botoText}</span>
+              <ChevronRight size={16} className="group-hover:translate-x-1.5 transition-transform shrink-0" />
             </button>
             <button
               onClick={onGoToLogin}

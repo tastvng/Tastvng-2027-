@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Compass, Sparkles, CheckCircle2, RotateCcw, Image as ImageIcon, Video, Palette, Play, Eye, FileText, LayoutTemplate, Sliders, Upload, Trash2, Users } from 'lucide-react';
+import { Compass, Sparkles, CheckCircle2, RotateCcw, Image as ImageIcon, Video, Palette, Play, Eye, FileText, LayoutTemplate, Sliders, Upload, Trash2, Users, Save } from 'lucide-react';
 import { PortadaConfig } from './PortadaPage';
 import { saveSupabaseSettings, getSupabaseSettings, isSupabaseConfigured, getSupabaseSetting, saveSupabaseSetting } from '../supabaseClient';
 import { useLanguage } from '../LanguageContext';
@@ -11,6 +11,7 @@ import { DEFAULT_CATEGORIA_DESCRIPTIONS } from '../data';
 export const DEFAULT_PORTADA_DATA = {
   ca: {
     heading: "Inscripcions Comparses El Tast 2027",
+    subtitol: "",
     welcome: "BENVINGUTS AL ESPAI DE REGISTRE OFICIAL DEL TAST",
     description: "Enguany us presentem un qüestionari àgil i integrat amb el nostre sistema de secretaria digital de l'Associació Cultural El Tast. Prepara el teu DNI, escolleix la teva talla d'armilla o samarreta, i obtén el teu QR instantani per recollir el mocador oficial sense cues a la seu social!",
     buttonText: "Inscripció en línia",
@@ -23,6 +24,7 @@ export const DEFAULT_PORTADA_DATA = {
   },
   es: {
     heading: "Inscripciones Comparses El Tast 2027",
+    subtitol: "",
     welcome: "BIENVENIDOS AL ESPACIO DE REGISTRO OFICIAL DEL TAST",
     description: "Este año os presentamos un cuestionario ágil e integrado con nuestro sistema de secretaría digital de la Asociación Cultural El Tast. ¡Prepara tu DNI, elige tu talla de chaleco o camiseta, y obtén tu QR instantáneo para recoger el pañuelo oficial sin colas en la sede social!",
     buttonText: "Inscripción en línea",
@@ -39,8 +41,10 @@ export const PORTADA_CONFIG_DEFAULTS: PortadaConfig = {
   activa: true,
   titolCA: 'Inscripcions Comparses El Tast 2027',
   titolES: 'Inscripciones Comparses El Tast 2027',
-  subtitolCA: "BENVINGUTS AL ESPAI DE REGISTRE OFICIAL DEL TAST",
-  subtitolES: "BIENVENIDOS AL ESPACIO DE REGISTRO OFICIAL DEL TAST",
+  subtitolCA: '',
+  subtitolES: '',
+  benvingudaCA: "BENVINGUTS AL ESPAI DE REGISTRE OFICIAL DEL TAST",
+  benvingudaES: "BIENVENIDOS AL ESPACIO DE REGISTRO OFICIAL DEL TAST",
   descripcioCA: "Enguany us presentem un qüestionari àgil i integrat amb el nostre sistema de secretaria digital de l'Associació Cultural El Tast. Prepara el teu DNI, escolleix la teva talla d'armilla o samarreta, i obtén el teu QR instantani per recollir el mocador oficial sense cues a la seu social!",
   descripcioES: 'Este año os presentamos un cuestionario ágil e integrado con nuestro sistema de secretaría digital de la Asociación Cultural El Tast. ¡Prepara tu DNI, elige tu talla de chaleco o camiseta, y obtén tu QR instantáneo para recoger el pañuelo oficial sin colas en la sede social!',
   
@@ -120,6 +124,7 @@ export const PORTADA_CONFIG_DEFAULTS: PortadaConfig = {
   cuestionariActiu: true,
   ca: {
     heading: "Inscripcions Comparses El Tast 2027",
+    subtitol: "",
     welcome: "BENVINGUTS AL ESPAI DE REGISTRE OFICIAL DEL TAST",
     description: "Enguany us presentem un qüestionari àgil i integrat amb el nostre sistema de secretaria digital de l'Associació Cultural El Tast. Prepara el teu DNI, escolleix la teva talla d'armilla o samarreta, i obtén el teu QR instantani per recollir el mocador oficial sense cues a la seu social!",
     buttonText: "Inscripció en línia",
@@ -128,6 +133,7 @@ export const PORTADA_CONFIG_DEFAULTS: PortadaConfig = {
   },
   es: {
     heading: "Inscripciones Comparses El Tast 2027",
+    subtitol: "",
     welcome: "BIENVENIDOS AL ESPACIO DE REGISTRO OFICIAL DEL TAST",
     description: "Este año os presentamos un cuestionario ágil e integrado con nuestro sistema de secretaría digital de la Asociación Cultural El Tast. ¡Prepara tu DNI, elige tu talla de chaleco o camiseta, y obtén tu QR instantáneo para recoger el pañuelo oficial sin colas en la sede social!",
     buttonText: "Inscripción en línea",
@@ -137,59 +143,88 @@ export const PORTADA_CONFIG_DEFAULTS: PortadaConfig = {
 };
 
 export function ensureValidPortadaConfig(raw: any, activeYear: string = '2027'): PortadaConfig {
-  const base = { ...PORTADA_CONFIG_DEFAULTS, ...(raw || {}) };
+  if (!raw) return { ...PORTADA_CONFIG_DEFAULTS };
+  const base = { ...PORTADA_CONFIG_DEFAULTS, ...raw };
   
-  // 1. Process Catalan heading
-  let caHeading = raw?.ca?.heading || raw?.titolCA || '';
-  if (!caHeading || caHeading.trim().toLowerCase().startsWith('inscripciones')) {
-    caHeading = `Inscripcions Comparses El Tast ${activeYear}`;
-  }
+  // 1. Process Catalan heading (preserve what user set, do not invent old texts)
+  const caHeading = raw?.titolCA !== undefined 
+    ? raw.titolCA 
+    : (raw?.ca?.heading ?? `Inscripcions Comparses El Tast ${activeYear}`);
 
-  // 2. Process Catalan welcome
-  let caWelcome = raw?.ca?.welcome || raw?.subtitolCA || '';
-  if (!caWelcome || caWelcome.trim().toLowerCase().includes('bienvenido')) {
-    caWelcome = "BENVINGUTS AL ESPAI DE REGISTRE OFICIAL DEL TAST";
+  // 2. Process Catalan welcome & subtitle
+  let caWelcome = raw?.benvingudaCA !== undefined 
+    ? raw.benvingudaCA 
+    : raw?.ca?.welcome;
+
+  let caSubtitol = raw?.subtitolCA !== undefined 
+    ? raw.subtitolCA 
+    : raw?.ca?.subtitol;
+
+  if (caWelcome === undefined) {
+    if (caSubtitol && (caSubtitol.toLowerCase().includes('benvingut') || caSubtitol.toLowerCase().includes('bienvenido'))) {
+      caWelcome = caSubtitol;
+      caSubtitol = '';
+    } else {
+      caWelcome = PORTADA_CONFIG_DEFAULTS.benvingudaCA || DEFAULT_PORTADA_DATA.ca.welcome;
+    }
+  }
+  if (caSubtitol === undefined) {
+    caSubtitol = '';
   }
 
   // 3. Process Catalan description
-  let caDesc = raw?.ca?.description || raw?.descripcioCA || '';
-  if (!caDesc || caDesc.trim().toLowerCase().includes('este año') || caDesc.trim().toLowerCase().includes('asociación')) {
-    caDesc = "Enguany us presentem un qüestionari àgil i integrat amb el nostre sistema de secretaria digital de l'Associació Cultural El Tast. Prepara el teu DNI, escolleix la teva talla d'armilla o samarreta, i obtén el teu QR instantani per recollir el mocador oficial sense cues a la seu social!";
-  }
+  const caDesc = raw?.descripcioCA !== undefined 
+    ? raw.descripcioCA 
+    : (raw?.ca?.description ?? PORTADA_CONFIG_DEFAULTS.descripcioCA);
 
   // 4. Process Spanish heading
-  let esHeading = raw?.es?.heading || raw?.titolES || '';
-  if (!esHeading || esHeading.trim().toLowerCase().startsWith('inscripcions')) {
-    esHeading = `Inscripciones Comparses El Tast ${activeYear}`;
-  }
+  const esHeading = raw?.titolES !== undefined 
+    ? raw.titolES 
+    : (raw?.es?.heading ?? `Inscripciones Comparses El Tast ${activeYear}`);
 
-  // 5. Process Spanish welcome
-  let esWelcome = raw?.es?.welcome || raw?.subtitolES || '';
-  if (!esWelcome || esWelcome.trim().toLowerCase().includes('benvingut')) {
-    esWelcome = "BIENVENIDOS AL ESPACIO DE REGISTRO OFICIAL DEL TAST";
+  // 5. Process Spanish welcome & subtitle
+  let esWelcome = raw?.benvingudaES !== undefined 
+    ? raw.benvingudaES 
+    : raw?.es?.welcome;
+
+  let esSubtitol = raw?.subtitolES !== undefined 
+    ? raw.subtitolES 
+    : raw?.es?.subtitol;
+
+  if (esWelcome === undefined) {
+    if (esSubtitol && (esSubtitol.toLowerCase().includes('bienvenido') || esSubtitol.toLowerCase().includes('benvingut'))) {
+      esWelcome = esSubtitol;
+      esSubtitol = '';
+    } else {
+      esWelcome = PORTADA_CONFIG_DEFAULTS.benvingudaES || DEFAULT_PORTADA_DATA.es.welcome;
+    }
+  }
+  if (esSubtitol === undefined) {
+    esSubtitol = '';
   }
 
   // 6. Process Spanish description
-  let esDesc = raw?.es?.description || raw?.descripcioES || '';
-  if (!esDesc || esDesc.trim().toLowerCase().includes('enguany') || esDesc.trim().toLowerCase().includes('associació')) {
-    esDesc = "Este año os presentamos un cuestionario ágil e integrado con nuestro sistema de secretaría digital de la Asociación Cultural El Tast. ¡Prepara tu DNI, elige tu talla de chaleco o camiseta, y obtén tu QR instantáneo para recoger el pañuelo oficial sin colas en la sede social!";
-  }
+  const esDesc = raw?.descripcioES !== undefined 
+    ? raw.descripcioES 
+    : (raw?.es?.description ?? PORTADA_CONFIG_DEFAULTS.descripcioES);
 
-  const caBtn = raw?.ca?.buttonText || raw?.botoTextCA || 'Inscripció en línia';
-  const esBtn = raw?.es?.buttonText || raw?.botoTextES || 'Inscripción en línea';
+  const caBtn = raw?.botoTextCA !== undefined ? raw.botoTextCA : (raw?.ca?.buttonText ?? 'Inscripció en línia');
+  const esBtn = raw?.botoTextES !== undefined ? raw.botoTextES : (raw?.es?.buttonText ?? 'Inscripción en línea');
 
-  const caBadge = raw?.ca?.badgeText || raw?.badgeTextCA || `Inscripcions Obertes ${activeYear}`;
-  const esBadge = raw?.es?.badgeText || raw?.badgeTextES || `Inscripciones Abiertas ${activeYear}`;
+  const caBadge = raw?.badgeTextCA !== undefined ? raw.badgeTextCA : (raw?.ca?.badgeText ?? `Inscripcions Obertes ${activeYear}`);
+  const esBadge = raw?.badgeTextES !== undefined ? raw.badgeTextES : (raw?.es?.badgeText ?? `Inscripciones Abiertas ${activeYear}`);
 
-  const caFooter = raw?.ca?.footerText || raw?.footerTextCA || `© ${activeYear} ASSOCIACIÓ COMPARSES EL TAST • VILANOVA`;
-  const esFooter = raw?.es?.footerText || raw?.footerTextES || `© ${activeYear} ASOCIACIÓN COMPARSAS EL TAST • VILANOVA`;
+  const caFooter = raw?.footerTextCA !== undefined ? raw.footerTextCA : (raw?.ca?.footerText ?? `© ${activeYear} ASSOCIACIÓ COMPARSES EL TAST • VILANOVA`);
+  const esFooter = raw?.footerTextES !== undefined ? raw.footerTextES : (raw?.es?.footerText ?? `© ${activeYear} ASOCIACIÓN COMPARSAS EL TAST • VILANOVA`);
 
   return {
     ...base,
     titolCA: caHeading,
     titolES: esHeading,
-    subtitolCA: caWelcome,
-    subtitolES: esWelcome,
+    subtitolCA: caSubtitol,
+    subtitolES: esSubtitol,
+    benvingudaCA: caWelcome,
+    benvingudaES: esWelcome,
     descripcioCA: caDesc,
     descripcioES: esDesc,
     botoTextCA: caBtn,
@@ -199,7 +234,9 @@ export function ensureValidPortadaConfig(raw: any, activeYear: string = '2027'):
     footerTextCA: caFooter,
     footerTextES: esFooter,
     ca: {
+      ...(raw?.ca || {}),
       heading: caHeading,
+      subtitol: caSubtitol,
       welcome: caWelcome,
       description: caDesc,
       buttonText: caBtn,
@@ -207,7 +244,9 @@ export function ensureValidPortadaConfig(raw: any, activeYear: string = '2027'):
       footerText: caFooter
     },
     es: {
+      ...(raw?.es || {}),
       heading: esHeading,
+      subtitol: esSubtitol,
       welcome: esWelcome,
       description: esDesc,
       buttonText: esBtn,
@@ -663,13 +702,17 @@ export default function AdminPortada({ onAddLog }: AdminPortadaProps) {
     }
   };
 
+  const [textEditingLang, setTextEditingLang] = useState<'ca' | 'es'>(language === 'es' ? 'es' : 'ca');
+
   const updateField = <K extends keyof PortadaConfig>(field: K, value: PortadaConfig[K]) => {
     setConfig(prev => {
       const next = { ...prev, [field]: value };
       if (field === 'titolCA') next.ca = { ...next.ca, heading: value as string };
       if (field === 'titolES') next.es = { ...next.es, heading: value as string };
-      if (field === 'subtitolCA') next.ca = { ...next.ca, welcome: value as string };
-      if (field === 'subtitolES') next.es = { ...next.es, welcome: value as string };
+      if (field === 'subtitolCA') next.ca = { ...next.ca, subtitol: value as string };
+      if (field === 'subtitolES') next.es = { ...next.es, subtitol: value as string };
+      if (field === 'benvingudaCA') next.ca = { ...next.ca, welcome: value as string };
+      if (field === 'benvingudaES') next.es = { ...next.es, welcome: value as string };
       if (field === 'descripcioCA') next.ca = { ...next.ca, description: value as string };
       if (field === 'descripcioES') next.es = { ...next.es, description: value as string };
       if (field === 'botoTextCA') next.ca = { ...next.ca, buttonText: value as string };
@@ -682,7 +725,58 @@ export default function AdminPortada({ onAddLog }: AdminPortadaProps) {
     });
   };
 
-  const [autoTranslate, setAutoTranslate] = useState(true);
+  const handleResetTextosDefaults = () => {
+    const confirmMsg = language === 'ca'
+      ? "Vols restaurar els textos per defecte de la portada (Català i Castellà)? Els colors, fons i altres ajustos no es modificaran."
+      : "¿Deseas restaurar los textos por defecto de la portada (Catalán y Castellano)? Los colores, fondos y demás ajustes no se modificarán.";
+    if (!window.confirm(confirmMsg)) return;
+
+    setConfig(prev => {
+      const next = {
+        ...prev,
+        titolCA: PORTADA_CONFIG_DEFAULTS.titolCA,
+        titolES: PORTADA_CONFIG_DEFAULTS.titolES,
+        subtitolCA: PORTADA_CONFIG_DEFAULTS.subtitolCA || '',
+        subtitolES: PORTADA_CONFIG_DEFAULTS.subtitolES || '',
+        benvingudaCA: PORTADA_CONFIG_DEFAULTS.benvingudaCA || DEFAULT_PORTADA_DATA.ca.welcome,
+        benvingudaES: PORTADA_CONFIG_DEFAULTS.benvingudaES || DEFAULT_PORTADA_DATA.es.welcome,
+        descripcioCA: PORTADA_CONFIG_DEFAULTS.descripcioCA,
+        descripcioES: PORTADA_CONFIG_DEFAULTS.descripcioES,
+        botoTextCA: PORTADA_CONFIG_DEFAULTS.botoTextCA,
+        botoTextES: PORTADA_CONFIG_DEFAULTS.botoTextES,
+        badgeTextCA: `Inscripcions Obertes ${activeYear}`,
+        badgeTextES: `Inscripciones Abiertas ${activeYear}`,
+        ca: {
+          ...(prev.ca || {}),
+          heading: PORTADA_CONFIG_DEFAULTS.titolCA,
+          subtitol: PORTADA_CONFIG_DEFAULTS.subtitolCA || '',
+          welcome: PORTADA_CONFIG_DEFAULTS.benvingudaCA || DEFAULT_PORTADA_DATA.ca.welcome,
+          description: PORTADA_CONFIG_DEFAULTS.descripcioCA,
+          buttonText: PORTADA_CONFIG_DEFAULTS.botoTextCA,
+          badgeText: `Inscripcions Obertes ${activeYear}`
+        },
+        es: {
+          ...(prev.es || {}),
+          heading: PORTADA_CONFIG_DEFAULTS.titolES,
+          subtitol: PORTADA_CONFIG_DEFAULTS.subtitolES || '',
+          welcome: PORTADA_CONFIG_DEFAULTS.benvingudaES || DEFAULT_PORTADA_DATA.es.welcome,
+          description: PORTADA_CONFIG_DEFAULTS.descripcioES,
+          buttonText: PORTADA_CONFIG_DEFAULTS.botoTextES,
+          badgeText: `Inscripciones Abiertas ${activeYear}`
+        }
+      };
+      return next;
+    });
+
+    showToast(
+      language === 'ca'
+        ? "✓ Textos restaurats als valors per defecte. Fes clic a 'Desar' per confirmar a Supabase."
+        : "✓ Textos restaurados a los valores por defecto. Haz clic en 'Guardar' para confirmar en Supabase.",
+      'info'
+    );
+  };
+
+  const [autoTranslate, setAutoTranslate] = useState(false);
   const [translatingFields, setTranslatingFields] = useState<Record<string, boolean>>({});
   const [isQuotaExceeded, setIsQuotaExceeded] = useState(() => {
     return typeof window !== 'undefined' && window.sessionStorage?.getItem('tast_translation_quota_exceeded') === 'true';
@@ -1143,235 +1237,415 @@ export default function AdminPortada({ onAddLog }: AdminPortadaProps) {
           
           {/* TAB 2: TEXTOS */}
           {activeTab === 'textos' && (
-            <div className="bg-zinc-50 border border-zinc-150 rounded-2xl p-5 space-y-4 text-left">
-            <div className="flex justify-between items-center border-b border-zinc-200 pb-2">
-              <h4 className="font-sans font-bold text-xs text-zinc-700 uppercase tracking-widest flex items-center gap-1.5">
-                <FileText size={14} className="text-[#ff0090]" />
-                {language === 'ca' ? "Textos de la Coberta" : "Textos de la Portada"}
-              </h4>
-              <div className="flex items-center gap-10">
-                <label className="flex items-center gap-1.5 cursor-pointer text-[10px] text-zinc-500 select-none">
-                  <input 
-                    type="checkbox"
-                    checked={autoTranslate && !isQuotaExceeded}
-                    disabled={isQuotaExceeded}
-                    onChange={(e) => setAutoTranslate(e.target.checked)}
-                    className="rounded border-zinc-300 bg-white text-[#ff0090] focus:ring-0 accent-[#ff0090] w-3 h-3 cursor-pointer disabled:opacity-50"
-                  />
-                  <span className={autoTranslate && !isQuotaExceeded ? "text-[#ff0090] font-black uppercase tracking-wider animate-pulse" : "uppercase tracking-wider"}>
-                    {isQuotaExceeded 
-                      ? (language === 'ca' ? "Sincro Limits (Text Directe) ⚠️" : "Sincro Límites (Texto Directo) ⚠️")
-                      : "Sincro IA ✨"
+            <div className="bg-zinc-50 border border-zinc-200 rounded-2xl p-5 space-y-5 text-left">
+              {/* Header with Title and Language Selector */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-200 pb-4">
+                <div>
+                  <h4 className="font-sans font-bold text-sm text-zinc-800 flex items-center gap-2">
+                    <FileText size={16} className="text-[#ff0090]" />
+                    {language === 'ca' ? "Edició Completa dels Textos de la Portada" : "Edición Completa de los Textos de la Portada"}
+                  </h4>
+                  <p className="text-[11px] text-zinc-500 mt-0.5">
+                    {language === 'ca'
+                      ? "Edició independent per Català i Castellà. S'emmagatzema directament a Supabase."
+                      : "Edición independiente para Catalán y Castellano. Se almacena directamente en Supabase."}
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {/* Language Switcher Tabs */}
+                  <div className="flex bg-zinc-200/80 p-1 rounded-xl gap-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTextEditingLang('ca');
+                        setActiveLangTab('ca');
+                      }}
+                      className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
+                        textEditingLang === 'ca'
+                          ? 'bg-white text-zinc-900 shadow-sm'
+                          : 'text-zinc-600 hover:text-zinc-900'
+                      }`}
+                      id="btn-tab-lang-ca"
+                    >
+                      <span className="w-2 h-2 rounded-full bg-[#ff0090]" />
+                      Català (CAT)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTextEditingLang('es');
+                        setActiveLangTab('es');
+                      }}
+                      className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
+                        textEditingLang === 'es'
+                          ? 'bg-white text-zinc-900 shadow-sm'
+                          : 'text-zinc-600 hover:text-zinc-900'
+                      }`}
+                      id="btn-tab-lang-es"
+                    >
+                      <span className="w-2 h-2 rounded-full bg-amber-500" />
+                      Castellano (ESP)
+                    </button>
+                  </div>
+
+                  {/* Reset defaults button */}
+                  <button
+                    type="button"
+                    onClick={handleResetTextosDefaults}
+                    className="px-3 py-1.5 text-xs font-semibold text-zinc-600 hover:text-rose-600 bg-white hover:bg-rose-50 border border-zinc-200 hover:border-rose-200 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer"
+                    title={language === 'ca' ? "Restaurar només textos per defecte" : "Restaurar solo textos por defecto"}
+                    id="btn-reset-textos"
+                  >
+                    <RotateCcw size={13} />
+                    <span className="hidden sm:inline">
+                      {language === 'ca' ? "Restaurar valors per defecte" : "Restaurar valores por defecto"}
+                    </span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Active editing banner */}
+              <div className="bg-white border border-zinc-200/80 rounded-xl p-3 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className={`text-[10px] font-mono font-extrabold px-2 py-0.5 rounded-full ${
+                    textEditingLang === 'ca' ? 'bg-[#ff0090]/10 text-[#ff0090] border border-[#ff0090]/30' : 'bg-amber-100 text-amber-800 border border-amber-300'
+                  }`}>
+                    {textEditingLang === 'ca' ? "CATALÀ" : "CASTELLANO"}
+                  </span>
+                  <span className="text-xs text-zinc-600">
+                    {language === 'ca' 
+                      ? `Modificant els textos en ${textEditingLang === 'ca' ? 'Català' : 'Castellà'}. Es mostra en directe al mòbil de la dreta.`
+                      : `Modificando los textos en ${textEditingLang === 'ca' ? 'Catalán' : 'Castellano'}. Se muestra en directo en el móvil de la derecha.`
                     }
                   </span>
-                </label>
-                <span className="text-[9px] bg-zinc-805 bg-[#ff0090] text-white font-mono font-extrabold px-1.5 py-0.5 rounded">
-                  {language.toUpperCase()} ACTIU
-                </span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const sourceLang = textEditingLang === 'ca' ? 'ca' : 'es';
+                    const targetLang = textEditingLang === 'ca' ? 'es' : 'ca';
+                    if (!window.confirm(
+                      language === 'ca'
+                        ? `Vols traduir automàticament els textos de ${sourceLang.toUpperCase()} a ${targetLang.toUpperCase()}?`
+                        : `¿Deseas traducir automáticamente los textos de ${sourceLang.toUpperCase()} a ${targetLang.toUpperCase()}?`
+                    )) return;
+
+                    try {
+                      const { translateText } = await import('../translateService');
+                      if (sourceLang === 'ca') {
+                        if (config.titolCA) {
+                          const t = await translateText(config.titolCA, 'ca', 'es');
+                          if (t) updateField('titolES', t);
+                        }
+                        if (config.subtitolCA) {
+                          const t = await translateText(config.subtitolCA, 'ca', 'es');
+                          if (t) updateField('subtitolES', t);
+                        }
+                        if (config.benvingudaCA) {
+                          const t = await translateText(config.benvingudaCA, 'ca', 'es');
+                          if (t) updateField('benvingudaES', t);
+                        }
+                        if (config.descripcioCA) {
+                          const t = await translateText(config.descripcioCA, 'ca', 'es');
+                          if (t) updateField('descripcioES', t);
+                        }
+                        if (config.botoTextCA) {
+                          const t = await translateText(config.botoTextCA, 'ca', 'es');
+                          if (t) updateField('botoTextES', t);
+                        }
+                        if (config.badgeTextCA) {
+                          const t = await translateText(config.badgeTextCA, 'ca', 'es');
+                          if (t) updateField('badgeTextES', t);
+                        }
+                      } else {
+                        if (config.titolES) {
+                          const t = await translateText(config.titolES, 'es', 'ca');
+                          if (t) updateField('titolCA', t);
+                        }
+                        if (config.subtitolES) {
+                          const t = await translateText(config.subtitolES, 'es', 'ca');
+                          if (t) updateField('subtitolCA', t);
+                        }
+                        if (config.benvingudaES) {
+                          const t = await translateText(config.benvingudaES, 'es', 'ca');
+                          if (t) updateField('benvingudaCA', t);
+                        }
+                        if (config.descripcioES) {
+                          const t = await translateText(config.descripcioES, 'es', 'ca');
+                          if (t) updateField('descripcioCA', t);
+                        }
+                        if (config.botoTextES) {
+                          const t = await translateText(config.botoTextES, 'es', 'ca');
+                          if (t) updateField('botoTextCA', t);
+                        }
+                        if (config.badgeTextES) {
+                          const t = await translateText(config.badgeTextES, 'es', 'ca');
+                          if (t) updateField('badgeTextCA', t);
+                        }
+                      }
+                      showToast(
+                        language === 'ca' ? "✓ Textos copiats i traduïts a l'altre idioma" : "✓ Textos copiados y traducidos al otro idioma",
+                        'success'
+                      );
+                    } catch (e: any) {
+                      showToast(e?.message || "Error al traduir", 'error');
+                    }
+                  }}
+                  className="text-[11px] font-medium text-[#ff0090] hover:text-[#e0007f] hover:underline flex items-center gap-1 cursor-pointer"
+                >
+                  <Sparkles size={13} />
+                  <span>{language === 'ca' ? "Copiar i traduir a l'altre idioma" : "Copiar y traducir al otro idioma"}</span>
+                </button>
+              </div>
+
+              {/* Text Fields List */}
+              <div className="space-y-4">
+                {/* 1. Títol principal */}
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="block text-xs font-bold text-zinc-700">
+                      {language === 'ca' ? "1. Títol Principal" : "1. Título Principal"}
+                      <span className="text-rose-500 ml-0.5">*</span>
+                    </label>
+                    <span className="text-[10px] text-zinc-400 font-mono">
+                      {textEditingLang === 'ca' ? 'titolCA' : 'titolES'}
+                    </span>
+                  </div>
+                  <input
+                    type="text"
+                    required
+                    value={textEditingLang === 'ca' ? (config.titolCA ?? '') : (config.titolES ?? '')}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (textEditingLang === 'ca') {
+                        updateField('titolCA', val);
+                      } else {
+                        updateField('titolES', val);
+                      }
+                    }}
+                    placeholder={
+                      textEditingLang === 'ca'
+                        ? "Ex: Inscripcions Comparses El Tast 2027"
+                        : "Ej: Inscripciones Comparsas El Tast 2027"
+                    }
+                    className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] focus:ring-1 focus:ring-[#ff0090] rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all placeholder-zinc-400 font-sans"
+                    id="input-text-titol"
+                  />
+                  <p className="text-[10px] text-zinc-400 mt-1">
+                    {language === 'ca' ? "El gran encapçalament que identifica l'esdeveniment a la portada." : "El gran encabezado que identifica el evento en la portada."}
+                  </p>
+                </div>
+
+                {/* 2. Subtítol */}
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="block text-xs font-bold text-zinc-700">
+                      {language === 'ca' ? "2. Subtítol" : "2. Subtítulo"}
+                    </label>
+                    <span className="text-[10px] text-zinc-400 font-mono">
+                      {textEditingLang === 'ca' ? 'subtitolCA' : 'subtitolES'}
+                    </span>
+                  </div>
+                  <input
+                    type="text"
+                    value={textEditingLang === 'ca' ? (config.subtitolCA ?? '') : (config.subtitolES ?? '')}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (textEditingLang === 'ca') {
+                        updateField('subtitolCA', val);
+                      } else {
+                        updateField('subtitolES', val);
+                      }
+                    }}
+                    placeholder={
+                      textEditingLang === 'ca'
+                        ? "Ex: L'esdeveniment més esperat de l'any a Vilanova i la Geltrú"
+                        : "Ej: El evento más esperado del año en Vilanova i la Geltrú"
+                    }
+                    className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] focus:ring-1 focus:ring-[#ff0090] rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all placeholder-zinc-400 font-sans"
+                    id="input-text-subtitol"
+                  />
+                  <p className="text-[10px] text-zinc-400 mt-1">
+                    {language === 'ca' ? "Frase complementària que apareix sota el títol principal." : "Frase complementaria que aparece bajo el título principal."}
+                  </p>
+                </div>
+
+                {/* 3. Text de benvinguda */}
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="block text-xs font-bold text-zinc-700">
+                      {language === 'ca' ? "3. Text de Benvinguda" : "3. Texto de Bienvenida"}
+                    </label>
+                    <span className="text-[10px] text-zinc-400 font-mono">
+                      {textEditingLang === 'ca' ? 'benvingudaCA' : 'benvingudaES'}
+                    </span>
+                  </div>
+                  <input
+                    type="text"
+                    value={textEditingLang === 'ca' ? (config.benvingudaCA ?? '') : (config.benvingudaES ?? '')}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (textEditingLang === 'ca') {
+                        updateField('benvingudaCA', val);
+                      } else {
+                        updateField('benvingudaES', val);
+                      }
+                    }}
+                    placeholder={
+                      textEditingLang === 'ca'
+                        ? "Ex: BENVINGUTS AL PORTAL OFICIAL D'INSCRIPCIONS"
+                        : "Ej: BIENVENIDOS AL PORTAL OFICIAL DE INSCRIPCIONES"
+                    }
+                    className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] focus:ring-1 focus:ring-[#ff0090] rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all placeholder-zinc-400 font-sans"
+                    id="input-text-benvinguda"
+                  />
+                  <p className="text-[10px] text-zinc-400 mt-1">
+                    {language === 'ca' ? "Text superior d'obertura que dóna la benvinguda als participants." : "Texto superior de apertura que da la bienvenida a los participantes."}
+                  </p>
+                </div>
+
+                {/* 4. Text descriptiu */}
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="block text-xs font-bold text-zinc-700">
+                      {language === 'ca' ? "4. Text Descriptiu o Reglament" : "4. Texto Descriptivo o Reglamento"}
+                      <span className="text-rose-500 ml-0.5">*</span>
+                    </label>
+                    <span className="text-[10px] text-zinc-400 font-mono">
+                      {textEditingLang === 'ca' ? 'descripcioCA' : 'descripcioES'}
+                    </span>
+                  </div>
+                  <textarea
+                    rows={4}
+                    required
+                    value={textEditingLang === 'ca' ? (config.descripcioCA ?? '') : (config.descripcioES ?? '')}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (textEditingLang === 'ca') {
+                        updateField('descripcioCA', val);
+                      } else {
+                        updateField('descripcioES', val);
+                      }
+                    }}
+                    placeholder={
+                      textEditingLang === 'ca'
+                        ? "Descriu breument el funcionament, dates importants o requisits de participació..."
+                        : "Describe brevemente el funcionamiento, fechas importantes o requisitos de participación..."
+                    }
+                    className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] focus:ring-1 focus:ring-[#ff0090] rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all placeholder-zinc-400 font-sans resize-none leading-relaxed"
+                    id="textarea-text-descripcio"
+                  />
+                  <p className="text-[10px] text-zinc-400 mt-1">
+                    {language === 'ca' ? "El paràgraf principal amb el resum del funcionament del registre." : "El párrafo principal con el resumen del funcionamiento del registro."}
+                  </p>
+                </div>
+
+                {/* 5. Text del botó */}
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="block text-xs font-bold text-zinc-700">
+                      {language === 'ca' ? "5. Text del Botó Principal" : "5. Texto del Botón Principal"}
+                      <span className="text-rose-500 ml-0.5">*</span>
+                    </label>
+                    <span className="text-[10px] text-zinc-400 font-mono">
+                      {textEditingLang === 'ca' ? 'botoTextCA' : 'botoTextES'}
+                    </span>
+                  </div>
+                  <input
+                    type="text"
+                    required
+                    value={textEditingLang === 'ca' ? (config.botoTextCA ?? '') : (config.botoTextES ?? '')}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (textEditingLang === 'ca') {
+                        updateField('botoTextCA', val);
+                      } else {
+                        updateField('botoTextES', val);
+                      }
+                    }}
+                    placeholder={
+                      textEditingLang === 'ca'
+                        ? "Ex: Iniciar Formulari d'Inscripció"
+                        : "Ej: Iniciar Formulario de Inscripción"
+                    }
+                    className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] focus:ring-1 focus:ring-[#ff0090] rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all placeholder-zinc-400 font-sans"
+                    id="input-text-bototext"
+                  />
+                  <p className="text-[10px] text-zinc-400 mt-1">
+                    {language === 'ca' ? "L'acció principal que fa clic el participant per accedir al formulari." : "La acción principal que pulsa el participante para acceder al formulario."}
+                  </p>
+                </div>
+
+                {/* 6. Etiqueta de l'esdeveniment (Badge) */}
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="block text-xs font-bold text-zinc-700">
+                      {language === 'ca' ? "6. Etiqueta de l'Esdeveniment (Badge)" : "6. Etiqueta del Evento (Badge)"}
+                    </label>
+                    <span className="text-[10px] text-zinc-400 font-mono">
+                      {textEditingLang === 'ca' ? 'badgeTextCA' : 'badgeTextES'}
+                    </span>
+                  </div>
+                  <input
+                    type="text"
+                    value={textEditingLang === 'ca' ? (config.badgeTextCA ?? '') : (config.badgeTextES ?? '')}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (textEditingLang === 'ca') {
+                        updateField('badgeTextCA', val);
+                      } else {
+                        updateField('badgeTextES', val);
+                      }
+                    }}
+                    placeholder={
+                      textEditingLang === 'ca'
+                        ? `Ex: Inscripcions Obertes ${activeYear}`
+                        : `Ej: Inscripciones Abiertas ${activeYear}`
+                    }
+                    className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] focus:ring-1 focus:ring-[#ff0090] rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all placeholder-zinc-400 font-sans"
+                    id="input-text-badgetext"
+                  />
+                  <p className="text-[10px] text-zinc-400 mt-1">
+                    {language === 'ca' ? "Text destacat dins la píndola flotant sobre el títol." : "Texto destacado dentro de la píldora flotante sobre el título."}
+                  </p>
+                </div>
+              </div>
+
+              {/* Bottom Actions Bar for Textos tab */}
+              <div className="pt-4 border-t border-zinc-200 flex flex-col sm:flex-row items-center justify-between gap-3">
+                <div className="text-[11px] text-zinc-500 flex items-center gap-1.5">
+                  <CheckCircle2 size={14} className="text-emerald-500" />
+                  {language === 'ca' 
+                    ? "Previsualització activa en directe. En prémer 'Desar', s'actualitza la portada pública."
+                    : "Previsualización activa en directo. Al pulsar 'Guardar', se actualiza la portada pública."}
+                </div>
+
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <button
+                    type="button"
+                    onClick={handleResetTextosDefaults}
+                    className="flex-1 sm:flex-none px-3.5 py-2 text-xs font-semibold text-zinc-600 hover:text-zinc-900 bg-zinc-100 hover:bg-zinc-200 rounded-xl transition cursor-pointer"
+                  >
+                    {language === 'ca' ? "Restaurar Textos" : "Restaurar Textos"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSave}
+                    className="flex-1 sm:flex-none px-5 py-2 text-xs font-bold text-white bg-[#ff0090] hover:bg-[#e0007f] shadow-md shadow-[#ff0090]/20 rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer"
+                    id="btn-save-textos"
+                  >
+                    <Save size={14} />
+                    {saveSuccess
+                      ? (language === 'ca' ? "✓ Desat!" : "✓ ¡Guardado!")
+                      : (language === 'ca' ? "Desar a Supabase" : "Guardar en Supabase")
+                    }
+                  </button>
+                </div>
               </div>
             </div>
-
-            <div className="space-y-4">
-              {/* Títol / Título */}
-              <div>
-                <div className="flex justify-between items-center mb-1">
-                  <label className="block text-[10px] text-zinc-550 uppercase font-mono font-extrabold">
-                    {language === 'ca' ? "Títol de la Portada *" : "Título de la Portada *"}
-                  </label>
-                  {translatingFields['titol'] && <span className="text-[8px] text-[#ff0090] font-black animate-pulse">✨ Sincronitzant IA...</span>}
-                </div>
-                <input 
-                  type="text"
-                  required
-                  value={language === 'ca' ? (config.titolCA ?? '') : (config.titolES ?? '')}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    if (language === 'ca') {
-                      updateField('titolCA', val);
-                    } else {
-                      updateField('titolES', val);
-                    }
-                  }}
-                  onBlur={async (e) => {
-                    if (!autoTranslate) return;
-                    const val = e.target.value;
-                    try {
-                      const { syncDetectAndTranslate } = await import('../translateService');
-                      await syncDetectAndTranslate(
-                        val,
-                        (translated) => updateField('titolCA', translated),
-                        (translated) => updateField('titolES', translated),
-                        (loading) => setTranslatingFields(prev => ({ ...prev, titol: loading }))
-                      );
-                    } catch (err) {
-                      console.error("Error in titol translation onBlur:", err);
-                    }
-                  }}
-                  placeholder={language === 'ca' ? "El títol principal cridaner..." : "El título principal llamativo..."}
-                  className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all placeholder-zinc-400 font-sans"
-                />
-              </div>
-
-              {/* Subtítol / Subtítulo */}
-              <div>
-                <div className="flex justify-between items-center mb-1">
-                  <label className="block text-[10px] text-zinc-550 uppercase font-mono font-extrabold">
-                    {language === 'ca' ? "Subtítol superior" : "Subtítulo superior"}
-                  </label>
-                  {translatingFields['subtitol'] && <span className="text-[8px] text-[#ff0090] font-black animate-pulse">✨ Sincronitzant IA...</span>}
-                </div>
-                <input 
-                  type="text"
-                  value={language === 'ca' ? (config.subtitolCA ?? '') : (config.subtitolES ?? '')}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    if (language === 'ca') {
-                      updateField('subtitolCA', val);
-                    } else {
-                      updateField('subtitolES', val);
-                    }
-                  }}
-                  onBlur={async (e) => {
-                    if (!autoTranslate) return;
-                    const val = e.target.value;
-                    try {
-                      const { syncDetectAndTranslate } = await import('../translateService');
-                      await syncDetectAndTranslate(
-                        val,
-                        (translated) => updateField('subtitolCA', translated),
-                        (translated) => updateField('subtitolES', translated),
-                        (loading) => setTranslatingFields(prev => ({ ...prev, subtitol: loading }))
-                      );
-                    } catch (err) {
-                      console.error("Error in subtitol translation onBlur:", err);
-                    }
-                  }}
-                  placeholder={language === 'ca' ? "Ex: Benvinguts a les comparses d'El Tast..." : "Ej: Bienvenidos a las comparsas de El Tast..."}
-                  className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all placeholder-zinc-400 font-sans"
-                />
-              </div>
-
-              {/* Descripció / Descripción */}
-              <div>
-                <div className="flex justify-between items-center mb-1">
-                  <label className="block text-[10px] text-zinc-550 uppercase font-mono font-extrabold">
-                    {language === 'ca' ? "Descripció o Reglament breu *" : "Descripción o Reglamento breve *"}
-                  </label>
-                  {translatingFields['descripcio'] && <span className="text-[8px] text-[#ff0090] font-black animate-pulse">✨ Sincronitzant IA...</span>}
-                </div>
-                <textarea 
-                  rows={4}
-                  required
-                  value={language === 'ca' ? (config.descripcioCA ?? '') : (config.descripcioES ?? '')}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    if (language === 'ca') {
-                      updateField('descripcioCA', val);
-                    } else {
-                      updateField('descripcioES', val);
-                    }
-                  }}
-                  onBlur={async (e) => {
-                    if (!autoTranslate) return;
-                    const val = e.target.value;
-                    try {
-                      const { syncDetectAndTranslate } = await import('../translateService');
-                      await syncDetectAndTranslate(
-                        val,
-                        (translated) => updateField('descripcioCA', translated),
-                        (translated) => updateField('descripcioES', translated),
-                        (loading) => setTranslatingFields(prev => ({ ...prev, descripcio: loading }))
-                      );
-                    } catch (err) {
-                      console.error("Error in descripcio translation onBlur:", err);
-                    }
-                  }}
-                  placeholder={language === 'ca' ? "Descriu breument com funciona el registre..." : "Describe brevemente cómo funciona el registro..."}
-                  className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all placeholder-zinc-400 font-sans resize-none leading-relaxed"
-                />
-              </div>
-
-              {/* Text del Botó Principal */}
-              <div>
-                <div className="flex justify-between items-center mb-1">
-                  <label className="block text-[10px] text-zinc-550 uppercase font-mono font-extrabold">
-                    {language === 'ca' ? "Text del Botó Principal *" : "Texto del Botón Principal *"}
-                  </label>
-                  {translatingFields['botoText'] && <span className="text-[8px] text-[#ff0090] font-black animate-pulse">✨ Sincronitzant IA...</span>}
-                </div>
-                <input 
-                  type="text"
-                  required
-                  value={language === 'ca' ? (config.botoTextCA ?? '') : (config.botoTextES ?? '')}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    if (language === 'ca') {
-                      updateField('botoTextCA', val);
-                    } else {
-                      updateField('botoTextES', val);
-                    }
-                  }}
-                  onBlur={async (e) => {
-                    if (!autoTranslate) return;
-                    const val = e.target.value;
-                    try {
-                      const { syncDetectAndTranslate } = await import('../translateService');
-                      await syncDetectAndTranslate(
-                        val,
-                        (translated) => updateField('botoTextCA', translated),
-                        (translated) => updateField('botoTextES', translated),
-                        (loading) => setTranslatingFields(prev => ({ ...prev, botoText: loading }))
-                      );
-                    } catch (err) {
-                      console.error("Error in botoText translation onBlur:", err);
-                    }
-                  }}
-                  placeholder={language === 'ca' ? "Ex: Iniciar Formulari..." : "Ej: Iniciar Formulario..."}
-                  className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all placeholder-zinc-400 font-sans"
-                />
-              </div>
-
-              {/* Text de l'Etiqueta / Badge */}
-              <div>
-                <div className="flex justify-between items-center mb-1">
-                  <label className="block text-[10px] text-zinc-550 uppercase font-mono font-extrabold">
-                    {language === 'ca' ? "Text de l'Etiqueta / Badge" : "Texto de la Etiqueta / Badge"}
-                  </label>
-                  {translatingFields['badgeText'] && <span className="text-[8px] text-[#ff0090] font-black animate-pulse">✨ Sincronitzant IA...</span>}
-                </div>
-                <input 
-                  type="text"
-                  value={language === 'ca' ? (config.badgeTextCA ?? '') : (config.badgeTextES ?? '')}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    if (language === 'ca') {
-                      updateField('badgeTextCA', val);
-                    } else {
-                      updateField('badgeTextES', val);
-                    }
-                  }}
-                  onBlur={async (e) => {
-                    if (!autoTranslate) return;
-                    const val = e.target.value;
-                    try {
-                      const { syncDetectAndTranslate } = await import('../translateService');
-                      await syncDetectAndTranslate(
-                        val,
-                        (translated) => updateField('badgeTextCA', translated),
-                        (translated) => updateField('badgeTextES', translated),
-                        (loading) => setTranslatingFields(prev => ({ ...prev, badgeText: loading }))
-                      );
-                    } catch (err) {
-                      console.error("Error in badgeText translation onBlur:", err);
-                    }
-                  }}
-                  placeholder={language === 'ca' ? `Ex: Inscripcions Obertes ${activeYear}...` : `Ej: Inscripciones Abiertas ${activeYear}...`}
-                  className="w-full bg-white text-zinc-900 border border-zinc-200 focus:border-[#ff0090] rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all placeholder-zinc-400 font-sans"
-                />
-              </div>
-            </div>
-          </div>
-        )}
+          )}
 
           {/* TAB 3: FONTS I DISSENY */}
           {activeTab === 'fondo' && (
@@ -2653,9 +2927,28 @@ export default function AdminPortada({ onAddLog }: AdminPortadaProps) {
               <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/50 to-black/30 z-5 pointer-events-none" />
 
               {/* Shell mock header */}
-              <div className="relative z-10 w-full flex justify-between items-center text-[8px] text-zinc-550 uppercase tracking-widest border-b border-white/5 pb-2 font-mono">
+              <div className="relative z-10 w-full flex justify-between items-center text-[8px] text-zinc-400 uppercase tracking-widest border-b border-white/10 pb-2 font-mono">
                 <span>⚡ el tast vng {activeYear}</span>
-                <span className="text-[7px] bg-white/5 px-1.5 py-0.5 rounded text-fuchsia-400">mockup</span>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => { setActiveLangTab('ca'); setTextEditingLang('ca'); }}
+                    className={`px-1.5 py-0.5 rounded text-[8px] font-mono font-bold transition cursor-pointer ${
+                      activeLangTab === 'ca' ? 'bg-[#ff0090] text-white shadow' : 'bg-white/10 text-zinc-400 hover:text-white'
+                    }`}
+                  >
+                    CAT
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setActiveLangTab('es'); setTextEditingLang('es'); }}
+                    className={`px-1.5 py-0.5 rounded text-[8px] font-mono font-bold transition cursor-pointer ${
+                      activeLangTab === 'es' ? 'bg-[#ff0090] text-white shadow' : 'bg-white/10 text-zinc-400 hover:text-white'
+                    }`}
+                  >
+                    ESP
+                  </button>
+                </div>
               </div>
 
               {/* Shell mock body */}
@@ -2714,22 +3007,47 @@ export default function AdminPortada({ onAddLog }: AdminPortadaProps) {
                   );
                 })()}
 
+                {/* Welcome text */}
+                {(() => {
+                  const welcomeText = activeLangTab === 'ca' 
+                    ? (config.benvingudaCA || DEFAULT_PORTADA_DATA.ca.welcome) 
+                    : (config.benvingudaES || DEFAULT_PORTADA_DATA.es.welcome);
+                  if (!welcomeText) return null;
+                  return (
+                    <p 
+                      className="text-[7.5px] font-mono uppercase tracking-wider font-semibold line-clamp-1 break-words"
+                      style={{ color: config.subtitolColor || '#a1a1aa' }}
+                    >
+                      {welcomeText}
+                    </p>
+                  );
+                })()}
+
+                {/* Main title */}
                 <h5 
-                  className="font-sans font-black text-base md:text-lg leading-tight tracking-tight"
+                  className="font-sans font-black text-base md:text-lg leading-tight tracking-tight break-words"
                   style={{ color: config.titolColor || '#ffffff' }}
                 >
                   {activeLangTab === 'ca' ? config.titolCA : config.titolES}
                 </h5>
 
-                <p 
-                  className="text-[9px] tracking-wide uppercase font-mono"
-                  style={{ color: config.subtitolColor || '#a1a1aa' }}
-                >
-                  {activeLangTab === 'ca' ? config.subtitolCA : config.subtitolES}
-                </p>
+                {/* Subtitle */}
+                {(() => {
+                  const subText = activeLangTab === 'ca' ? config.subtitolCA : config.subtitolES;
+                  if (!subText) return null;
+                  return (
+                    <p 
+                      className="text-[8.5px] tracking-wide font-sans font-medium line-clamp-2 break-words"
+                      style={{ color: config.subtitolColor || '#a1a1aa' }}
+                    >
+                      {subText}
+                    </p>
+                  );
+                })()}
 
+                {/* Description */}
                 <p 
-                  className="text-[9px] leading-relaxed line-clamp-3"
+                  className="text-[8.5px] leading-relaxed line-clamp-3 break-words"
                   style={{ color: config.descripcioColor || '#d4d4d8' }}
                 >
                   {activeLangTab === 'ca' ? config.descripcioCA : config.descripcioES}
