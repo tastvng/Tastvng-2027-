@@ -32,7 +32,8 @@ export function getEntityConfigSync(language: 'ca' | 'es' = 'ca', fallbackConfig
 
   const nom = ev.nombre || localStorage.getItem('tast_nom_esdeveniment') || fallbackConfig?.titolSeccioTarifes?.replace(/Tarifes\s*/i, '') || "Associació Cultural El Tast";
   const direccio = ev.direccio || localStorage.getItem('tast_direccio_esdeveniment') || "Plaça Soler i Carbonell, 28, Vilanova i la Geltrú";
-  const email = ev.email || localStorage.getItem('tast_email_contacte') || "secretaria@eltast.cat";
+  const rawEmail = ev.email || localStorage.getItem('tast_email_contacte') || "tastvng@gmail.com";
+  const email = (rawEmail.includes('secretaria@eltast.cat') || rawEmail.includes('secretaria@tast.cat')) ? "tastvng@gmail.com" : rawEmail;
   const telefon = ev.telefon || localStorage.getItem('tast_telefon_contacte') || "600 000 000";
   const anyEdicio = ev.any_edicio || localStorage.getItem('tast_any_edicio') || "2027";
   const nomEsdeveniment = ev.nombre ? `${ev.nombre} ${anyEdicio}` : `El Tast ${anyEdicio}`;

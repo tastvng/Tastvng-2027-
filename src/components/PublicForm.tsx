@@ -12,6 +12,7 @@ import {
   Minus, 
   AlertTriangle,
   AlertCircle,
+  CheckCircle2,
   ChevronRight,
   Sparkle,
   Database,
@@ -319,9 +320,71 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
   const [cameraActive, setCameraActive] = useState(false);
   const [videoError, setVideoError] = useState<string | null>(null);
   
-  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const cameraVideoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+
+  // Questionnaire / Informative Video verification state
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const maxWatchedTimeRef = useRef<number>(0);
+  const isVideoReallyFinishedRef = useRef<boolean>(false);
+  const [videoWatched, setVideoWatched] = useState<boolean>(false);
+  const [videoWatchedError, setVideoWatchedError] = useState<string | null>(null);
+
+  const markVideoAsCompleted = () => {
+    isVideoReallyFinishedRef.current = true;
+    setVideoWatched(true);
+    setVideoWatchedError(null);
+  };
+
+  const handleVideoEnded = () => {
+    markVideoAsCompleted();
+  };
+
+  const handleVideoTimeUpdate = (e: React.SyntheticEvent<HTMLVideoElement>) => {
+    const v = e.currentTarget;
+    if (!v) return;
+
+    // Prevent skipping: if seeker jumps >2s ahead of recorded watch point, snap back
+    if (v.currentTime > maxWatchedTimeRef.current + 2) {
+      v.currentTime = maxWatchedTimeRef.current;
+      return;
+    }
+    if (v.currentTime > maxWatchedTimeRef.current) {
+      maxWatchedTimeRef.current = v.currentTime;
+    }
+
+    // 95% completion threshold
+    if (v.duration && v.duration > 0) {
+      const ratio = v.currentTime / v.duration;
+      if (ratio >= 0.95) {
+        markVideoAsCompleted();
+      }
+    }
+  };
+
+  const handleVideoSeeking = (e: React.SyntheticEvent<HTMLVideoElement>) => {
+    const v = e.currentTarget;
+    if (!v) return;
+    if (v.currentTime > maxWatchedTimeRef.current + 1) {
+      v.currentTime = maxWatchedTimeRef.current;
+    }
+  };
+
+  const handleVideoPause = () => {
+    if (!isVideoReallyFinishedRef.current) {
+      setVideoWatched(false);
+    }
+  };
+
+  const handleVideoCloseModal = () => {
+    if (!isVideoReallyFinishedRef.current) {
+      setVideoWatched(false);
+      setVideoWatchedError(language === 'ca'
+        ? "⚠️ Per continuar, cal veure el vídeo informatiu complet."
+        : "⚠️ Para continuar, es necesario ver el vídeo informativo completo.");
+    }
+  };
 
   // Calculate live total price
   const basePrice = categoria === CategoriaParella.ADULT 
@@ -474,8 +537,8 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
             video: { facingMode: { ideal: 'environment' } } 
           });
           streamRef.current = stream;
-          if (videoRef.current) {
-            videoRef.current.srcObject = stream;
+          if (cameraVideoRef.current) {
+            cameraVideoRef.current.srcObject = stream;
           }
         } catch (err: any) {
           console.error("error opening webcam:", err);
@@ -501,8 +564,8 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
   };
 
   const capturePhoto = () => {
-    if (videoRef.current && canvasRef.current) {
-      const video = videoRef.current;
+    if (cameraVideoRef.current && canvasRef.current) {
+      const video = cameraVideoRef.current;
       const canvas = canvasRef.current;
       const context = canvas.getContext('2d');
       if (context) {
@@ -650,6 +713,15 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
     if (!acceptaRGPD) tempErrors.rgpd = language === 'ca' ? "Heu d'acceptar els termes de privadesa" : "Debe aceptar los términos de privacidad";
     if (!acceptaPresencial) tempErrors.presencial = language === 'ca' ? "Heu d'acceptar pagar i recollir de manera presencial" : "Debe aceptar pagar y recoger de forma presencial";
 
+    // Video verification: the informative video must be watched completely (ended or >= 95%)
+    if (!videoWatched || !isVideoReallyFinishedRef.current) {
+      const videoMsg = language === 'ca'
+        ? "⚠️ Per continuar, cal veure el vídeo informatiu complet."
+        : "⚠️ Para continuar, es necesario ver el vídeo informativo completo.";
+      tempErrors.video = videoMsg;
+      setVideoWatchedError(videoMsg);
+    }
+
     // Check duplicates against existing registrations
     try {
       if (existingInscripcions && existingInscripcions.length > 0) {
@@ -730,6 +802,20 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
 
   const handleSubmetre = (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Block submission immediately if informative video has not been watched completely
+    if (!videoWatched || !isVideoReallyFinishedRef.current) {
+      const videoMsg = language === 'ca'
+        ? "⚠️ Per continuar, cal veure el vídeo informatiu complet."
+        : "⚠️ Para continuar, es necesario ver el vídeo informativo completo.";
+      setVideoWatchedError(videoMsg);
+      const target = document.getElementById('video-requirement-notice') || document.getElementById('btn-submit-registration');
+      if (target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      return;
+    }
+
     if (!validateForm()) {
       const scrollTarget = document.getElementById('public-form-title');
       if (scrollTarget) {
@@ -932,6 +1018,21 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
       } catch (e) {
         // Resilient fallback if server route is offline
         console.warn("Server validation endpoint offline, proceeding with client verification:", e);
+      }
+
+      // Strict final validation right before saving to Supabase / dispatching email
+      if (!videoWatched || !isVideoReallyFinishedRef.current) {
+        console.warn("[PublicForm] Inscription aborted: informative video not completed.");
+        const videoMsg = language === 'ca'
+          ? "⚠️ Per continuar, cal veure el vídeo informatiu complet."
+          : "⚠️ Para continuar, es necesario ver el vídeo informativo completo.";
+        setVideoWatchedError(videoMsg);
+        setIsSubmitting(false);
+        const target = document.getElementById('video-requirement-notice') || document.getElementById('btn-submit-registration');
+        if (target) {
+          target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        return;
       }
 
       try {

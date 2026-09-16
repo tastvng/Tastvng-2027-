@@ -1,0 +1,453 @@
+import type { VercelRequest, VercelResponse } from "@vercel/node";
+import { createClient } from "@supabase/supabase-js";
+import { GoogleGenAI } from "@google/genai";
+import { applyCorsHeaders } from "./_cors";
+import { checkRateLimit, getClientIp } from "./_rate-limit";
+
+// In-memory cache for live Supabase configuration (20 seconds TTL to keep it ultra-fresh)
+interface CachedConfig {
+  timestamp: number;
+  data: {
+    sistemaConfig: any;
+    personalizacion: any;
+    portadaConfig: any;
+    categoriaDescripcions: any;
+    preguntes: any[];
+  };
+}
+
+let configCache: CachedConfig | null = null;
+const CACHE_TTL_MS = 20 * 1000; // 20 seconds
+
+// In-memory anonymous stats accumulator
+interface AnonymousStats {
+  totalQueries: number;
+  byLanguage: { ca: number; es: number };
+  topics: Record<string, number>;
+  lastUpdated: string;
+}
+
+let statsAccumulator: AnonymousStats = {
+  totalQueries: 0,
+  byLanguage: { ca: 0, es: 0 },
+  topics: {},
+  lastUpdated: new Date().toISOString()
+};
+
+let lastStatsFlush = 0;
+
+/**
+ * Categorizes a query into anonymous topic buckets without storing any personal data.
+ */
+function categorizeQuery(text: string): string {
+  const lower = text.toLowerCase();
+  if (lower.includes('preu') || lower.includes('costa') || lower.includes('pagar') || lower.includes('tarifa') || lower.includes('euro') || lower.includes('precio') || lower.includes('cuesta')) {
+    return 'preus';
+  }
+  if (lower.includes('adult') || lower.includes('juvenil') || lower.includes('categoria') || lower.includes('edat') || lower.includes('edad') || lower.includes('menor')) {
+    return 'categories';
+  }
+  if (lower.includes('espera') || lower.includes('llista') || lower.includes('lloc') || lower.includes('cua') || lower.includes('plaza') || lower.includes('lista')) {
+    return 'llista_espera';
+  }
+  if (lower.includes('mocador') || lower.includes('pañuelo') || lower.includes('domas') || lower.includes('domàs') || lower.includes('armilla') || lower.includes('samarreta') || lower.includes('chaleco') || lower.includes('camiseta') || lower.includes('uniforme')) {
+    return 'materials';
+  }
+  if (lower.includes('talla') || lower.includes('mida') || lower.includes('tamany') || lower.includes('tallas')) {
+    return 'talles';
+  }
+  if (lower.includes('dni') || lower.includes('nie') || lower.includes('document') || lower.includes('passaport') || lower.includes('pasaporte')) {
+    return 'dni';
+  }
+  if (lower.includes('bizum') || lower.includes('efectiu') || lower.includes('efectivo') || lower.includes('transferència') || lower.includes('transferencia')) {
+    return 'pagaments';
+  }
+  if (lower.includes('horari') || lower.includes('horario') || lower.includes('recollir') || lower.includes('recollida') || lower.includes('entrega') || lower.includes('direccio') || lower.includes('adreça') || lower.includes('seu') || lower.includes('sede')) {
+    return 'horaris_i_recollida';
+  }
+  if (lower.includes('fac') || lower.includes('federacio') || lower.includes('federación') || lower.includes('carnaval') || lower.includes('comparsa') || lower.includes('caramel')) {
+    return 'fac_i_carnaval';
+  }
+  return 'general';
+}
+
+/**
+ * Record purely anonymous stats. Never records IPs, names, emails, or personal text.
+ */
+async function recordAnonymousStats(supabase: any, lang: 'ca' | 'es', topic: string) {
+  try {
+    statsAccumulator.totalQueries += 1;
+    statsAccumulator.byLanguage[lang] = (statsAccumulator.byLanguage[lang] || 0) + 1;
+    statsAccumulator.topics[topic] = (statsAccumulator.topics[topic] || 0) + 1;
+    statsAccumulator.lastUpdated = new Date().toISOString();
+
+    const now = Date.now();
+    // Flush to Supabase settings every 5 minutes or every 10 queries
+    if (supabase && (now - lastStatsFlush > 5 * 60 * 1000 || statsAccumulator.totalQueries % 10 === 0)) {
+      lastStatsFlush = now;
+      await supabase.from('settings').upsert({
+        key: 'tast_chatbot_stats',
+        value: statsAccumulator,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'key' });
+    }
+  } catch (err) {
+    // Non-critical background task failure
+  }
+}
+
+/**
+ * Fetches dynamic live configuration from Supabase (with short caching).
+ */
+async function getLiveEntityData() {
+  const now = Date.now();
+  if (configCache && (now - configCache.timestamp < CACHE_TTL_MS)) {
+    return configCache.data;
+  }
+
+  const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const anonKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+
+  let sistemaConfig: any = null;
+  let personalizacion: any = null;
+  let portadaConfig: any = null;
+  let categoriaDescripcions: any = null;
+  let preguntes: any[] = [];
+
+  if (supabaseUrl && (serviceKey || anonKey)) {
+    try {
+      const client = createClient(supabaseUrl, serviceKey || anonKey!);
+
+      // 1. Fetch settings keys
+      const { data: settingsRows } = await client
+        .from('settings')
+        .select('key, value')
+        .in('key', ['tast_config_2026', 'personalizacion', 'tast_portada_config_2026']);
+
+      if (settingsRows) {
+        for (const row of settingsRows) {
+          if (row.key === 'tast_config_2026') sistemaConfig = row.value;
+          if (row.key === 'personalizacion') personalizacion = row.value;
+          if (row.key === 'tast_portada_config_2026') portadaConfig = row.value;
+        }
+      }
+
+      // 2. Fetch sistema_config table rows
+      const { data: scRows } = await client.from('sistema_config').select('clau, valor');
+      if (scRows) {
+        for (const r of scRows) {
+          if (r.clau === 'descripcions_categories') categoriaDescripcions = r.valor;
+          if (r.clau === 'preus' && !sistemaConfig?.preuAdult) {
+            sistemaConfig = { ...(sistemaConfig || {}), ...r.valor };
+          }
+        }
+      }
+
+      // 3. Fetch active questions from preguntes table
+      const { data: pRows } = await client
+        .from('preguntes')
+        .select('titol, tipus, opcions, requerit')
+        .eq('activa', true)
+        .order('ordre', { ascending: true });
+
+      if (pRows) {
+        preguntes = pRows;
+      }
+    } catch (e) {
+      console.warn("[Chat API] Could not fetch fresh Supabase config, using defaults:", e);
+    }
+  }
+
+  const result = {
+    sistemaConfig,
+    personalizacion,
+    portadaConfig,
+    categoriaDescripcions,
+    preguntes
+  };
+
+  configCache = {
+    timestamp: now,
+    data: result
+  };
+
+  return result;
+}
+
+/**
+ * Builds the comprehensive dynamic system instruction with live data and FAC knowledge.
+ */
+function buildSystemPrompt(lang: 'ca' | 'es', liveData: any): string {
+  const { sistemaConfig, personalizacion, portadaConfig, categoriaDescripcions, preguntes } = liveData;
+
+  const ev = personalizacion?.evento || {};
+  const sec = personalizacion?.secretaria || {};
+
+  // Entity details
+  const nomEntitat = ev.nombre || "Associació Cultural El Tast";
+  const direccio = ev.direccio || "Plaça Soler i Carbonell, 28, 08800 Vilanova i la Geltrú";
+  const rawEmail = ev.email || "tastvng@gmail.com";
+  const email = (rawEmail.includes('secretaria@eltast.cat') || rawEmail.includes('secretaria@tast.cat')) ? "tastvng@gmail.com" : rawEmail;
+  const telefon = ev.telefon || "600 000 000";
+
+  // Real live schedule & pickup
+  const horariAtencio = lang === 'ca'
+    ? (sec.hours_ca || "Dimecres i divendres, de 18:00h a 21:30h directament a la seu social.")
+    : (sec.hours_es || "Miércoles y viernes, de 18:00h a 21:30h directamente en la sede social.");
+
+  const diesEntrega = lang === 'ca'
+    ? (sec.dies_entrega_ca || "Dimecres i divendres de 18:00h a 21:30h a la seu social.")
+    : (sec.dies_entrega_es || "Miércoles y viernes de 18:00h a 21:30h en la sede social.");
+
+  // Prices
+  const preuAdult = sistemaConfig?.preuAdult ?? 130;
+  const preuJuvenil = sistemaConfig?.preuJuvenil ?? 95;
+  const preuDomas = sistemaConfig?.preuDomasBalco ?? 20;
+  const preuMocador = sistemaConfig?.preuMocadorExtra ?? 6;
+
+  // Status
+  const estatInscripcions = sistemaConfig?.estatInscripcions || 'obertes';
+  const estatText = estatInscripcions === 'obertes'
+    ? (lang === 'ca' ? 'Inscripcions Obertes' : 'Inscripciones Abiertas')
+    : estatInscripcions === 'espera'
+      ? (lang === 'ca' ? "Llista d'espera activa (places completes)" : 'Lista de espera activa (plazas completadas)')
+      : (lang === 'ca' ? 'Inscripcions Tancades' : 'Inscripciones Cerradas');
+
+  // Uniform lines and sizes
+  const liniesUniforme = sistemaConfig?.liniisUniforme || [
+    { nom: "Armilla oficial El Tast", opcions: ["XS", "S", "M", "L", "XL", "XXL", "3XL"] },
+    { nom: "Samarreta oficial El Tast", opcions: ["XS", "S", "M", "L", "XL", "XXL"] }
+  ];
+
+  const uniformesDesc = liniesUniforme.map((u: any) =>
+    `- ${u.nom || u.nomES}: talles disponibles [${(u.opcions || []).join(', ')}]`
+  ).join('\n');
+
+  // Dynamic questions summary
+  const preguntesDesc = (preguntes && preguntes.length > 0)
+    ? preguntes.map((p: any) => `- ${p.titol} (${p.tipus}${p.opcions ? ': ' + p.opcions.join(', ') : ''})`).join('\n')
+    : "- Cap pregunta addicional configurada.";
+
+  // Categories info
+  const descAdults = categoriaDescripcions?.adult?.descripcio ||
+    (lang === 'ca' ? "Categoria d'adults per a parelles a partir de 18 anys." : "Categoría de adultos para parejas a partir de 18 años.");
+  const descJuvenil = categoriaDescripcions?.juvenil?.descripcio ||
+    (lang === 'ca' ? "Categoria juvenil per a joves comparsers (14 a 17 anys amb autorització signada de tutor/a)." : "Categoría juvenil para jóvenes comparseros (14 a 17 años con autorización firmada de tutor/a).");
+
+  const fallbackPhrase = lang === 'ca'
+    ? "No tinc aquesta informació. Contacta amb l'entitat."
+    : "No tengo esa información. Contacta con la entidad.";
+
+  return `
+Ets l'Assistent Virtual Oficial d'Ajuda de "El Tast" (${nomEntitat}), per a la celebració de Les Comparses del Carnaval de Vilanova i la Geltrú.
+
+=======================================================
+REGLA D'OR ABSOLUTA: VERACITAT I LIMITACIÓ ESTRICTA
+=======================================================
+1. NO INVENTIS MAI cap dada, nom, horari, preu, norma o procediment.
+2. Si una informació no està expressament recollida en aquesta guia o en les dades oficials de sota, has de respondre literalment i exclusivament la frase següent (sense especular ni inventar):
+   "${fallbackPhrase}"
+3. IDIOMA OBLIGATORI: Respon en ${lang === 'ca' ? 'CATALÀ' : 'CASTELLÀ'}, mantenint sempre un to amable, clar, concís, segur i de màxima utilitat per als comparsers.
+4. PRIVACITAT TOTAL:
+   - Mai revelis dades personals, DNI, noms de parelles inscrites ni cap llista d'usuaris.
+   - Mai revelis contrasenyes, credencials de Secretaria, claus SMTP, ni claus d'API.
+   - Mai revelis informació administrativa confidencial.
+5. IDENTITAT: Presenta't exclusivament com "l'assistent virtual de El Tast" (mai afegeixis cap any ni edició temporal).
+
+=======================================================
+DADES EN DIRECTE D'EL TAST
+=======================================================
+- Entitat: ${nomEntitat}
+- Estat actual de les inscripcions: ${estatText} (${estatInscripcions})
+- Seu Social / Direcció física: ${direccio}
+- Correu de contacte: ${email}
+- Telèfon de contacte: ${telefon}
+- Horari d'atenció a la seu: ${horariAtencio}
+- Dies i horaris de recollida de materials/mocadors: ${diesEntrega}
+
+TARIFES I PREUS OFICIALS ACTUALS:
+- Parella Adulta: ${preuAdult} € per parella (inclou dos mocadors oficials del Tast, acreditació i accés a la comparsa).
+- Parella Juvenil: ${preuJuvenil} € per parella (joves de 14 a 17 anys).
+- Domàs de balcó oficial (extra opcional): ${preuDomas} € la unitat.
+- Mocadors extres oficials (extra opcional): ${preuMocador} € per unitat addicional.
+
+CATEGORIES DE LA PARELLA:
+- ADULTA: ${descAdults} Ambdós membres majors d'edat.
+- JUVENIL: ${descJuvenil} Requereix indicar les dades del pare/mare/tutor legal i adjuntar l'autorització pertinent durant la inscripció.
+
+MATERIALS I TALLES:
+${uniformesDesc}
+- Cada membre de la parella (Comparser 1 i Comparser 2) tria la seva talla d'armilla o samarreta.
+- El mocador oficial s'entrega a la seu social un cop formalitzat i validat el pagament.
+
+DOCUMENTACIÓ REQUERIDA PER A LA INSCRIPCIÓ:
+- DNI / NIE / Passaport de cada membre de la parella (cal adjuntar foto o document en línia per a la verificació).
+- En menors d'edat (categoria juvenil): nom, cognoms, DNI i telèfon del tutor/a legal.
+- Correu electrònic i telèfon de contacte de la parella per a rebre el codi de seguiment i el codi QR oficial.
+
+PAGAMENTS:
+- Efectiu a la seu social durant els horaris d'atenció (${horariAtencio}).
+- Bizum (si està habilitat per Secretaria a la seu o número oficial).
+- Quan el pagament està confirmat, l'estat passa a "PAGAT" i es pot recollir el material.
+
+LLISTA D'ESPERA:
+- Si l'aforament o places de la comparsa s'omplen, el sistema activa la llista d'espera oficial amb codis tipus LE00001, LE00002...
+- Les inscripcions en llista d'espera no paguen fins que Secretaria no allibera una plaça vacant i són admeses oficialment (passant a codi A0001 per adults o J0001 per juvenils).
+
+PREGUNTES DINÀMIQUES DEL FORMULARI:
+${preguntesDesc}
+
+=======================================================
+INFORMACIÓ GENERAL DE LA FAC (CARNAVAL DE VILANOVA)
+Font oficial: https://carnavaldevilanova.cat/la-fac/
+=======================================================
+- La Federació d'Associacions pel Carnaval (FAC) és l'organisme responsable d'unir, coordinar i organitzar les entitats vinculades al Carnaval de Vilanova i la Geltrú des de 1989.
+- Seu de la FAC: Carrer Major, 39, 08800 Vilanova i la Geltrú.
+- Telèfon de la FAC: 93 893 01 01 | Correu: fac@carnavaldevilanova.cat | Web: https://carnavaldevilanova.cat
+- El Tast és una entitat associada històrica que participa a les Comparses de Vilanova, respectant la normativa de seguretat, la logística i l'ús sostenible dels caramels (ecocaramels) regulats per la FAC.
+
+FORMAT DE RESPOSTA:
+- Sigues clar, concís i agradable.
+- Utilitza llistes o punts destacats si la resposta té diversos passos o preus.
+- Si l'usuari et saluda, respon cordialment i ofereix la teva ajuda per a les comparses d'El Tast.
+`.trim();
+}
+
+export default async function handler(req: any, res: any) {
+  applyCorsHeaders(req as any, res as any, "POST, OPTIONS");
+
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
+  }
+
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
+
+  // IP Rate limiting: max 20 queries per 5 minutes per IP
+  const clientIp = getClientIp(req);
+  if (!checkRateLimit("chatbot", clientIp, 20, 5 * 60 * 1000)) {
+    return res.status(429).json({
+      error: "Has superat el límit de missatges per minut. Si us plau, espera una mica abans de tornar a preguntar.",
+      isRateLimit: true
+    });
+  }
+
+  try {
+    const { message, messages, language } = req.body || {};
+    const lang: 'ca' | 'es' = language === 'es' ? 'es' : 'ca';
+
+    // The user query can be passed as `message` (single string) or the last message from `messages`
+    let userQuery = typeof message === 'string' ? message.trim() : '';
+    if (!userQuery && Array.isArray(messages) && messages.length > 0) {
+      const last = messages[messages.length - 1];
+      if (last && typeof last.content === 'string') {
+        userQuery = last.content.trim();
+      }
+    }
+
+    if (!userQuery) {
+      return res.status(400).json({ error: "El missatge no pot estar buit." });
+    }
+
+    if (userQuery.length > 1000) {
+      return res.status(400).json({ error: "El missatge és massa llarg (màxim 1000 caràcters)." });
+    }
+
+    // Anti-prompt-injection & credential guardrails
+    const lowerQuery = userQuery.toLowerCase();
+    const sensitiveTokens = ['smtp', 'password', 'contrasenya', 'contraseña', 'service_role', 'api_key', 'secret', 'select * from', 'drop table', 'token'];
+    for (const token of sensitiveTokens) {
+      if (lowerQuery.includes(token)) {
+        return res.status(200).json({
+          reply: lang === 'ca'
+            ? "Per motius de seguretat, no puc facilitar credencials, claus ni informació interna del sistema. Si necessites ajuda oficial, contacta amb tastvng@gmail.com."
+            : "Por motivos de seguridad, no puedo facilitar credenciales, claves ni información interna del sistema. Si necesitas ayuda oficial, contacta con tastvng@gmail.com."
+        });
+      }
+    }
+
+    // Check Gemini API key
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      console.warn("[Chatbot] GEMINI_API_KEY is not defined in environment.");
+      return res.status(503).json({
+        error: "Servei d'IA no configurat al servidor.",
+        isAiError: true
+      });
+    }
+
+    // Fetch dynamic live context from Supabase
+    const liveData = await getLiveEntityData();
+    const systemInstruction = buildSystemPrompt(lang, liveData);
+
+    // Initialize Gemini API client
+    const ai = new GoogleGenAI({
+      apiKey,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build'
+        }
+      }
+    });
+
+    // Format conversation history for Gemini
+    const contents: any[] = [];
+    if (Array.isArray(messages) && messages.length > 1) {
+      // Include past turns up to 6 turns (to preserve context without ballooning tokens)
+      const recentTurns = messages.slice(-7, -1);
+      for (const turn of recentTurns) {
+        const role = turn.role === 'user' ? 'user' : 'model';
+        const text = typeof turn.content === 'string' ? turn.content.trim() : '';
+        if (text) {
+          contents.push({
+            role,
+            parts: [{ text }]
+          });
+        }
+      }
+    }
+
+    // Add current user prompt
+    contents.push({
+      role: 'user',
+      parts: [{ text: userQuery }]
+    });
+
+    // Call Gemini 3.8 Flash model
+    const response = await ai.models.generateContent({
+      model: 'gemini-3.8-flash',
+      contents,
+      config: {
+        systemInstruction,
+        temperature: 0.2, // Low temperature for high factual accuracy
+      }
+    });
+
+    const reply = response.text?.trim() || (
+      lang === 'ca' ? "No tinc aquesta informació. Contacta amb l'entitat." : "No tengo esa información. Contacta con la entidad."
+    );
+
+    // Background: record anonymous stats
+    const topic = categorizeQuery(userQuery);
+    const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+    if (supabaseUrl && serviceKey) {
+      const client = createClient(supabaseUrl, serviceKey);
+      recordAnonymousStats(client, lang, topic).catch(() => {});
+    }
+
+    return res.status(200).json({
+      reply,
+      topic
+    });
+  } catch (err: any) {
+    console.error("[Chatbot Error]:", err);
+    return res.status(500).json({
+      error: "Error processant la consulta del xat.",
+      isAiError: true,
+      details: err?.message || String(err)
+    });
+  }
+}

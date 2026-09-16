@@ -54,6 +54,7 @@ import NotificationFeed from './components/NotificationFeed';
 import MobileRemoteScanner from './components/MobileRemoteScanner';
 import PortadaPage, { PortadaConfig } from './components/PortadaPage';
 import { PORTADA_CONFIG_DEFAULTS, ensureValidPortadaConfig } from './components/AdminPortada';
+import Chatbot from './components/Chatbot';
 import { 
   supabase,
   isSupabaseConfigured, 
@@ -1437,6 +1438,11 @@ export default function App() {
         error={inscripcionsError}
         onRefresh={handleRefreshInscripcions}
       />
+
+      {/* Floating Help Chatbot (Visible on Portada, Questionnaire, and Confirmation) */}
+      {(view === 'portada' || view === 'public' || view === 'confirmacio') && (
+        <Chatbot language={language} activeYear={activeYear} />
+      )}
     </div>
   );
 }

@@ -11,6 +11,7 @@ import inscriptionsHandler from "./api/inscriptions";
 import scannerHandler from "./api/scanner";
 import configHandler from "./api/config";
 import healthHandler from "./api/health";
+import chatHandler from "./api/chat";
 
 dotenv.config();
 
@@ -208,6 +209,10 @@ async function startServer() {
 
   // 6. /api/health
   app.all("/api/health", healthHandler);
+
+  // 7. /api/chat (Unified Help Chatbot)
+  app.all("/api/chat", chatHandler);
+  app.use("/api/chat", chatHandler);
 
   // Lazy load GoogleGenAI client for translation
   let aiClient: any = null;

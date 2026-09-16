@@ -274,12 +274,17 @@ export default function PortadaPage({
     ? (liveConfig?.footerLink1LabelCA || DEFAULT_PORTADA_DATA.ca.footerLink1Label)
     : (liveConfig?.footerLink1LabelES || DEFAULT_PORTADA_DATA.es.footerLink1Label);
 
-  const footerLink2Label = currentLang === 'ca'
+  const rawFooterLink2Label = currentLang === 'ca'
     ? (liveConfig?.footerLink2LabelCA || DEFAULT_PORTADA_DATA.ca.footerLink2Label)
     : (liveConfig?.footerLink2LabelES || DEFAULT_PORTADA_DATA.es.footerLink2Label);
+  const footerLink2Label = rawFooterLink2Label
+    ? rawFooterLink2Label.replace(/secretaria@eltast\.cat/g, 'tastvng@gmail.com').replace(/secretaria@tast\.cat/g, 'tastvng@gmail.com')
+    : 'tastvng@gmail.com';
 
   const footerLink1Url = liveConfig.footerLink1Url || '#';
-  const footerLink2Url = liveConfig.footerLink2Url || 'mailto:secretaria@eltast.cat';
+  const footerLink2Url = (liveConfig.footerLink2Url || 'mailto:tastvng@gmail.com')
+    .replace(/secretaria@eltast\.cat/g, 'tastvng@gmail.com')
+    .replace(/secretaria@tast\.cat/g, 'tastvng@gmail.com');
   const footerTextColor = liveConfig.footerTextColor || '#71717a';
 
   // Button Custom styling resolver
