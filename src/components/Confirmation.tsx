@@ -53,7 +53,8 @@ export default function Confirmation({ registration, onClear, onUpdate, config }
     }
   }, [language, registration.c1DniUrl, registration.c2DniUrl]);
 
-  const qrIdentifier = `REG-${registration.codiSeguiment || registration.id}`;
+  // Rule 10: QR code contains the exact saved tracking code
+  const qrIdentifier = registration.codiSeguiment || registration.id;
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&color=e6007e&data=${encodeURIComponent(qrIdentifier)}`;
 
   const sendRealEmail = async () => {

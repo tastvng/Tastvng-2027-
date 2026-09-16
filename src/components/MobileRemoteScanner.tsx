@@ -1039,7 +1039,7 @@ export default function MobileRemoteScanner({
             <form onSubmit={handleManualSubmit} className="space-y-2 bg-zinc-900/80 p-3 rounded-2xl border border-zinc-800">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-bold text-zinc-300 uppercase tracking-wide">
-                  {language === 'ca' ? "Codi d'inscripció (ex: TAST-2027-0001)" : "Código de inscripción (ej: TAST-2027-0001)"}
+                  {language === 'ca' ? "Codi d'inscripció (ex: A0001, J0001, LE00001)" : "Código de inscripción (ej: A0001, J0001, LE00001)"}
                 </span>
                 <button
                   type="button"
@@ -1054,7 +1054,7 @@ export default function MobileRemoteScanner({
                   type="text"
                   value={manualCode}
                   onChange={(e) => setManualCode(e.target.value)}
-                  placeholder="TAST-2027-XXXX"
+                  placeholder="A0001 / J0001 / LE00001"
                   className="flex-1 bg-zinc-950 border border-zinc-750 rounded-xl px-3 py-2 text-xs font-mono font-bold text-white focus:outline-none focus:border-[#ff0090]"
                   id="mobile-manual-code-input"
                   autoFocus

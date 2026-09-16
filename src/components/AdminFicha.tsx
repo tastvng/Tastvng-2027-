@@ -28,16 +28,20 @@ import { useLanguage } from '../LanguageContext';
 import TranslatedText from './TranslatedText';
 import { Inscripcio, EstatPagament, EstatVerificacio, EstatInscripcio, MetodePagament, CategoriaParella, SistemaConfig } from '../types';
 import { calculateInscriptionOrderBreakdown, validateInscriptionTotal } from '../utils/orderCalculations';
+import { determineCodeGroup, allocateNextCode } from '../utils/codeAllocator';
 
 interface AdminFichaProps {
   registration: Inscripcio;
+  allInscripcions?: Inscripcio[];
   config?: SistemaConfig;
   onBack: () => void;
   onSave: (updatedRecord: Inscripcio) => void;
 }
 
-export default function AdminFicha({ registration, config, onBack, onSave }: AdminFichaProps) {
+export default function AdminFicha({ registration, allInscripcions = [], config, onBack, onSave }: AdminFichaProps) {
   const { language, t } = useLanguage();
+  const [codiSeguiment, setCodiSeguiment] = useState<string>(registration.codiSeguiment || '');
+  const [categoria, setCategoria] = useState<CategoriaParella>(registration.categoria);
 
   // Single Source of Truth Order Breakdown and Validation
   const breakdown = calculateInscriptionOrderBreakdown(registration, config, language);
@@ -262,6 +266,37 @@ export default function AdminFicha({ registration, config, onBack, onSave }: Adm
 
   const isWaitlist = estatInscripcio === 'llista_espera' || (!estatInscripcio && llistaEspera);
 
+  const handleStatusChange = async (newIsWaitlist: boolean, newCategory?: CategoriaParella) => {
+    const targetCategory = newCategory || categoria;
+    setLlistaEspera(newIsWaitlist);
+    setEstatInscripcio(newIsWaitlist ? 'llista_espera' : 'obertes');
+    if (newCategory) setCategoria(newCategory);
+
+    const targetGroup = determineCodeGroup(targetCategory, newIsWaitlist);
+    const currentGroup = determineCodeGroup(categoria, isWaitlist);
+    
+    // If group changed (e.g. from Waitlist LE to Normal A/J, or vice-versa)
+    if (targetGroup !== currentGroup) {
+      try {
+        const res = await fetch(`/api/inscriptions?action=allocate-code&categoria=${encodeURIComponent(targetCategory)}&isWaitlist=${newIsWaitlist}&excludeCode=${encodeURIComponent(registration.codiSeguiment || '')}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.ok && data.codiSeguiment) {
+            setCodiSeguiment(data.codiSeguiment);
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn("Could not query server code allocator:", err);
+      }
+      const existing = (allInscripcions || [])
+        .filter(i => i.id !== registration.id)
+        .map(i => i.codiSeguiment);
+      const newCode = allocateNextCode(existing, targetGroup);
+      setCodiSeguiment(newCode);
+    }
+  };
+
   const rotateImage1 = () => {
     setRotacio1((prev) => (prev + 90) % 360);
   };
@@ -294,6 +329,8 @@ export default function AdminFicha({ registration, config, onBack, onSave }: Adm
 
     const updatedInscripcio: Inscripcio = {
       ...registration,
+      codiSeguiment,
+      categoria,
       emailContactoPareja: emailContactoPareja.trim(),
       telefonContactoPareja: telefonContactoPareja.trim(),
       c1Nom: c1Nom.trim(),
@@ -353,7 +390,14 @@ export default function AdminFicha({ registration, config, onBack, onSave }: Adm
           <span className="font-mono text-[9px] text-zinc-500 uppercase">
             {language === 'ca' ? 'CODI DETALL DE FITXA' : 'CÓDIGO DETALLE DE FICHA'}
           </span>
-          <h2 className="font-sans font-extrabold text-base tracking-tight text-fuchsia-400">{registration.codiSeguiment}</h2>
+          <div className="flex items-center justify-center gap-2">
+            <h2 className="font-sans font-extrabold text-base tracking-tight text-fuchsia-400">{codiSeguiment}</h2>
+            {codiSeguiment !== registration.codiSeguiment && (
+              <span className="text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full border border-amber-500/30">
+                {language === 'ca' ? `Nou codi (Antic: ${registration.codiSeguiment})` : `Nuevo código (Antiguo: ${registration.codiSeguiment})`}
+              </span>
+            )}
+          </div>
         </div>
 
         <button 
@@ -1400,10 +1444,7 @@ export default function AdminFicha({ registration, config, onBack, onSave }: Adm
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
-                  onClick={() => {
-                    setLlistaEspera(false);
-                    setEstatInscripcio('obertes');
-                  }}
+                  onClick={() => handleStatusChange(false)}
                   className={`py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                     !isWaitlist 
                       ? 'bg-zinc-850 text-white border border-zinc-700' 
@@ -1414,10 +1455,7 @@ export default function AdminFicha({ registration, config, onBack, onSave }: Adm
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    setLlistaEspera(true);
-                    setEstatInscripcio('llista_espera');
-                  }}
+                  onClick={() => handleStatusChange(true)}
                   className={`py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                     isWaitlist 
                       ? 'bg-amber-500 text-white shadow shadow-amber-500/10' 

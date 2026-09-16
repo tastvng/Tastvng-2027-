@@ -2,6 +2,77 @@ import { createClient } from "@supabase/supabase-js";
 import crypto from "crypto";
 import { applyCorsHeaders } from "./_cors.ts";
 import { checkRateLimit, getClientIp } from "./_rate-limit.ts";
+import { 
+  determineCodeGroup, 
+  allocateNextCode, 
+  formatCode, 
+  extractUsedNumbers, 
+  findLowestAvailableNumber,
+  isLegacyCode,
+  CodeGroup 
+} from "./_code-allocator.ts";
+
+// In-process serialized queue to prevent concurrent requests in the same container from colliding
+let inMemoryLockQueue: Promise<any> = Promise.resolve();
+
+/**
+ * Distributed lock on Supabase `settings` table (key: 'lock_code_allocation')
+ * with TTL to guarantee strict atomicity across concurrent clients.
+ */
+async function acquireDistributedLock(supabase: any, lockToken: string, maxWaitMs = 7000): Promise<boolean> {
+  const start = Date.now();
+  const lockKey = 'lock_code_allocation';
+  const ttlMs = 8000;
+
+  while (Date.now() - start < maxWaitMs) {
+    try {
+      const { data: current } = await supabase
+        .from('settings')
+        .select('value')
+        .eq('key', lockKey)
+        .maybeSingle();
+
+      const val = (current?.value as any) || {};
+      const isLocked = val.token && (Date.now() - (val.locked_at || 0) < ttlMs);
+
+      if (!isLocked) {
+        const now = Date.now();
+        const { data: updated, error } = await supabase
+          .from('settings')
+          .upsert({
+            key: lockKey,
+            value: { token: lockToken, locked_at: now },
+            updated_at: new Date().toISOString()
+          })
+          .select();
+
+        if (!error && updated && updated.length > 0 && (updated[0].value as any)?.token === lockToken) {
+          return true;
+        }
+      }
+    } catch (e) {
+      console.warn("Notice checking code allocation lock:", e);
+    }
+    await new Promise(r => setTimeout(r, 60));
+  }
+  return false;
+}
+
+async function releaseDistributedLock(supabase: any, lockToken: string): Promise<void> {
+  const lockKey = 'lock_code_allocation';
+  try {
+    await supabase
+      .from('settings')
+      .update({
+        value: { token: null, locked_at: 0 },
+        updated_at: new Date().toISOString()
+      })
+      .eq('key', lockKey)
+      .eq('value->>token', lockToken);
+  } catch (err) {
+    console.warn("Notice releasing lock:", err);
+  }
+}
 
 /**
  * Validates binary magic bytes to strictly verify the real file type.
@@ -135,12 +206,17 @@ export default async function inscriptionsHandler(req: any, res: any) {
         rowId = crypto.randomUUID();
       }
 
-      // 3. Generate or validate codiSeguiment
+      // 3. Determine if waitlist or normal category
+      const isWaitlist = reg.estatInscripcio === 'llista_espera' ||
+                         reg.estatInscripcio === 'espera' ||
+                         reg.estat_inscripcio === 'espera' ||
+                         reg.estat_inscripcio === 'llista_espera' ||
+                         Boolean(reg.llistaEspera);
+      const codeGroup = determineCodeGroup(categoria, isWaitlist);
       let codiSeguiment = String(reg.codiSeguiment || '').trim();
-      if (!codiSeguiment) {
-        const prefix = categoria === 'juvenil' ? 'J' : 'A';
-        const randomSuffix = Math.random().toString(36).substring(2, 6).toUpperCase();
-        codiSeguiment = `TAST-2027-${prefix}${Date.now().toString().slice(-4)}-${randomSuffix}`;
+      // If code was not already pre-allocated or matches legacy format, initialize empty for atomic allocation
+      if (isLegacyCode(codiSeguiment)) {
+        codiSeguiment = '';
       }
 
       // 4. Ensure JSON objects are genuine objects (not strings or null)
@@ -230,39 +306,135 @@ export default async function inscriptionsHandler(req: any, res: any) {
         });
       }
 
-      // 6. Perform INSERT into public.inscripciones (without .select() to prevent 42501 RLS select violation)
-      const { error: insertError } = await serverSupabase
-        .from('inscripciones')
-        .insert(insertRow);
+      // 6. Perform ATOMIC code allocation and INSERT into public.inscripciones
+      const lockToken = crypto.randomUUID();
+      let confirmedCode = codiSeguiment;
 
-      if (insertError) {
+      try {
+        await new Promise<void>((resolve, reject) => {
+          inMemoryLockQueue = inMemoryLockQueue.then(async () => {
+            let lockAcquired = false;
+            try {
+              lockAcquired = await acquireDistributedLock(serverSupabase, lockToken, 7000);
+
+              // Query all currently registered tracking codes
+              const { data: existingRows, error: fetchErr } = await serverSupabase
+                .from('inscripciones')
+                .select('codiSeguiment');
+
+              if (fetchErr) {
+                throw fetchErr;
+              }
+
+              const existingCodes = (existingRows || []).map((r: any) => r.codiSeguiment).filter(Boolean);
+
+              // If codiSeguiment was not pre-allocated, allocate the lowest free code
+              if (!confirmedCode) {
+                confirmedCode = allocateNextCode(existingCodes, codeGroup);
+              }
+              insertRow.codiSeguiment = confirmedCode;
+
+              // Insert row into database
+              const { error: insertError } = await serverSupabase
+                .from('inscripciones')
+                .insert(insertRow);
+
+              if (insertError) {
+                // If a duplicate code collision occurs under concurrent load, retry with fresh scan
+                if (
+                  insertError.code === '23505' ||
+                  insertError.message?.toLowerCase().includes('duplicate') ||
+                  insertError.message?.toLowerCase().includes('unique')
+                ) {
+                  console.warn("[Concurrency retry]: Code collision detected, reallocating atomically...");
+                  const { data: retryRows } = await serverSupabase
+                    .from('inscripciones')
+                    .select('codiSeguiment');
+                  const refreshedCodes = (retryRows || []).map((r: any) => r.codiSeguiment).filter(Boolean);
+                  confirmedCode = allocateNextCode(refreshedCodes, codeGroup);
+                  insertRow.codiSeguiment = confirmedCode;
+                  const retryInsert = await serverSupabase.from('inscripciones').insert(insertRow);
+                  if (retryInsert.error) {
+                    throw retryInsert.error;
+                  }
+                } else {
+                  throw insertError;
+                }
+              }
+
+              resolve();
+            } catch (err) {
+              reject(err);
+            } finally {
+              if (lockAcquired) {
+                await releaseDistributedLock(serverSupabase, lockToken);
+              }
+            }
+          });
+        });
+      } catch (err: any) {
         console.error("[INSERT error]:", {
           table: "public.inscripciones",
-          message: insertError.message,
-          code: insertError.code,
-          details: insertError.details,
-          hint: insertError.hint
+          message: err?.message,
+          code: err?.code,
+          details: err?.details
         });
 
         return res.status(500).json({
           ok: false,
           step: "database_insert",
-          error: insertError.message,
-          code: insertError.code,
-          details: insertError.details,
-          hint: insertError.hint
+          error: err?.message || "Error en desar la inscripció a la base de dades.",
+          code: err?.code || "INSERT_FAILED",
+          details: err?.details
         });
       }
 
-      const confirmedRow = insertRow;
-      console.log(`[INSERT ok]: table public.inscripciones, id: ${confirmedRow.id}, codi: ${confirmedRow.codiSeguiment}, user: ${confirmedRow.c1Nom} & ${confirmedRow.c2Nom}`);
+      console.log(`[INSERT ok]: table public.inscripciones, id: ${insertRow.id}, codi: ${confirmedCode}, user: ${insertRow.c1Nom} & ${insertRow.c2Nom}`);
 
       return res.status(200).json({
         ok: true,
         step: "database_insert",
-        id: confirmedRow.id,
-        codiSeguiment: confirmedRow.codiSeguiment,
-        data: confirmedRow
+        id: insertRow.id,
+        codiSeguiment: confirmedCode,
+        data: insertRow
+      });
+    }
+
+    // ==========================================
+    // ROUTE: ALLOCATE NEXT CODE (action=allocate-code or action=get-next-code)
+    // ==========================================
+    if (action === 'allocate-code' || action === 'get-next-code') {
+      const serverSupabase = getServerSupabase();
+      if (!serverSupabase) {
+        return res.status(500).json({ ok: false, error: "Supabase no configurat" });
+      }
+
+      const isWaitlist = Boolean(
+        body.isWaitlist ?? 
+        (body.estatInscripcio === 'llista_espera' || query.estatInscripcio === 'llista_espera' || body.llistaEspera)
+      );
+      const categoria = body.categoria || query.categoria || 'adult';
+      const codeGroup = determineCodeGroup(categoria, isWaitlist);
+      const excludeCode = String(body.excludeCode || query.excludeCode || '').trim();
+
+      const { data: existingRows, error: fetchErr } = await serverSupabase
+        .from('inscripciones')
+        .select('codiSeguiment');
+
+      if (fetchErr) {
+        return res.status(500).json({ ok: false, error: fetchErr.message });
+      }
+
+      let codesList = (existingRows || []).map((r: any) => r.codiSeguiment).filter(Boolean);
+      if (excludeCode) {
+        codesList = codesList.filter((c: string) => c.toUpperCase() !== excludeCode.toUpperCase());
+      }
+
+      const nextCode = allocateNextCode(codesList, codeGroup);
+      return res.status(200).json({
+        ok: true,
+        codiSeguiment: nextCode,
+        group: codeGroup
       });
     }
 

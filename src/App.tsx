@@ -62,12 +62,14 @@ import {
   getSupabaseInscripciones, 
   getSupabaseInscripcionesResult,
   saveSupabaseInscripcion, 
+  updateSupabaseInscripcion,
   deleteSupabaseInscripcion, 
   deleteMultipleSupabaseInscripciones, 
   clearAllSupabaseInscripciones,
   checkCurrentUserIsAdmin,
   fetchAdminUsers
 } from './supabaseClient';
+import { allocateNextCode, determineCodeGroup } from './utils/codeAllocator';
 
 export default function App() {
   const { language, setLanguage, t } = useLanguage();
@@ -762,12 +764,10 @@ export default function App() {
     }, 0);
     newReg.posicioGlobal = maxPos > 0 ? maxPos + 1 : (latestInscripcions.length + 1);
 
-    // Calculate collision-resistant tracking code
-    const countCategory = latestInscripcions.filter(ins => ins.categoria === newReg.categoria).length;
-    const prefix = newReg.categoria === CategoriaParella.ADULT ? 'A' : 'J';
-    const randomSuffix = Math.random().toString(36).substring(2, 6).toUpperCase();
-    const seqNum = String(countCategory + 1).padStart(4, '0');
-    newReg.codiSeguiment = `TAST-2027-${prefix}${seqNum}-${randomSuffix}`;
+    // Rule 12: No construyas el código solo visualmente en el frontend.
+    // Rule 13: Antes de guardar, buscar el primer número libre del grupo correspondiente.
+    // Rule 14: Confirmar el código únicamente después de completar correctamente el INSERT.
+    newReg.codiSeguiment = '';
 
     // 3. PERSIST FIRST IN SUPABASE:
     // Only proceed to confirmation if the DB insert completes with ok: true!
@@ -797,6 +797,10 @@ export default function App() {
         };
       }
 
+      // Rule 14: Confirm code only after successful database insert
+      newReg.codiSeguiment = dbResult.codiSeguiment;
+      if (dbResult.id) newReg.id = dbResult.id;
+
       console.log(`[INSERT ok]: table public.inscripciones, id: ${newReg.id}, codi: ${newReg.codiSeguiment}, user: ${newReg.c1Nom} & ${newReg.c2Nom}`);
       addLog(`✓ Inscripció registrada persistentment a Supabase: ${newReg.codiSeguiment}`);
       saveLogger.log(
@@ -806,6 +810,9 @@ export default function App() {
         language === 'ca' ? `Codi: ${newReg.codiSeguiment} - Registrada a Supabase` : `Código: ${newReg.codiSeguiment} - Registrada en Supabase`
       );
     } else {
+      const isWaitlist = newReg.estatInscripcio === 'llista_espera' || (!newReg.estatInscripcio && newReg.llistaEspera);
+      const codeGroup = determineCodeGroup(newReg.categoria, Boolean(isWaitlist));
+      newReg.codiSeguiment = allocateNextCode(latestInscripcions.map(i => i.codiSeguiment), codeGroup);
       saveLogger.log(
         'Inscripción',
         language === 'ca' ? `Nova inscripció: ${newReg.c1Nom} & ${newReg.c2Nom}` : `Nueva inscripción: ${newReg.c1Nom} & ${newReg.c2Nom}`,
@@ -836,20 +843,20 @@ export default function App() {
     }, 0);
     newReg.posicioGlobal = maxPos > 0 ? maxPos + 1 : (inscripcions.length + 1);
 
-    // Calculate sequential category code
-    const countCategory = inscripcions.filter(ins => ins.categoria === newReg.categoria).length;
-    const prefix = newReg.categoria === CategoriaParella.ADULT ? 'A' : 'J';
-    newReg.codiSeguiment = `${prefix}-${countCategory + 1}`;
+    const isWaitlist = newReg.estatInscripcio === 'llista_espera' || (!newReg.estatInscripcio && newReg.llistaEspera);
+    const codeGroup = determineCodeGroup(newReg.categoria, Boolean(isWaitlist));
+    newReg.codiSeguiment = '';
 
-    const updated = [newReg, ...inscripcions];
-    setInscripcions(updated);
-    syncWithGoogle(updated);
-    addLog(`Parella afegida manualment des del taulell: ${newReg.c1Nom} & ${newReg.c2Nom}. Codi: ${newReg.codiSeguiment}`);
     if (isSupabaseConfigured) {
       try {
         const res = await saveSupabaseInscripcion(newReg);
         if (res.ok) {
-          addLog(`✓ Inscripció manual registrada persistentment a Supabase.`);
+          newReg.codiSeguiment = res.codiSeguiment;
+          if (res.id) newReg.id = res.id;
+          const updated = [newReg, ...inscripcions];
+          setInscripcions(updated);
+          syncWithGoogle(updated);
+          addLog(`✓ Inscripció manual registrada persistentment a Supabase: ${newReg.codiSeguiment}`);
           saveLogger.log(
             'Inscripción Manual',
             language === 'ca' ? `Alta manual: ${newReg.c1Nom} & ${newReg.c2Nom}` : `Alta manual: ${newReg.c1Nom} & ${newReg.c2Nom}`,
@@ -857,6 +864,10 @@ export default function App() {
             language === 'ca' ? `Codi: ${newReg.codiSeguiment} - Sincronitzat amb Supabase` : `Código: ${newReg.codiSeguiment} - Sincronizado con Supabase`
           );
         } else {
+          newReg.codiSeguiment = allocateNextCode(inscripcions.map(i => i.codiSeguiment), codeGroup);
+          const updated = [newReg, ...inscripcions];
+          setInscripcions(updated);
+          syncWithGoogle(updated);
           console.error("Error saving manual inscription to Supabase:", res.error);
           saveLogger.log(
             'Inscripción Manual',
@@ -867,16 +878,17 @@ export default function App() {
           );
         }
       } catch (err) {
+        newReg.codiSeguiment = allocateNextCode(inscripcions.map(i => i.codiSeguiment), codeGroup);
+        const updated = [newReg, ...inscripcions];
+        setInscripcions(updated);
+        syncWithGoogle(updated);
         console.error("Error saving manual inscription to Supabase:", err);
-        saveLogger.log(
-          'Inscripción Manual',
-          language === 'ca' ? `Alta manual: ${newReg.c1Nom} & ${newReg.c2Nom}` : `Alta manual: ${newReg.c1Nom} & ${newReg.c2Nom}`,
-          'error',
-          undefined,
-          err instanceof Error ? err.message : String(err)
-        );
       }
     } else {
+      newReg.codiSeguiment = allocateNextCode(inscripcions.map(i => i.codiSeguiment), codeGroup);
+      const updated = [newReg, ...inscripcions];
+      setInscripcions(updated);
+      syncWithGoogle(updated);
       saveLogger.log(
         'Inscripción Manual',
         language === 'ca' ? `Alta manual: ${newReg.c1Nom} & ${newReg.c2Nom}` : `Alta manual: ${newReg.c1Nom} & ${newReg.c2Nom}`,
@@ -994,7 +1006,10 @@ export default function App() {
     addLog(`Ficha d'inscripció actualitzada del parella: ${updatedReg.c1Nom} (${updatedReg.codiSeguiment})`);
     if (isSupabaseConfigured) {
       try {
-        await saveSupabaseInscripcion(updatedReg);
+        const res = await updateSupabaseInscripcion(updatedReg);
+        if (!res.ok) {
+          throw new Error(res.error || "Error al desar canvis");
+        }
         addLog(`✓ Ficha actualitzada persistentment a Supabase.`);
         showToast(language === 'ca' ? '✓ Inscripció actualitzada correctament' : '✓ Inscripción actualizada correctamente', 'success');
         saveLogger.log(
@@ -1339,6 +1354,7 @@ export default function App() {
             {view === 'admin-ficha' && editId && (
               <AdminFicha 
                 registration={activeScannedRecord && activeScannedRecord.id === editId ? activeScannedRecord : (inscripcions.find(i => i.id === editId) || activeScannedRecord!)}
+                allInscripcions={inscripcions}
                 config={config}
                 onBack={() => {
                   setEditId(null);

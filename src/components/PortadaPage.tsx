@@ -231,28 +231,28 @@ export default function PortadaPage({
 
   // 1. Heading / Títol principal (always in currentLang)
   const titol = currentLang === 'ca'
-    ? (liveConfig.titolCA || langData?.heading || DEFAULT_PORTADA_DATA.ca.heading)
-    : (liveConfig.titolES || langData?.heading || DEFAULT_PORTADA_DATA.es.heading);
+    ? (liveConfig.titolCA !== undefined && liveConfig.titolCA.trim() !== '' ? liveConfig.titolCA : (langData?.heading || DEFAULT_PORTADA_DATA.ca.heading))
+    : (liveConfig.titolES !== undefined && liveConfig.titolES.trim() !== '' ? liveConfig.titolES : (langData?.heading || DEFAULT_PORTADA_DATA.es.heading));
 
-  // 2. Welcome text / Text de benvinguda (always in currentLang)
+  // 2. Welcome text / Text de benvinguda (optional: if user cleared it, show empty)
   const benvinguda = currentLang === 'ca'
-    ? (liveConfig.benvingudaCA || langData?.welcome || DEFAULT_PORTADA_DATA.ca.welcome)
-    : (liveConfig.benvingudaES || langData?.welcome || DEFAULT_PORTADA_DATA.es.welcome);
+    ? (liveConfig.benvingudaCA !== undefined ? liveConfig.benvingudaCA : (langData?.welcome ?? ''))
+    : (liveConfig.benvingudaES !== undefined ? liveConfig.benvingudaES : (langData?.welcome ?? ''));
 
-  // 3. Subtítol / Subtítulo (optional, always in currentLang)
+  // 3. Subtítol / Subtítulo (optional: if user cleared it, show empty)
   const subtitol = currentLang === 'ca'
-    ? (liveConfig.subtitolCA || langData?.subtitol || '')
-    : (liveConfig.subtitolES || langData?.subtitol || '');
+    ? (liveConfig.subtitolCA !== undefined ? liveConfig.subtitolCA : (langData?.subtitol ?? ''))
+    : (liveConfig.subtitolES !== undefined ? liveConfig.subtitolES : (langData?.subtitol ?? ''));
 
   // 4. Description / Text descriptiu (always in currentLang)
   const descripcio = currentLang === 'ca'
-    ? (liveConfig.descripcioCA || langData?.description || DEFAULT_PORTADA_DATA.ca.description)
-    : (liveConfig.descripcioES || langData?.description || DEFAULT_PORTADA_DATA.es.description);
+    ? (liveConfig.descripcioCA !== undefined && liveConfig.descripcioCA.trim() !== '' ? liveConfig.descripcioCA : (langData?.description || DEFAULT_PORTADA_DATA.ca.description))
+    : (liveConfig.descripcioES !== undefined && liveConfig.descripcioES.trim() !== '' ? liveConfig.descripcioES : (langData?.description || DEFAULT_PORTADA_DATA.es.description));
 
   // 5. Button Text / Text del botó (always in currentLang)
   const botoText = currentLang === 'ca'
-    ? (liveConfig.botoTextCA || langData?.buttonText || DEFAULT_PORTADA_DATA.ca.buttonText)
-    : (liveConfig.botoTextES || langData?.buttonText || DEFAULT_PORTADA_DATA.es.buttonText);
+    ? (liveConfig.botoTextCA !== undefined && liveConfig.botoTextCA.trim() !== '' ? liveConfig.botoTextCA : (langData?.buttonText || DEFAULT_PORTADA_DATA.ca.buttonText))
+    : (liveConfig.botoTextES !== undefined && liveConfig.botoTextES.trim() !== '' ? liveConfig.botoTextES : (langData?.buttonText || DEFAULT_PORTADA_DATA.es.buttonText));
 
   // 6. Badge Text / Etiqueta de l'esdeveniment (always in currentLang)
   const badgeText = globalEstatInscripcions === 'tancades'
@@ -260,8 +260,8 @@ export default function PortadaPage({
     : globalEstatInscripcions === 'espera'
       ? (currentLang === 'ca' ? `Llista d'Espera ${activeYear}` : `Lista de Espera ${activeYear}`)
       : (currentLang === 'ca'
-          ? (liveConfig.badgeTextCA || langData?.badgeText || DEFAULT_PORTADA_DATA.ca.badgeText)
-          : (liveConfig.badgeTextES || langData?.badgeText || DEFAULT_PORTADA_DATA.es.badgeText));
+          ? (liveConfig.badgeTextCA !== undefined && liveConfig.badgeTextCA.trim() !== '' ? liveConfig.badgeTextCA : (langData?.badgeText || DEFAULT_PORTADA_DATA.ca.badgeText))
+          : (liveConfig.badgeTextES !== undefined && liveConfig.badgeTextES.trim() !== '' ? liveConfig.badgeTextES : (langData?.badgeText || DEFAULT_PORTADA_DATA.es.badgeText)));
 
   // 7. Footer Text (always in currentLang)
   const footerText = (currentLang === 'ca'

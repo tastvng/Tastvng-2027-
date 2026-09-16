@@ -896,6 +896,89 @@ export async function saveSupabaseInscripcion(ins: Inscripcio): Promise<SaveInsc
 }
 
 /**
+ * Updates an existing inscription in public.inscripciones.
+ */
+export async function updateSupabaseInscripcion(ins: Inscripcio): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const apiRes = await fetch(`/api/inscriptions?action=update&id=${encodeURIComponent(ins.id)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: ins.id,
+        updates: {
+          codiSeguiment: ins.codiSeguiment,
+          categoria: ins.categoria,
+          c1Nom: ins.c1Nom,
+          c1Cognoms: ins.c1Cognoms,
+          c1Email: ins.emailContactoPareja || ins.c1Email,
+          c1Telefon: ins.telefonContactoPareja || ins.c1Telefon,
+          c1Talla: ins.c1Talla,
+          c1UniformeTipus: ins.c1UniformeTipus,
+          c1TutorNom: ins.c1TutorNom,
+          c1TutorCognoms: ins.c1TutorCognoms,
+          c1TutorDni: ins.c1TutorDni,
+          c1TutorTelefon: ins.c1TutorTelefon,
+          c2Nom: ins.c2Nom,
+          c2Cognoms: ins.c2Cognoms,
+          c2Email: ins.emailContactoPareja || ins.c2Email,
+          c2Telefon: ins.telefonContactoPareja || ins.c2Telefon,
+          c2Talla: ins.c2Talla,
+          c2UniformeTipus: ins.c2UniformeTipus,
+          c2TutorNom: ins.c2TutorNom,
+          c2TutorCognoms: ins.c2TutorCognoms,
+          c2TutorDni: ins.c2TutorDni,
+          c2TutorTelefon: ins.c2TutorTelefon,
+          preuCalculat: ins.preuCalculat,
+          estatPagament: ins.estatPagament,
+          metodePagament: ins.metodePagament,
+          estatDni: ins.estatDni,
+          entregaMaterial: ins.entregaMaterial,
+          estat_inscripcio: ins.estatInscripcio,
+          bandera: ins.bandera,
+          actualizadoEn: new Date().toISOString()
+        }
+      })
+    });
+    if (apiRes.ok) {
+      const data = await apiRes.json();
+      if (data.ok) return { ok: true };
+    }
+  } catch (err: any) {
+    console.warn("API update failed, trying direct Supabase client:", err);
+  }
+
+  if (!supabase) return { ok: false, error: "Supabase no disponible" };
+  const { error } = await supabase
+    .from('inscripciones')
+    .update({
+      codiSeguiment: ins.codiSeguiment,
+      categoria: ins.categoria,
+      c1Nom: ins.c1Nom,
+      c1Cognoms: ins.c1Cognoms,
+      c1Talla: ins.c1Talla,
+      c1UniformeTipus: ins.c1UniformeTipus,
+      c2Nom: ins.c2Nom,
+      c2Cognoms: ins.c2Cognoms,
+      c2Talla: ins.c2Talla,
+      c2UniformeTipus: ins.c2UniformeTipus,
+      preuCalculat: ins.preuCalculat,
+      estatPagament: ins.estatPagament,
+      metodePagament: ins.metodePagament,
+      estatDni: ins.estatDni,
+      entregaMaterial: ins.entregaMaterial,
+      estat_inscripcio: ins.estatInscripcio,
+      bandera: ins.bandera,
+      actualizadoEn: new Date().toISOString()
+    })
+    .eq('id', ins.id);
+
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+  return { ok: true };
+}
+
+/**
  * Removes an inscription by its ID.
  */
 export async function deleteSupabaseInscripcion(id: string): Promise<boolean> {

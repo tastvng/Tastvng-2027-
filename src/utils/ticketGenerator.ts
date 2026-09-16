@@ -52,8 +52,8 @@ export function buildUnifiedEmailHtml(options: TicketGenerationOptions): {
     `;
   }
 
-  // QR representation
-  const qrIdentifier = `REG-${registration.codiSeguiment}`;
+  // QR representation (Rule 10: QR contains the exact saved tracking code)
+  const qrIdentifier = registration.codiSeguiment;
   const qrImgUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&color=e6007e&data=${encodeURIComponent(qrIdentifier)}`;
 
   // DNI Status HTML

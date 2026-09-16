@@ -1103,7 +1103,7 @@ export default function AdminScanner({
                   type="text"
                   value={manualCodeInput}
                   onChange={(e) => setManualCodeInput(e.target.value)}
-                  placeholder={`TAST-${activeYear}-0001`}
+                  placeholder="A0001 / J0001 / LE00001"
                   className="flex-1 bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs font-mono font-bold text-white uppercase focus:outline-none focus:border-[#ff0090]"
                   id="input-scanner-manual-code"
                 />

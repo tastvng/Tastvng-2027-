@@ -756,11 +756,9 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
       clearInterval(interval);
       setSubmitProgress(100);
 
-      // Generate a collision-resistant unique tracking code
-      const prefix = categoria === CategoriaParella.ADULT ? 'A' : 'J';
+      // Temporary reference for file uploads (real code is allocated atomically on server)
       const randomId = 'ins-' + Math.random().toString(36).substr(2, 9);
-      const randomSuffix = Math.random().toString(36).substring(2, 6).toUpperCase();
-      const codiSeguiment = `TAST-2027-${prefix}${Date.now().toString().slice(-4)}-${randomSuffix}`;
+      const tempRef = `upload_${randomId}`;
 
       let finalC1DniUrl = c1DniUrl || '';
       let finalC2DniUrl = c2DniUrl || '';
@@ -772,7 +770,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              codiSeguiment,
+              codiSeguiment: tempRef,
               participant: 'c1',
               fileData: c1DniUrl
             })
@@ -794,7 +792,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              codiSeguiment,
+              codiSeguiment: tempRef,
               participant: 'c2',
               fileData: c2DniUrl
             })
@@ -862,7 +860,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
 
       const novaInscripcio: Inscripcio = {
         id: randomId,
-        codiSeguiment,
+        codiSeguiment: '', // Allocated and confirmed atomically on Supabase insert
         categoria,
         emailContactoPareja: emailContactoPareja.trim(),
         telefonContactoPareja: telefonContactoPareja.trim(),
