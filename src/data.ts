@@ -62,18 +62,12 @@ export const DEFAULT_CATEGORIA_DESCRIPTIONS = {
 export const CONFIG_INICIAL: SistemaConfig = {
   preuAdult: 90.00,
   preuJuvenil: 60.00,
-  preuDomasBalco: 15.00,
-  preuMocadorExtra: 6.00,
   estatInscripcions: 'obertes',
   armilla_opcional: true,
   titolSeccioTarifes: 'Tarifes i Cànons 2026',
   tarifesDinamiques: [
     { id: 'adults', nom: 'Preu Parella Adulta (€)', nomES: 'Precio Pareja Adulta (€)', valor: 90.00, actiu: true, tipus: 'categoria_adult' },
-    { id: 'juvenils', nom: 'Preu Parella Juvenil (€)', nomES: 'Precio Pareja Juvenil (€)', valor: 60.00, actiu: true, tipus: 'categoria_juvenil' },
-    { id: 'domas', nom: 'Cànon Domàs de Balcó (€)', nomES: 'Canon Domás de Balcón (€)', valor: 15.00, actiu: true, tipus: 'extra_domas' },
-    { id: 'mocador', nom: 'Cànon Mocador Extra (€)', nomES: 'Canon Pañuelo Extra (€)', valor: 6.00, actiu: true, tipus: 'extra_mocador' },
-    { id: 'clavells', nom: 'Clavells', nomES: 'Claveles', valor: 8.00, actiu: true, tipus: 'extra_generic' },
-    { id: 'corbati', nom: 'Corbatí', nomES: 'Corbatín', valor: 10.00, actiu: true, tipus: 'extra_generic' }
+    { id: 'juvenils', nom: 'Preu Parella Juvenil (€)', nomES: 'Precio Pareja Juvenil (€)', valor: 60.00, actiu: true, tipus: 'categoria_juvenil' }
   ],
   titolFormulariDinamic: "Preguntes del Qüestionari d'El Tast",
   cuestionariActiu: true,
@@ -178,9 +172,9 @@ export const INSCRIPCIONS_INICIALS: Inscripcio[] = [
       'preg-2': 'Sí, tots dos participants',
       'preg-3': 'És possible recollir la roba abans?'
     },
-    preuCalculat: 105.00, // 90 + 1 mocador extra (6) + domas (15) o similar
-    teDomasBalco: true,
-    teMocadorsExtra: 1,
+    preuCalculat: 90.00,
+    teDomasBalco: false,
+    teMocadorsExtra: 0,
     estatPagament: EstatPagament.PAGAT,
     metodePagament: MetodePagament.BIZUM,
     estatDni: EstatVerificacio.VALIDAT,
@@ -277,9 +271,9 @@ export const INSCRIPCIONS_INICIALS: Inscripcio[] = [
       'preg-2': 'Només Comparser 1',
       'preg-3': 'Cap observació particular'
     },
-    preuCalculat: 111.00, // 90 + 15 domàs + 6 mocador extra
-    teDomasBalco: true,
-    teMocadorsExtra: 1,
+    preuCalculat: 90.00,
+    teDomasBalco: false,
+    teMocadorsExtra: 0,
     estatPagament: EstatPagament.PENDENT,
     metodePagament: null,
     estatDni: EstatVerificacio.REBUTJAT,
@@ -310,8 +304,8 @@ export const INSCRIPCIONS_INICIALS: Inscripcio[] = [
       'preg-2': 'No volem participar-hi',
       'preg-3': 'Preferim color clar si és possible'
     },
-    preuCalculat: 75.00, // 60 + 15 domas
-    teDomasBalco: true,
+    preuCalculat: 60.00,
+    teDomasBalco: false,
     teMocadorsExtra: 0,
     estatPagament: EstatPagament.PAGAT,
     metodePagament: MetodePagament.BIZUM,

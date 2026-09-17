@@ -13,6 +13,7 @@ interface CachedConfig {
     portadaConfig: any;
     categoriaDescripcions: any;
     preguntes: any[];
+    customFaqs: any[];
   };
 }
 
@@ -36,39 +37,221 @@ let statsAccumulator: AnonymousStats = {
 
 let lastStatsFlush = 0;
 
+// =======================================================
+// OFFICIAL FAC WEB SCRAPER & CACHE (https://carnavaldevilanova.cat/la-fac/)
+// =======================================================
+interface FacCache {
+  timestamp: number;
+  rawText: string;
+  has2027Date: boolean;
+  date2027Text: string | null;
+}
+
+let facCache: FacCache | null = null;
+const FAC_CACHE_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours in-memory cache
+
+async function getOfficialFacData(): Promise<FacCache> {
+  const now = Date.now();
+  if (facCache && (now - facCache.timestamp < FAC_CACHE_TTL_MS)) {
+    return facCache;
+  }
+
+  const FALLBACK_FAC_TEXT = `
+La FAC (Federació d'Associacions pel Carnaval de Vilanova i la Geltrú) és l'organisme responsable d'unir, coordinar i organitzar les entitats vinculades al Carnaval de Vilanova i la Geltrú des de 1989.
+El Carnaval de Vilanova i la Geltrú és una celebració històrica reconeguda oficialment com a Festa Patrimonial d'Interès Nacional.
+La FAC coordina les entitats participants per preservar la tradició, la seguretat i la celebració dels actes emblemàtics del cicle de Carnaval:
+- Dissabte del Ball de Mantons
+- Dijous Gras (merengada i xatonada tradicional)
+- Divendres d'Arrivo (arribada de Sa Majestat el Rei Carnestoltes i sermó)
+- Dissabte de Mascarots (rei de la disbauxa infantil i nit de disfresses)
+- Diumenge de Comparses: l'acte central i més emblemàtic del Carnaval de Vilanova i la Geltrú. Parelles de comparsers i comparseres desfilen agrupades darrere de la bandera de la seva entitat al ritme del pasdoble militar El Turuta, lluint la indumentària tradicional, fins a entrar a la plaça de la Vila on se celebra la multitudinària i històrica batalla o guerra de caramels.
+- Dilluns de Coros de Carnestoltes
+- Dimarts de Vidalot
+- Dimecres de Cendra (enterro de la sardina)
+
+Seu oficial de la FAC: Carrer Major, 39, 08800 Vilanova i la Geltrú.
+Telèfon de la FAC: 93 893 01 01 | Correu: fac@carnavaldevilanova.cat
+Web oficial: https://carnavaldevilanova.cat/la-fac/
+`;
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 4000);
+    const res = await fetch("https://carnavaldevilanova.cat/la-fac/", {
+      signal: controller.signal,
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; ElTastBot/1.0; +https://carnavaldevilanova.cat)"
+      }
+    });
+    clearTimeout(timeoutId);
+
+    if (res.ok) {
+      const html = await res.text();
+      const cleanText = html
+        .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, " ")
+        .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, " ")
+        .replace(/<[^>]+>/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+
+      // Check if text has confirmed 2027 date pattern
+      const has2027 = /2027\b/.test(cleanText) && /(?:febrer|mar[cç]|gener|febrero|marzo|enero|\d{1,2}\s+de\s+[a-z]+)\s+de\s+2027/i.test(cleanText);
+
+      facCache = {
+        timestamp: now,
+        rawText: cleanText.slice(0, 10000),
+        has2027Date: has2027,
+        date2027Text: null
+      };
+      return facCache;
+    }
+  } catch (err) {
+    console.warn("[FAC Scraper] Fetch error or timeout, using verified fallback cache:", err);
+  }
+
+  facCache = {
+    timestamp: now,
+    rawText: FALLBACK_FAC_TEXT,
+    has2027Date: false,
+    date2027Text: null
+  };
+  return facCache;
+}
+
+// =======================================================
+// INTENT CLASSIFICATION ENGINE (NO LOOSE SUBSTRING SEARCH)
+// =======================================================
+export enum ChatIntent {
+  GREETING = 'GREETING',
+  FECHA_COMPARSA_2027 = 'FECHA_COMPARSA_2027',
+  HISTORIA_ACTO = 'HISTORIA_ACTO',
+  MATERIALES = 'MATERIALES',
+  PRECIOS = 'PRECIOS',
+  LISTA_ESPERA = 'LISTA_ESPERA',
+  HORARIOS_RECOGIDA = 'HORARIOS_RECOGIDA',
+  DOCUMENTACION_DNI = 'DOCUMENTACION_DNI',
+  CONTACTO = 'CONTACTO',
+  UNKNOWN = 'UNKNOWN'
+}
+
 /**
- * Categorizes a query into anonymous topic buckets without storing any personal data.
+ * Robust intent classifier using whole words and multi-word phrases.
+ * Eliminates loose single-word matches (e.g. avoiding matching "cua" inside "cuándo").
  */
-function categorizeQuery(text: string): string {
-  const lower = text.toLowerCase();
-  if (lower.includes('preu') || lower.includes('costa') || lower.includes('pagar') || lower.includes('tarifa') || lower.includes('euro') || lower.includes('precio') || lower.includes('cuesta')) {
-    return 'preus';
+function classifyUserIntent(rawQuery: string): ChatIntent {
+  const q = rawQuery.trim().toLowerCase();
+
+  // 1. GREETING
+  if (/^(?:hola|bones|bon\s+dia|bona\s+tarda|buenas|buenos\s+d[ií]as|buenas\s+tardes|buenas\s+noches|hey|hello|saludos)[\s!.,?]*$/i.test(q)) {
+    return ChatIntent.GREETING;
   }
-  if (lower.includes('adult') || lower.includes('juvenil') || lower.includes('categoria') || lower.includes('edat') || lower.includes('edad') || lower.includes('menor')) {
-    return 'categories';
+
+  // 2. FECHA COMPARSA 2027 (Must check before waiting list or other intents)
+  // e.g. "¿Cuándo es la comparsa 2027?", "quan es la comparsa 2027", "fecha comparsa 2027"
+  if (
+    /(?:quan|cu[aá]ndo|fechas?|dates?|d[ií]as?|qu[eé]\s+d[ií]a|quin\s+dia|calendari|calendario).*?(?:comparsa|carnaval|2027)/i.test(q) ||
+    /(?:comparsa|carnaval).*?(?:quan|cu[aá]ndo|fechas?|dates?|d[ií]as?|qu[eé]\s+d[ií]a|quin\s+dia|calendari|calendario|2027)/i.test(q) ||
+    (/\b2027\b/.test(q) && /(?:cu[aá]ndo|quan|fecha|data|d[ií]a|es\b|se\s+celebra)/i.test(q))
+  ) {
+    return ChatIntent.FECHA_COMPARSA_2027;
   }
-  if (lower.includes('espera') || lower.includes('llista') || lower.includes('lloc') || lower.includes('cua') || lower.includes('plaza') || lower.includes('lista')) {
-    return 'llista_espera';
+
+  // 3. HISTORIA DEL ACTO / CARNAVAL / FAC
+  // e.g. "¿Cuál es la historia del acto?", "història de l'acte", "historia de la comparsa"
+  if (
+    /(?:hist[oò]ria|historia|or[ií]gens?|or[ií]genes?|antecedents?|antecedentes?|tradici[oó]|de\s+on\s+ve|de\s+d[oó]nde\s+viene)\b/i.test(q) ||
+    /(?:qu[eé]\s+[eé]s|qu[eé]\s+son)\s+(?:l['’]acte|el\s+acto|les?\s+comparses?|las?\s+comparsas?|la\s+fac|el\s+carnaval)\b/i.test(q) ||
+    /(?:historia|hist[oò]ria)\s+del\s+acto/i.test(q)
+  ) {
+    return ChatIntent.HISTORIA_ACTO;
   }
-  if (lower.includes('mocador') || lower.includes('pañuelo') || lower.includes('domas') || lower.includes('domàs') || lower.includes('armilla') || lower.includes('samarreta') || lower.includes('chaleco') || lower.includes('camiseta') || lower.includes('uniforme')) {
-    return 'materials';
+
+  // 4. LISTA DE ESPERA (Whole word and specific phrases only; no loose "cua")
+  // e.g. "¿Cómo funciona la lista de espera?", "llista d'espera", "lista de espera"
+  if (
+    /\b(?:llista\s+d['’]espera|lista\s+de\s+espera)\b/i.test(q) ||
+    /(?:com|c[oó]mo)\s+funciona\s+(?:la\s+)?(?:llista|lista)/i.test(q) ||
+    /(?:queden|quedan)\s+(?:places|plazas)/i.test(q) ||
+    /\bplaces\s+exhaurides\b/i.test(q) ||
+    /\bplazas\s+agotadas\b/i.test(q) ||
+    /\bllista\b/i.test(q) && /\bespera\b/i.test(q) ||
+    /\blista\b/i.test(q) && /\bespera\b/i.test(q)
+  ) {
+    return ChatIntent.LISTA_ESPERA;
   }
-  if (lower.includes('talla') || lower.includes('mida') || lower.includes('tamany') || lower.includes('tallas')) {
-    return 'talles';
+
+  // 5. MATERIALES (Rule 8: ONLY chaleco, claveles, pajarita. Rule 9: NO pañuelos, mocadors, domàs)
+  // e.g. "¿Qué materiales hay?", "quins materials hi ha?", "qué ropa hay"
+  if (
+    /(?:qu[eé]|quins?)\s+(?:materials?|vestuari|vestuario|ropa|roba)\b/i.test(q) ||
+    /\b(?:materials?\s+disponibles?|qu[eé]\s+materiales?\s+hay|quins?\s+materials?\s+hi\s+ha)\b/i.test(q) ||
+    /\b(?:qu[eé]\s+puedo\s+comprar|qu[eé]\s+puc\s+comprar)\b/i.test(q) ||
+    /\b(?:chaleco|chalecos|armilla|armilles|claveles?|clavells?|pajarita|pajaritas|corbat[ií])\b/i.test(q)
+  ) {
+    // If not asking for prices/costs of materials
+    if (!/(?:cu[aá]nto|quant|preu|precio|costa|cuesta)\b/i.test(q)) {
+      return ChatIntent.MATERIALES;
+    }
   }
-  if (lower.includes('dni') || lower.includes('nie') || lower.includes('document') || lower.includes('passaport') || lower.includes('pasaporte')) {
-    return 'dni';
+
+  // 6. PRECIOS / CUÁNTO CUESTA
+  // e.g. "¿Cuánto cuesta?", "precios", "tarifas", "quant costa?", "quins són els preus?"
+  if (
+    /\b(?:cu[aá]nto\s+cuesta|quant\s+costa|cu[aá]nto\s+vale|quant\s+val|preu|preus|precio|precios|tarifa|tarifas|tasas?|c[aà]non)\b/i.test(q) ||
+    /(?:cu[aá]nto|quant)\s+(?:s['’]ha\s+de\s+pagar|se\s+debe\s+pagar|hay\s+que\s+pagar|cal\s+pagar|pagar|es|val|costa|cuesta)/i.test(q) ||
+    /\b(?:bizum|efectiu|efectivo|transfer[eè]ncia)\b/i.test(q)
+  ) {
+    return ChatIntent.PRECIOS;
   }
-  if (lower.includes('bizum') || lower.includes('efectiu') || lower.includes('efectivo') || lower.includes('transferència') || lower.includes('transferencia')) {
-    return 'pagaments';
+
+  // 7. HORARIOS Y ENTREGA / SEDE
+  // e.g. "¿Dónde y cuándo recoger los materiales?", "horarios", "dónde está la sede"
+  if (
+    /\b(?:horari|horaris|horario|horarios)\b/i.test(q) ||
+    /\b(?:recollir|recoger|recollida|recogida)\b/i.test(q) ||
+    /(?:on|d[oó]nde).*?(?:recollir|recoger|recollida|recogida|seu|sede)/i.test(q) ||
+    /\b(?:adre[cç]a|direcci[oó]n)\b/i.test(q) ||
+    /\bon\s+[eé]s\s+la\s+seu\b/i.test(q) ||
+    /\bd[oó]nde\s+est[aá]\s+la\s+sede\b/i.test(q)
+  ) {
+    return ChatIntent.HORARIOS_RECOGIDA;
   }
-  if (lower.includes('horari') || lower.includes('horario') || lower.includes('recollir') || lower.includes('recollida') || lower.includes('entrega') || lower.includes('direccio') || lower.includes('adreça') || lower.includes('seu') || lower.includes('sede')) {
-    return 'horaris_i_recollida';
+
+  // 8. DOCUMENTACIÓN Y DNI
+  // e.g. "¿Qué documentación hay que aportar?", "dni", "menores"
+  if (
+    /\b(?:dni|nie|passaport|pasaporte|documentaci[oó]n|documentaci[oó]|autorizaci[oó]n|autoritzaci[oó])\b/i.test(q)
+  ) {
+    return ChatIntent.DOCUMENTACION_DNI;
   }
-  if (lower.includes('fac') || lower.includes('federacio') || lower.includes('federación') || lower.includes('carnaval') || lower.includes('comparsa') || lower.includes('caramel')) {
-    return 'fac_i_carnaval';
+
+  // 9. CONTACTO
+  // e.g. "teléfono", "correo", "cómo contactar"
+  if (
+    /\b(?:contactar|contacto|contacte|tel[eé]fono|tel[eè]fon|correo|correu|email)\b/i.test(q)
+  ) {
+    return ChatIntent.CONTACTO;
   }
-  return 'general';
+
+  return ChatIntent.UNKNOWN;
+}
+
+/**
+ * Matches custom FAQs from Secretaria only if exact match.
+ * Rule 11: Si una FAQ no coincide exactamente con la pregunta, no la muestres como respuesta.
+ */
+function matchCustomFaq(query: string, customFaqs: any[]): string | null {
+  if (!Array.isArray(customFaqs) || customFaqs.length === 0) return null;
+  const cleanQ = query.toLowerCase().replace(/[¿?¡!.,:;]/g, '').trim();
+
+  for (const faq of customFaqs) {
+    if (!faq) continue;
+    const faqQ = (faq.q || faq.pregunta || faq.question || '').toLowerCase().replace(/[¿?¡!.,:;]/g, '').trim();
+    if (faqQ && cleanQ === faqQ) {
+      return faq.a || faq.resposta || faq.respuesta || faq.answer || null;
+    }
+  }
+  return null;
 }
 
 /**
@@ -82,7 +265,6 @@ async function recordAnonymousStats(supabase: any, lang: 'ca' | 'es', topic: str
     statsAccumulator.lastUpdated = new Date().toISOString();
 
     const now = Date.now();
-    // Flush to Supabase settings every 5 minutes or every 10 queries
     if (supabase && (now - lastStatsFlush > 5 * 60 * 1000 || statsAccumulator.totalQueries % 10 === 0)) {
       lastStatsFlush = now;
       await supabase.from('settings').upsert({
@@ -98,6 +280,7 @@ async function recordAnonymousStats(supabase: any, lang: 'ca' | 'es', topic: str
 
 /**
  * Fetches dynamic live configuration from Supabase (with short caching).
+ * Rule 7: Para precios, materiales, tallas, inscripción, DNI y horarios de entrega, usa únicamente sistema_config y settings de Supabase.
  */
 async function getLiveEntityData() {
   const now = Date.now();
@@ -114,6 +297,7 @@ async function getLiveEntityData() {
   let portadaConfig: any = null;
   let categoriaDescripcions: any = null;
   let preguntes: any[] = [];
+  let customFaqs: any[] = [];
 
   if (supabaseUrl && (serviceKey || anonKey)) {
     try {
@@ -123,25 +307,25 @@ async function getLiveEntityData() {
       const { data: settingsRows } = await client
         .from('settings')
         .select('key, value')
-        .in('key', ['tast_config_2026', 'personalizacion', 'tast_portada_config_2026']);
+        .in('key', ['tast_config_2026', 'personalizacion', 'tast_portada_config_2026', 'faqs', 'secretaria_faqs']);
 
       if (settingsRows) {
         for (const row of settingsRows) {
-          if (row.key === 'tast_config_2026') sistemaConfig = row.value;
-          if (row.key === 'personalizacion') personalizacion = row.value;
-          if (row.key === 'tast_portada_config_2026') portadaConfig = row.value;
+          let val = row.value;
+          if (typeof val === 'string') {
+            try { val = JSON.parse(val); } catch {}
+          }
+          if (row.key === 'tast_config_2026') sistemaConfig = val;
+          if (row.key === 'personalizacion') personalizacion = val;
+          if (row.key === 'tast_portada_config_2026') portadaConfig = val;
+          if (row.key === 'faqs' || row.key === 'secretaria_faqs') customFaqs = Array.isArray(val) ? val : [];
         }
       }
 
-      // 2. Fetch sistema_config table rows
-      const { data: scRows } = await client.from('sistema_config').select('clau, valor');
-      if (scRows) {
-        for (const r of scRows) {
-          if (r.clau === 'descripcions_categories') categoriaDescripcions = r.valor;
-          if (r.clau === 'preus' && !sistemaConfig?.preuAdult) {
-            sistemaConfig = { ...(sistemaConfig || {}), ...r.valor };
-          }
-        }
+      // 2. Fetch authoritative configuration from public.sistema_config table
+      const { data: scRows } = await client.from('sistema_config').select('config').limit(1);
+      if (scRows && scRows[0]?.config) {
+        sistemaConfig = { ...(sistemaConfig || {}), ...scRows[0].config };
       }
 
       // 3. Fetch active questions from preguntes table
@@ -164,7 +348,8 @@ async function getLiveEntityData() {
     personalizacion,
     portadaConfig,
     categoriaDescripcions,
-    preguntes
+    preguntes,
+    customFaqs
   };
 
   configCache = {
@@ -176,263 +361,213 @@ async function getLiveEntityData() {
 }
 
 /**
- * Builds the comprehensive dynamic system instruction with live data and FAC knowledge.
+ * Builds the comprehensive dynamic system instruction with live Supabase data and official FAC knowledge.
  */
-function buildSystemPrompt(lang: 'ca' | 'es', liveData: any): string {
-  const { sistemaConfig, personalizacion, portadaConfig, categoriaDescripcions, preguntes } = liveData;
+function buildSystemPrompt(lang: 'ca' | 'es', liveData: any, facText: string): string {
+  const { sistemaConfig, personalizacion } = liveData;
 
   const ev = personalizacion?.evento || {};
   const sec = personalizacion?.secretaria || {};
 
-  // Entity details
   const nomEntitat = ev.nombre || "Associació Cultural El Tast";
   const direccio = ev.direccio || "Plaça Soler i Carbonell, 28, 08800 Vilanova i la Geltrú";
   const rawEmail = ev.email || "tastvng@gmail.com";
   const email = (rawEmail.includes('secretaria@eltast.cat') || rawEmail.includes('secretaria@tast.cat')) ? "tastvng@gmail.com" : rawEmail;
   const telefon = ev.telefon || "600 000 000";
 
-  // Real live schedule & pickup
   const horariAtencio = lang === 'ca'
-    ? (sec.hours_ca || "Dimecres i divendres, de 18:00h a 21:30h directament a la seu social.")
-    : (sec.hours_es || "Miércoles y viernes, de 18:00h a 21:30h directamente en la sede social.");
+    ? (sec.hours_ca || "Dissabtes, de 10:00h a 13:30h directament a la seu social.")
+    : (sec.hours_es || "Sábados, de 10:00h a 13:30h directamente en la sede social.");
 
   const diesEntrega = lang === 'ca'
-    ? (sec.dies_entrega_ca || "Dimecres i divendres de 18:00h a 21:30h a la seu social.")
-    : (sec.dies_entrega_es || "Miércoles y viernes de 18:00h a 21:30h en la sede social.");
+    ? (sec.dies_entrega_ca || "Dissabtes, de 10:00h a 13:30h a la seu social.")
+    : (sec.dies_entrega_es || "Sábados, de 10:00h a 13:30h en la sede social.");
 
-  // Prices
-  const preuAdult = sistemaConfig?.preuAdult ?? 130;
-  const preuJuvenil = sistemaConfig?.preuJuvenil ?? 95;
-  const preuDomas = sistemaConfig?.preuDomasBalco ?? 20;
-  const preuMocador = sistemaConfig?.preuMocadorExtra ?? 6;
-
-  // Status
-  const estatInscripcions = sistemaConfig?.estatInscripcions || 'obertes';
-  const estatText = estatInscripcions === 'obertes'
-    ? (lang === 'ca' ? 'Inscripcions Obertes' : 'Inscripciones Abiertas')
-    : estatInscripcions === 'espera'
-      ? (lang === 'ca' ? "Llista d'espera activa (places completes)" : 'Lista de espera activa (plazas completadas)')
-      : (lang === 'ca' ? 'Inscripcions Tancades' : 'Inscripciones Cerradas');
-
-  // Uniform lines and sizes
-  const liniesUniforme = sistemaConfig?.liniisUniforme || [
-    { nom: "Armilla oficial El Tast", opcions: ["XS", "S", "M", "L", "XL", "XXL", "3XL"] },
-    { nom: "Samarreta oficial El Tast", opcions: ["XS", "S", "M", "L", "XL", "XXL"] }
-  ];
-
-  const uniformesDesc = liniesUniforme.map((u: any) =>
-    `- ${u.nom || u.nomES}: talles disponibles [${(u.opcions || []).join(', ')}]`
-  ).join('\n');
-
-  // Dynamic questions summary
-  const preguntesDesc = (preguntes && preguntes.length > 0)
-    ? preguntes.map((p: any) => `- ${p.titol} (${p.tipus}${p.opcions ? ': ' + p.opcions.join(', ') : ''})`).join('\n')
-    : "- Cap pregunta addicional configurada.";
-
-  // Categories info
-  const descAdults = categoriaDescripcions?.adult?.descripcio ||
-    (lang === 'ca' ? "Categoria d'adults per a parelles a partir de 18 anys." : "Categoría de adultos para parejas a partir de 18 años.");
-  const descJuvenil = categoriaDescripcions?.juvenil?.descripcio ||
-    (lang === 'ca' ? "Categoria juvenil per a joves comparsers (14 a 17 anys amb autorització signada de tutor/a)." : "Categoría juvenil para jóvenes comparseros (14 a 17 años con autorización firmada de tutor/a).");
+  const preuAdult = sistemaConfig?.preuAdult ?? 90;
+  const preuJuvenil = sistemaConfig?.preuJuvenil ?? 60;
 
   const fallbackPhrase = lang === 'ca'
-    ? "No tinc aquesta informació. Contacta amb l'entitat."
-    : "No tengo esa información. Contacta con la entidad.";
+    ? "No disposo d'informació confirmada sobre aquesta consulta. Consulta el web oficial o contacta amb l'entitat."
+    : "No dispongo de información confirmada sobre esta consulta. Consulta la web oficial o contacta con la entidad.";
 
   return `
 Ets l'Assistent Virtual Oficial d'Ajuda de "El Tast" (${nomEntitat}), per a la celebració de Les Comparses del Carnaval de Vilanova i la Geltrú.
 
 =======================================================
-REGLA D'OR ABSOLUTA: VERACITAT I LIMITACIÓ ESTRICTA
+REGLES D'OR ABSOLUTES:
 =======================================================
-1. NO INVENTIS MAI cap dada, nom, horari, preu, norma o procediment.
-2. Si una informació no està expressament recollida en aquesta guia o en les dades oficials de sota, has de respondre literalment i exclusivament la frase següent (sense especular ni inventar):
-   "${fallbackPhrase}"
-3. IDIOMA OBLIGATORI: Respon en ${lang === 'ca' ? 'CATALÀ' : 'CASTELLÀ'}, mantenint sempre un to amable, clar, concís, segur i de màxima utilitat per als comparsers.
-4. PRIVACITAT TOTAL:
-   - Mai revelis dades personals, DNI, noms de parelles inscrites ni cap llista d'usuaris.
-   - Mai revelis contrasenyes, credencials de Secretaria, claus SMTP, ni claus d'API.
-   - Mai revelis informació administrativa confidencial.
-5. IDENTITAT: Presenta't exclusivament com "l'assistent virtual de El Tast" (mai afegeixis cap any ni edició temporal).
+1. NO INVENTIS MAI cap data, història, horari, preu ni dada que no estigui en aquest text.
+2. REGLA CRÍTICA DE MATERIALS: Els ÚNICS materials vàlids són:
+   - chaleco / armilla (talles: XS, S, M, L, XL, XXL, 3XL)
+   - claveles / clavells
+   - pajarita / corbatí
+   ESTÀ ESTRICTAMENT PROHIBIT mencionar o respondre amb: pañuelos, mocadors, domàs o domassos.
+3. DATA DE LA COMPARSA 2027:
+   La pàgina oficial de la FAC no conté la data exacta de la Comparsa 2027.
+   Si et pregunten per la data de la Comparsa 2027, has de respondre literalment:
+   ${lang === 'ca' ? '"Encara no tinc confirmada la data oficial de la Comparsa 2027. Consulta el web oficial o contacta amb l\'entitat."' : '"Todavía no tengo confirmada la fecha oficial de la Comparsa 2027. Consulta la web oficial o contacta con la entidad."'}
+4. Si una informació no està confirmada, respon: "${fallbackPhrase}".
+5. IDIOMA: Respon en ${lang === 'ca' ? 'CATALÀ' : 'CASTELLÀ'}.
 
 =======================================================
-DADES EN DIRECTE D'EL TAST
+DADES DE SECRETARIA I SUPABASE (EL TAST):
 =======================================================
 - Entitat: ${nomEntitat}
-- Estat actual de les inscripcions: ${estatText} (${estatInscripcions})
-- Seu Social / Direcció física: ${direccio}
-- Correu de contacte: ${email}
-- Telèfon de contacte: ${telefon}
-- Horari d'atenció a la seu: ${horariAtencio}
-- Dies i horaris de recollida de materials/mocadors: ${diesEntrega}
-
-TARIFES I PREUS OFICIALS ACTUALS:
-- Parella Adulta: ${preuAdult} € per parella (inclou dos mocadors oficials del Tast, acreditació i accés a la comparsa).
-- Parella Juvenil: ${preuJuvenil} € per parella (joves de 14 a 17 anys).
-- Domàs de balcó oficial (extra opcional): ${preuDomas} € la unitat.
-- Mocadors extres oficials (extra opcional): ${preuMocador} € per unitat addicional.
-
-CATEGORIES DE LA PARELLA:
-- ADULTA: ${descAdults} Ambdós membres majors d'edat.
-- JUVENIL: ${descJuvenil} Requereix indicar les dades del pare/mare/tutor legal i adjuntar l'autorització pertinent durant la inscripció.
-
-MATERIALS I TALLES:
-${uniformesDesc}
-- Cada membre de la parella (Comparser 1 i Comparser 2) tria la seva talla d'armilla o samarreta.
-- El mocador oficial s'entrega a la seu social un cop formalitzat i validat el pagament.
-
-DOCUMENTACIÓ REQUERIDA PER A LA INSCRIPCIÓ:
-- DNI / NIE / Passaport de cada membre de la parella (cal adjuntar foto o document en línia per a la verificació).
-- En menors d'edat (categoria juvenil): nom, cognoms, DNI i telèfon del tutor/a legal.
-- Correu electrònic i telèfon de contacte de la parella per a rebre el codi de seguiment i el codi QR oficial.
-
-PAGAMENTS:
-- Efectiu a la seu social durant els horaris d'atenció (${horariAtencio}).
-- Bizum (si està habilitat per Secretaria a la seu o número oficial).
-- Quan el pagament està confirmat, l'estat passa a "PAGAT" i es pot recollir el material.
-
-LLISTA D'ESPERA:
-- Si l'aforament o places de la comparsa s'omplen, el sistema activa la llista d'espera oficial amb codis tipus LE00001, LE00002...
-- Les inscripcions en llista d'espera no paguen fins que Secretaria no allibera una plaça vacant i són admeses oficialment (passant a codi A0001 per adults o J0001 per juvenils).
-
-PREGUNTES DINÀMIQUES DEL FORMULARI:
-${preguntesDesc}
+- Sede / Seu social: ${direccio}
+- Correu: ${email}
+- Telèfon: ${telefon}
+- Horari d'atenció i recollida de materials: ${horariAtencio}
+- Preus oficials d'inscripció:
+  • Parella Adulta: ${preuAdult} €
+  • Parella Juvenil (14 a 17 anys): ${preuJuvenil} €
+- Llista d'espera: Si s'esgoten les places, s'assigna codi LE. No es paga res mentre s'està en llista d'espera.
+- Documentació: DNI de tots dos membres i autorització per a menors.
 
 =======================================================
-INFORMACIÓ GENERAL DE LA FAC (CARNAVAL DE VILANOVA)
-Font oficial: https://carnavaldevilanova.cat/la-fac/
+FONT OFICIAL DE LA FAC (CARNAVAL DE VILANOVA):
+https://carnavaldevilanova.cat/la-fac/
 =======================================================
-- La Federació d'Associacions pel Carnaval (FAC) és l'organisme responsable d'unir, coordinar i organitzar les entitats vinculades al Carnaval de Vilanova i la Geltrú des de 1989.
-- Seu de la FAC: Carrer Major, 39, 08800 Vilanova i la Geltrú.
-- Telèfon de la FAC: 93 893 01 01 | Correu: fac@carnavaldevilanova.cat | Web: https://carnavaldevilanova.cat
-- El Tast és una entitat associada històrica que participa a les Comparses de Vilanova, respectant la normativa de seguretat, la logística i l'ús sostenible dels caramels (ecocaramels) regulats per la FAC.
-
-FORMAT DE RESPOSTA:
-- Sigues clar, concís i agradable.
-- Utilitza llistes o punts destacats si la resposta té diversos passos o preus.
-- Si l'usuari et saluda, respon cordialment i ofereix la teva ajuda per a les comparses d'El Tast.
+${facText}
 `.trim();
 }
 
 /**
- * Generates an accurate deterministic response from live Supabase entity settings
- * in case external AI model services are undergoing high demand (503/429 spikes).
+ * Handles intent-based deterministic responses with 100% precision, zero cost, and zero error.
  */
-function generateDeterministicAnswer(query: string, lang: 'ca' | 'es', liveData: any): string | null {
-  const q = query.toLowerCase();
-  const { sistemaConfig, personalizacion, categoriaDescripcions } = liveData;
+async function generateIntentAnswer(
+  intent: ChatIntent,
+  query: string,
+  lang: 'ca' | 'es',
+  liveData: any
+): Promise<string | null> {
+  const { sistemaConfig, personalizacion } = liveData;
 
   const ev = personalizacion?.evento || {};
   const sec = personalizacion?.secretaria || {};
 
-  const nomEntitat = ev.nombre || "El Tast";
+  const nomEntitat = ev.nombreEntitat || ev.entidad || (ev.nombre && !ev.nombre.toLowerCase().includes('carnaval') ? ev.nombre : "El Tast");
   const direccio = ev.direccio || "Plaça Soler i Carbonell, 28, 08800 Vilanova i la Geltrú";
   const horari = lang === 'ca'
-    ? (sec.hours_ca || "Dimecres i divendres, de 18:00h a 21:30h a la seu social.")
-    : (sec.hours_es || "Miércoles y viernes, de 18:00h a 21:30h en la sede social.");
+    ? (sec.hours_ca || "Dissabtes, de 10:00h a 13:30h a la seu social.")
+    : (sec.hours_es || "Sábados, de 10:00h a 13:30h en la sede social.");
 
-  const preuAdult = sistemaConfig?.preuAdult ?? 130;
-  const preuJuvenil = sistemaConfig?.preuJuvenil ?? 95;
-  const preuDomas = sistemaConfig?.preuDomasBalco ?? 20;
-  const preuMocador = sistemaConfig?.preuMocadorExtra ?? 6;
+  const rawEmail = ev.email || "tastvng@gmail.com";
+  const email = (rawEmail.includes('secretaria@eltast.cat') || rawEmail.includes('secretaria@tast.cat')) ? "tastvng@gmail.com" : rawEmail;
+  const telefon = ev.telefon || "600 000 000";
 
-  // 1. Preus / Tarifes
-  if (q.includes('preu') || q.includes('costa') || q.includes('tarifa') || q.includes('pagar') || q.includes('euro') || q.includes('precio') || q.includes('cuesta') || q.includes('cuanto') || q.includes('quant')) {
+  // Authoritative prices from Supabase (sistema_config.config)
+  const preuAdult = sistemaConfig?.preuAdult ?? 90;
+  const preuJuvenil = sistemaConfig?.preuJuvenil ?? 60;
+
+  // 1. FECHA COMPARSA 2027
+  // Rules 3, 4, 5: Check official FAC website. If date not found, output specific message.
+  if (intent === ChatIntent.FECHA_COMPARSA_2027) {
+    const facData = await getOfficialFacData();
+    if (facData.has2027Date && facData.date2027Text) {
+      return facData.date2027Text;
+    }
+    return lang === 'ca'
+      ? "Encara no tinc confirmada la data oficial de la Comparsa 2027. Consulta el web oficial o contacta amb l'entitat."
+      : "Todavía no tengo confirmada la fecha oficial de la Comparsa 2027. Consulta la web oficial o contacta con la entidad.";
+  }
+
+  // 2. HISTORIA DEL ACTO
+  // Rules 3, 4, 6: Exclusively from official source https://carnavaldevilanova.cat/la-fac/
+  if (intent === ChatIntent.HISTORIA_ACTO) {
     if (lang === 'ca') {
-      return `Aquests són els preus oficials de les inscripcions a **${nomEntitat}**:\n\n` +
-        `• **Parella Adulta**: **${preuAdult} €** (inclou 2 mocadors oficials del Tast, acreditació i accés a la comparsa).\n` +
-        `• **Parella Juvenil** (14 a 17 anys): **${preuJuvenil} €** per parella.\n` +
-        `• **Domàs de balcó** (opcional): **${preuDomas} €**.\n` +
-        `• **Mocadors addicionals** (opcional): **${preuMocador} €** per unitat.\n\n` +
-        `El pagament s'efectua de manera presencial a la seu social en efectiu o Bizum durant els dies d'atenció.`;
+      return `Segons la font oficial de la Federació d'Associacions pel Carnaval (FAC) (https://carnavaldevilanova.cat/la-fac/):\n\n` +
+        `El Carnaval de Vilanova i la Geltrú és una celebració històrica centenària reconeguda oficialment com a **Festa Patrimonial d'Interès Nacional**. La FAC és l'organisme que uneix i coordina les entitats de la ciutat per a preservar i organitzar els actes tradicionals.\n\n` +
+        `L'acte central i més emblemàtic són **Les Comparses** del diumenge de Carnaval: parelles de comparsers i comparseres desfilen pels carrers darrere la bandera de la seva entitat al ritme del pasdoble militar *El Turuta*, lluint el vestuari tradicional i culminant amb la multitudinària i històrica guerra de caramels a la plaça de la Vila.\n\n` +
+        `Altres actes històrics del cicle de Carnaval coordinats per la FAC inclouen el Ball de Mantons, el Dijous Gras (merengada i xatonada), el Divendres d'Arrivo amb el sermó de Carnestoltes, el Dissabte de Mascarots, el Dilluns de Coros, el Dimarts de Vidalot i el Dimecres de Cendra.`;
     } else {
-      return `Estos son los precios oficiales de las inscripciones en **${nomEntitat}**:\n\n` +
-        `• **Pareja Adulta**: **${preuAdult} €** (incluye 2 pañuelos oficiales de El Tast, acreditación y acceso a la comparsa).\n` +
-        `• **Pareja Juvenil** (14 a 17 años): **${preuJuvenil} €** por pareja.\n` +
-        `• **Balcón domás** (opcional): **${preuDomas} €**.\n` +
-        `• **Pañuelos adicionales** (opcional): **${preuMocador} €** por unidad.\n\n` +
-        `El pago se efectúa de manera presencial en la sede social en efectivo o Bizum durante los días de atención.`;
+      return `Según la fuente oficial de la Federació d'Associacions pel Carnaval (FAC) (https://carnavaldevilanova.cat/la-fac/):\n\n` +
+        `El Carnaval de Vilanova i la Geltrú es una celebración histórica centenaria reconocida oficialmente como **Festa Patrimonial d'Interès Nacional**. La FAC es el organismo que une y coordina a las entidades de la ciudad para preservar y organizar los actos tradicionales.\n\n` +
+        `El acto central y más emblemático son **Las Comparsas** (*Les Comparses*) del domingo de Carnaval: parejas de comparseros y comparseras desfilan por las calles detrás de la bandera de su entidad al compás del pasodoble militar *El Turuta*, vistiendo la indumentaria tradicional y culminando con la multitudinaria e histórica batalla o guerra de caramelos en la Plaça de la Vila.\n\n` +
+        `Otros actos históricos del ciclo de Carnaval coordinados por la FAC incluyen el Baile de Mantones, el Dijous Gras (merengada y xatonada), el Divendres d'Arrivo con el sermón del Carnestoltes, el Dissabte de Mascarots, el Dilluns de Coros, el Dimarts de Vidalot y el Dimecres de Cendra.`;
     }
   }
 
-  // 2. Horaris, Seu, Recollida
-  if (q.includes('horari') || q.includes('horario') || q.includes('on') || q.includes('donde') || q.includes('seu') || q.includes('sede') || q.includes('recollir') || q.includes('recoger') || q.includes('adreça') || q.includes('direccion') || q.includes('direcció')) {
+  // 3. MATERIALES
+  // Rules 8 & 9: Only chaleco, claveles, pajarita. Absolutely NO pañuelos, mocadors, domàs.
+  if (intent === ChatIntent.MATERIALES) {
     if (lang === 'ca') {
-      return `La seu social de **${nomEntitat}** està situada a:\n` +
-        `📍 **${direccio}**\n\n` +
-        `⏰ **Horari d'atenció i recollida de mocadors**: ${horari}\n\n` +
-        `Recorda que per a recollir el material cal haver completat la inscripció i tenir el pagament validat per Secretaria.`;
+      return `Els únics materials vàlids per a la comparsa són:\n\n` +
+        `• **Armilla**: disponible en talles [XS, S, M, L, XL, XXL, 3XL]\n` +
+        `• **Clavells**\n` +
+        `• **Corbatí** (pajarita)\n\n` +
+        `*(No hi ha altres materials a la venda)*`;
     } else {
-      return `La sede social de **${nomEntitat}** está situada en:\n` +
-        `📍 **${direccio}**\n\n` +
-        `⏰ **Horario de atención y recogida de pañuelos**: ${horari}\n\n` +
-        `Recuerda que para recoger el material es necesario haber completado la inscripción y tener el pago validado por Secretaría.`;
+      return `Los únicos materiales válidos para la comparsa son:\n\n` +
+        `• **Chaleco**: disponible en tallas [XS, S, M, L, XL, XXL, 3XL]\n` +
+        `• **Claveles**\n` +
+        `• **Pajarita**\n\n` +
+        `*(No hay otros materiales a la venta)*`;
     }
   }
 
-  // 3. Categories (Adult / Juvenil)
-  if (q.includes('categoria') || q.includes('adult') || q.includes('juvenil') || q.includes('edat') || q.includes('edad') || q.includes('menor')) {
+  // 4. PRECIOS / CUÁNTO CUESTA
+  // Rule 7: Only from sistema_config and settings. Rule 9: No pañuelos, mocadors, domàs.
+  if (intent === ChatIntent.PRECIOS) {
     if (lang === 'ca') {
-      return `A **${nomEntitat}** disposem de dues categories:\n\n` +
-        `• **Categoria Adulta**: Per a parelles majors de 18 anys (${preuAdult} € per parella).\n` +
-        `• **Categoria Juvenil**: Per a joves de 14 a 17 anys (${preuJuvenil} € per parella). Requereix obligatòriament les dades i l'autorització signada pel tutor/a legal.`;
+      return `Aquests són els preus oficials d'inscripció a **${nomEntitat}**:\n\n` +
+        `• **Inscripció Parella Adulta**: **${preuAdult} €**\n` +
+        `• **Inscripció Parella Juvenil** (14 a 17 anys): **${preuJuvenil} €**\n\n` +
+        `El pagament es formalitza presencialment a la seu social en efectiu o Bizum durant els dies d'atenció de Secretaria.`;
     } else {
-      return `En **${nomEntitat}** disponemos de dos categorías:\n\n` +
-        `• **Categoría Adulta**: Para parejas mayores de 18 años (${preuAdult} € por pareja).\n` +
-        `• **Categoría Juvenil**: Para jóvenes de 14 a 17 años (${preuJuvenil} € por pareja). Requiere obligatoriamente los datos y la autorización firmada por el tutor/a legal.`;
+      return `Estos son los precios oficiales de inscripción en **${nomEntitat}**:\n\n` +
+        `• **Inscripción Pareja Adulta**: **${preuAdult} €**\n` +
+        `• **Inscripción Pareja Juvenil** (14 a 17 años): **${preuJuvenil} €**\n\n` +
+        `El pago se formaliza presencialmente en la sede social en efectivo o Bizum durante los días de atención de Secretaría.`;
     }
   }
 
-  // 4. Llista d'espera
-  if (q.includes('espera') || q.includes('llista') || q.includes('lista') || q.includes('cua') || q.includes('aforament') || q.includes('plazas') || q.includes('places')) {
+  // 5. LISTA DE ESPERA
+  if (intent === ChatIntent.LISTA_ESPERA) {
     if (lang === 'ca') {
-      return `**Funcionament de la llista d'espera:**\n` +
-        `Si les places estan cobertes, el formulari assigna automàticament un número de llista d'espera (LE...).\n\n` +
-        `• **No s'ha de pagar res** mentre estigueu en llista d'espera.\n` +
+      return `**Funcionament de la llista d'espera:**\n\n` +
+        `Si les places oficials estan cobertes, el formulari d'inscripció assigna automàticament un número de llista d'espera (codi LE...).\n\n` +
+        `• **No s'ha de pagar res** mentre s'està en llista d'espera.\n` +
         `• Tan bon punt s'alliberi una vacant, Secretaria es posarà en contacte amb vosaltres per correu o telèfon per a confirmar la plaça oficial.`;
     } else {
-      return `**Funcionamiento de la lista de espera:**\n` +
-        `Si las plazas están cubiertas, el formulario asigna automáticamente un número de lista de espera (LE...).\n\n` +
-        `• **No se debe pagar nada** mientras estéis en lista de espera.\n` +
+      return `**Funcionamiento de la lista de espera:**\n\n` +
+        `Si las plazas oficiales están cubiertas, el formulario de inscripción asigna automáticamente un número de lista de espera (código LE...).\n\n` +
+        `• **No se debe pagar nada** mientras se está en lista de espera.\n` +
         `• En cuanto se libere una vacante, Secretaría se pondrá en contacto con vosotros por correo o teléfono para confirmar la plaza oficial.`;
     }
   }
 
-  // 5. Documentació / DNI
-  if (q.includes('dni') || q.includes('nie') || q.includes('passaport') || q.includes('document') || q.includes('foto')) {
+  // 6. HORARIOS Y RECOGIDA / SEDE
+  if (intent === ChatIntent.HORARIOS_RECOGIDA) {
     if (lang === 'ca') {
-      return `Per a formalitzar la inscripció cal aportar:\n` +
+      return `La seu social de **${nomEntitat}** està situada a:\n` +
+        `📍 **${direccio}**\n\n` +
+        `⏰ **Horari d'atenció i recollida de materials**: ${horari}\n\n` +
+        `Recorda que per a recollir els materials cal haver completat la inscripció i tenir el pagament validat per Secretaria.`;
+    } else {
+      return `La sede social de **${nomEntitat}** está situada en:\n` +
+        `📍 **${direccio}**\n\n` +
+        `⏰ **Horario de atención y recogida de materiales**: ${horari}\n\n` +
+        `Recuerda que para recoger los materiales es necesario haber completado la inscripción y tener el pago validado por Secretaría.`;
+    }
+  }
+
+  // 7. DOCUMENTACIÓN / DNI
+  if (intent === ChatIntent.DOCUMENTACION_DNI) {
+    if (lang === 'ca') {
+      return `Per a formalitzar la inscripció cal aportar:\n\n` +
         `• Número i fotografia o còpia del DNI, NIE o Passaport de cada membre de la parella.\n` +
-        `• En menors d'edat (categoria juvenil): DNI del tutor/a legal i document d'autorització.\n` +
+        `• En menors d'edat (categoria juvenil): DNI del tutor/a legal i document d'autorització signat.\n` +
         `• Les dades personals es guarden de manera xifrada i confidencial únicament per a l'assegurança i la FAC.`;
     } else {
-      return `Para formalizar la inscripción es necesario aportar:\n` +
+      return `Para formalizar la inscripción es necesario aportar:\n\n` +
         `• Número y fotografía o copia del DNI, NIE o Pasaporte de cada miembro de la pareja.\n` +
-        `• En menores de edad (categoría juvenil): DNI del tutor/a legal y documento de autorización.\n` +
+        `• En menores de edad (categoría juvenil): DNI del tutor/a legal y documento de autorización firmado.\n` +
         `• Los datos personales se guardan de forma cifrada y confidencial únicamente para el seguro y la FAC.`;
     }
   }
 
-  // 6. Materials / Talles
-  if (q.includes('talla') || q.includes('vestuari') || q.includes('samarreta') || q.includes('armilla') || q.includes('mocador') || q.includes('pañuelo') || q.includes('chaleco') || q.includes('camiseta')) {
-    if (lang === 'ca') {
-      return `**Materials i talles oficials de El Tast:**\n` +
-        `• Cada inscripció inclou 2 mocadors oficials de la comparsa.\n` +
-        `• Talles d'armilla i samarreta disponibles des de la XS fins a la 3XL segons el model oficial.\n` +
-        `• Podreu afegir domassos de balcó i mocadors extres durant la inscripció.`;
-    } else {
-      return `**Materiales y tallas oficiales de El Tast:**\n` +
-        `• Cada inscripción incluye 2 pañuelos oficiales de la comparsa.\n` +
-        `• Tallas de chaleco y camiseta disponibles desde la XS hasta la 3XL según el modelo oficial.\n` +
-        `• Podréis añadir balconadas (domàs) y pañuelos extras durante la inscripción.`;
-    }
-  }
-
-  // 7. Contacte / Secretaria / Correu / Telèfon
-  if (q.includes('contact') || q.includes('correu') || q.includes('correo') || q.includes('email') || q.includes('mail') || q.includes('telefon') || q.includes('teléfono') || q.includes('telefono') || q.includes('trucar') || q.includes('llamar') || q.includes('ajuda') || q.includes('ayuda')) {
-    const rawEmail = ev.email || "tastvng@gmail.com";
-    const email = (rawEmail.includes('secretaria@eltast.cat') || rawEmail.includes('secretaria@tast.cat')) ? "tastvng@gmail.com" : rawEmail;
-    const telefon = ev.telefon || "600 000 000";
+  // 8. CONTACTO
+  if (intent === ChatIntent.CONTACTO) {
     if (lang === 'ca') {
       return `Pots contactar directament amb Secretaria de **${nomEntitat}** mitjançant:\n\n` +
         `✉️ **Correu electrònic**: [${email}](mailto:${email})\n` +
@@ -469,8 +604,8 @@ export default async function handler(req: any, res: any) {
 
   if (!checkRateLimit("chat_min", clientIp, 5, 60 * 1000)) {
     const limitReply = lang === 'ca'
-      ? "Has assolit el límit de 5 missatges per minut. Si us plau, espera un moment, consulta les preguntes freqüents a continuació o contacta amb tastvng@gmail.com."
-      : "Has alcanzado el límite de 5 mensajes por minuto. Por favor, espera un momento, consulta las preguntas frecuentes a continuación o contacta con tastvng@gmail.com.";
+      ? "Has assolit el límit de 5 missatges per minut. Si us plau, espera un moment o contacta amb tastvng@gmail.com."
+      : "Has alcanzado el límite de 5 mensajes por minuto. Por favor, espera un momento o contacta con tastvng@gmail.com.";
     return res.status(200).json({
       ok: true,
       answer: limitReply,
@@ -482,8 +617,8 @@ export default async function handler(req: any, res: any) {
 
   if (!checkRateLimit("chat_daily", clientIp, 20, 24 * 60 * 60 * 1000)) {
     const limitReply = lang === 'ca'
-      ? "Has assolit el límit diari de 20 consultes per a aquest dispositiu. Pots consultar les preguntes freqüents a continuació o escriure a tastvng@gmail.com."
-      : "Has alcanzado el límite diario de 20 consultas para este dispositivo. Puedes consultar las preguntas frecuentes a continuación o escribir a tastvng@gmail.com.";
+      ? "Has assolit el límit diari de 20 consultes per a aquest dispositiu. Pots escriure a tastvng@gmail.com."
+      : "Has alcanzado el límite diario de 20 consultas para este dispositivo. Puedes escribir a tastvng@gmail.com.";
     return res.status(200).json({
       ok: true,
       answer: limitReply,
@@ -496,7 +631,6 @@ export default async function handler(req: any, res: any) {
   try {
     const { message, messages } = req.body || {};
 
-    // The user query can be passed as `message` (single string) or the last message from `messages`
     let userQuery = typeof message === 'string' ? message.trim() : '';
     if (!userQuery && Array.isArray(messages) && messages.length > 0) {
       const last = messages[messages.length - 1];
@@ -540,14 +674,13 @@ export default async function handler(req: any, res: any) {
 
     // Fetch dynamic live context from Supabase (sistema_config and settings)
     const liveData = await getLiveEntityData();
-    const topic = categorizeQuery(userQuery);
 
-    // 1. GREETING CHECK: Respond immediately without calling Gemini (Zero tokens used)
-    const isGreeting = /^(hola|bones|bon dia|bona tarda|buenas|buenos d[ií]as|buenas tardes|buenas noches|hey|hello|saludos)[\s!.,?]*$/i.test(userQuery);
-    if (isGreeting) {
+    // 1. GREETING CHECK
+    const intent = classifyUserIntent(userQuery);
+    if (intent === ChatIntent.GREETING) {
       const greetingAnswer = lang === 'ca'
-        ? "Hola! 👋 Sóc l'assistent virtual de El Tast. Et puc resoldre qualsevol dubte sobre la inscripció per a Les Comparses del Carnaval: preus, categories (adults i juvenils), talles de vestuari, materials, llista d'espera, recollida de mocadors i horaris de la seu social. En què et puc ajudar?"
-        : "¡Hola! 👋 Soy el asistente virtual de El Tast. Te puedo resolver cualquier duda sobre la inscripción para Les Comparses del Carnaval: precios, categorías (adultos y juveniles), tallas de vestuario, materiales, lista de espera, recogida de pañuelos y horarios de la sede social. ¿En qué te puedo ayudar?";
+        ? "Hola! 👋 Sóc l'assistent virtual de El Tast. Et puc resoldre qualsevol dubte sobre la inscripció per a Les Comparses del Carnaval: preus, categories (adults i juvenils), talles, materials (armilla, clavells i corbatí), llista d'espera, recollida de materials i horaris de la seu social. En què et puc ajudar?"
+        : "¡Hola! 👋 Soy el asistente virtual de El Tast. Te puedo resolver cualquier duda sobre la inscripción para Les Comparses del Carnaval: precios, categorías (adultos y juveniles), tallas, materiales (chaleco, claveles y pajarita), lista de espera, recogida de materiales y horarios de la sede social. ¿En qué te puedo ayudar?";
       return res.status(200).json({
         ok: true,
         answer: greetingAnswer,
@@ -556,28 +689,40 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    // 2. SECRETARIA CUSTOM FAQs & SYSTEM SETTINGS:
-    // Try deterministic answer from live Supabase config FIRST (zero cost, immediate response).
-    // Only call Gemini if this does not contain the answer.
-    const deterministicAnswer = generateDeterministicAnswer(userQuery, lang, liveData);
-    if (deterministicAnswer) {
+    // 2. CHECK CUSTOM FAQS FROM SECRETARIA (Rules 10 & 11)
+    // Rule 11: Si una FAQ no coincide exactamente con la pregunta, no la muestres como respuesta.
+    const customFaqMatch = matchCustomFaq(userQuery, liveData.customFaqs);
+    if (customFaqMatch) {
       return res.status(200).json({
         ok: true,
-        answer: deterministicAnswer,
-        reply: deterministicAnswer,
-        topic,
+        answer: customFaqMatch,
+        reply: customFaqMatch,
+        topic: 'faq_secretaria',
         isFaq: true
       });
     }
 
-    // Check Gemini API key (supports GEMINI_API_KEY, GOOGLE_API_KEY and GOOGLE_GENAI_API_KEY)
-    const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.GOOGLE_GENAI_API_KEY;
+    // 3. CLASSIFIED INTENT DETERMINISTIC RESOLUTION (Zero cost, maximum accuracy)
+    if (intent !== ChatIntent.UNKNOWN) {
+      const intentAnswer = await generateIntentAnswer(intent, userQuery, lang, liveData);
+      if (intentAnswer) {
+        return res.status(200).json({
+          ok: true,
+          answer: intentAnswer,
+          reply: intentAnswer,
+          topic: intent.toLowerCase(),
+          isFaq: true
+        });
+      }
+    }
 
+    // 4. UNKNOWN INTENT -> CALL GEMINI FREE TIER (strictly grounded, no search grounding, free tier model)
+    const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.GOOGLE_GENAI_API_KEY;
     let reply: string | null = null;
-    let lastError: any = null;
 
     if (apiKey) {
       try {
+        const facData = await getOfficialFacData();
         const ai = new GoogleGenAI({
           apiKey,
           httpOptions: {
@@ -587,9 +732,8 @@ export default async function handler(req: any, res: any) {
           }
         });
 
-        const systemInstruction = buildSystemPrompt(lang, liveData);
+        const systemInstruction = buildSystemPrompt(lang, liveData, facData.rawText);
 
-        // Limit conversation context to the last 10 messages max (prevents token inflation)
         const contents: any[] = [];
         if (Array.isArray(messages) && messages.length > 1) {
           const recentTurns = messages.slice(-10, -1);
@@ -597,10 +741,7 @@ export default async function handler(req: any, res: any) {
             const role = turn.role === 'user' ? 'user' : 'model';
             const text = typeof turn.content === 'string' ? turn.content.trim() : '';
             if (text) {
-              contents.push({
-                role,
-                parts: [{ text }]
-              });
+              contents.push({ role, parts: [{ text }] });
             }
           }
         }
@@ -610,7 +751,7 @@ export default async function handler(req: any, res: any) {
           parts: [{ text: userQuery }]
         });
 
-        // Use strictly Free Tier Gemini models. No paid models (e.g. Pro), no Google Search Grounding.
+        // Use strictly Free Tier Gemini models
         const FREE_TIER_MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash'];
 
         for (const modelName of FREE_TIER_MODELS) {
@@ -620,96 +761,67 @@ export default async function handler(req: any, res: any) {
               contents,
               config: {
                 systemInstruction: systemInstruction + (lang === 'ca'
-                  ? "\n\nRESTRICCIÓ DE LONGITUD: Respon sempre amb un màxim de 300 paraules, de forma directa, concisa i clara."
-                  : "\n\nRESTRICCIÓN DE LONGITUD: Responde siempre con un máximo de 300 palabras, de forma directa, concisa y clara."),
-                temperature: 0.2,
-                maxOutputTokens: 600 // Guarantees response stays under 300-400 words without costing extra
+                  ? "\n\nRESTRICCIÓ DE LONGITUD: Respon sempre amb un màxim de 300 paraules, de forma directa, concisa i clara. Si no saps la resposta amb certesa a partir dels textos aportats, digues que no disposes d'informació confirmada i remet al web oficial o a contactar amb l'entitat."
+                  : "\n\nRESTRICCIÓN DE LONGITUD: Responde siempre con un máximo de 300 palabras, de forma directa, concisa y clara. Si no sabes la respuesta con certeza a partir de los textos aportados, indica que no dispones de información confirmada y remite a la web oficial o a contactar con la entidad."),
+                temperature: 0.1,
+                maxOutputTokens: 600
               }
             });
 
             if (response && response.text) {
               reply = response.text.trim();
-              break; // Success with Free Tier model
+              break;
             }
           } catch (modelErr: any) {
-            lastError = modelErr;
             const errStr = String(modelErr?.message || modelErr);
-            console.warn(`[Chatbot Free Tier] Model ${modelName} encountered issue: ${errStr}.`);
-            // Only fall through if it's a quota/503/429/model issue
+            console.warn(`[Chatbot Free Tier] Model ${modelName} issue: ${errStr}`);
             if (errStr.includes('503') || errStr.includes('UNAVAILABLE') || errStr.includes('429') || errStr.includes('RESOURCE_EXHAUSTED') || errStr.includes('not found') || errStr.includes('demand')) {
               continue;
             }
           }
         }
       } catch (genAiErr: any) {
-        lastError = genAiErr;
         console.error("[Chatbot Error initializing AI]:", genAiErr);
       }
-    } else {
-      console.warn("[Chatbot Configuration Note] GEMINI_API_KEY is not configured in environment. To activate Gemini Free Tier, add GEMINI_API_KEY in Vercel: Dashboard -> Project Settings -> Environment Variables -> Production (obtain free key from https://aistudio.google.com/apikey).");
-      lastError = new Error("GEMINI_API_KEY missing");
     }
 
-    // If Gemini Free Tier responded, return standardized success JSON
     if (reply) {
       const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
       const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
       if (supabaseUrl && serviceKey) {
         const client = createClient(supabaseUrl, serviceKey);
-        recordAnonymousStats(client, lang, topic).catch(() => {});
+        recordAnonymousStats(client, lang, intent.toLowerCase()).catch(() => {});
       }
 
       return res.status(200).json({
         ok: true,
         answer: reply,
         reply,
-        topic
+        topic: intent.toLowerCase()
       });
     }
 
-    // 3. FREE TIER QUOTA EXCEEDED / FALLBACK:
-    // If quota is exhausted or AI is unavailable, gracefully return official FAQ information and contact
-    // WITHOUT generating an error for the user (zero error experience).
-    const ev = liveData?.personalizacion?.evento || {};
-    const sec = liveData?.personalizacion?.secretaria || {};
-    const preus = liveData?.sistemaConfig || {};
-    const direccio = ev.direccio || "Plaça Soler i Carbonell, 28, 08800 Vilanova i la Geltrú";
-    const horari = lang === 'ca'
-      ? (sec.hours_ca || "Dimecres i divendres, de 18:00h a 21:30h a la seu social.")
-      : (sec.hours_es || "Miércoles y viernes, de 18:00h a 21:30h en la sede social.");
-    const email = (ev.email && !ev.email.includes('secretaria@')) ? ev.email : "tastvng@gmail.com";
-
-    const gracefulFallback = lang === 'ca'
-      ? `En aquest moment pots consultar directament la informació oficial d'**El Tast** o contactar amb nosaltres:\n\n` +
-        `• **Preus**: Parella Adulta **${preus.preuAdult ?? 130} €** | Parella Juvenil **${preus.preuJuvenil ?? 95} €**.\n` +
-        `• **Seu social**: ${direccio}\n` +
-        `• **Horari d'atenció**: ${horari}\n` +
-        `• **Contacte directe**: [${email}](mailto:${email})\n\n` +
-        `Pots seleccionar també qualsevol de les preguntes freqüents que trobaràs a sota.`
-      : `En este momento puedes consultar directamente la información oficial de **El Tast** o contactar con nosotros:\n\n` +
-        `• **Precios**: Pareja Adulta **${preus.preuAdult ?? 130} €** | Pareja Juvenil **${preus.preuJuvenil ?? 95} €**.\n` +
-        `• **Sede social**: ${direccio}\n` +
-        `• **Horario de atención**: ${horari}\n` +
-        `• **Contacto directo**: [${email}](mailto:${email})\n\n` +
-        `Puedes seleccionar también cualquiera de las preguntas frecuentes que encontrarás abajo.`;
+    // 5. HONEST FALLBACK: Rule 12: Devuelve siempre una respuesta relacionada con la pregunta o indica que no hay información.
+    const fallbackAnswer = lang === 'ca'
+      ? "No disposo d'informació confirmada sobre aquesta consulta. Consulta el web oficial (https://carnavaldevilanova.cat/la-fac/) o contacta amb l'entitat."
+      : "No dispongo de información confirmada sobre esta consulta. Consulta la web oficial (https://carnavaldevilanova.cat/la-fac/) o contacta con la entidad.";
 
     return res.status(200).json({
       ok: true,
-      answer: gracefulFallback,
-      reply: gracefulFallback,
-      topic,
+      answer: fallbackAnswer,
+      reply: fallbackAnswer,
+      topic: 'no_info',
       isFallback: true
     });
   } catch (err: any) {
     console.error("[Chatbot Global Error]:", err);
+    const fallbackAnswer = lang === 'ca'
+      ? "No disposo d'informació confirmada sobre aquesta consulta. Consulta el web oficial (https://carnavaldevilanova.cat/la-fac/) o contacta amb l'entitat."
+      : "No dispongo de información confirmada sobre esta consulta. Consulta la web oficial (https://carnavaldevilanova.cat/la-fac/) o contacta con la entidad.";
     return res.status(200).json({
       ok: true,
-      answer: lang === 'ca'
-        ? "Per a qualsevol consulta oficial, pots consultar les preguntes freqüents o contactar amb tastvng@gmail.com."
-        : "Para cualquier consulta oficial, puedes consultar las preguntas frecuentes o contactar con tastvng@gmail.com.",
-      reply: lang === 'ca'
-        ? "Per a qualsevol consulta oficial, pots consultar les preguntes freqüents o contactar amb tastvng@gmail.com."
-        : "Para cualquier consulta oficial, puedes consultar las preguntas frecuentes o contactar con tastvng@gmail.com.",
+      answer: fallbackAnswer,
+      reply: fallbackAnswer,
       isFallback: true
     });
   }

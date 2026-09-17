@@ -200,6 +200,16 @@ export default async function inscriptionsHandler(req: any, res: any) {
         });
       }
 
+      // 1.1 Strict verification: Informative video must be completed before saving registration
+      if (reg.videoWatched !== true && !reg.video_watched) {
+        return res.status(400).json({
+          ok: false,
+          step: "validation",
+          error: "⚠️ Per continuar, cal veure el vídeo informatiu complet.",
+          code: "VIDEO_NOT_COMPLETED"
+        });
+      }
+
       // 2. Validate / normalize UUID
       let rowId = reg.id;
       if (!rowId || typeof rowId !== 'string' || !UUID_REGEX.test(rowId)) {
@@ -781,17 +791,33 @@ export default async function inscriptionsHandler(req: any, res: any) {
         });
       }
 
-      // Authoritative official prices (El Tast 2027 official rates)
-      const PREU_ADULT = 70;
-      const PREU_JUVENIL = 60;
-      const PREU_DOMAS = 12;
-      const PREU_MOCADOR = 5;
+      // Authoritative official prices fetched dynamically from sistema_config
+      let preuAdult = 70;
+      let preuJuvenil = 60;
 
-      const basePrice = categoria === 'juvenil' ? PREU_JUVENIL : PREU_ADULT;
-      const domasPrice = teDomasBalco ? PREU_DOMAS : 0;
-      const mocadorsCount = Math.max(0, parseInt(teMocadorsExtra || '0', 10) || 0);
-      const mocadorsPrice = mocadorsCount * PREU_MOCADOR;
-      const preuTotalCalculat = basePrice + domasPrice + mocadorsPrice;
+      const serverSupabase = getServerSupabase();
+      if (serverSupabase) {
+        try {
+          const { data: configRows } = await serverSupabase
+            .from('sistema_config')
+            .select('clave, valor');
+          if (configRows && configRows.length > 0) {
+            configRows.forEach((r: any) => {
+              const k = String(r.clave || '').toLowerCase();
+              const num = parseFloat(r.valor);
+              if (!isNaN(num)) {
+                if (k === 'preu_adult' || k === 'precio_adulto') preuAdult = num;
+                if (k === 'preu_juvenil' || k === 'precio_juvenil') preuJuvenil = num;
+              }
+            });
+          }
+        } catch (e) {
+          console.warn("Notice fetching dynamic pricing from sistema_config:", e);
+        }
+      }
+
+      const basePrice = categoria === 'juvenil' ? preuJuvenil : preuAdult;
+      const preuTotalCalculat = basePrice;
 
       return res.status(200).json({
         ok: true,
@@ -799,10 +825,7 @@ export default async function inscriptionsHandler(req: any, res: any) {
         categoria: categoria === 'juvenil' ? 'juvenil' : 'adult',
         preuTotalCalculat,
         desglossament: {
-          base: basePrice,
-          domas: domasPrice,
-          mocadors: mocadorsPrice,
-          mocadorsCount
+          base: basePrice
         }
       });
     }

@@ -84,6 +84,7 @@ export interface Inscripcio {
   preuCalculat: number;
   teDomasBalco: boolean;
   teMocadorsExtra: number;
+  videoWatched?: boolean;
   
   // Estats de gestió
   estatPagament: EstatPagament;
@@ -133,8 +134,8 @@ export interface SistemaConfigItem {
 export interface SistemaConfig {
   preuAdult: number;
   preuJuvenil: number;
-  preuDomasBalco: number;
-  preuMocadorExtra: number;
+  preuDomasBalco?: number;
+  preuMocadorExtra?: number;
   preguntesFormulari: PreguntaDinamica[];
   logoText?: string;
   titolPrincipal?: string;

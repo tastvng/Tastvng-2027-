@@ -331,6 +331,13 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
   const [videoWatched, setVideoWatched] = useState<boolean>(false);
   const [videoWatchedError, setVideoWatchedError] = useState<string | null>(null);
 
+  // Expose videoRef for external and DOM inspection
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      (window as any).__videoRef = videoRef;
+    }
+  }, []);
+
   const markVideoAsCompleted = () => {
     isVideoReallyFinishedRef.current = true;
     setVideoWatched(true);
@@ -338,11 +345,28 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
   };
 
   const handleVideoEnded = () => {
-    markVideoAsCompleted();
+    const v = videoRef.current;
+    // Anti-skip check: if video element has duration, verify it wasn't skipped
+    if (v && v.duration && v.duration > 0) {
+      if (maxWatchedTimeRef.current >= v.duration * 0.90 || v.currentTime >= v.duration * 0.90) {
+        markVideoAsCompleted();
+      } else {
+        // Skipped to the end without watching
+        isVideoReallyFinishedRef.current = false;
+        setVideoWatched(false);
+        setVideoWatchedError(language === 'ca'
+          ? "⚠️ Per continuar, cal veure el vídeo informatiu complet."
+          : "⚠️ Para continuar, es necesario ver el vídeo informativo completo.");
+      }
+    } else {
+      markVideoAsCompleted();
+    }
   };
 
-  const handleVideoTimeUpdate = (e: React.SyntheticEvent<HTMLVideoElement>) => {
-    const v = e.currentTarget;
+  const handleVideoTimeUpdate = (e?: React.SyntheticEvent<HTMLVideoElement> | Event) => {
+    const v = (e && 'currentTarget' in e && e.currentTarget) 
+      ? (e.currentTarget as HTMLVideoElement) 
+      : videoRef.current;
     if (!v) return;
 
     // Prevent skipping: if seeker jumps >2s ahead of recorded watch point, snap back
@@ -357,14 +381,16 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
     // 95% completion threshold
     if (v.duration && v.duration > 0) {
       const ratio = v.currentTime / v.duration;
-      if (ratio >= 0.95) {
+      if (ratio >= 0.95 && maxWatchedTimeRef.current >= v.duration * 0.90) {
         markVideoAsCompleted();
       }
     }
   };
 
-  const handleVideoSeeking = (e: React.SyntheticEvent<HTMLVideoElement>) => {
-    const v = e.currentTarget;
+  const handleVideoSeeking = (e?: React.SyntheticEvent<HTMLVideoElement> | Event) => {
+    const v = (e && 'currentTarget' in e && e.currentTarget) 
+      ? (e.currentTarget as HTMLVideoElement) 
+      : videoRef.current;
     if (!v) return;
     if (v.currentTime > maxWatchedTimeRef.current + 1) {
       v.currentTime = maxWatchedTimeRef.current;
@@ -980,6 +1006,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
         preuCalculat: totalCalculat,
         teDomasBalco,
         teMocadorsExtra,
+        videoWatched: true,
         estatPagament: EstatPagament.PENDENT,
         metodePagament: null,
         estatDni: EstatVerificacio.PENDENT,
@@ -1791,8 +1818,18 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
         </div>
 
         {/* Código de Vestimenta Button / Modal */}
-        <div className="max-w-md mx-auto sm:max-w-none">
-          <CodigoVestimentaModal youtubeUrl={youtubeUrl} />
+        <div className="max-w-md mx-auto sm:max-w-none" id="codigo-vestimenta-seccio">
+          <CodigoVestimentaModal 
+            youtubeUrl={youtubeUrl}
+            videoRef={videoRef}
+            videoWatched={videoWatched}
+            videoWatchedError={videoWatchedError}
+            onVideoEnded={handleVideoEnded}
+            onVideoTimeUpdate={handleVideoTimeUpdate}
+            onVideoPause={handleVideoPause}
+            onVideoSeeking={handleVideoSeeking}
+            onCloseModal={handleVideoCloseModal}
+          />
         </div>
 
         {/* Floating/Bottom Action price breakdown bar */}
@@ -1817,14 +1854,46 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
             </p>
           </div>
 
-          <button
-            type="submit"
-            className="w-full md:w-auto bg-[#ff0090] hover:bg-[#d60079] text-white font-sans font-extrabold text-sm uppercase tracking-wider px-8 py-4.5 rounded-2xl shadow-xl shadow-fuchsia-900/30 transition-all flex items-center justify-center gap-2 group shrink-0 cursor-pointer"
-            id="btn-submit-registration"
-          >
-            <span>{language === 'ca' ? "Enviar Preinscripció" : "Enviar Preinscripción"}</span>
-            <ChevronRight size={16} className="group-hover:translate-x-1 transition-transform" />
-          </button>
+          <div className="flex flex-col items-center md:items-end gap-2 w-full md:w-auto relative z-10">
+            {videoWatched ? (
+              <div id="video-submit-status-badge" className="flex items-center gap-1.5 text-xs font-bold text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-3 py-1.5 rounded-xl">
+                <CheckCircle2 size={14} className="text-emerald-400 shrink-0" />
+                <span>✅ {language === 'ca' ? "Vídeo vist correctament" : "Vídeo visto correctamente"}</span>
+              </div>
+            ) : videoWatchedError ? (
+              <div id="video-requirement-notice-bottom" className="flex items-center gap-1.5 text-xs font-semibold text-amber-400 bg-amber-950/60 border border-amber-500/30 px-3 py-1.5 rounded-xl">
+                <AlertTriangle size={14} className="text-amber-400 shrink-0" />
+                <span>{videoWatchedError}</span>
+              </div>
+            ) : (
+              <div className="text-[11px] text-zinc-400 flex items-center gap-1.5 font-sans">
+                <span>🔒 {language === 'ca' ? "Cal veure el vídeo complet per activar l'enviament" : "Es necesario ver el vídeo completo para activar el envío"}</span>
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={!videoWatched || isSubmitting}
+              id="btn-submit-registration"
+              className={`w-full md:w-auto font-sans font-extrabold text-sm uppercase tracking-wider px-8 py-4.5 rounded-2xl shadow-xl transition-all flex items-center justify-center gap-2 group shrink-0 ${
+                videoWatched && !isSubmitting
+                  ? "bg-[#ff0090] hover:bg-[#d60079] text-white shadow-fuchsia-900/30 cursor-pointer"
+                  : "bg-zinc-800 text-zinc-400 opacity-60 cursor-not-allowed border border-zinc-700 shadow-none"
+              }`}
+            >
+              {isSubmitting ? (
+                <>
+                  <span className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin shrink-0" />
+                  <span>{language === 'ca' ? "Enviant..." : "Enviando..."}</span>
+                </>
+              ) : (
+                <>
+                  <span>{language === 'ca' ? "Enviar Preinscripció" : "Enviar Preinscripción"}</span>
+                  <ChevronRight size={16} className={videoWatched ? "group-hover:translate-x-1 transition-transform" : "opacity-40"} />
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </form>
       )}
@@ -1833,7 +1902,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
       <CameraModal
         cameraActive={cameraActive}
         videoError={videoError}
-        videoRef={videoRef}
+        videoRef={cameraVideoRef}
         canvasRef={canvasRef}
         simulateCapture={simulateCapture}
         stopCamera={stopCamera}

@@ -73,8 +73,8 @@ export const Chatbot: React.FC<ChatbotProps> = ({
       id: 'welcome-1',
       role: 'assistant',
       content: isCa
-        ? `Hola! 👋 Sóc l'assistent virtual de **El Tast**. Et puc resoldre qualsevol dubte sobre la inscripció, categories d'adults i juvenils, preus, talles, materials, llista d'espera, recollida de mocadors, pagaments i la seu social. En què et puc ajudar?`
-        : `¡Hola! 👋 Soy el asistente virtual de **El Tast**. Te puedo resolver cualquier duda sobre la inscripción, categorías de adultos y juveniles, precios, tallas, materiales, lista de espera, recogida de pañuelos, pagos y la sede social. ¿En qué te puedo ayudar?`,
+        ? `Hola! 👋 Sóc l'assistent virtual de **El Tast**. Et puc resoldre qualsevol dubte sobre la inscripció, categories d'adults i juvenils, preus, talles, materials (armilla, clavells i corbatí), llista d'espera, recollida de materials, pagaments i la seu social. En què et puc ajudar?`
+        : `¡Hola! 👋 Soy el asistente virtual de **El Tast**. Te puedo resolver cualquier duda sobre la inscripción, categorías de adultos y juveniles, precios, tallas, materiales (chaleco, claveles y pajarita), lista de espera, recogida de materiales, pagos y la sede social. ¿En qué te puedo ayudar?`,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
     setMessages([initialWelcome]);
@@ -218,18 +218,18 @@ export const Chatbot: React.FC<ChatbotProps> = ({
   // Quick suggestion chips
   const quickSuggestions = isCa
     ? [
-        { label: "💰 Preus i categories", query: "Quins són els preus i les categories de la parella?" },
-        { label: "📍 On i quan recollir mocadors?", query: "On i quan es recullen els mocadors i materials?" },
-        { label: "⏳ Com funciona la llista d'espera?", query: "Com funciona la llista d'espera i quan s'ha de pagar?" },
+        { label: "💰 Preus d'inscripció", query: "Quant costa la inscripció de la comparsa?" },
+        { label: "📍 On i quan recollir materials?", query: "On i quan es recullen els materials?" },
+        { label: "⏳ Llista d'espera", query: "Com funciona la llista d'espera?" },
         { label: "🪪 Documentació i DNI", query: "Quina documentació i DNI cal aportar a la inscripció?" },
-        { label: "👕 Talles de vestuari", query: "Quines talles d'armilles o samarretes hi ha disponibles?" }
+        { label: "👕 Quins materials hi ha?", query: "Quins materials hi ha?" }
       ]
     : [
-        { label: "💰 Precios y categorías", query: "¿Cuáles son los precios y las categorías de la pareja?" },
-        { label: "📍 ¿Dónde y cuándo recoger pañuelos?", query: "¿Dónde y cuándo se recogen los pañuelos y materiales?" },
-        { label: "⏳ ¿Cómo funciona la lista de espera?", query: "¿Cómo funciona la lista de espera y cuándo se debe pagar?" },
+        { label: "💰 Precios de inscripción", query: "¿Cuánto cuesta la inscripción de la comparsa?" },
+        { label: "📍 ¿Dónde y cuándo recoger materiales?", query: "¿Dónde y cuándo se recogen los materiales?" },
+        { label: "⏳ Lista de espera", query: "¿Cómo funciona la lista de espera?" },
         { label: "🪪 Documentación y DNI", query: "¿Qué documentación y DNI es necesario aportar en la inscripción?" },
-        { label: "👕 Tallas de vestuario", query: "¿Qué tallas de chalecos o camisetas hay disponibles?" }
+        { label: "👕 ¿Qué materiales hay?", query: "¿Qué materiales hay?" }
       ];
 
   // Static FAQ fallback items for when AI is unavailable
@@ -237,7 +237,11 @@ export const Chatbot: React.FC<ChatbotProps> = ({
     ? [
         {
           q: "Quins són els preus d'inscripció?",
-          a: "Parella Adulta (majors de 18 anys): 130 € per parella (inclou 2 mocadors oficials i acreditació). Parella Juvenil (14 a 17 anys amb autorització): 95 € per parella. Domàs de balcó: 20 €. Mocadors addicionals: 6 €."
+          a: "Parella Adulta: 90 € per parella. Parella Juvenil (14 a 17 anys amb autorització): 60 € per parella."
+        },
+        {
+          q: "Quins materials hi ha?",
+          a: "Els únics materials vàlids són l'armilla oficial (talles XS a 3XL), els clavells i el corbatí (pajarita)."
         },
         {
           q: "On i quan es recullen els materials?",
@@ -250,16 +254,16 @@ export const Chatbot: React.FC<ChatbotProps> = ({
         {
           q: "Com funciona la llista d'espera?",
           a: "Si les places s'esgoten, s'assigna automàticament un codi de llista d'espera (LE...). No s'ha de pagar res fins que Secretaria confirmi una vacant i us assigni número oficial."
-        },
-        {
-          q: "Quines formes de pagament s'accepten?",
-          a: "Efectiu directament a la seu social en horari d'atenció o Bizum si està habilitat per l'entitat."
         }
       ]
     : [
         {
           q: "¿Cuáles son los precios de inscripción?",
-          a: "Pareja Adulta (mayores de 18 años): 130 € por pareja (incluye 2 pañuelos oficiales y acreditación). Pareja Juvenil (14 a 17 años con autorización): 95 € por pareja. Balcón domás: 20 €. Pañuelos adicionales: 6 €."
+          a: "Pareja Adulta: 90 € por pareja. Pareja Juvenil (14 a 17 años con autorización): 60 € por pareja."
+        },
+        {
+          q: "¿Qué materiales hay?",
+          a: "Los únicos materiales válidos son el chaleco oficial (tallas XS a 3XL), los claveles y la pajarita."
         },
         {
           q: "¿Dónde y cuándo se recogen los materiales?",
@@ -272,10 +276,6 @@ export const Chatbot: React.FC<ChatbotProps> = ({
         {
           q: "¿Cómo funciona la lista de espera?",
           a: "Si las plazas se agotan, se asigna automáticamente un código de lista de espera (LE...). No se debe pagar nada hasta que Secretaría confirme una vacante y os asigne número oficial."
-        },
-        {
-          q: "¿Qué formas de pago se aceptan?",
-          a: "Efectivo directamente en la sede social en horario de atención o Bizum si está habilitado por la entidad."
         }
       ];
 
