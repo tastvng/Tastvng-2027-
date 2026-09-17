@@ -151,8 +151,8 @@ export const Chatbot: React.FC<ChatbotProps> = ({
     setIsLoading(true);
 
     try {
-      // Map history for Gemini API
-      const formattedTurns = newHistory.slice(-8).map(m => ({
+      // Map history for Gemini API (capped at last 10 turns max)
+      const formattedTurns = newHistory.slice(-10).map(m => ({
         role: m.role === 'user' ? 'user' : 'model',
         content: m.content
       }));

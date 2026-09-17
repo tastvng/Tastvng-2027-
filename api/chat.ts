@@ -428,6 +428,24 @@ function generateDeterministicAnswer(query: string, lang: 'ca' | 'es', liveData:
     }
   }
 
+  // 7. Contacte / Secretaria / Correu / Telèfon
+  if (q.includes('contact') || q.includes('correu') || q.includes('correo') || q.includes('email') || q.includes('mail') || q.includes('telefon') || q.includes('teléfono') || q.includes('telefono') || q.includes('trucar') || q.includes('llamar') || q.includes('ajuda') || q.includes('ayuda')) {
+    const rawEmail = ev.email || "tastvng@gmail.com";
+    const email = (rawEmail.includes('secretaria@eltast.cat') || rawEmail.includes('secretaria@tast.cat')) ? "tastvng@gmail.com" : rawEmail;
+    const telefon = ev.telefon || "600 000 000";
+    if (lang === 'ca') {
+      return `Pots contactar directament amb Secretaria de **${nomEntitat}** mitjançant:\n\n` +
+        `✉️ **Correu electrònic**: [${email}](mailto:${email})\n` +
+        `📞 **Telèfon**: ${telefon}\n` +
+        `📍 **Atenció presencial a la seu**: ${direccio} (${horari})`;
+    } else {
+      return `Puedes contactar directamente con Secretaría de **${nomEntitat}** mediante:\n\n` +
+        `✉️ **Correo electrónico**: [${email}](mailto:${email})\n` +
+        `📞 **Teléfono**: ${telefon}\n` +
+        `📍 **Atención presencial en la sede**: ${direccio} (${horari})`;
+    }
+  }
+
   return null;
 }
 
@@ -442,18 +460,41 @@ export default async function handler(req: any, res: any) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  // IP Rate limiting: max 20 queries per 5 minutes per IP
+  // IP Rate limiting:
+  // - Maximum 5 messages per minute per user/IP
+  // - Maximum 20 messages per day per IP
   const clientIp = getClientIp(req);
-  if (!checkRateLimit("chatbot", clientIp, 20, 5 * 60 * 1000)) {
-    return res.status(429).json({
-      error: "Has superat el límit de missatges per minut. Si us plau, espera una mica abans de tornar a preguntar.",
+  const { language } = req.body || {};
+  const lang: 'ca' | 'es' = language === 'es' ? 'es' : 'ca';
+
+  if (!checkRateLimit("chat_min", clientIp, 5, 60 * 1000)) {
+    const limitReply = lang === 'ca'
+      ? "Has assolit el límit de 5 missatges per minut. Si us plau, espera un moment, consulta les preguntes freqüents a continuació o contacta amb tastvng@gmail.com."
+      : "Has alcanzado el límite de 5 mensajes por minuto. Por favor, espera un momento, consulta las preguntas frecuentes a continuación o contacta con tastvng@gmail.com.";
+    return res.status(200).json({
+      ok: true,
+      answer: limitReply,
+      reply: limitReply,
+      topic: 'rate_limit',
+      isRateLimit: true
+    });
+  }
+
+  if (!checkRateLimit("chat_daily", clientIp, 20, 24 * 60 * 60 * 1000)) {
+    const limitReply = lang === 'ca'
+      ? "Has assolit el límit diari de 20 consultes per a aquest dispositiu. Pots consultar les preguntes freqüents a continuació o escriure a tastvng@gmail.com."
+      : "Has alcanzado el límite diario de 20 consultas para este dispositivo. Puedes consultar las preguntas frecuentes a continuación o escribir a tastvng@gmail.com.";
+    return res.status(200).json({
+      ok: true,
+      answer: limitReply,
+      reply: limitReply,
+      topic: 'rate_limit',
       isRateLimit: true
     });
   }
 
   try {
-    const { message, messages, language } = req.body || {};
-    const lang: 'ca' | 'es' = language === 'es' ? 'es' : 'ca';
+    const { message, messages } = req.body || {};
 
     // The user query can be passed as `message` (single string) or the last message from `messages`
     let userQuery = typeof message === 'string' ? message.trim() : '';
@@ -465,11 +506,19 @@ export default async function handler(req: any, res: any) {
     }
 
     if (!userQuery) {
-      return res.status(400).json({ error: "El missatge no pot estar buit." });
+      return res.status(400).json({
+        ok: false,
+        error: "EMPTY_MESSAGE",
+        message: lang === 'ca' ? "El missatge no pot estar buit." : "El mensaje no puede estar vacío."
+      });
     }
 
     if (userQuery.length > 1000) {
-      return res.status(400).json({ error: "El missatge és massa llarg (màxim 1000 caràcters)." });
+      return res.status(400).json({
+        ok: false,
+        error: "MESSAGE_TOO_LONG",
+        message: lang === 'ca' ? "El missatge és massa llarg (màxim 1000 caràcters)." : "El mensaje es demasiado largo (máximo 1000 caracteres)."
+      });
     }
 
     // Anti-prompt-injection & credential guardrails
@@ -489,14 +538,11 @@ export default async function handler(req: any, res: any) {
       }
     }
 
-    // Check Gemini API key (supports GEMINI_API_KEY, GOOGLE_API_KEY and GOOGLE_GENAI_API_KEY)
-    const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.GOOGLE_GENAI_API_KEY;
-
     // Fetch dynamic live context from Supabase (sistema_config and settings)
     const liveData = await getLiveEntityData();
     const topic = categorizeQuery(userQuery);
 
-    // If query is a pure greeting, return instant friendly greeting
+    // 1. GREETING CHECK: Respond immediately without calling Gemini (Zero tokens used)
     const isGreeting = /^(hola|bones|bon dia|bona tarda|buenas|buenos d[ií]as|buenas tardes|buenas noches|hey|hello|saludos)[\s!.,?]*$/i.test(userQuery);
     if (isGreeting) {
       const greetingAnswer = lang === 'ca'
@@ -509,6 +555,23 @@ export default async function handler(req: any, res: any) {
         topic: 'salutacio'
       });
     }
+
+    // 2. SECRETARIA CUSTOM FAQs & SYSTEM SETTINGS:
+    // Try deterministic answer from live Supabase config FIRST (zero cost, immediate response).
+    // Only call Gemini if this does not contain the answer.
+    const deterministicAnswer = generateDeterministicAnswer(userQuery, lang, liveData);
+    if (deterministicAnswer) {
+      return res.status(200).json({
+        ok: true,
+        answer: deterministicAnswer,
+        reply: deterministicAnswer,
+        topic,
+        isFaq: true
+      });
+    }
+
+    // Check Gemini API key (supports GEMINI_API_KEY, GOOGLE_API_KEY and GOOGLE_GENAI_API_KEY)
+    const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.GOOGLE_GENAI_API_KEY;
 
     let reply: string | null = null;
     let lastError: any = null;
@@ -526,10 +589,10 @@ export default async function handler(req: any, res: any) {
 
         const systemInstruction = buildSystemPrompt(lang, liveData);
 
-        // Format conversation history for Gemini
+        // Limit conversation context to the last 10 messages max (prevents token inflation)
         const contents: any[] = [];
         if (Array.isArray(messages) && messages.length > 1) {
-          const recentTurns = messages.slice(-7, -1);
+          const recentTurns = messages.slice(-10, -1);
           for (const turn of recentTurns) {
             const role = turn.role === 'user' ? 'user' : 'model';
             const text = typeof turn.content === 'string' ? turn.content.trim() : '';
@@ -547,29 +610,32 @@ export default async function handler(req: any, res: any) {
           parts: [{ text: userQuery }]
         });
 
-        // Resilience: fallback chain across supported Gemini models if a model suffers 503 or temporary unavailability
-        const CANDIDATE_MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-2.5-pro'];
+        // Use strictly Free Tier Gemini models. No paid models (e.g. Pro), no Google Search Grounding.
+        const FREE_TIER_MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash'];
 
-        for (const modelName of CANDIDATE_MODELS) {
+        for (const modelName of FREE_TIER_MODELS) {
           try {
             const response = await ai.models.generateContent({
               model: modelName,
               contents,
               config: {
-                systemInstruction,
+                systemInstruction: systemInstruction + (lang === 'ca'
+                  ? "\n\nRESTRICCIÓ DE LONGITUD: Respon sempre amb un màxim de 300 paraules, de forma directa, concisa i clara."
+                  : "\n\nRESTRICCIÓN DE LONGITUD: Responde siempre con un máximo de 300 palabras, de forma directa, concisa y clara."),
                 temperature: 0.2,
+                maxOutputTokens: 600 // Guarantees response stays under 300-400 words without costing extra
               }
             });
 
             if (response && response.text) {
               reply = response.text.trim();
-              break; // Success! Exit model loop
+              break; // Success with Free Tier model
             }
           } catch (modelErr: any) {
             lastError = modelErr;
             const errStr = String(modelErr?.message || modelErr);
-            console.warn(`[Chatbot] Model ${modelName} failed: ${errStr}. Trying next model if available...`);
-            // Only continue to next model if it's an API/availability/quota/503/429 error
+            console.warn(`[Chatbot Free Tier] Model ${modelName} encountered issue: ${errStr}.`);
+            // Only fall through if it's a quota/503/429/model issue
             if (errStr.includes('503') || errStr.includes('UNAVAILABLE') || errStr.includes('429') || errStr.includes('RESOURCE_EXHAUSTED') || errStr.includes('not found') || errStr.includes('demand')) {
               continue;
             }
@@ -580,13 +646,12 @@ export default async function handler(req: any, res: any) {
         console.error("[Chatbot Error initializing AI]:", genAiErr);
       }
     } else {
-      console.warn("[Chatbot] GEMINI_API_KEY is not defined in environment.");
+      console.warn("[Chatbot Configuration Note] GEMINI_API_KEY is not configured in environment. To activate Gemini Free Tier, add GEMINI_API_KEY in Vercel: Dashboard -> Project Settings -> Environment Variables -> Production (obtain free key from https://aistudio.google.com/apikey).");
       lastError = new Error("GEMINI_API_KEY missing");
     }
 
-    // If Gemini models responded, return standardized success JSON
+    // If Gemini Free Tier responded, return standardized success JSON
     if (reply) {
-      // Record anonymous stats in background
       const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
       const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
       if (supabaseUrl && serviceKey) {
@@ -602,33 +667,50 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    // Deterministic factual fallback based on live entity data from Supabase
-    // This guarantees that critical queries (prices, hours, categories, materials, waiting list)
-    // always succeed even if Google API is temporarily experiencing a 503 spike or downtime
-    const fallbackAnswer = generateDeterministicAnswer(userQuery, lang, liveData);
-    if (fallbackAnswer) {
-      return res.status(200).json({
-        ok: true,
-        answer: fallbackAnswer,
-        reply: fallbackAnswer,
-        topic,
-        isFallback: true
-      });
-    }
+    // 3. FREE TIER QUOTA EXCEEDED / FALLBACK:
+    // If quota is exhausted or AI is unavailable, gracefully return official FAQ information and contact
+    // WITHOUT generating an error for the user (zero error experience).
+    const ev = liveData?.personalizacion?.evento || {};
+    const sec = liveData?.personalizacion?.secretaria || {};
+    const preus = liveData?.sistemaConfig || {};
+    const direccio = ev.direccio || "Plaça Soler i Carbonell, 28, 08800 Vilanova i la Geltrú";
+    const horari = lang === 'ca'
+      ? (sec.hours_ca || "Dimecres i divendres, de 18:00h a 21:30h a la seu social.")
+      : (sec.hours_es || "Miércoles y viernes, de 18:00h a 21:30h en la sede social.");
+    const email = (ev.email && !ev.email.includes('secretaria@')) ? ev.email : "tastvng@gmail.com";
 
-    // If no answer could be generated and AI is unavailable, return standardized error JSON
-    console.error("[Chatbot Error - unavailable]:", lastError?.message || lastError);
-    return res.status(503).json({
-      ok: false,
-      error: "CHATBOT_UNAVAILABLE",
-      message: lastError?.message || "This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later."
+    const gracefulFallback = lang === 'ca'
+      ? `En aquest moment pots consultar directament la informació oficial d'**El Tast** o contactar amb nosaltres:\n\n` +
+        `• **Preus**: Parella Adulta **${preus.preuAdult ?? 130} €** | Parella Juvenil **${preus.preuJuvenil ?? 95} €**.\n` +
+        `• **Seu social**: ${direccio}\n` +
+        `• **Horari d'atenció**: ${horari}\n` +
+        `• **Contacte directe**: [${email}](mailto:${email})\n\n` +
+        `Pots seleccionar també qualsevol de les preguntes freqüents que trobaràs a sota.`
+      : `En este momento puedes consultar directamente la información oficial de **El Tast** o contactar con nosotros:\n\n` +
+        `• **Precios**: Pareja Adulta **${preus.preuAdult ?? 130} €** | Pareja Juvenil **${preus.preuJuvenil ?? 95} €**.\n` +
+        `• **Sede social**: ${direccio}\n` +
+        `• **Horario de atención**: ${horari}\n` +
+        `• **Contacto directo**: [${email}](mailto:${email})\n\n` +
+        `Puedes seleccionar también cualquiera de las preguntas frecuentes que encontrarás abajo.`;
+
+    return res.status(200).json({
+      ok: true,
+      answer: gracefulFallback,
+      reply: gracefulFallback,
+      topic,
+      isFallback: true
     });
   } catch (err: any) {
     console.error("[Chatbot Global Error]:", err);
-    return res.status(500).json({
-      ok: false,
-      error: "CHATBOT_UNAVAILABLE",
-      message: err?.message || "Error real registrat al servidor"
+    return res.status(200).json({
+      ok: true,
+      answer: lang === 'ca'
+        ? "Per a qualsevol consulta oficial, pots consultar les preguntes freqüents o contactar amb tastvng@gmail.com."
+        : "Para cualquier consulta oficial, puedes consultar las preguntas frecuentes o contactar con tastvng@gmail.com.",
+      reply: lang === 'ca'
+        ? "Per a qualsevol consulta oficial, pots consultar les preguntes freqüents o contactar amb tastvng@gmail.com."
+        : "Para cualquier consulta oficial, puedes consultar las preguntas frecuentes o contactar con tastvng@gmail.com.",
+      isFallback: true
     });
   }
 }

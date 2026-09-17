@@ -48,6 +48,7 @@
     { "source": "/api/preguntes", "destination": "/api/config?action=preguntes" },
     { "source": "/api/admin/preguntes/:id", "destination": "/api/config?action=preguntes&id=:id" },
     { "source": "/api/admin/preguntes", "destination": "/api/config?action=preguntes" },
+    { "source": "/api/chat", "destination": "/api/chat" },
     { "source": "/api/:path*", "destination": "/api/:path*" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
   ]
