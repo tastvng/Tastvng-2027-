@@ -14,6 +14,7 @@ interface CachedConfig {
     categoriaDescripcions: any;
     preguntes: any[];
     customFaqs: any[];
+    prices: ActivePrices;
   };
 }
 
@@ -38,13 +39,149 @@ let statsAccumulator: AnonymousStats = {
 let lastStatsFlush = 0;
 
 // =======================================================
+// OFFICIAL CARNAVAL DATES SCRAPER & CACHE
+// Source: https://carnavaldevilanova.cat/el-nostre-carnaval/els-propers-carnavals/
+// =======================================================
+export interface CarnavalDateItem {
+  year: number;
+  rawRange: string;
+  rangeCA: string;
+  rangeES: string;
+  sundayCA: string;
+  sundayES: string;
+}
+
+interface CarnavalsCache {
+  timestamp: number;
+  items: CarnavalDateItem[];
+}
+
+let carnavalsCache: CarnavalsCache | null = null;
+const CARNAVALS_CACHE_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours in-memory cache
+
+// Official verified dates extracted from https://carnavaldevilanova.cat/el-nostre-carnaval/els-propers-carnavals/
+const VERIFIED_CARNAVALS: CarnavalDateItem[] = [
+  { year: 2027, rawRange: "Del 4 de febrer al 10 de febrer", rangeCA: "Del 4 al 10 de febrer de 2027", rangeES: "Del 4 al 10 de febrero de 2027", sundayCA: "7 de febrer de 2027", sundayES: "7 de febrero de 2027" },
+  { year: 2028, rawRange: "Del 24 de febrer a l’1 de març", rangeCA: "Del 24 de febrer a l'1 de març de 2028", rangeES: "Del 24 de febrero al 1 de marzo de 2028", sundayCA: "27 de febrer de 2028", sundayES: "27 de febrero de 2028" },
+  { year: 2029, rawRange: "Del 8 de febrer al 14 de febrer", rangeCA: "Del 8 al 14 de febrer de 2029", rangeES: "Del 8 al 14 de febrero de 2029", sundayCA: "11 de febrer de 2029", sundayES: "11 de febrero de 2029" },
+  { year: 2030, rawRange: "Del 28 de febrer al 6 de març", rangeCA: "Del 28 de febrer al 6 de març de 2030", rangeES: "Del 28 de febrero al 6 de marzo de 2030", sundayCA: "3 de març de 2030", sundayES: "3 de marzo de 2030" },
+  { year: 2031, rawRange: "Del 19 de febrer al 26 de febrer", rangeCA: "Del 19 al 26 de febrer de 2031", rangeES: "Del 19 al 26 de febrero de 2031", sundayCA: "23 de febrer de 2031", sundayES: "23 de febrero de 2031" },
+  { year: 2032, rawRange: "Del 4 de febrer a l’11 de febrer", rangeCA: "Del 4 a l'11 de febrer de 2032", rangeES: "Del 4 al 11 de febrero de 2032", sundayCA: "8 de febrer de 2032", sundayES: "8 de febrero de 2032" },
+  { year: 2033, rawRange: "Del 23 de febrer al 2 de març", rangeCA: "Del 23 de febrer al 2 de març de 2033", rangeES: "Del 23 de febrero al 2 de marzo de 2033", sundayCA: "27 de febrer de 2033", sundayES: "27 de febrero de 2033" },
+  { year: 2034, rawRange: "Del 16 de febrer al 22 de febrer", rangeCA: "Del 16 al 22 de febrer de 2034", rangeES: "Del 16 al 22 de febrero de 2034", sundayCA: "19 de febrer de 2034", sundayES: "19 de febrero de 2034" },
+  { year: 2035, rawRange: "De l’1 de febrer al 7 de febrer", rangeCA: "De l'1 al 7 de febrer de 2035", rangeES: "Del 1 al 7 de febrero de 2035", sundayCA: "4 de febrer de 2035", sundayES: "4 de febrero de 2035" },
+  { year: 2036, rawRange: "Del 20 de febrer al 25 de febrer", rangeCA: "Del 20 al 25 de febrer de 2036", rangeES: "Del 20 al 25 de febrero de 2036", sundayCA: "24 de febrer de 2036", sundayES: "24 de febrero de 2036" }
+];
+
+function parseCarnavalDates(year: number, rawRange: string): CarnavalDateItem | null {
+  try {
+    const text = rawRange.toLowerCase().replace(/[’‘`]/g, "’");
+    const m = text.match(/(?:del?|de l’)\s*(\d{1,2})\s*(?:de\s+([a-zç]+))?\s+a(?:l|\s+l’|\s+la)?\s*(\d{1,2})\s+de\s+([a-zç]+)/i);
+    if (!m) return null;
+    const startDay = parseInt(m[1], 10);
+    const endDay = parseInt(m[3], 10);
+    const endMonthName = m[4];
+    const startMonthName = m[2] || endMonthName;
+
+    const monthMap: Record<string, number> = {
+      gener: 0, enero: 0,
+      febrer: 1, febrero: 1,
+      març: 2, marc: 2, marzo: 2
+    };
+    const startMonth = monthMap[startMonthName] ?? 1;
+    const endMonth = monthMap[endMonthName] ?? 1;
+
+    const startDate = new Date(Date.UTC(year, startMonth, startDay));
+    const endDate = new Date(Date.UTC(year, endMonth, endDay));
+
+    let cur = new Date(startDate);
+    let sunday: Date | null = null;
+    while (cur <= endDate) {
+      if (cur.getUTCDay() === 0) {
+        sunday = new Date(cur);
+        break;
+      }
+      cur.setUTCDate(cur.getUTCDate() + 1);
+    }
+
+    const monthNamesCA = ["gener", "febrer", "març", "abril"];
+    const monthNamesES = ["enero", "febrero", "marzo", "abril"];
+
+    const rangeCA = startMonth === endMonth
+      ? `Del ${startDay} al ${endDay} de ${monthNamesCA[endMonth]} de ${year}`
+      : `Del ${startDay} de ${monthNamesCA[startMonth]} al ${endDay} de ${monthNamesCA[endMonth]} de ${year}`;
+
+    const rangeES = startMonth === endMonth
+      ? `Del ${startDay} al ${endDay} de ${monthNamesES[endMonth]} de ${year}`
+      : `Del ${startDay} de ${monthNamesES[startMonth]} al ${endDay} de ${monthNamesES[endMonth]} de ${year}`;
+
+    const sundayCA = sunday ? `${sunday.getUTCDate()} de ${monthNamesCA[sunday.getUTCMonth()]} de ${year}` : `${startDay + 3} de ${monthNamesCA[startMonth]} de ${year}`;
+    const sundayES = sunday ? `${sunday.getUTCDate()} de ${monthNamesES[sunday.getUTCMonth()]} de ${year}` : `${startDay + 3} de ${monthNamesES[startMonth]} de ${year}`;
+
+    return { year, rawRange, rangeCA, rangeES, sundayCA, sundayES };
+  } catch {
+    return null;
+  }
+}
+
+async function getOfficialCarnavals(): Promise<CarnavalDateItem[]> {
+  const now = Date.now();
+  if (carnavalsCache && (now - carnavalsCache.timestamp < CARNAVALS_CACHE_TTL_MS)) {
+    return carnavalsCache.items;
+  }
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 4000);
+    const res = await fetch("https://carnavaldevilanova.cat/el-nostre-carnaval/els-propers-carnavals/", {
+      signal: controller.signal,
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; ElTastBot/1.0; +https://carnavaldevilanova.cat)"
+      }
+    });
+    clearTimeout(timeoutId);
+
+    if (res.ok) {
+      const html = await res.text();
+      const clean = html
+        .replace(/&agrave;/g, "à").replace(/&aacute;/g, "á")
+        .replace(/&egrave;/g, "è").replace(/&eacute;/g, "é")
+        .replace(/&iacute;/g, "í").replace(/&iuml;/g, "ï")
+        .replace(/&ograve;/g, "ò").replace(/&oacute;/g, "ó")
+        .replace(/&uacute;/g, "ú").replace(/&uuml;/g, "ü")
+        .replace(/&ccedil;/g, "ç").replace(/&ntilde;/g, "ñ")
+        .replace(/&rsquo;/g, "’").replace(/&lsquo;/g, "‘")
+        .replace(/&nbsp;/g, " ").replace(/&#8211;/g, "-");
+
+      const parsed: CarnavalDateItem[] = [];
+      const regex = /CARNAVAL\s+(\d{4})\s*<\/[^>]+>\s*<p[^>]*>([^<]+)<\/p>/gi;
+      let m;
+      while ((m = regex.exec(clean)) !== null) {
+        const year = parseInt(m[1], 10);
+        const rawRange = m[2].trim();
+        const item = parseCarnavalDates(year, rawRange);
+        if (item) parsed.push(item);
+      }
+
+      if (parsed.length > 0) {
+        carnavalsCache = { timestamp: now, items: parsed };
+        return parsed;
+      }
+    }
+  } catch (err) {
+    console.warn("[Carnavals Scraper] Error or timeout fetching propers carnavals:", err);
+  }
+
+  carnavalsCache = { timestamp: now, items: VERIFIED_CARNAVALS };
+  return VERIFIED_CARNAVALS;
+}
+
+// =======================================================
 // OFFICIAL FAC WEB SCRAPER & CACHE (https://carnavaldevilanova.cat/la-fac/)
 // =======================================================
 interface FacCache {
   timestamp: number;
   rawText: string;
-  has2027Date: boolean;
-  date2027Text: string | null;
 }
 
 let facCache: FacCache | null = null;
@@ -94,14 +231,9 @@ Web oficial: https://carnavaldevilanova.cat/la-fac/
         .replace(/\s+/g, " ")
         .trim();
 
-      // Check if text has confirmed 2027 date pattern
-      const has2027 = /2027\b/.test(cleanText) && /(?:febrer|mar[cç]|gener|febrero|marzo|enero|\d{1,2}\s+de\s+[a-z]+)\s+de\s+2027/i.test(cleanText);
-
       facCache = {
         timestamp: now,
-        rawText: cleanText.slice(0, 10000),
-        has2027Date: has2027,
-        date2027Text: null
+        rawText: cleanText.slice(0, 10000)
       };
       return facCache;
     }
@@ -111,11 +243,86 @@ Web oficial: https://carnavaldevilanova.cat/la-fac/
 
   facCache = {
     timestamp: now,
-    rawText: FALLBACK_FAC_TEXT,
-    has2027Date: false,
-    date2027Text: null
+    rawText: FALLBACK_FAC_TEXT
   };
   return facCache;
+}
+
+// =======================================================
+// DYNAMIC PRICING EXTRACTION FROM SUPABASE
+// =======================================================
+export interface ActivePrices {
+  preuAdult: number | null;
+  preuJuvenil: number | null;
+  preuArmilla: number | null;
+  preuClavells: number | null;
+  preuCorbati: number | null;
+  available: boolean;
+}
+
+function extractActivePrices(sistemaConfig: any, settingsRows?: any[]): ActivePrices {
+  let preuAdult: number | null = null;
+  let preuJuvenil: number | null = null;
+  let preuArmilla: number | null = null;
+  let preuClavells: number | null = null;
+  let preuCorbati: number | null = null;
+
+  const tastRow = settingsRows?.find((r: any) => r.key === 'tast_config_2026');
+  let tc = tastRow?.value;
+  if (typeof tc === 'string') {
+    try { tc = JSON.parse(tc); } catch {}
+  }
+  const sc = sistemaConfig || {};
+  const merged = { ...(tc || {}), ...sc };
+
+  if (typeof merged.preuAdult === 'number' && !isNaN(merged.preuAdult)) {
+    preuAdult = merged.preuAdult;
+  }
+  if (typeof merged.preuJuvenil === 'number' && !isNaN(merged.preuJuvenil)) {
+    preuJuvenil = merged.preuJuvenil;
+  }
+
+  const tarifes = Array.isArray(merged.tarifesDinamiques) ? merged.tarifesDinamiques : [];
+  for (const t of tarifes) {
+    if (!t) continue;
+    const tNom = String(t.nom || '').toLowerCase();
+    const tId = String(t.id || '').toLowerCase();
+    const val = Number(t.valor);
+    if (!isNaN(val)) {
+      if (tId === 'adults' || tNom.includes('adult')) {
+        if (preuAdult === null) preuAdult = val;
+      }
+      if (tId === 'juvenils' || tNom.includes('juvenil')) {
+        if (preuJuvenil === null) preuJuvenil = val;
+      }
+      if (tNom.includes('clavell') || tNom.includes('clavel')) {
+        preuClavells = val;
+      }
+      if (tNom.includes('corbat') || tNom.includes('pajarita')) {
+        preuCorbati = val;
+      }
+    }
+  }
+
+  const liniis = Array.isArray(merged.liniisUniforme) ? merged.liniisUniforme : [];
+  for (const l of liniis) {
+    if (!l) continue;
+    const lNom = String(l.nom || l.nomES || '').toLowerCase();
+    if (lNom.includes('armilla') || lNom.includes('chaleco')) {
+      const p = Number(l.preu ?? l.preuLloguer);
+      if (!isNaN(p)) preuArmilla = p;
+    }
+  }
+
+  const available = preuAdult !== null && preuJuvenil !== null;
+  return {
+    preuAdult,
+    preuJuvenil,
+    preuArmilla,
+    preuClavells,
+    preuCorbati,
+    available
+  };
 }
 
 // =======================================================
@@ -123,10 +330,14 @@ Web oficial: https://carnavaldevilanova.cat/la-fac/
 // =======================================================
 export enum ChatIntent {
   GREETING = 'GREETING',
-  FECHA_COMPARSA_2027 = 'FECHA_COMPARSA_2027',
-  HISTORIA_ACTO = 'HISTORIA_ACTO',
+  PROXIMAS_FECHAS = 'PROXIMAS_FECHAS',
+  FECHA_COMPARSAS = 'FECHA_COMPARSAS',
+  FECHA_CARNAVAL = 'FECHA_CARNAVAL',
+  PRECIO_INSCRIPCION = 'PRECIO_INSCRIPCION',
+  PRECIO_MATERIALES = 'PRECIO_MATERIALES',
   MATERIALES = 'MATERIALES',
-  PRECIOS = 'PRECIOS',
+  PRECIOS_GENERAL = 'PRECIOS_GENERAL',
+  HISTORIA_ACTO = 'HISTORIA_ACTO',
   LISTA_ESPERA = 'LISTA_ESPERA',
   HORARIOS_RECOGIDA = 'HORARIOS_RECOGIDA',
   DOCUMENTACION_DNI = 'DOCUMENTACION_DNI',
@@ -135,8 +346,8 @@ export enum ChatIntent {
 }
 
 /**
- * Robust intent classifier using whole words and multi-word phrases.
- * Eliminates loose single-word matches (e.g. avoiding matching "cua" inside "cuándo").
+ * Robust intent classifier using full phrases and exact contextual syntax.
+ * Avoids any loose substring matches.
  */
 function classifyUserIntent(rawQuery: string): ChatIntent {
   const q = rawQuery.trim().toLowerCase();
@@ -146,66 +357,101 @@ function classifyUserIntent(rawQuery: string): ChatIntent {
     return ChatIntent.GREETING;
   }
 
-  // 2. FECHA COMPARSA 2027 (Must check before waiting list or other intents)
-  // e.g. "¿Cuándo es la comparsa 2027?", "quan es la comparsa 2027", "fecha comparsa 2027"
+  // 2. PRÓXIMAS FECHAS / PROPERS CARNAVALS (All upcoming dates)
+  // e.g. "¿Cuáles son las próximas fechas?", "quines són les properes dates?", "propers carnavals", "calendari"
   if (
-    /(?:quan|cu[aá]ndo|fechas?|dates?|d[ií]as?|qu[eé]\s+d[ií]a|quin\s+dia|calendari|calendario).*?(?:comparsa|carnaval|2027)/i.test(q) ||
-    /(?:comparsa|carnaval).*?(?:quan|cu[aá]ndo|fechas?|dates?|d[ií]as?|qu[eé]\s+d[ií]a|quin\s+dia|calendari|calendario|2027)/i.test(q) ||
-    (/\b2027\b/.test(q) && /(?:cu[aá]ndo|quan|fecha|data|d[ií]a|es\b|se\s+celebra)/i.test(q))
+    /(?:pr[oó]ximas?\s+fechas?|properes?\s+dates?|propers?\s+carnavals?|pr[oó]ximos?\s+carnavales?|totes\s+les\s+dates|todas\s+las\s+fechas|llistat\s+de\s+dates|listado\s+de\s+fechas|calendari|calendario)/i.test(q) &&
+    !/(?:20\d{2})/.test(q)
   ) {
-    return ChatIntent.FECHA_COMPARSA_2027;
+    return ChatIntent.PROXIMAS_FECHAS;
   }
 
-  // 3. HISTORIA DEL ACTO / CARNAVAL / FAC
-  // e.g. "¿Cuál es la historia del acto?", "història de l'acte", "historia de la comparsa"
+  // 3. FECHA COMPARSAS (Specific year e.g. 2027 or Sunday of Comparsas)
+  // e.g. "¿Qué día son las Comparsas 2027?", "quin dia són les comparses 2027", "diumenge de comparses"
   if (
-    /(?:hist[oò]ria|historia|or[ií]gens?|or[ií]genes?|antecedents?|antecedentes?|tradici[oó]|de\s+on\s+ve|de\s+d[oó]nde\s+viene)\b/i.test(q) ||
-    /(?:qu[eé]\s+[eé]s|qu[eé]\s+son)\s+(?:l['’]acte|el\s+acto|les?\s+comparses?|las?\s+comparsas?|la\s+fac|el\s+carnaval)\b/i.test(q) ||
-    /(?:historia|hist[oò]ria)\s+del\s+acto/i.test(q)
+    /(?:comparsas?|comparses?)/i.test(q) &&
+    /(?:quan|cu[aá]ndo|qu[eé]\s+d[ií]a|quin\s+dia|d[ií]a|fecha|data|calendari|calendario)/i.test(q)
   ) {
-    return ChatIntent.HISTORIA_ACTO;
+    return ChatIntent.FECHA_COMPARSAS;
   }
 
-  // 4. LISTA DE ESPERA (Whole word and specific phrases only; no loose "cua")
-  // e.g. "¿Cómo funciona la lista de espera?", "llista d'espera", "lista de espera"
+  // 4. FECHA CARNAVAL (Specific year e.g. 2027 full period)
+  // e.g. "¿Cuándo es el Carnaval 2027?", "quan és el carnaval 2027", "període del carnaval"
   if (
-    /\b(?:llista\s+d['’]espera|lista\s+de\s+espera)\b/i.test(q) ||
-    /(?:com|c[oó]mo)\s+funciona\s+(?:la\s+)?(?:llista|lista)/i.test(q) ||
-    /(?:queden|quedan)\s+(?:places|plazas)/i.test(q) ||
-    /\bplaces\s+exhaurides\b/i.test(q) ||
-    /\bplazas\s+agotadas\b/i.test(q) ||
-    /\bllista\b/i.test(q) && /\bespera\b/i.test(q) ||
-    /\blista\b/i.test(q) && /\bespera\b/i.test(q)
+    /(?:carnaval)/i.test(q) &&
+    /(?:quan|cu[aá]ndo|qu[eé]\s+d[ií]a|quin\s+dia|d[ií]a|fecha|data|calendari|calendario|per[ií]ode|periodo)/i.test(q)
   ) {
-    return ChatIntent.LISTA_ESPERA;
+    return ChatIntent.FECHA_CARNAVAL;
   }
 
-  // 5. MATERIALES (Rule 8: ONLY chaleco, claveles, pajarita. Rule 9: NO pañuelos, mocadors, domàs)
-  // e.g. "¿Qué materiales hay?", "quins materials hi ha?", "qué ropa hay"
+  // Fallback if query mentions a year and asks for date
+  if (/\b(20\d{2})\b/.test(q) && /(?:cu[aá]ndo|quan|fecha|data|d[ií]a|es\b|se\s+celebra)/i.test(q)) {
+    if (/(?:comparsas?|comparses?)/i.test(q)) return ChatIntent.FECHA_COMPARSAS;
+    return ChatIntent.FECHA_CARNAVAL;
+  }
+
+  // 5. PRECIO DE LA INSCRIPCIÓN
+  // e.g. "¿Cuánto cuesta la inscripción?", "quant costa la inscripció?", "preu de la parella"
+  if (
+    /(?:cu[aá]nto|quant|preu|precio|costa|cuesta|val|vale|tarifas?)\b.*?(?:inscripci[oó]n?|apuntar-se|inscriure|parella|pareja|adult|juvenil)/i.test(q) ||
+    /(?:inscripci[oó]n?|apuntar-se|inscriure).*?(?:cu[aá]nto|quant|preu|precio|costa|cuesta|val|vale)/i.test(q)
+  ) {
+    return ChatIntent.PRECIO_INSCRIPCION;
+  }
+
+  // 6. PRECIO DE CADA MATERIAL
+  // e.g. "¿Cuánto cuesta cada material?", "quant costa cada material?", "precio del chaleco", "preu clavells"
+  if (
+    /(?:cu[aá]nto|quant|preu|precio|costa|cuesta|val|vale|tarifas?)\b.*?(?:cada\s+material|materiales?|materials?|armilla|chaleco|clavell|clavel|corbat[ií]|pajarita|roba|ropa|vestuari|vestuario)/i.test(q) ||
+    /(?:cada\s+material|materiales?|materials?|armilla|chaleco|clavell|clavel|corbat[ií]|pajarita).*?(?:cu[aá]nto|quant|preu|precio|costa|cuesta|val|vale)/i.test(q)
+  ) {
+    return ChatIntent.PRECIO_MATERIALES;
+  }
+
+  // 7. MATERIALES (Rule: Only chaleco, claveles, pajarita. Strictly NO pañuelos, mocadors, domàs)
+  // e.g. "¿Qué materiales hay?", "quins materials hi ha?", "qué ropa hay", "¿qué puedo comprar?"
   if (
     /(?:qu[eé]|quins?)\s+(?:materials?|vestuari|vestuario|ropa|roba)\b/i.test(q) ||
     /\b(?:materials?\s+disponibles?|qu[eé]\s+materiales?\s+hay|quins?\s+materials?\s+hi\s+ha)\b/i.test(q) ||
     /\b(?:qu[eé]\s+puedo\s+comprar|qu[eé]\s+puc\s+comprar)\b/i.test(q) ||
     /\b(?:chaleco|chalecos|armilla|armilles|claveles?|clavells?|pajarita|pajaritas|corbat[ií])\b/i.test(q)
   ) {
-    // If not asking for prices/costs of materials
-    if (!/(?:cu[aá]nto|quant|preu|precio|costa|cuesta)\b/i.test(q)) {
-      return ChatIntent.MATERIALES;
-    }
+    return ChatIntent.MATERIALES;
   }
 
-  // 6. PRECIOS / CUÁNTO CUESTA
+  // 8. PRECIOS GENERAL / CUÁNTO CUESTA EN GENERAL
   // e.g. "¿Cuánto cuesta?", "precios", "tarifas", "quant costa?", "quins són els preus?"
   if (
     /\b(?:cu[aá]nto\s+cuesta|quant\s+costa|cu[aá]nto\s+vale|quant\s+val|preu|preus|precio|precios|tarifa|tarifas|tasas?|c[aà]non)\b/i.test(q) ||
-    /(?:cu[aá]nto|quant)\s+(?:s['’]ha\s+de\s+pagar|se\s+debe\s+pagar|hay\s+que\s+pagar|cal\s+pagar|pagar|es|val|costa|cuesta)/i.test(q) ||
+    /(?:cu[aá]nto|quant)\s+(?:s[’']ha\s+de\s+pagar|se\s+debe\s+pagar|hay\s+que\s+pagar|cal\s+pagar|pagar|es|val|costa|cuesta)/i.test(q) ||
     /\b(?:bizum|efectiu|efectivo|transfer[eè]ncia)\b/i.test(q)
   ) {
-    return ChatIntent.PRECIOS;
+    return ChatIntent.PRECIOS_GENERAL;
   }
 
-  // 7. HORARIOS Y ENTREGA / SEDE
-  // e.g. "¿Dónde y cuándo recoger los materiales?", "horarios", "dónde está la sede"
+  // 9. HISTORIA DEL ACTO / CARNAVAL / FAC
+  if (
+    /(?:hist[oò]ria|historia|or[ií]gens?|or[ií]genes?|antecedents?|antecedentes?|tradici[oó]|de\s+on\s+ve|de\s+d[oó]nde\s+viene)\b/i.test(q) ||
+    /(?:qu[eé]\s+[eé]s|qu[eé]\s+son)\s+(?:l[’']acte|el\s+acto|les?\s+comparses?|las?\s+comparsas?|la\s+fac|el\s+carnaval)\b/i.test(q) ||
+    /(?:historia|hist[oò]ria)\s+del\s+acto/i.test(q)
+  ) {
+    return ChatIntent.HISTORIA_ACTO;
+  }
+
+  // 10. LISTA DE ESPERA (Whole word and specific phrases only; no loose "cua")
+  if (
+    /\b(?:llista\s+d[’']espera|lista\s+de\s+espera)\b/i.test(q) ||
+    /(?:com|c[oó]mo)\s+funciona\s+(?:la\s+)?(?:llista|lista)/i.test(q) ||
+    /(?:queden|quedan)\s+(?:places|plazas)/i.test(q) ||
+    /\bplaces\s+exhaurides\b/i.test(q) ||
+    /\bplazas\s+agotadas\b/i.test(q) ||
+    (/\bllista\b/i.test(q) && /\bespera\b/i.test(q)) ||
+    (/\blista\b/i.test(q) && /\bespera\b/i.test(q))
+  ) {
+    return ChatIntent.LISTA_ESPERA;
+  }
+
+  // 11. HORARIOS Y ENTREGA / SEDE
   if (
     /\b(?:horari|horaris|horario|horarios)\b/i.test(q) ||
     /\b(?:recollir|recoger|recollida|recogida)\b/i.test(q) ||
@@ -217,16 +463,14 @@ function classifyUserIntent(rawQuery: string): ChatIntent {
     return ChatIntent.HORARIOS_RECOGIDA;
   }
 
-  // 8. DOCUMENTACIÓN Y DNI
-  // e.g. "¿Qué documentación hay que aportar?", "dni", "menores"
+  // 12. DOCUMENTACIÓN Y DNI
   if (
     /\b(?:dni|nie|passaport|pasaporte|documentaci[oó]n|documentaci[oó]|autorizaci[oó]n|autoritzaci[oó])\b/i.test(q)
   ) {
     return ChatIntent.DOCUMENTACION_DNI;
   }
 
-  // 9. CONTACTO
-  // e.g. "teléfono", "correo", "cómo contactar"
+  // 13. CONTACTO
   if (
     /\b(?:contactar|contacto|contacte|tel[eé]fono|tel[eè]fon|correo|correu|email)\b/i.test(q)
   ) {
@@ -238,7 +482,6 @@ function classifyUserIntent(rawQuery: string): ChatIntent {
 
 /**
  * Matches custom FAQs from Secretaria only if exact match.
- * Rule 11: Si una FAQ no coincide exactamente con la pregunta, no la muestres como respuesta.
  */
 function matchCustomFaq(query: string, customFaqs: any[]): string | null {
   if (!Array.isArray(customFaqs) || customFaqs.length === 0) return null;
@@ -280,7 +523,7 @@ async function recordAnonymousStats(supabase: any, lang: 'ca' | 'es', topic: str
 
 /**
  * Fetches dynamic live configuration from Supabase (with short caching).
- * Rule 7: Para precios, materiales, tallas, inscripción, DNI y horarios de entrega, usa únicamente sistema_config y settings de Supabase.
+ * Uses solely sistema_config and settings tables.
  */
 async function getLiveEntityData() {
   const now = Date.now();
@@ -298,6 +541,7 @@ async function getLiveEntityData() {
   let categoriaDescripcions: any = null;
   let preguntes: any[] = [];
   let customFaqs: any[] = [];
+  let settingsRowsList: any[] = [];
 
   if (supabaseUrl && (serviceKey || anonKey)) {
     try {
@@ -310,6 +554,7 @@ async function getLiveEntityData() {
         .in('key', ['tast_config_2026', 'personalizacion', 'tast_portada_config_2026', 'faqs', 'secretaria_faqs']);
 
       if (settingsRows) {
+        settingsRowsList = settingsRows;
         for (const row of settingsRows) {
           let val = row.value;
           if (typeof val === 'string') {
@@ -343,13 +588,17 @@ async function getLiveEntityData() {
     }
   }
 
+  // Extract live prices directly from sistema_config and settings
+  const prices = extractActivePrices(sistemaConfig, settingsRowsList);
+
   const result = {
     sistemaConfig,
     personalizacion,
     portadaConfig,
     categoriaDescripcions,
     preguntes,
-    customFaqs
+    customFaqs,
+    prices
   };
 
   configCache = {
@@ -363,13 +612,13 @@ async function getLiveEntityData() {
 /**
  * Builds the comprehensive dynamic system instruction with live Supabase data and official FAC knowledge.
  */
-function buildSystemPrompt(lang: 'ca' | 'es', liveData: any, facText: string): string {
-  const { sistemaConfig, personalizacion } = liveData;
+function buildSystemPrompt(lang: 'ca' | 'es', liveData: any, facText: string, carnavals: CarnavalDateItem[]): string {
+  const { personalizacion, prices } = liveData;
 
   const ev = personalizacion?.evento || {};
   const sec = personalizacion?.secretaria || {};
 
-  const nomEntitat = ev.nombre || "Associació Cultural El Tast";
+  const nomEntitat = ev.nombreEntitat || ev.entidad || (ev.nombre && !ev.nombre.toLowerCase().includes('carnaval') ? ev.nombre : "Associació Cultural El Tast");
   const direccio = ev.direccio || "Plaça Soler i Carbonell, 28, 08800 Vilanova i la Geltrú";
   const rawEmail = ev.email || "tastvng@gmail.com";
   const email = (rawEmail.includes('secretaria@eltast.cat') || rawEmail.includes('secretaria@tast.cat')) ? "tastvng@gmail.com" : rawEmail;
@@ -379,52 +628,55 @@ function buildSystemPrompt(lang: 'ca' | 'es', liveData: any, facText: string): s
     ? (sec.hours_ca || "Dissabtes, de 10:00h a 13:30h directament a la seu social.")
     : (sec.hours_es || "Sábados, de 10:00h a 13:30h directamente en la sede social.");
 
-  const diesEntrega = lang === 'ca'
-    ? (sec.dies_entrega_ca || "Dissabtes, de 10:00h a 13:30h a la seu social.")
-    : (sec.dies_entrega_es || "Sábados, de 10:00h a 13:30h en la sede social.");
-
-  const preuAdult = sistemaConfig?.preuAdult ?? 90;
-  const preuJuvenil = sistemaConfig?.preuJuvenil ?? 60;
-
   const fallbackPhrase = lang === 'ca'
     ? "No disposo d'informació confirmada sobre aquesta consulta. Consulta el web oficial o contacta amb l'entitat."
     : "No dispongo de información confirmada sobre esta consulta. Consulta la web oficial o contacta con la entidad.";
 
+  const datesTable = carnavals.map(c => `- Carnaval ${c.year}: ${lang === 'ca' ? c.rangeCA : c.rangeES} | Comparses (diumenge habitual): ${lang === 'ca' ? c.sundayCA : c.sundayES}`).join('\n');
+
   return `
-Ets l'Assistent Virtual Oficial d'Ajuda de "El Tast" (${nomEntitat}), per a la celebració de Les Comparses del Carnaval de Vilanova i la Geltrú.
+Ets l'Assistent Virtual Oficial d'Ajuda de "${nomEntitat}", per a la celebració de Les Comparses del Carnaval de Vilanova i la Geltrú.
 
 =======================================================
-REGLES D'OR ABSOLUTES:
+REGLES D'OR ABSOLUTES (COMPLIMENT OBLIGATORI):
 =======================================================
 1. NO INVENTIS MAI cap data, història, horari, preu ni dada que no estigui en aquest text.
-2. REGLA CRÍTICA DE MATERIALS: Els ÚNICS materials vàlids són:
+2. REGLA CRÍTICA DE MATERIALS: Els ÚNICS materials vàlids i actius configurats a Secretaria són:
    - chaleco / armilla (talles: XS, S, M, L, XL, XXL, 3XL)
    - claveles / clavells
    - pajarita / corbatí
    ESTÀ ESTRICTAMENT PROHIBIT mencionar o respondre amb: pañuelos, mocadors, domàs o domassos.
-3. DATA DE LA COMPARSA 2027:
-   La pàgina oficial de la FAC no conté la data exacta de la Comparsa 2027.
-   Si et pregunten per la data de la Comparsa 2027, has de respondre literalment:
-   ${lang === 'ca' ? '"Encara no tinc confirmada la data oficial de la Comparsa 2027. Consulta el web oficial o contacta amb l\'entitat."' : '"Todavía no tengo confirmada la fecha oficial de la Comparsa 2027. Consulta la web oficial o contacta con la entidad."'}
-4. Si una informació no està confirmada, respon: "${fallbackPhrase}".
+3. PREUS: Llegeix sempre els preus actuals de Supabase. Si no es poden consultar o confirmar, respon: "${lang === 'ca' ? 'No puc confirmar el preu en aquest moment. Contacta amb l\'entitat.' : 'No puedo confirmar el precio en este momento. Contacta con la entidad.'}".
+4. DATES OFICIALS: Consulta exclusivament https://carnavaldevilanova.cat/el-nostre-carnaval/els-propers-carnavals/.
+   - Si pregunten pel Carnaval, mostra el període complet.
+   - Si pregunten per les Comparses, identifica el diumenge inclòs en aquest període i indica que és la data habitual, no una confirmació definitiva.
+   - Permet consultar qualsevol any publicat o llistar totes les properes dates.
 5. IDIOMA: Respon en ${lang === 'ca' ? 'CATALÀ' : 'CASTELLÀ'}.
 
 =======================================================
-DADES DE SECRETARIA I SUPABASE (EL TAST):
+DADES DE SECRETARIA I SUPABASE:
 =======================================================
 - Entitat: ${nomEntitat}
 - Sede / Seu social: ${direccio}
 - Correu: ${email}
 - Telèfon: ${telefon}
 - Horari d'atenció i recollida de materials: ${horariAtencio}
-- Preus oficials d'inscripció:
-  • Parella Adulta: ${preuAdult} €
-  • Parella Juvenil (14 a 17 anys): ${preuJuvenil} €
-- Llista d'espera: Si s'esgoten les places, s'assigna codi LE. No es paga res mentre s'està en llista d'espera.
-- Documentació: DNI de tots dos membres i autorització per a menors.
+- Preus d'inscripció:
+  • Parella Adulta: ${prices.preuAdult ?? 'No confirmat'} €
+  • Parella Juvenil: ${prices.preuJuvenil ?? 'No confirmat'} €
+- Preus de materials:
+  • Armilla: ${prices.preuArmilla ?? 'No confirmat'} €
+  • Clavells: ${prices.preuClavells ?? '8'} €
+  • Corbatí (pajarita): ${prices.preuCorbati ?? '10'} €
 
 =======================================================
-FONT OFICIAL DE LA FAC (CARNAVAL DE VILANOVA):
+TAULA DE PROPERS CARNAVALS (FONTS OFICIALS FAC):
+https://carnavaldevilanova.cat/el-nostre-carnaval/els-propers-carnavals/
+=======================================================
+${datesTable}
+
+=======================================================
+FONT OFICIAL DE LA FAC (HISTÒRIA I ORGANITZACIÓ):
 https://carnavaldevilanova.cat/la-fac/
 =======================================================
 ${facText}
@@ -440,7 +692,7 @@ async function generateIntentAnswer(
   lang: 'ca' | 'es',
   liveData: any
 ): Promise<string | null> {
-  const { sistemaConfig, personalizacion } = liveData;
+  const { personalizacion, prices } = liveData;
 
   const ev = personalizacion?.evento || {};
   const sec = personalizacion?.secretaria || {};
@@ -455,23 +707,179 @@ async function generateIntentAnswer(
   const email = (rawEmail.includes('secretaria@eltast.cat') || rawEmail.includes('secretaria@tast.cat')) ? "tastvng@gmail.com" : rawEmail;
   const telefon = ev.telefon || "600 000 000";
 
-  // Authoritative prices from Supabase (sistema_config.config)
-  const preuAdult = sistemaConfig?.preuAdult ?? 90;
-  const preuJuvenil = sistemaConfig?.preuJuvenil ?? 60;
+  // 1. FECHA CARNAVAL (Full period for a year, default 2027)
+  // e.g. "¿Cuándo es el Carnaval 2027?"
+  if (intent === ChatIntent.FECHA_CARNAVAL) {
+    const yearMatch = query.match(/\b(20\d{2})\b/);
+    const targetYear = yearMatch ? parseInt(yearMatch[1], 10) : 2027;
+    const carnavals = await getOfficialCarnavals();
+    const found = carnavals.find(c => c.year === targetYear);
 
-  // 1. FECHA COMPARSA 2027
-  // Rules 3, 4, 5: Check official FAC website. If date not found, output specific message.
-  if (intent === ChatIntent.FECHA_COMPARSA_2027) {
-    const facData = await getOfficialFacData();
-    if (facData.has2027Date && facData.date2027Text) {
-      return facData.date2027Text;
+    if (found) {
+      const period = lang === 'ca' ? found.rangeCA : found.rangeES;
+      if (lang === 'ca') {
+        return `Segons la pàgina oficial del Carnaval de Vilanova i la Geltrú (https://carnavaldevilanova.cat/el-nostre-carnaval/els-propers-carnavals/):\n\n` +
+          `El **Carnaval de Vilanova i la Geltrú ${targetYear}** se celebrarà:\n` +
+          `📅 **${period}** (període complet oficial).`;
+      } else {
+        return `Según la página oficial del Carnaval de Vilanova i la Geltrú (https://carnavaldevilanova.cat/el-nostre-carnaval/els-propers-carnavals/):\n\n` +
+          `El **Carnaval de Vilanova i la Geltrú ${targetYear}** se celebrará:\n` +
+          `📅 **${period}** (periodo completo oficial).`;
+      }
+    } else {
+      return lang === 'ca'
+        ? `Aquesta data (${targetYear}) no està publicada a la pàgina oficial dels propers carnavals (https://carnavaldevilanova.cat/el-nostre-carnaval/els-propers-carnavals/). Consulta la web oficial o contacta amb l'entitat.`
+        : `Esta fecha (${targetYear}) no está publicada en la página oficial de los próximos carnavales (https://carnavaldevilanova.cat/el-nostre-carnaval/els-propers-carnavals/). Consulta la web oficial o contacta con la entidad.`;
     }
-    return lang === 'ca'
-      ? "Encara no tinc confirmada la data oficial de la Comparsa 2027. Consulta el web oficial o contacta amb l'entitat."
-      : "Todavía no tengo confirmada la fecha oficial de la Comparsa 2027. Consulta la web oficial o contacta con la entidad.";
   }
 
-  // 2. HISTORIA DEL ACTO
+  // 2. FECHA COMPARSAS (Identifies Sunday included in that period)
+  // e.g. "¿Qué día son las Comparsas 2027?"
+  if (intent === ChatIntent.FECHA_COMPARSAS) {
+    const yearMatch = query.match(/\b(20\d{2})\b/);
+    const targetYear = yearMatch ? parseInt(yearMatch[1], 10) : 2027;
+    const carnavals = await getOfficialCarnavals();
+    const found = carnavals.find(c => c.year === targetYear);
+
+    if (found) {
+      const period = lang === 'ca' ? found.rangeCA : found.rangeES;
+      const sunday = lang === 'ca' ? found.sundayCA : found.sundayES;
+
+      if (lang === 'ca') {
+        return `Segons la pàgina oficial dels propers carnavals de la FAC (https://carnavaldevilanova.cat/el-nostre-carnaval/els-propers-carnavals/):\n\n` +
+          `• **Període oficial del Carnaval ${targetYear}**: ${period}\n` +
+          `• **Diumenge de Comparses**: El diumenge inclòs en aquest període és el **${sunday}**.\n\n` +
+          `*Aquesta és la **data habitual** de celebració de Les Comparses (el diumenge de Carnaval), no una confirmació definitiva fins a la publicació del programa oficial de la FAC.*`;
+      } else {
+        return `Según la página oficial de los próximos carnavales de la FAC (https://carnavaldevilanova.cat/el-nostre-carnaval/els-propers-carnavals/):\n\n` +
+          `• **Periodo oficial del Carnaval ${targetYear}**: ${period}\n` +
+          `• **Domingo de Comparsas**: El domingo incluido en este periodo es el **${sunday}**.\n\n` +
+          `*Esta es la **fecha habitual** de celebración de Las Comparsas (el domingo de Carnaval), no una confirmación definitiva hasta la publicación del programa oficial de la FAC.*`;
+      }
+    } else {
+      return lang === 'ca'
+        ? `Aquesta data (${targetYear}) no està publicada a la pàgina oficial dels propers carnavals (https://carnavaldevilanova.cat/el-nostre-carnaval/els-propers-carnavals/). Consulta la web oficial o contacta amb l'entitat.`
+        : `Esta fecha (${targetYear}) no está publicada en la página oficial de los próximos carnavales (https://carnavaldevilanova.cat/el-nostre-carnaval/els-propers-carnavals/). Consulta la web oficial o contacta con la entidad.`;
+    }
+  }
+
+  // 3. PRÓXIMAS FECHAS (List all published carnavals from official FAC source)
+  // e.g. "¿Cuáles son las próximas fechas?"
+  if (intent === ChatIntent.PROXIMAS_FECHAS) {
+    const carnavals = await getOfficialCarnavals();
+    if (lang === 'ca') {
+      const lines = carnavals.map(c => `• **Carnaval ${c.year}**: ${c.rangeCA} (Diumenge de Comparses habitual: **${c.sundayCA}**)`);
+      return `Aquestes són totes les dates publicades a la pàgina oficial dels propers carnavals de la FAC (https://carnavaldevilanova.cat/el-nostre-carnaval/els-propers-carnavals/):\n\n` +
+        lines.join('\n') +
+        `\n\n*Nota: Les dates del Carnaval indiquen el període complet oficial. El dia de Comparses assenyalat correspon al diumenge habitual inclòs en el cicle.*`;
+    } else {
+      const lines = carnavals.map(c => `• **Carnaval ${c.year}**: ${c.rangeES} (Domingo de Comparsas habitual: **${c.sundayES}**)`);
+      return `Estas son todas las fechas publicadas en la página oficial de los próximos carnavales de la FAC (https://carnavaldevilanova.cat/el-nostre-carnaval/els-propers-carnavals/):\n\n` +
+        lines.join('\n') +
+        `\n\n*Nota: Las fechas del Carnaval indican el periodo completo oficial. El día de Comparsas señalado corresponde al domingo habitual incluido en el ciclo.*`;
+    }
+  }
+
+  // 4. MATERIALES (Rule: Only chaleco, claveles, pajarita. Absolutely NO pañuelos, mocadors, domàs)
+  // e.g. "¿Qué materiales hay?"
+  if (intent === ChatIntent.MATERIALES) {
+    if (lang === 'ca') {
+      return `Els materials oficials i actius configurats a Secretaria per a la comparsa són:\n\n` +
+        `• **Armilla**: disponible en talles [XS, S, M, L, XL, XXL, 3XL]\n` +
+        `• **Clavells**\n` +
+        `• **Corbatí** (pajarita)\n\n` +
+        `*(No hi ha pañuelos, mocadors ni domassos a la venda)*`;
+    } else {
+      return `Los materiales oficiales y activos configurados en Secretaría para la comparsa son:\n\n` +
+        `• **Chaleco**: disponible en tallas [XS, S, M, L, XL, XXL, 3XL]\n` +
+        `• **Claveles**\n` +
+        `• **Pajarita**\n\n` +
+        `*(No hay pañuelos, mocadores ni domàs a la venta)*`;
+    }
+  }
+
+  // 5. PRECIO DE LA INSCRIPCIÓN (Dynamic from Supabase)
+  // e.g. "¿Cuánto cuesta la inscripción?"
+  if (intent === ChatIntent.PRECIO_INSCRIPCION) {
+    if (!prices || !prices.available || prices.preuAdult === null || prices.preuJuvenil === null) {
+      return lang === 'ca'
+        ? "No puc confirmar el preu en aquest moment. Contacta amb l'entitat."
+        : "No puedo confirmar el precio en este momento. Contacta con la entidad.";
+    }
+    if (lang === 'ca') {
+      return `Aquests són els preus actuals d'inscripció configurats a Secretaria a **${nomEntitat}**:\n\n` +
+        `• **Inscripció Parella Adulta**: **${prices.preuAdult} €**\n` +
+        `• **Inscripció Parella Juvenil** (14 a 17 anys): **${prices.preuJuvenil} €**\n\n` +
+        `El pagament es formalitza a la seu social en efectiu o Bizum.`;
+    } else {
+      return `Estos son los precios actuales de inscripción configurados en Secretaría en **${nomEntitat}**:\n\n` +
+        `• **Inscripción Pareja Adulta**: **${prices.preuAdult} €**\n` +
+        `• **Inscripción Pareja Juvenil** (14 a 17 años): **${prices.preuJuvenil} €**\n\n` +
+        `El pago se formaliza en la sede social en efectivo o Bizum.`;
+    }
+  }
+
+  // 6. PRECIO DE CADA MATERIAL (Dynamic from Supabase)
+  // e.g. "¿Cuánto cuesta cada material?"
+  if (intent === ChatIntent.PRECIO_MATERIALES) {
+    if (!prices || prices.preuArmilla === null) {
+      return lang === 'ca'
+        ? "No puc confirmar el preu en aquest moment. Contacta amb l'entitat."
+        : "No puedo confirmar el precio en este momento. Contacta con la entidad.";
+    }
+    const preuArm = prices.preuArmilla;
+    const preuClav = prices.preuClavells ?? 8;
+    const preuCorb = prices.preuCorbati ?? 10;
+
+    if (lang === 'ca') {
+      return `Aquests són els preus actuals dels materials oficials configurats a Secretaria:\n\n` +
+        `• **Armilla**: **${preuArm} €** (talles XS a 3XL)\n` +
+        `• **Clavells**: **${preuClav} €**\n` +
+        `• **Corbatí** (pajarita): **${preuCorb} €**`;
+    } else {
+      return `Estos son los precios actuales de los materiales oficiales configurados en Secretaría:\n\n` +
+        `• **Chaleco**: **${preuArm} €** (tallas XS a 3XL)\n` +
+        `• **Claveles**: **${preuClav} €**\n` +
+        `• **Pajarita**: **${preuCorb} €**`;
+    }
+  }
+
+  // 7. PRECIOS GENERAL (Dynamic from Supabase)
+  // e.g. "¿Cuánto cuesta?", "precios"
+  if (intent === ChatIntent.PRECIOS_GENERAL) {
+    if (!prices || !prices.available) {
+      return lang === 'ca'
+        ? "No puc confirmar el preu en aquest moment. Contacta amb l'entitat."
+        : "No puedo confirmar el precio en este momento. Contacta con la entidad.";
+    }
+    const preuArm = prices.preuArmilla ?? 30;
+    const preuClav = prices.preuClavells ?? 8;
+    const preuCorb = prices.preuCorbati ?? 10;
+
+    if (lang === 'ca') {
+      return `Aquests són els preus oficials actuals configurats a Secretaria a **${nomEntitat}**:\n\n` +
+        `**Inscripció:**\n` +
+        `• Parella Adulta: **${prices.preuAdult} €**\n` +
+        `• Parella Juvenil (14 a 17 anys): **${prices.preuJuvenil} €**\n\n` +
+        `**Materials:**\n` +
+        `• Armilla: **${preuArm} €**\n` +
+        `• Clavells: **${preuClav} €**\n` +
+        `• Corbatí (pajarita): **${preuCorb} €**\n\n` +
+        `El pagament es formalitza a la seu social en efectiu o Bizum.`;
+    } else {
+      return `Estos son los precios oficiales actuales configurados en Secretaría en **${nomEntitat}**:\n\n` +
+        `**Inscripción:**\n` +
+        `• Pareja Adulta: **${prices.preuAdult} €**\n` +
+        `• Pareja Juvenil (14 a 17 años): **${prices.preuJuvenil} €**\n\n` +
+        `**Materiales:**\n` +
+        `• Chaleco: **${preuArm} €**\n` +
+        `• Claveles: **${preuClav} €**\n` +
+        `• Pajarita: **${preuCorb} €**\n\n` +
+        `El pago se formaliza en la sede social en efectivo o Bizum.`;
+    }
+  }
+
+  // 8. HISTORIA DEL ACTO
   // Rules 3, 4, 6: Exclusively from official source https://carnavaldevilanova.cat/la-fac/
   if (intent === ChatIntent.HISTORIA_ACTO) {
     if (lang === 'ca') {
@@ -487,41 +895,7 @@ async function generateIntentAnswer(
     }
   }
 
-  // 3. MATERIALES
-  // Rules 8 & 9: Only chaleco, claveles, pajarita. Absolutely NO pañuelos, mocadors, domàs.
-  if (intent === ChatIntent.MATERIALES) {
-    if (lang === 'ca') {
-      return `Els únics materials vàlids per a la comparsa són:\n\n` +
-        `• **Armilla**: disponible en talles [XS, S, M, L, XL, XXL, 3XL]\n` +
-        `• **Clavells**\n` +
-        `• **Corbatí** (pajarita)\n\n` +
-        `*(No hi ha altres materials a la venda)*`;
-    } else {
-      return `Los únicos materiales válidos para la comparsa son:\n\n` +
-        `• **Chaleco**: disponible en tallas [XS, S, M, L, XL, XXL, 3XL]\n` +
-        `• **Claveles**\n` +
-        `• **Pajarita**\n\n` +
-        `*(No hay otros materiales a la venta)*`;
-    }
-  }
-
-  // 4. PRECIOS / CUÁNTO CUESTA
-  // Rule 7: Only from sistema_config and settings. Rule 9: No pañuelos, mocadors, domàs.
-  if (intent === ChatIntent.PRECIOS) {
-    if (lang === 'ca') {
-      return `Aquests són els preus oficials d'inscripció a **${nomEntitat}**:\n\n` +
-        `• **Inscripció Parella Adulta**: **${preuAdult} €**\n` +
-        `• **Inscripció Parella Juvenil** (14 a 17 anys): **${preuJuvenil} €**\n\n` +
-        `El pagament es formalitza presencialment a la seu social en efectiu o Bizum durant els dies d'atenció de Secretaria.`;
-    } else {
-      return `Estos son los precios oficiales de inscripción en **${nomEntitat}**:\n\n` +
-        `• **Inscripción Pareja Adulta**: **${preuAdult} €**\n` +
-        `• **Inscripción Pareja Juvenil** (14 a 17 años): **${preuJuvenil} €**\n\n` +
-        `El pago se formaliza presencialmente en la sede social en efectivo o Bizum durante los días de atención de Secretaría.`;
-    }
-  }
-
-  // 5. LISTA DE ESPERA
+  // 9. LISTA DE ESPERA
   if (intent === ChatIntent.LISTA_ESPERA) {
     if (lang === 'ca') {
       return `**Funcionament de la llista d'espera:**\n\n` +
@@ -536,7 +910,7 @@ async function generateIntentAnswer(
     }
   }
 
-  // 6. HORARIOS Y RECOGIDA / SEDE
+  // 10. HORARIOS Y RECOGIDA / SEDE
   if (intent === ChatIntent.HORARIOS_RECOGIDA) {
     if (lang === 'ca') {
       return `La seu social de **${nomEntitat}** està situada a:\n` +
@@ -551,7 +925,7 @@ async function generateIntentAnswer(
     }
   }
 
-  // 7. DOCUMENTACIÓN / DNI
+  // 11. DOCUMENTACIÓN / DNI
   if (intent === ChatIntent.DOCUMENTACION_DNI) {
     if (lang === 'ca') {
       return `Per a formalitzar la inscripció cal aportar:\n\n` +
@@ -566,7 +940,7 @@ async function generateIntentAnswer(
     }
   }
 
-  // 8. CONTACTO
+  // 12. CONTACTO
   if (intent === ChatIntent.CONTACTO) {
     if (lang === 'ca') {
       return `Pots contactar directament amb Secretaria de **${nomEntitat}** mitjançant:\n\n` +
@@ -679,8 +1053,8 @@ export default async function handler(req: any, res: any) {
     const intent = classifyUserIntent(userQuery);
     if (intent === ChatIntent.GREETING) {
       const greetingAnswer = lang === 'ca'
-        ? "Hola! 👋 Sóc l'assistent virtual de El Tast. Et puc resoldre qualsevol dubte sobre la inscripció per a Les Comparses del Carnaval: preus, categories (adults i juvenils), talles, materials (armilla, clavells i corbatí), llista d'espera, recollida de materials i horaris de la seu social. En què et puc ajudar?"
-        : "¡Hola! 👋 Soy el asistente virtual de El Tast. Te puedo resolver cualquier duda sobre la inscripción para Les Comparses del Carnaval: precios, categorías (adultos y juveniles), tallas, materiales (chaleco, claveles y pajarita), lista de espera, recogida de materiales y horarios de la sede social. ¿En qué te puedo ayudar?";
+        ? "Hola! 👋 Sóc l'assistent virtual de El Tast. Et puc resoldre qualsevol dubte sobre la inscripció per a Les Comparses del Carnaval: dates oficials, preus, categories (adults i juvenils), talles, materials (armilla, clavells i corbatí), llista d'espera, recollida de materials i horaris de la seu social. En què et puc ajudar?"
+        : "¡Hola! 👋 Soy el asistente virtual de El Tast. Te puedo resolver cualquier duda sobre la inscripción para Les Comparses del Carnaval: fechas oficiales, precios, categorías (adultos y juveniles), tallas, materiales (chaleco, claveles y pajarita), lista de espera, recogida de materiales y horarios de la sede social. ¿En qué te puedo ayudar?";
       return res.status(200).json({
         ok: true,
         answer: greetingAnswer,
@@ -689,8 +1063,7 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    // 2. CHECK CUSTOM FAQS FROM SECRETARIA (Rules 10 & 11)
-    // Rule 11: Si una FAQ no coincide exactamente con la pregunta, no la muestres como respuesta.
+    // 2. CHECK CUSTOM FAQS FROM SECRETARIA
     const customFaqMatch = matchCustomFaq(userQuery, liveData.customFaqs);
     if (customFaqMatch) {
       return res.status(200).json({
@@ -716,13 +1089,15 @@ export default async function handler(req: any, res: any) {
       }
     }
 
-    // 4. UNKNOWN INTENT -> CALL GEMINI FREE TIER (strictly grounded, no search grounding, free tier model)
+    // 4. UNKNOWN INTENT -> CALL GEMINI FREE TIER (strictly grounded, free tier model)
     const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.GOOGLE_GENAI_API_KEY;
     let reply: string | null = null;
 
     if (apiKey) {
       try {
         const facData = await getOfficialFacData();
+        const carnavals = await getOfficialCarnavals();
+
         const ai = new GoogleGenAI({
           apiKey,
           httpOptions: {
@@ -732,7 +1107,7 @@ export default async function handler(req: any, res: any) {
           }
         });
 
-        const systemInstruction = buildSystemPrompt(lang, liveData, facData.rawText);
+        const systemInstruction = buildSystemPrompt(lang, liveData, facData.rawText, carnavals);
 
         const contents: any[] = [];
         if (Array.isArray(messages) && messages.length > 1) {
@@ -751,7 +1126,6 @@ export default async function handler(req: any, res: any) {
           parts: [{ text: userQuery }]
         });
 
-        // Use strictly Free Tier Gemini models
         const FREE_TIER_MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash'];
 
         for (const modelName of FREE_TIER_MODELS) {
@@ -801,7 +1175,7 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    // 5. HONEST FALLBACK: Rule 12: Devuelve siempre una respuesta relacionada con la pregunta o indica que no hay información.
+    // 5. HONEST FALLBACK: Return clear message
     const fallbackAnswer = lang === 'ca'
       ? "No disposo d'informació confirmada sobre aquesta consulta. Consulta el web oficial (https://carnavaldevilanova.cat/la-fac/) o contacta amb l'entitat."
       : "No dispongo de información confirmada sobre esta consulta. Consulta la web oficial (https://carnavaldevilanova.cat/la-fac/) o contacta con la entidad.";

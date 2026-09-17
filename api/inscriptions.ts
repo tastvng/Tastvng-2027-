@@ -791,28 +791,50 @@ export default async function inscriptionsHandler(req: any, res: any) {
         });
       }
 
-      // Authoritative official prices fetched dynamically from sistema_config
-      let preuAdult = 70;
-      let preuJuvenil = 60;
+      // Authoritative official prices fetched dynamically from settings & sistema_config
+      let preuAdult = 45;
+      let preuJuvenil = 45;
 
       const serverSupabase = getServerSupabase();
       if (serverSupabase) {
         try {
-          const { data: configRows } = await serverSupabase
-            .from('sistema_config')
-            .select('clave, valor');
-          if (configRows && configRows.length > 0) {
-            configRows.forEach((r: any) => {
-              const k = String(r.clave || '').toLowerCase();
-              const num = parseFloat(r.valor);
-              if (!isNaN(num)) {
-                if (k === 'preu_adult' || k === 'precio_adulto') preuAdult = num;
-                if (k === 'preu_juvenil' || k === 'precio_juvenil') preuJuvenil = num;
-              }
-            });
+          const { data: settingsRow } = await serverSupabase
+            .from('settings')
+            .select('value')
+            .eq('key', 'tast_config_2026')
+            .maybeSingle();
+
+          let configVal = settingsRow?.value;
+          if (typeof configVal === 'string') {
+            try { configVal = JSON.parse(configVal); } catch {}
+          }
+
+          if (!configVal) {
+            const { data: scRows } = await serverSupabase
+              .from('sistema_config')
+              .select('config')
+              .limit(1);
+            if (scRows && scRows[0]?.config) {
+              configVal = scRows[0].config;
+            }
+          }
+
+          if (configVal) {
+            if (typeof configVal.preuAdult === 'number' && !isNaN(configVal.preuAdult)) {
+              preuAdult = configVal.preuAdult;
+            }
+            if (typeof configVal.preuJuvenil === 'number' && !isNaN(configVal.preuJuvenil)) {
+              preuJuvenil = configVal.preuJuvenil;
+            }
+            if (Array.isArray(configVal.tarifesDinamiques)) {
+              const ad = configVal.tarifesDinamiques.find((t: any) => t.id === 'adults' || String(t.nom || '').toLowerCase().includes('adult'));
+              const ju = configVal.tarifesDinamiques.find((t: any) => t.id === 'juvenils' || String(t.nom || '').toLowerCase().includes('juvenil'));
+              if (ad && !isNaN(Number(ad.valor))) preuAdult = Number(ad.valor);
+              if (ju && !isNaN(Number(ju.valor))) preuJuvenil = Number(ju.valor);
+            }
           }
         } catch (e) {
-          console.warn("Notice fetching dynamic pricing from sistema_config:", e);
+          console.warn("Notice fetching dynamic pricing from settings/sistema_config:", e);
         }
       }
 

@@ -218,18 +218,20 @@ export const Chatbot: React.FC<ChatbotProps> = ({
   // Quick suggestion chips
   const quickSuggestions = isCa
     ? [
-        { label: "💰 Preus d'inscripció", query: "Quant costa la inscripció de la comparsa?" },
-        { label: "📍 On i quan recollir materials?", query: "On i quan es recullen els materials?" },
-        { label: "⏳ Llista d'espera", query: "Com funciona la llista d'espera?" },
-        { label: "🪪 Documentació i DNI", query: "Quina documentació i DNI cal aportar a la inscripció?" },
-        { label: "👕 Quins materials hi ha?", query: "Quins materials hi ha?" }
+        { label: "📅 Carnaval 2027", query: "Quan és el Carnaval 2027?" },
+        { label: "🎭 Comparses 2027", query: "Quin dia són les Comparses 2027?" },
+        { label: "🗓️ Properes dates", query: "Quines són les properes dates?" },
+        { label: "💰 Preu inscripció", query: "Quant costa la inscripció?" },
+        { label: "👕 Materials oficials", query: "Quins materials hi ha?" },
+        { label: "🏷️ Preu materials", query: "Quant costa cada material?" }
       ]
     : [
-        { label: "💰 Precios de inscripción", query: "¿Cuánto cuesta la inscripción de la comparsa?" },
-        { label: "📍 ¿Dónde y cuándo recoger materiales?", query: "¿Dónde y cuándo se recogen los materiales?" },
-        { label: "⏳ Lista de espera", query: "¿Cómo funciona la lista de espera?" },
-        { label: "🪪 Documentación y DNI", query: "¿Qué documentación y DNI es necesario aportar en la inscripción?" },
-        { label: "👕 ¿Qué materiales hay?", query: "¿Qué materiales hay?" }
+        { label: "📅 Carnaval 2027", query: "¿Cuándo es el Carnaval 2027?" },
+        { label: "🎭 Comparsas 2027", query: "¿Qué día son las Comparsas 2027?" },
+        { label: "🗓️ Próximas fechas", query: "¿Cuáles son las próximas fechas?" },
+        { label: "💰 Precio inscripción", query: "¿Cuánto cuesta la inscripción?" },
+        { label: "👕 Materiales oficiales", query: "¿Qué materiales hay?" },
+        { label: "🏷️ Precio materiales", query: "¿Cuánto cuesta cada material?" }
       ];
 
   // Static FAQ fallback items for when AI is unavailable
@@ -237,11 +239,11 @@ export const Chatbot: React.FC<ChatbotProps> = ({
     ? [
         {
           q: "Quins són els preus d'inscripció?",
-          a: "Parella Adulta: 90 € per parella. Parella Juvenil (14 a 17 anys amb autorització): 60 € per parella."
+          a: "No puc confirmar el preu en aquest moment. Contacta amb l'entitat."
         },
         {
           q: "Quins materials hi ha?",
-          a: "Els únics materials vàlids són l'armilla oficial (talles XS a 3XL), els clavells i el corbatí (pajarita)."
+          a: "Els materials oficials i actius configurats a Secretaria són l'armilla oficial (talles XS a 3XL), els clavells i el corbatí (pajarita). No hi ha altres materials a la venda."
         },
         {
           q: "On i quan es recullen els materials?",
@@ -259,11 +261,11 @@ export const Chatbot: React.FC<ChatbotProps> = ({
     : [
         {
           q: "¿Cuáles son los precios de inscripción?",
-          a: "Pareja Adulta: 90 € por pareja. Pareja Juvenil (14 a 17 años con autorización): 60 € por pareja."
+          a: "No puedo confirmar el precio en este momento. Contacta con la entidad."
         },
         {
           q: "¿Qué materiales hay?",
-          a: "Los únicos materiales válidos son el chaleco oficial (tallas XS a 3XL), los claveles y la pajarita."
+          a: "Los materiales oficiales y activos configurados en Secretaría son el chaleco oficial (tallas XS a 3XL), los claveles y la pajarita. No hay otros materiales a la venta."
         },
         {
           q: "¿Dónde y cuándo se recogen los materiales?",
