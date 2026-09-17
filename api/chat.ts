@@ -314,6 +314,123 @@ FORMAT DE RESPOSTA:
 `.trim();
 }
 
+/**
+ * Generates an accurate deterministic response from live Supabase entity settings
+ * in case external AI model services are undergoing high demand (503/429 spikes).
+ */
+function generateDeterministicAnswer(query: string, lang: 'ca' | 'es', liveData: any): string | null {
+  const q = query.toLowerCase();
+  const { sistemaConfig, personalizacion, categoriaDescripcions } = liveData;
+
+  const ev = personalizacion?.evento || {};
+  const sec = personalizacion?.secretaria || {};
+
+  const nomEntitat = ev.nombre || "El Tast";
+  const direccio = ev.direccio || "Plaça Soler i Carbonell, 28, 08800 Vilanova i la Geltrú";
+  const horari = lang === 'ca'
+    ? (sec.hours_ca || "Dimecres i divendres, de 18:00h a 21:30h a la seu social.")
+    : (sec.hours_es || "Miércoles y viernes, de 18:00h a 21:30h en la sede social.");
+
+  const preuAdult = sistemaConfig?.preuAdult ?? 130;
+  const preuJuvenil = sistemaConfig?.preuJuvenil ?? 95;
+  const preuDomas = sistemaConfig?.preuDomasBalco ?? 20;
+  const preuMocador = sistemaConfig?.preuMocadorExtra ?? 6;
+
+  // 1. Preus / Tarifes
+  if (q.includes('preu') || q.includes('costa') || q.includes('tarifa') || q.includes('pagar') || q.includes('euro') || q.includes('precio') || q.includes('cuesta') || q.includes('cuanto') || q.includes('quant')) {
+    if (lang === 'ca') {
+      return `Aquests són els preus oficials de les inscripcions a **${nomEntitat}**:\n\n` +
+        `• **Parella Adulta**: **${preuAdult} €** (inclou 2 mocadors oficials del Tast, acreditació i accés a la comparsa).\n` +
+        `• **Parella Juvenil** (14 a 17 anys): **${preuJuvenil} €** per parella.\n` +
+        `• **Domàs de balcó** (opcional): **${preuDomas} €**.\n` +
+        `• **Mocadors addicionals** (opcional): **${preuMocador} €** per unitat.\n\n` +
+        `El pagament s'efectua de manera presencial a la seu social en efectiu o Bizum durant els dies d'atenció.`;
+    } else {
+      return `Estos son los precios oficiales de las inscripciones en **${nomEntitat}**:\n\n` +
+        `• **Pareja Adulta**: **${preuAdult} €** (incluye 2 pañuelos oficiales de El Tast, acreditación y acceso a la comparsa).\n` +
+        `• **Pareja Juvenil** (14 a 17 años): **${preuJuvenil} €** por pareja.\n` +
+        `• **Balcón domás** (opcional): **${preuDomas} €**.\n` +
+        `• **Pañuelos adicionales** (opcional): **${preuMocador} €** por unidad.\n\n` +
+        `El pago se efectúa de manera presencial en la sede social en efectivo o Bizum durante los días de atención.`;
+    }
+  }
+
+  // 2. Horaris, Seu, Recollida
+  if (q.includes('horari') || q.includes('horario') || q.includes('on') || q.includes('donde') || q.includes('seu') || q.includes('sede') || q.includes('recollir') || q.includes('recoger') || q.includes('adreça') || q.includes('direccion') || q.includes('direcció')) {
+    if (lang === 'ca') {
+      return `La seu social de **${nomEntitat}** està situada a:\n` +
+        `📍 **${direccio}**\n\n` +
+        `⏰ **Horari d'atenció i recollida de mocadors**: ${horari}\n\n` +
+        `Recorda que per a recollir el material cal haver completat la inscripció i tenir el pagament validat per Secretaria.`;
+    } else {
+      return `La sede social de **${nomEntitat}** está situada en:\n` +
+        `📍 **${direccio}**\n\n` +
+        `⏰ **Horario de atención y recogida de pañuelos**: ${horari}\n\n` +
+        `Recuerda que para recoger el material es necesario haber completado la inscripción y tener el pago validado por Secretaría.`;
+    }
+  }
+
+  // 3. Categories (Adult / Juvenil)
+  if (q.includes('categoria') || q.includes('adult') || q.includes('juvenil') || q.includes('edat') || q.includes('edad') || q.includes('menor')) {
+    if (lang === 'ca') {
+      return `A **${nomEntitat}** disposem de dues categories:\n\n` +
+        `• **Categoria Adulta**: Per a parelles majors de 18 anys (${preuAdult} € per parella).\n` +
+        `• **Categoria Juvenil**: Per a joves de 14 a 17 anys (${preuJuvenil} € per parella). Requereix obligatòriament les dades i l'autorització signada pel tutor/a legal.`;
+    } else {
+      return `En **${nomEntitat}** disponemos de dos categorías:\n\n` +
+        `• **Categoría Adulta**: Para parejas mayores de 18 años (${preuAdult} € por pareja).\n` +
+        `• **Categoría Juvenil**: Para jóvenes de 14 a 17 años (${preuJuvenil} € por pareja). Requiere obligatoriamente los datos y la autorización firmada por el tutor/a legal.`;
+    }
+  }
+
+  // 4. Llista d'espera
+  if (q.includes('espera') || q.includes('llista') || q.includes('lista') || q.includes('cua') || q.includes('aforament') || q.includes('plazas') || q.includes('places')) {
+    if (lang === 'ca') {
+      return `**Funcionament de la llista d'espera:**\n` +
+        `Si les places estan cobertes, el formulari assigna automàticament un número de llista d'espera (LE...).\n\n` +
+        `• **No s'ha de pagar res** mentre estigueu en llista d'espera.\n` +
+        `• Tan bon punt s'alliberi una vacant, Secretaria es posarà en contacte amb vosaltres per correu o telèfon per a confirmar la plaça oficial.`;
+    } else {
+      return `**Funcionamiento de la lista de espera:**\n` +
+        `Si las plazas están cubiertas, el formulario asigna automáticamente un número de lista de espera (LE...).\n\n` +
+        `• **No se debe pagar nada** mientras estéis en lista de espera.\n` +
+        `• En cuanto se libere una vacante, Secretaría se pondrá en contacto con vosotros por correo o teléfono para confirmar la plaza oficial.`;
+    }
+  }
+
+  // 5. Documentació / DNI
+  if (q.includes('dni') || q.includes('nie') || q.includes('passaport') || q.includes('document') || q.includes('foto')) {
+    if (lang === 'ca') {
+      return `Per a formalitzar la inscripció cal aportar:\n` +
+        `• Número i fotografia o còpia del DNI, NIE o Passaport de cada membre de la parella.\n` +
+        `• En menors d'edat (categoria juvenil): DNI del tutor/a legal i document d'autorització.\n` +
+        `• Les dades personals es guarden de manera xifrada i confidencial únicament per a l'assegurança i la FAC.`;
+    } else {
+      return `Para formalizar la inscripción es necesario aportar:\n` +
+        `• Número y fotografía o copia del DNI, NIE o Pasaporte de cada miembro de la pareja.\n` +
+        `• En menores de edad (categoría juvenil): DNI del tutor/a legal y documento de autorización.\n` +
+        `• Los datos personales se guardan de forma cifrada y confidencial únicamente para el seguro y la FAC.`;
+    }
+  }
+
+  // 6. Materials / Talles
+  if (q.includes('talla') || q.includes('vestuari') || q.includes('samarreta') || q.includes('armilla') || q.includes('mocador') || q.includes('pañuelo') || q.includes('chaleco') || q.includes('camiseta')) {
+    if (lang === 'ca') {
+      return `**Materials i talles oficials de El Tast:**\n` +
+        `• Cada inscripció inclou 2 mocadors oficials de la comparsa.\n` +
+        `• Talles d'armilla i samarreta disponibles des de la XS fins a la 3XL segons el model oficial.\n` +
+        `• Podreu afegir domassos de balcó i mocadors extres durant la inscripció.`;
+    } else {
+      return `**Materiales y tallas oficiales de El Tast:**\n` +
+        `• Cada inscripción incluye 2 pañuelos oficiales de la comparsa.\n` +
+        `• Tallas de chaleco y camiseta disponibles desde la XS hasta la 3XL según el modelo oficial.\n` +
+        `• Podréis añadir balconadas (domàs) y pañuelos extras durante la inscripción.`;
+    }
+  }
+
+  return null;
+}
+
 export default async function handler(req: any, res: any) {
   applyCorsHeaders(req as any, res as any, "POST, OPTIONS");
 
@@ -360,94 +477,158 @@ export default async function handler(req: any, res: any) {
     const sensitiveTokens = ['smtp', 'password', 'contrasenya', 'contraseña', 'service_role', 'api_key', 'secret', 'select * from', 'drop table', 'token'];
     for (const token of sensitiveTokens) {
       if (lowerQuery.includes(token)) {
+        const safeReply = lang === 'ca'
+          ? "Per motius de seguretat, no puc facilitar credencials, claus ni informació interna del sistema. Si necessites ajuda oficial, contacta amb tastvng@gmail.com."
+          : "Por motivos de seguridad, no puedo facilitar credenciales, claves ni información interna del sistema. Si necesitas ayuda oficial, contacta con tastvng@gmail.com.";
         return res.status(200).json({
-          reply: lang === 'ca'
-            ? "Per motius de seguretat, no puc facilitar credencials, claus ni informació interna del sistema. Si necessites ajuda oficial, contacta amb tastvng@gmail.com."
-            : "Por motivos de seguridad, no puedo facilitar credenciales, claves ni información interna del sistema. Si necesitas ayuda oficial, contacta con tastvng@gmail.com."
+          ok: true,
+          answer: safeReply,
+          reply: safeReply,
+          topic: 'seguretat'
         });
       }
     }
 
-    // Check Gemini API key
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      console.warn("[Chatbot] GEMINI_API_KEY is not defined in environment.");
-      return res.status(503).json({
-        error: "Servei d'IA no configurat al servidor.",
-        isAiError: true
+    // Check Gemini API key (supports GEMINI_API_KEY, GOOGLE_API_KEY and GOOGLE_GENAI_API_KEY)
+    const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.GOOGLE_GENAI_API_KEY;
+
+    // Fetch dynamic live context from Supabase (sistema_config and settings)
+    const liveData = await getLiveEntityData();
+    const topic = categorizeQuery(userQuery);
+
+    // If query is a pure greeting, return instant friendly greeting
+    const isGreeting = /^(hola|bones|bon dia|bona tarda|buenas|buenos d[ií]as|buenas tardes|buenas noches|hey|hello|saludos)[\s!.,?]*$/i.test(userQuery);
+    if (isGreeting) {
+      const greetingAnswer = lang === 'ca'
+        ? "Hola! 👋 Sóc l'assistent virtual de El Tast. Et puc resoldre qualsevol dubte sobre la inscripció per a Les Comparses del Carnaval: preus, categories (adults i juvenils), talles de vestuari, materials, llista d'espera, recollida de mocadors i horaris de la seu social. En què et puc ajudar?"
+        : "¡Hola! 👋 Soy el asistente virtual de El Tast. Te puedo resolver cualquier duda sobre la inscripción para Les Comparses del Carnaval: precios, categorías (adultos y juveniles), tallas de vestuario, materiales, lista de espera, recogida de pañuelos y horarios de la sede social. ¿En qué te puedo ayudar?";
+      return res.status(200).json({
+        ok: true,
+        answer: greetingAnswer,
+        reply: greetingAnswer,
+        topic: 'salutacio'
       });
     }
 
-    // Fetch dynamic live context from Supabase
-    const liveData = await getLiveEntityData();
-    const systemInstruction = buildSystemPrompt(lang, liveData);
+    let reply: string | null = null;
+    let lastError: any = null;
 
-    // Initialize Gemini API client
-    const ai = new GoogleGenAI({
-      apiKey,
-      httpOptions: {
-        headers: {
-          'User-Agent': 'aistudio-build'
-        }
-      }
-    });
+    if (apiKey) {
+      try {
+        const ai = new GoogleGenAI({
+          apiKey,
+          httpOptions: {
+            headers: {
+              'User-Agent': 'aistudio-build'
+            }
+          }
+        });
 
-    // Format conversation history for Gemini
-    const contents: any[] = [];
-    if (Array.isArray(messages) && messages.length > 1) {
-      // Include past turns up to 6 turns (to preserve context without ballooning tokens)
-      const recentTurns = messages.slice(-7, -1);
-      for (const turn of recentTurns) {
-        const role = turn.role === 'user' ? 'user' : 'model';
-        const text = typeof turn.content === 'string' ? turn.content.trim() : '';
-        if (text) {
-          contents.push({
-            role,
-            parts: [{ text }]
-          });
+        const systemInstruction = buildSystemPrompt(lang, liveData);
+
+        // Format conversation history for Gemini
+        const contents: any[] = [];
+        if (Array.isArray(messages) && messages.length > 1) {
+          const recentTurns = messages.slice(-7, -1);
+          for (const turn of recentTurns) {
+            const role = turn.role === 'user' ? 'user' : 'model';
+            const text = typeof turn.content === 'string' ? turn.content.trim() : '';
+            if (text) {
+              contents.push({
+                role,
+                parts: [{ text }]
+              });
+            }
+          }
         }
+
+        contents.push({
+          role: 'user',
+          parts: [{ text: userQuery }]
+        });
+
+        // Resilience: fallback chain across supported Gemini models if a model suffers 503 or temporary unavailability
+        const CANDIDATE_MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-2.5-pro'];
+
+        for (const modelName of CANDIDATE_MODELS) {
+          try {
+            const response = await ai.models.generateContent({
+              model: modelName,
+              contents,
+              config: {
+                systemInstruction,
+                temperature: 0.2,
+              }
+            });
+
+            if (response && response.text) {
+              reply = response.text.trim();
+              break; // Success! Exit model loop
+            }
+          } catch (modelErr: any) {
+            lastError = modelErr;
+            const errStr = String(modelErr?.message || modelErr);
+            console.warn(`[Chatbot] Model ${modelName} failed: ${errStr}. Trying next model if available...`);
+            // Only continue to next model if it's an API/availability/quota/503/429 error
+            if (errStr.includes('503') || errStr.includes('UNAVAILABLE') || errStr.includes('429') || errStr.includes('RESOURCE_EXHAUSTED') || errStr.includes('not found') || errStr.includes('demand')) {
+              continue;
+            }
+          }
+        }
+      } catch (genAiErr: any) {
+        lastError = genAiErr;
+        console.error("[Chatbot Error initializing AI]:", genAiErr);
       }
+    } else {
+      console.warn("[Chatbot] GEMINI_API_KEY is not defined in environment.");
+      lastError = new Error("GEMINI_API_KEY missing");
     }
 
-    // Add current user prompt
-    contents.push({
-      role: 'user',
-      parts: [{ text: userQuery }]
-    });
-
-    // Call Gemini 3.8 Flash model
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.8-flash',
-      contents,
-      config: {
-        systemInstruction,
-        temperature: 0.2, // Low temperature for high factual accuracy
+    // If Gemini models responded, return standardized success JSON
+    if (reply) {
+      // Record anonymous stats in background
+      const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+      const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+      if (supabaseUrl && serviceKey) {
+        const client = createClient(supabaseUrl, serviceKey);
+        recordAnonymousStats(client, lang, topic).catch(() => {});
       }
-    });
 
-    const reply = response.text?.trim() || (
-      lang === 'ca' ? "No tinc aquesta informació. Contacta amb l'entitat." : "No tengo esa información. Contacta con la entidad."
-    );
-
-    // Background: record anonymous stats
-    const topic = categorizeQuery(userQuery);
-    const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
-    if (supabaseUrl && serviceKey) {
-      const client = createClient(supabaseUrl, serviceKey);
-      recordAnonymousStats(client, lang, topic).catch(() => {});
+      return res.status(200).json({
+        ok: true,
+        answer: reply,
+        reply,
+        topic
+      });
     }
 
-    return res.status(200).json({
-      reply,
-      topic
+    // Deterministic factual fallback based on live entity data from Supabase
+    // This guarantees that critical queries (prices, hours, categories, materials, waiting list)
+    // always succeed even if Google API is temporarily experiencing a 503 spike or downtime
+    const fallbackAnswer = generateDeterministicAnswer(userQuery, lang, liveData);
+    if (fallbackAnswer) {
+      return res.status(200).json({
+        ok: true,
+        answer: fallbackAnswer,
+        reply: fallbackAnswer,
+        topic,
+        isFallback: true
+      });
+    }
+
+    // If no answer could be generated and AI is unavailable, return standardized error JSON
+    console.error("[Chatbot Error - unavailable]:", lastError?.message || lastError);
+    return res.status(503).json({
+      ok: false,
+      error: "CHATBOT_UNAVAILABLE",
+      message: lastError?.message || "This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later."
     });
   } catch (err: any) {
-    console.error("[Chatbot Error]:", err);
+    console.error("[Chatbot Global Error]:", err);
     return res.status(500).json({
-      error: "Error processant la consulta del xat.",
-      isAiError: true,
-      details: err?.message || String(err)
+      ok: false,
+      error: "CHATBOT_UNAVAILABLE",
+      message: err?.message || "Error real registrat al servidor"
     });
   }
 }

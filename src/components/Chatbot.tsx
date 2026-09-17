@@ -12,7 +12,8 @@ import {
   Sparkles,
   ChevronDown,
   ChevronUp,
-  AlertCircle
+  AlertCircle,
+  RotateCcw
 } from 'lucide-react';
 import { getEntityConfigSync } from '../utils/entityConfig';
 
@@ -42,6 +43,7 @@ export const Chatbot: React.FC<ChatbotProps> = ({
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [aiErrorOccurred, setAiErrorOccurred] = useState(false);
+  const [lastFailedQuery, setLastFailedQuery] = useState<string | null>(null);
   const [expandedFaqIndex, setExpandedFaqIndex] = useState<number | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -113,6 +115,7 @@ export const Chatbot: React.FC<ChatbotProps> = ({
     };
     setMessages([initialWelcome]);
     setAiErrorOccurred(false);
+    setLastFailedQuery(null);
     const sessionKey = `tast_chat_history_${language}`;
     sessionStorage.removeItem(sessionKey);
   };
@@ -128,14 +131,22 @@ export const Chatbot: React.FC<ChatbotProps> = ({
     setInputValue('');
     setAiErrorOccurred(false);
 
-    const userMsg: ChatMessage = {
-      id: 'usr-' + Date.now(),
-      role: 'user',
-      content: text,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    };
+    // If retrying, remove the previous error message if present at the end of history
+    const baseHistory = messages.filter((m, idx) => !(m.isError && idx === messages.length - 1));
 
-    const newHistory = [...messages, userMsg];
+    // Avoid duplicate user message bubble if retrying the same last message
+    const lastMsg = baseHistory[baseHistory.length - 1];
+    let newHistory = baseHistory;
+    if (!lastMsg || lastMsg.role !== 'user' || lastMsg.content !== text) {
+      const userMsg: ChatMessage = {
+        id: 'usr-' + Date.now(),
+        role: 'user',
+        content: text,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      };
+      newHistory = [...baseHistory, userMsg];
+    }
+
     setMessages(newHistory);
     setIsLoading(true);
 
@@ -158,13 +169,13 @@ export const Chatbot: React.FC<ChatbotProps> = ({
         })
       });
 
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData?.error || `HTTP error ${res.status}`);
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok || data.ok === false) {
+        throw new Error(data.message || data.error || `HTTP error ${res.status}`);
       }
 
-      const data = await res.json();
-      const reply = data.reply || (isCa ? "No tinc aquesta informació. Contacta amb l'entitat." : "No tengo esa información. Contacta con la entidad.");
+      const reply = data.answer || data.reply || (isCa ? "No tinc aquesta informació. Contacta amb l'entitat." : "No tengo esa información. Contacta con la entidad.");
 
       const botMsg: ChatMessage = {
         id: 'bot-' + Date.now(),
@@ -174,16 +185,19 @@ export const Chatbot: React.FC<ChatbotProps> = ({
       };
 
       setMessages(prev => [...prev, botMsg]);
+      setLastFailedQuery(null);
+      setAiErrorOccurred(false);
     } catch (err) {
       console.warn("[Chatbot] Request failed:", err);
+      setLastFailedQuery(text);
       setAiErrorOccurred(true);
       const errorMsg: ChatMessage = {
         id: 'err-' + Date.now(),
         role: 'assistant',
         isError: true,
         content: isCa
-          ? "El servei d'intel·ligència artificial no està disponible en aquest moment. Pots consultar les preguntes freqüents a continuació o contactar directament amb Secretaria."
-          : "El servicio de inteligencia artificial no está disponible en este momento. Puedes consultar las preguntas frecuentes a continuación o contactar directamente con Secretaría.",
+          ? "El servei d'intel·ligència artificial no està disponible en aquest moment. Pots consultar les preguntes freqüents a continuació o utilitzar el botó de reintentar."
+          : "El servicio de inteligencia artificial no está disponible en este momento. Puedes consultar las preguntas frecuentes a continuación o utilizar el botón de reintentar.",
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       };
       setMessages(prev => [...prev, errorMsg]);
@@ -397,6 +411,23 @@ export const Chatbot: React.FC<ChatbotProps> = ({
                     }`}
                   >
                     {renderFormattedText(m.content)}
+                    {m.isError && lastFailedQuery && (
+                      <div className="mt-2.5 pt-2 border-t border-rose-800/40 flex items-center justify-between gap-2">
+                        <span className="text-[11px] text-rose-300/80 italic">
+                          {isCa ? 'Vols tornar a provar?' : '¿Deseas volver a probar?'}
+                        </span>
+                        <button
+                          id="btn-retry-chat"
+                          type="button"
+                          onClick={() => handleSendMessage(lastFailedQuery)}
+                          disabled={isLoading}
+                          className="inline-flex items-center gap-1.5 px-3 py-1 bg-rose-800 hover:bg-rose-700 active:scale-95 text-white rounded-lg text-xs font-semibold transition-all shadow-sm cursor-pointer disabled:opacity-50"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" />
+                          <span>{isCa ? 'Reintentar' : 'Reintentar'}</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
                   <span className="text-[10px] text-stone-500 mt-1 px-1">
                     {m.timestamp}
@@ -420,6 +451,28 @@ export const Chatbot: React.FC<ChatbotProps> = ({
             {/* Fallback FAQ & Contact Accordion when AI has error */}
             {aiErrorOccurred && (
               <div className="mt-4 p-3 bg-stone-900/90 border border-stone-800 rounded-xl space-y-3">
+                {lastFailedQuery && (
+                  <div className="flex items-center justify-between pb-2.5 border-b border-stone-800">
+                    <div className="min-w-0 pr-2">
+                      <span className="text-[10px] text-stone-500 uppercase tracking-wider block">
+                        {isCa ? 'Última consulta' : 'Última consulta'}
+                      </span>
+                      <p className="text-xs text-stone-300 font-medium truncate">
+                        "{lastFailedQuery}"
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleSendMessage(lastFailedQuery)}
+                      disabled={isLoading}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#ff0090]/20 hover:bg-[#ff0090]/30 text-[#ff0090] border border-[#ff0090]/50 rounded-lg text-xs font-bold transition-all active:scale-95 shrink-0 cursor-pointer disabled:opacity-50"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      <span>{isCa ? 'Reintentar' : 'Reintentar'}</span>
+                    </button>
+                  </div>
+                )}
+
                 <div className="flex items-center gap-2 text-xs font-semibold text-amber-400">
                   <AlertCircle className="w-4 h-4 shrink-0" />
                   <span>{isCa ? 'Preguntes més freqüents (FAQ)' : 'Preguntas más frecuentes (FAQ)'}</span>
