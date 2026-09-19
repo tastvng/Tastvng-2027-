@@ -14,7 +14,7 @@ export default function AdminPersonalitzacio({ onAddLog }: AdminPersonalitzacioP
   const { language } = useLanguage();
   const [activeTab, setActiveTab] = useState<'diseno' | 'portada'>('diseno');
   
-  const [codigoVestimentaUrl, setCodigoVestimentaUrl] = useState('https://www.youtube.com/embed/dcY7s1F3jo0');
+  const [codigoVestimentaUrl, setCodigoVestimentaUrl] = useState('https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4');
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
@@ -22,7 +22,7 @@ export default function AdminPersonalitzacio({ onAddLog }: AdminPersonalitzacioP
       try {
         const { getSupabaseSetting, isSupabaseConfigured } = await import('../supabaseClient');
         if (isSupabaseConfigured) {
-          const val = await getSupabaseSetting<string>('codigo_vestimenta_url', 'https://www.youtube.com/embed/dcY7s1F3jo0');
+          const val = await getSupabaseSetting<string>('codigo_vestimenta_url', 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4');
           if (val) {
             setCodigoVestimentaUrl(val);
           }
@@ -127,12 +127,12 @@ export default function AdminPersonalitzacio({ onAddLog }: AdminPersonalitzacioP
 
         <div className="space-y-3">
           <label className="block text-xs font-mono font-bold text-zinc-300">
-            {language === 'ca' ? "URL d'Inserció de YouTube (Embed)" : "URL de Inserción de YouTube (Embed)"}
+            {language === 'ca' ? "URL del Vídeo informatiu (MP4 o Supabase Storage)" : "URL del Vídeo informativo (MP4 o Supabase Storage)"}
           </label>
           <div className="flex flex-col sm:flex-row gap-3">
             <input
               type="text"
-              placeholder="https://www.youtube.com/embed/dcY7s1F3jo0"
+              placeholder="https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4"
               value={codigoVestimentaUrl}
               onChange={(e) => setCodigoVestimentaUrl(e.target.value)}
               className="flex-1 bg-zinc-950 text-white border border-zinc-800 focus:border-[#ff0090] rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:ring-0 transition-all font-mono"
@@ -150,18 +150,18 @@ export default function AdminPersonalitzacio({ onAddLog }: AdminPersonalitzacioP
           </div>
           <p className="text-[10px] text-zinc-500">
             {language === 'ca' 
-              ? "Exemple de format: https://www.youtube.com/embed/dcY7s1F3jo0" 
-              : "Ejemplo de formato: https://www.youtube.com/embed/dcY7s1F3jo0"
+              ? "Format admès: URL directa a un fitxer .mp4 o enllaç públic/signat de Supabase Storage." 
+              : "Formato admitido: URL directa a un archivo .mp4 o enlace público/firmado de Supabase Storage."
             }
           </p>
         </div>
 
         {/* Preview Container */}
-        <div className="bg-zinc-950/60 border border-zinc-800/60 rounded-2xl p-4 space-y-2">
+        <div className="bg-zinc-950/60 border border-zinc-800/60 rounded-2xl p-4 space-y-3">
           <span className="text-[10px] font-mono font-bold text-zinc-500 uppercase tracking-widest block">
-            {language === 'ca' ? "VISTA PRÈVIA DEL BOTÓ" : "VISTA PREVIA DEL BOTÓN"}
+            {language === 'ca' ? "VISTA PRÈVIA DEL BLOC DE VÍDEO" : "VISTA PREVIA DEL BLOQUE DE VÍDEO"}
           </span>
-          <div className="max-w-xs">
+          <div className="w-full max-w-xl">
             <CodigoVestimentaModal youtubeUrl={codigoVestimentaUrl} />
           </div>
         </div>
