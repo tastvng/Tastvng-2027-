@@ -316,6 +316,8 @@ ${textToTranslate}
     app.use(vite.middlewares);
   } else {
     console.log(`Starting server in production mode. Serving static files from: ${distPath}`);
+    const publicPath = path.join(process.cwd(), 'public');
+    app.use(express.static(publicPath));
     app.use(express.static(distPath));
     app.get('*', (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
