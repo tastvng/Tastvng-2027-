@@ -1,8 +1,39 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { createClient } from "@supabase/supabase-js";
 import { GoogleGenAI } from "@google/genai";
-import { applyCorsHeaders } from "./_cors";
-import { checkRateLimit, getClientIp } from "./_rate-limit";
+
+function applyCorsHeaders(req: any, res: any, methods = "POST, OPTIONS") {
+  const origin = req.headers?.origin;
+  res.setHeader("Access-Control-Allow-Origin", origin || "*");
+  res.setHeader("Access-Control-Allow-Methods", methods);
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+}
+
+const chatRateLimits = new Map<string, { count: number; resetTime: number }>();
+
+function checkRateLimit(prefix: string, ip: string, maxRequests: number, windowMs: number): boolean {
+  const key = `${prefix}:${ip}`;
+  const now = Date.now();
+  const record = chatRateLimits.get(key);
+  if (!record || now > record.resetTime) {
+    chatRateLimits.set(key, { count: 1, resetTime: now + windowMs });
+    return true;
+  }
+  if (record.count >= maxRequests) {
+    return false;
+  }
+  record.count += 1;
+  return true;
+}
+
+function getClientIp(req: any): string {
+  const forwarded = req.headers?.['x-forwarded-for'];
+  if (typeof forwarded === 'string') {
+    return forwarded.split(',')[0].trim();
+  }
+  return req.socket?.remoteAddress || req.connection?.remoteAddress || req.ip || 'unknown';
+}
 
 // In-memory cache for live Supabase configuration (20 seconds TTL to keep it ultra-fresh)
 interface CachedConfig {
@@ -328,22 +359,24 @@ function extractActivePrices(sistemaConfig: any, settingsRows?: any[]): ActivePr
 // =======================================================
 // INTENT CLASSIFICATION ENGINE (NO LOOSE SUBSTRING SEARCH)
 // =======================================================
-export enum ChatIntent {
-  GREETING = 'GREETING',
-  PROXIMAS_FECHAS = 'PROXIMAS_FECHAS',
-  FECHA_COMPARSAS = 'FECHA_COMPARSAS',
-  FECHA_CARNAVAL = 'FECHA_CARNAVAL',
-  PRECIO_INSCRIPCION = 'PRECIO_INSCRIPCION',
-  PRECIO_MATERIALES = 'PRECIO_MATERIALES',
-  MATERIALES = 'MATERIALES',
-  PRECIOS_GENERAL = 'PRECIOS_GENERAL',
-  HISTORIA_ACTO = 'HISTORIA_ACTO',
-  LISTA_ESPERA = 'LISTA_ESPERA',
-  HORARIOS_RECOGIDA = 'HORARIOS_RECOGIDA',
-  DOCUMENTACION_DNI = 'DOCUMENTACION_DNI',
-  CONTACTO = 'CONTACTO',
-  UNKNOWN = 'UNKNOWN'
-}
+export const ChatIntent = {
+  GREETING: 'GREETING',
+  PROXIMAS_FECHAS: 'PROXIMAS_FECHAS',
+  FECHA_COMPARSAS: 'FECHA_COMPARSAS',
+  FECHA_CARNAVAL: 'FECHA_CARNAVAL',
+  PRECIO_INSCRIPCION: 'PRECIO_INSCRIPCION',
+  PRECIO_MATERIALES: 'PRECIO_MATERIALES',
+  MATERIALES: 'MATERIALES',
+  PRECIOS_GENERAL: 'PRECIOS_GENERAL',
+  HISTORIA_ACTO: 'HISTORIA_ACTO',
+  LISTA_ESPERA: 'LISTA_ESPERA',
+  HORARIOS_RECOGIDA: 'HORARIOS_RECOGIDA',
+  DOCUMENTACION_DNI: 'DOCUMENTACION_DNI',
+  CONTACTO: 'CONTACTO',
+  UNKNOWN: 'UNKNOWN'
+} as const;
+
+export type ChatIntent = (typeof ChatIntent)[keyof typeof ChatIntent];
 
 /**
  * Robust intent classifier using full phrases and exact contextual syntax.
@@ -353,7 +386,11 @@ function classifyUserIntent(rawQuery: string): ChatIntent {
   const q = rawQuery.trim().toLowerCase();
 
   // 1. GREETING
-  if (/^(?:hola|bones|bon\s+dia|bona\s+tarda|buenas|buenos\s+d[ií]as|buenas\s+tardes|buenas\s+noches|hey|hello|saludos)[\s!.,?]*$/i.test(q)) {
+  if (
+    /^(?:hola|bones|bon\s+dia|bona\s+tarda|buenas|buenos\s+d[ií]as|buenas\s+tardes|buenas\s+noches|hey|hello|saludos)[\s!.,?]*$/i.test(q) ||
+    /^(?:hola|buenas|bones)[\s,]+(?:buenas|que\s+tal|qu[eè]\s+tal|com\s+va|c[oó]mo\s+est[aá]s?|en\s+qu[eè]|bon\s+dia|bona\s+tarda)[\s!.,?]*$/i.test(q) ||
+    /^(?:hola|bones)[\s!.,?]*$/i.test(q)
+  ) {
     return ChatIntent.GREETING;
   }
 
@@ -958,6 +995,18 @@ async function generateIntentAnswer(
   return null;
 }
 
+function logSafeError(context: string, err: any, apiKey?: string) {
+  let msg = err?.stack || err?.message || String(err);
+  if (apiKey) {
+    msg = msg.split(apiKey).join('[REDACTED_API_KEY]');
+  }
+  const envKey = process.env.GEMINI_API_KEY;
+  if (envKey) {
+    msg = msg.split(envKey).join('[REDACTED_API_KEY]');
+  }
+  console.error(`[Vercel Chat Error] ${context}:`, msg);
+}
+
 export default async function handler(req: any, res: any) {
   applyCorsHeaders(req as any, res as any, "POST, OPTIONS");
 
@@ -965,45 +1014,30 @@ export default async function handler(req: any, res: any) {
     return res.status(200).end();
   }
 
+  // Ensure every response has application/json header
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+
   if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
-
-  // IP Rate limiting:
-  // - Maximum 5 messages per minute per user/IP
-  // - Maximum 20 messages per day per IP
-  const clientIp = getClientIp(req);
-  const { language } = req.body || {};
-  const lang: 'ca' | 'es' = language === 'es' ? 'es' : 'ca';
-
-  if (!checkRateLimit("chat_min", clientIp, 5, 60 * 1000)) {
-    const limitReply = lang === 'ca'
-      ? "Has assolit el límit de 5 missatges per minut. Si us plau, espera un moment o contacta amb tastvng@gmail.com."
-      : "Has alcanzado el límite de 5 mensajes por minuto. Por favor, espera un momento o contacta con tastvng@gmail.com.";
-    return res.status(200).json({
-      ok: true,
-      answer: limitReply,
-      reply: limitReply,
-      topic: 'rate_limit',
-      isRateLimit: true
-    });
-  }
-
-  if (!checkRateLimit("chat_daily", clientIp, 20, 24 * 60 * 60 * 1000)) {
-    const limitReply = lang === 'ca'
-      ? "Has assolit el límit diari de 20 consultes per a aquest dispositiu. Pots escriure a tastvng@gmail.com."
-      : "Has alcanzado el límite diario de 20 consultas para este dispositivo. Puedes escribir a tastvng@gmail.com.";
-    return res.status(200).json({
-      ok: true,
-      answer: limitReply,
-      reply: limitReply,
-      topic: 'rate_limit',
-      isRateLimit: true
-    });
+    return res.status(405).json({ ok: false, error: "Method not allowed" });
   }
 
   try {
-    const { message, messages } = req.body || {};
+    // 1. Parse request body safely across all runtimes (JSON object, string, or Buffer)
+    let body = req.body;
+    if (typeof body === 'string') {
+      try {
+        body = JSON.parse(body);
+      } catch {
+        // keep body as-is if string
+      }
+    } else if (Buffer.isBuffer(body)) {
+      try {
+        body = JSON.parse(body.toString('utf-8'));
+      } catch {}
+    }
+
+    const { message, language, messages } = body || {};
+    const lang: 'ca' | 'es' = (language === 'es' || language === 'castellano') ? 'es' : 'ca';
 
     let userQuery = typeof message === 'string' ? message.trim() : '';
     if (!userQuery && Array.isArray(messages) && messages.length > 0) {
@@ -1014,22 +1048,32 @@ export default async function handler(req: any, res: any) {
     }
 
     if (!userQuery) {
-      return res.status(400).json({
+      return res.status(200).json({
         ok: false,
-        error: "EMPTY_MESSAGE",
-        message: lang === 'ca' ? "El missatge no pot estar buit." : "El mensaje no puede estar vacío."
+        error: "CHATBOT_UNAVAILABLE"
       });
     }
 
     if (userQuery.length > 1000) {
-      return res.status(400).json({
+      return res.status(200).json({
         ok: false,
-        error: "MESSAGE_TOO_LONG",
-        message: lang === 'ca' ? "El missatge és massa llarg (màxim 1000 caràcters)." : "El mensaje es demasiado largo (máximo 1000 caracteres)."
+        error: "CHATBOT_UNAVAILABLE"
       });
     }
 
-    // Anti-prompt-injection & credential guardrails
+    // 2. IMMEDIATE GREETING HANDLING (Zero latency, no database dependency, 100% reliable)
+    const intent = classifyUserIntent(userQuery);
+    if (intent === ChatIntent.GREETING) {
+      const greetingAnswer = lang === 'ca'
+        ? "Hola, en què et puc ajudar?"
+        : "Hola, ¿en qué puedo ayudarte?";
+      return res.status(200).json({
+        ok: true,
+        answer: greetingAnswer
+      });
+    }
+
+    // 3. Sensitive tokens & credential guardrails
     const lowerQuery = userQuery.toLowerCase();
     const sensitiveTokens = ['smtp', 'password', 'contrasenya', 'contraseña', 'service_role', 'api_key', 'secret', 'select * from', 'drop table', 'token'];
     for (const token of sensitiveTokens) {
@@ -1039,124 +1083,143 @@ export default async function handler(req: any, res: any) {
           : "Por motivos de seguridad, no puedo facilitar credenciales, claves ni información interna del sistema. Si necesitas ayuda oficial, contacta con tastvng@gmail.com.";
         return res.status(200).json({
           ok: true,
-          answer: safeReply,
-          reply: safeReply,
-          topic: 'seguretat'
+          answer: safeReply
         });
       }
     }
 
-    // Fetch dynamic live context from Supabase (sistema_config and settings)
-    const liveData = await getLiveEntityData();
-
-    // 1. GREETING CHECK
-    const intent = classifyUserIntent(userQuery);
-    if (intent === ChatIntent.GREETING) {
-      const greetingAnswer = lang === 'ca'
-        ? "Hola! 👋 Sóc l'assistent virtual de El Tast. Et puc resoldre qualsevol dubte sobre la inscripció per a Les Comparses del Carnaval: dates oficials, preus, categories (adults i juvenils), talles, materials (armilla, clavells i corbatí), llista d'espera, recollida de materials i horaris de la seu social. En què et puc ajudar?"
-        : "¡Hola! 👋 Soy el asistente virtual de El Tast. Te puedo resolver cualquier duda sobre la inscripción para Les Comparses del Carnaval: fechas oficiales, precios, categorías (adultos y juveniles), tallas, materiales (chaleco, claveles y pajarita), lista de espera, recogida de materiales y horarios de la sede social. ¿En qué te puedo ayudar?";
-      return res.status(200).json({
-        ok: true,
-        answer: greetingAnswer,
-        reply: greetingAnswer,
-        topic: 'salutacio'
-      });
+    // 4. Rate limiting for non-greeting messages (sensible thresholds: 30/min, 100/day)
+    const clientIp = getClientIp(req);
+    if (clientIp && clientIp !== 'unknown') {
+      if (!checkRateLimit("chat_min", clientIp, 30, 60 * 1000)) {
+        const limitReply = lang === 'ca'
+          ? "Has assolit el límit temporal de missatges. Si us plau, espera uns segons o contacta amb tastvng@gmail.com."
+          : "Has alcanzado el límite temporal de mensajes. Por favor, espera unos segundos o contacta con tastvng@gmail.com.";
+        return res.status(200).json({
+          ok: true,
+          answer: limitReply
+        });
+      }
+      if (!checkRateLimit("chat_daily", clientIp, 100, 24 * 60 * 60 * 1000)) {
+        const limitReply = lang === 'ca'
+          ? "Has assolit el límit diari de consultes per a aquest dispositiu. Pots escriure a tastvng@gmail.com."
+          : "Has alcanzado el límite diario de consultas para este dispositivo. Puedes escribir a tastvng@gmail.com.";
+        return res.status(200).json({
+          ok: true,
+          answer: limitReply
+        });
+      }
     }
 
-    // 2. CHECK CUSTOM FAQS FROM SECRETARIA
-    const customFaqMatch = matchCustomFaq(userQuery, liveData.customFaqs);
+    // 5. Fetch dynamic live context from Supabase (with fallback defaults)
+    let liveData: any = null;
+    try {
+      liveData = await getLiveEntityData();
+    } catch (dbErr: any) {
+      logSafeError("Supabase Context Fetch", dbErr);
+      liveData = {
+        personalizacion: {},
+        prices: {
+          preuAdult: 45,
+          preuJuvenil: 45,
+          preuArmilla: 30,
+          preuClavells: 8,
+          preuCorbati: 10
+        },
+        customFaqs: []
+      };
+    }
+
+    // 6. Check custom FAQs from Secretaría
+    const customFaqMatch = matchCustomFaq(userQuery, liveData?.customFaqs);
     if (customFaqMatch) {
       return res.status(200).json({
         ok: true,
-        answer: customFaqMatch,
-        reply: customFaqMatch,
-        topic: 'faq_secretaria',
-        isFaq: true
+        answer: customFaqMatch
       });
     }
 
-    // 3. CLASSIFIED INTENT DETERMINISTIC RESOLUTION (Zero cost, maximum accuracy)
+    // 7. Classified intent deterministic resolution (Dates, Prices, Materials, etc.)
     if (intent !== ChatIntent.UNKNOWN) {
       const intentAnswer = await generateIntentAnswer(intent, userQuery, lang, liveData);
       if (intentAnswer) {
         return res.status(200).json({
           ok: true,
-          answer: intentAnswer,
-          reply: intentAnswer,
-          topic: intent.toLowerCase(),
-          isFaq: true
+          answer: intentAnswer
         });
       }
     }
 
-    // 4. UNKNOWN INTENT -> CALL GEMINI FREE TIER (strictly grounded, free tier model)
-    const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.GOOGLE_GENAI_API_KEY;
+    // 8. UNKNOWN INTENT -> GEMINI FREE TIER CALL (strictly process.env.GEMINI_API_KEY, no Search Grounding)
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      logSafeError("Env Verification", new Error("GEMINI_API_KEY is not defined in process.env for Production"));
+      return res.status(200).json({
+        ok: false,
+        error: "CHATBOT_UNAVAILABLE"
+      });
+    }
+
     let reply: string | null = null;
+    try {
+      const facData = await getOfficialFacData();
+      const carnavals = await getOfficialCarnavals();
 
-    if (apiKey) {
-      try {
-        const facData = await getOfficialFacData();
-        const carnavals = await getOfficialCarnavals();
-
-        const ai = new GoogleGenAI({
-          apiKey,
-          httpOptions: {
-            headers: {
-              'User-Agent': 'aistudio-build'
-            }
-          }
-        });
-
-        const systemInstruction = buildSystemPrompt(lang, liveData, facData.rawText, carnavals);
-
-        const contents: any[] = [];
-        if (Array.isArray(messages) && messages.length > 1) {
-          const recentTurns = messages.slice(-10, -1);
-          for (const turn of recentTurns) {
-            const role = turn.role === 'user' ? 'user' : 'model';
-            const text = typeof turn.content === 'string' ? turn.content.trim() : '';
-            if (text) {
-              contents.push({ role, parts: [{ text }] });
-            }
+      const ai = new GoogleGenAI({
+        apiKey,
+        httpOptions: {
+          headers: {
+            'User-Agent': 'aistudio-build'
           }
         }
+      });
 
-        contents.push({
-          role: 'user',
-          parts: [{ text: userQuery }]
-        });
+      const systemInstruction = buildSystemPrompt(lang, liveData, facData.rawText, carnavals);
 
-        const FREE_TIER_MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash'];
-
-        for (const modelName of FREE_TIER_MODELS) {
-          try {
-            const response = await ai.models.generateContent({
-              model: modelName,
-              contents,
-              config: {
-                systemInstruction: systemInstruction + (lang === 'ca'
-                  ? "\n\nRESTRICCIÓ DE LONGITUD: Respon sempre amb un màxim de 300 paraules, de forma directa, concisa i clara. Si no saps la resposta amb certesa a partir dels textos aportats, digues que no disposes d'informació confirmada i remet al web oficial o a contactar amb l'entitat."
-                  : "\n\nRESTRICCIÓN DE LONGITUD: Responde siempre con un máximo de 300 palabras, de forma directa, concisa y clara. Si no sabes la respuesta con certeza a partir de los textos aportados, indica que no dispones de información confirmada y remite a la web oficial o a contactar con la entidad."),
-                temperature: 0.1,
-                maxOutputTokens: 600
-              }
-            });
-
-            if (response && response.text) {
-              reply = response.text.trim();
-              break;
-            }
-          } catch (modelErr: any) {
-            const errStr = String(modelErr?.message || modelErr);
-            console.warn(`[Chatbot Free Tier] Model ${modelName} issue: ${errStr}`);
-            if (errStr.includes('503') || errStr.includes('UNAVAILABLE') || errStr.includes('429') || errStr.includes('RESOURCE_EXHAUSTED') || errStr.includes('not found') || errStr.includes('demand')) {
-              continue;
-            }
+      const contents: any[] = [];
+      if (Array.isArray(messages) && messages.length > 1) {
+        const recentTurns = messages.slice(-10, -1);
+        for (const turn of recentTurns) {
+          const role = turn.role === 'user' ? 'user' : 'model';
+          const text = typeof turn.content === 'string' ? turn.content.trim() : '';
+          if (text) {
+            contents.push({ role, parts: [{ text }] });
           }
         }
-      } catch (genAiErr: any) {
-        console.error("[Chatbot Error initializing AI]:", genAiErr);
       }
+
+      contents.push({
+        role: 'user',
+        parts: [{ text: userQuery }]
+      });
+
+      // Google AI Studio Free Tier models without search grounding
+      const FREE_TIER_MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash'];
+
+      for (const modelName of FREE_TIER_MODELS) {
+        try {
+          const response = await ai.models.generateContent({
+            model: modelName,
+            contents,
+            config: {
+              systemInstruction: systemInstruction + (lang === 'ca'
+                ? "\n\nRESTRICCIÓ DE LONGITUD: Respon sempre amb un màxim de 300 paraules, de forma directa, concisa i clara. Si no saps la resposta amb certesa a partir dels textos aportats, digues que no disposes d'informació confirmada i remet al web oficial o a contactar amb l'entitat."
+                : "\n\nRESTRICCIÓN DE LONGITUD: Responde siempre con un máximo de 300 palabras, de forma directa, concisa y clara. Si no sabes la respuesta con certeza a partir de los textos aportados, indica que no dispones de información confirmada y remite a la web oficial o a contactar con la entidad."),
+              temperature: 0.1,
+              maxOutputTokens: 600
+            }
+          });
+
+          if (response && response.text) {
+            reply = response.text.trim();
+            break;
+          }
+        } catch (modelErr: any) {
+          logSafeError(`Gemini model ${modelName} call`, modelErr, apiKey);
+        }
+      }
+    } catch (genAiErr: any) {
+      logSafeError("AI Initialization", genAiErr, apiKey);
     }
 
     if (reply) {
@@ -1169,34 +1232,24 @@ export default async function handler(req: any, res: any) {
 
       return res.status(200).json({
         ok: true,
-        answer: reply,
-        reply,
-        topic: intent.toLowerCase()
+        answer: reply
       });
     }
 
-    // 5. HONEST FALLBACK: Return clear message
+    // If Gemini model could not answer, return honest fallback or CHATBOT_UNAVAILABLE
     const fallbackAnswer = lang === 'ca'
       ? "No disposo d'informació confirmada sobre aquesta consulta. Consulta el web oficial (https://carnavaldevilanova.cat/la-fac/) o contacta amb l'entitat."
       : "No dispongo de información confirmada sobre esta consulta. Consulta la web oficial (https://carnavaldevilanova.cat/la-fac/) o contacta con la entidad.";
 
     return res.status(200).json({
       ok: true,
-      answer: fallbackAnswer,
-      reply: fallbackAnswer,
-      topic: 'no_info',
-      isFallback: true
+      answer: fallbackAnswer
     });
   } catch (err: any) {
-    console.error("[Chatbot Global Error]:", err);
-    const fallbackAnswer = lang === 'ca'
-      ? "No disposo d'informació confirmada sobre aquesta consulta. Consulta el web oficial (https://carnavaldevilanova.cat/la-fac/) o contacta amb l'entitat."
-      : "No dispongo de información confirmada sobre esta consulta. Consulta la web oficial (https://carnavaldevilanova.cat/la-fac/) o contacta con la entidad.";
+    logSafeError("Handler Uncaught Exception", err, process.env.GEMINI_API_KEY);
     return res.status(200).json({
-      ok: true,
-      answer: fallbackAnswer,
-      reply: fallbackAnswer,
-      isFallback: true
+      ok: false,
+      error: "CHATBOT_UNAVAILABLE"
     });
   }
 }

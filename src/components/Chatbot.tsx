@@ -169,38 +169,80 @@ export const Chatbot: React.FC<ChatbotProps> = ({
         })
       });
 
-      const data = await res.json().catch(() => ({}));
-
-      if (!res.ok || data.ok === false) {
-        throw new Error(data.message || data.error || `HTTP error ${res.status}`);
+      let isJson = false;
+      let data: any = null;
+      try {
+        const textResponse = await res.text();
+        data = JSON.parse(textResponse);
+        isJson = true;
+      } catch {
+        isJson = false;
       }
 
-      const reply = data.answer || data.reply || (isCa ? "No tinc aquesta informació. Contacta amb l'entitat." : "No tengo esa información. Contacta con la entidad.");
+      if (isJson && data && data.ok === true && (data.answer || data.reply)) {
+        const reply = data.answer || data.reply;
+        const botMsg: ChatMessage = {
+          id: 'bot-' + Date.now(),
+          role: 'assistant',
+          content: reply,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        };
+        setMessages(prev => [...prev, botMsg]);
+        setLastFailedQuery(null);
+        setAiErrorOccurred(false);
+      } else {
+        // Do not display error message bubble when response is non-JSON or service unavailable
+        const cleanText = text.trim().toLowerCase();
+        const isGreeting = /^(?:hola|bones|bon\s+dia|bona\s+tarda|buenas|buenos\s+d[ií]as|buenas\s+tardes|buenas\s+noches|hey|hello|saludos)[\s!.,?]*$/i.test(cleanText) || /^(?:hola|buenas|bones)\b/i.test(cleanText);
+
+        let fallbackReply = "";
+        if (isGreeting) {
+          fallbackReply = isCa ? "Hola, en què et puc ajudar?" : "Hola, ¿en qué puedo ayudarte?";
+        } else {
+          const matchedFaq = fallbackFaqs.find(f => {
+            const q = f.q.toLowerCase();
+            return cleanText.includes(q) || q.includes(cleanText);
+          });
+          if (matchedFaq) {
+            fallbackReply = matchedFaq.a;
+          } else {
+            fallbackReply = isCa
+              ? "Pots consultar les preguntes freqüents a continuació o contactar directament amb l'entitat a tastvng@gmail.com."
+              : "Puedes consultar las preguntas frecuentes a continuación o contactar directamente con la entidad en tastvng@gmail.com.";
+          }
+        }
+
+        const botMsg: ChatMessage = {
+          id: 'bot-' + Date.now(),
+          role: 'assistant',
+          isError: false,
+          content: fallbackReply,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        };
+        setMessages(prev => [...prev, botMsg]);
+        setLastFailedQuery(null);
+        // Keep FAQs open as alternative for non-greetings without showing error message
+        setAiErrorOccurred(!isGreeting);
+      }
+    } catch (err) {
+      console.warn("[Chatbot] Request exception:", err);
+      const cleanText = text.trim().toLowerCase();
+      const isGreeting = /^(?:hola|bones|bon\s+dia|bona\s+tarda|buenas|buenos\s+d[ií]as|buenas\s+tardes|buenas\s+noches|hey|hello|saludos)[\s!.,?]*$/i.test(cleanText) || /^(?:hola|buenas|bones)\b/i.test(cleanText);
+
+      const fallbackReply = isGreeting
+        ? (isCa ? "Hola, en què et puc ajudar?" : "Hola, ¿en qué puedo ayudarte?")
+        : (isCa ? "Pots consultar les preguntes freqüents a continuació o contactar amb tastvng@gmail.com." : "Puedes consultar las preguntas frecuentes a continuación o contactar con tastvng@gmail.com.");
 
       const botMsg: ChatMessage = {
         id: 'bot-' + Date.now(),
         role: 'assistant',
-        content: reply,
+        isError: false,
+        content: fallbackReply,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       };
-
       setMessages(prev => [...prev, botMsg]);
       setLastFailedQuery(null);
-      setAiErrorOccurred(false);
-    } catch (err) {
-      console.warn("[Chatbot] Request failed:", err);
-      setLastFailedQuery(text);
-      setAiErrorOccurred(true);
-      const errorMsg: ChatMessage = {
-        id: 'err-' + Date.now(),
-        role: 'assistant',
-        isError: true,
-        content: isCa
-          ? "El servei d'intel·ligència artificial no està disponible en aquest moment. Pots consultar les preguntes freqüents a continuació o utilitzar el botó de reintentar."
-          : "El servicio de inteligencia artificial no está disponible en este momento. Puedes consultar las preguntas frecuentes a continuación o utilizar el botón de reintentar.",
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      };
-      setMessages(prev => [...prev, errorMsg]);
+      setAiErrorOccurred(!isGreeting);
     } finally {
       setIsLoading(false);
     }
