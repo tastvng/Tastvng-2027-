@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { CheckCircle2, AlertTriangle, RefreshCw, Shirt } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, RefreshCw, Shirt, VideoOff } from 'lucide-react';
 import { useLanguage } from '../LanguageContext';
 
 export interface CodigoVestimentaModalProps {
@@ -14,10 +14,6 @@ export interface CodigoVestimentaModalProps {
   onVideoSeeking?: (e: React.SyntheticEvent<HTMLVideoElement> | Event) => void;
   onCloseModal?: () => void;
 }
-
-// Verified production-accessible, byte-range compliant MP4 H.264/AAC videos
-export const DEFAULT_PRODUCTION_VIDEO_URL = "/videos/codi_vestimenta.mp4";
-export const SUPABASE_STORAGE_VIDEO_URL = "https://iorpqqbhyfkmethttlwd.supabase.co/storage/v1/object/public/videos/codi_vestimenta.mp4";
 
 /**
  * Strict console logging for failures conforming to Rule 8:
@@ -63,14 +59,14 @@ async function verifyVideoSource(url: string): Promise<{ ok: boolean; status: nu
 /**
  * Resolves Supabase Storage URLs (handles public bucket paths, signed URLs, and storage:// protocol)
  */
-async function resolveStorageOrPublicUrl(rawUrl: string): Promise<string> {
+async function resolveStorageOrPublicUrl(rawUrl: string): Promise<string | null> {
   if (!rawUrl || typeof rawUrl !== 'string') {
-    return DEFAULT_PRODUCTION_VIDEO_URL;
+    return null;
   }
 
   const trimmed = rawUrl.trim();
   if (!trimmed) {
-    return DEFAULT_PRODUCTION_VIDEO_URL;
+    return null;
   }
 
   // Handle absolute path directly
@@ -100,11 +96,6 @@ async function resolveStorageOrPublicUrl(rawUrl: string): Promise<string> {
       }
     }
 
-    // If an embed URL from YouTube or Vimeo was passed, fallback to valid MP4 since <video> cannot play web pages
-    if (trimmed.includes('youtube.com') || trimmed.includes('youtu.be') || trimmed.includes('player.vimeo.com') || trimmed.includes('vimeo.com/')) {
-      return DEFAULT_PRODUCTION_VIDEO_URL;
-    }
-
     return trimmed;
   }
 
@@ -129,11 +120,11 @@ async function resolveStorageOrPublicUrl(rawUrl: string): Promise<string> {
         }
       }
     } catch (err) {
-      console.warn('[CodigoVestimenta] Failed to resolve storage:// URL, using default MP4');
+      console.warn('[CodigoVestimenta] Failed to resolve storage:// URL');
     }
   }
 
-  return DEFAULT_PRODUCTION_VIDEO_URL;
+  return null;
 }
 
 export const CodigoVestimentaModal: React.FC<CodigoVestimentaModalProps> = ({ 
@@ -148,15 +139,17 @@ export const CodigoVestimentaModal: React.FC<CodigoVestimentaModalProps> = ({
   onVideoSeeking,
 }) => {
   const { language } = useLanguage();
-  const [videoUrl, setVideoUrl] = useState<string>(DEFAULT_PRODUCTION_VIDEO_URL);
+  const [videoUrl, setVideoUrl] = useState<string>('');
   const [isValidSource, setIsValidSource] = useState<boolean>(false);
   const [videoLoadError, setVideoLoadError] = useState<string | null>(null);
+  const [isMissingOriginal, setIsMissingOriginal] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
   // Load and verify candidate video sources
   const loadAndVerifyVideo = useCallback(async () => {
     setIsLoading(true);
     setVideoLoadError(null);
+    setIsMissingOriginal(false);
 
     let targetCandidate = youtubeUrl?.trim();
 
@@ -164,22 +157,35 @@ export const CodigoVestimentaModal: React.FC<CodigoVestimentaModalProps> = ({
       try {
         const { getSupabaseSetting, isSupabaseConfigured } = await import('../supabaseClient');
         if (isSupabaseConfigured) {
-          const stored = await getSupabaseSetting<string>('codigo_vestimenta_url', DEFAULT_PRODUCTION_VIDEO_URL);
-          targetCandidate = stored?.trim() || DEFAULT_PRODUCTION_VIDEO_URL;
+          const stored = await getSupabaseSetting<string>('codigo_vestimenta_url', '');
+          targetCandidate = stored?.trim() || '';
         } else {
           const local = typeof localStorage !== 'undefined' ? localStorage.getItem('codigo_vestimenta_url') : null;
-          targetCandidate = local?.trim() || DEFAULT_PRODUCTION_VIDEO_URL;
+          targetCandidate = local?.trim() || '';
         }
       } catch {
-        targetCandidate = DEFAULT_PRODUCTION_VIDEO_URL;
+        targetCandidate = '';
       }
     }
 
-    const resolvedUrl = await resolveStorageOrPublicUrl(targetCandidate || DEFAULT_PRODUCTION_VIDEO_URL);
+    if (!targetCandidate) {
+      setIsMissingOriginal(true);
+      setIsValidSource(false);
+      setIsLoading(false);
+      return;
+    }
 
-    // 1. Verify primary resolved URL (Rule 2 & 7)
-    const primaryCheck = await verifyVideoSource(resolvedUrl);
-    if (primaryCheck.ok) {
+    const resolvedUrl = await resolveStorageOrPublicUrl(targetCandidate);
+    if (!resolvedUrl) {
+      setIsMissingOriginal(true);
+      setIsValidSource(false);
+      setIsLoading(false);
+      return;
+    }
+
+    // Verify resolved URL
+    const check = await verifyVideoSource(resolvedUrl);
+    if (check.ok) {
       setVideoUrl(resolvedUrl);
       setIsValidSource(true);
       setVideoLoadError(null);
@@ -187,32 +193,14 @@ export const CodigoVestimentaModal: React.FC<CodigoVestimentaModalProps> = ({
       return;
     }
 
-    // Primary failed - log in strict compliance with Rule 8
-    logVideoFailure(resolvedUrl, primaryCheck.status, primaryCheck.error || 'Font primària inaccessible');
+    // Logging in strict compliance with Rule 8
+    logVideoFailure(resolvedUrl, check.status, check.error || 'Font no accessible');
 
-    // 2. Try secondary production fallback
-    const fallbackUrl = resolvedUrl === DEFAULT_PRODUCTION_VIDEO_URL 
-      ? SUPABASE_STORAGE_VIDEO_URL 
-      : DEFAULT_PRODUCTION_VIDEO_URL;
-
-    const fallbackCheck = await verifyVideoSource(fallbackUrl);
-    if (fallbackCheck.ok) {
-      setVideoUrl(fallbackUrl);
-      setIsValidSource(true);
-      setVideoLoadError(null);
-      setIsLoading(false);
-      return;
-    }
-
-    // Secondary failed - log in strict compliance with Rule 8
-    logVideoFailure(fallbackUrl, fallbackCheck.status, fallbackCheck.error || 'Font secundària inaccessible');
-
-    // All failed
     setIsValidSource(false);
     setIsLoading(false);
     const errMsg = language === 'ca'
-      ? "No s'ha pogut reproduir el vídeo informatiu. Comproveu la connexió o contacteu amb l'organització."
-      : "No se ha podido reproducir el vídeo informativo. Comprueba la conexión o contacta con la organización.";
+      ? "No s'ha pogut carregar el fitxer de vídeo original. Comproveu la connexió o contacteu amb l'organització."
+      : "No se ha podido cargar el archivo de vídeo original. Comprueba la conexión o contacta con la organización.";
     setVideoLoadError(errMsg);
   }, [youtubeUrl, language]);
 
@@ -237,17 +225,10 @@ export const CodigoVestimentaModal: React.FC<CodigoVestimentaModalProps> = ({
     }
 
     logVideoFailure(videoUrl, code, message);
-
-    // If a non-default URL failed, attempt switching to default production asset
-    if (videoUrl !== DEFAULT_PRODUCTION_VIDEO_URL) {
-      setVideoUrl(DEFAULT_PRODUCTION_VIDEO_URL);
-      return;
-    }
-
     setIsValidSource(false);
     const errMsg = language === 'ca'
-      ? "No s'ha pogut reproduir el vídeo informatiu. Comproveu la connexió o contacteu amb l'organització."
-      : "No se ha podido reproducir el vídeo informativo. Comprueba la conexión o contacta con la organización.";
+      ? "No s'ha pogut reproduir el vídeo original. Comproveu la connexió o contacteu amb l'organització."
+      : "No se ha podido reproducir el vídeo original. Comprueba la conexión o contacta con la organización.";
     setVideoLoadError(errMsg);
   }, [videoUrl, language]);
 
@@ -283,7 +264,7 @@ export const CodigoVestimentaModal: React.FC<CodigoVestimentaModalProps> = ({
               <h3 className="text-base font-extrabold font-sans text-white tracking-tight">
                 {blockTitle}
               </h3>
-              {videoWatched && !videoLoadError && (
+              {videoWatched && !videoLoadError && !isMissingOriginal && (
                 <span 
                   id="badge-video-completat" 
                   className="text-[11px] font-bold font-mono text-emerald-400 bg-emerald-950/80 border border-emerald-500/40 px-2.5 py-0.5 rounded-full inline-flex items-center gap-1"
@@ -305,8 +286,8 @@ export const CodigoVestimentaModal: React.FC<CodigoVestimentaModalProps> = ({
         id="video-player-container"
         className="w-full aspect-video min-h-[220px] sm:min-h-[320px] md:min-h-[380px] bg-black rounded-2xl overflow-hidden relative shadow-inner border border-zinc-800 flex items-center justify-center"
       >
-        {/* Render player ONLY when source is valid (Rule 7) */}
-        {isValidSource && (
+        {/* Render player ONLY when source is valid */}
+        {isValidSource && !isMissingOriginal && (
           <video
             ref={videoRef}
             id="video-cuestionari"
@@ -332,8 +313,29 @@ export const CodigoVestimentaModal: React.FC<CodigoVestimentaModalProps> = ({
           </video>
         )}
 
-        {/* Video Load Error Overlay with single occurrence (Rule 9 & 10) */}
-        {videoLoadError && (
+        {/* Rule 7: Clear message when original video is not available */}
+        {isMissingOriginal && !isLoading && (
+          <div 
+            id="video-missing-original-notice"
+            className="absolute inset-0 bg-black/95 flex flex-col items-center justify-center p-6 text-center space-y-3 z-20"
+          >
+            <div className="p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-2xl text-amber-400">
+              <VideoOff size={32} className="stroke-[2]" />
+            </div>
+            <h4 className="text-sm font-extrabold text-white">
+              Falta cargar el vídeo original
+            </h4>
+            <p className="text-xs text-zinc-400 max-w-sm leading-relaxed">
+              {language === 'ca'
+                ? "Cal carregar el vídeo original des del panell d'administració (Personalització > Codi de vestimenta) per visualitzar la normativa."
+                : "Es necesario cargar el vídeo original desde el panel de administración (Personalización > Código de vestimenta) para visualizar la normativa."
+              }
+            </p>
+          </div>
+        )}
+
+        {/* Video Load Error Overlay */}
+        {videoLoadError && !isMissingOriginal && (
           <div 
             id="video-load-error-overlay"
             className="absolute inset-0 bg-black/95 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center space-y-4 z-20 animate-fade-in"
@@ -356,7 +358,7 @@ export const CodigoVestimentaModal: React.FC<CodigoVestimentaModalProps> = ({
         )}
 
         {/* Loading Spinner */}
-        {isLoading && !videoLoadError && (
+        {isLoading && !videoLoadError && !isMissingOriginal && (
           <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center space-y-2 pointer-events-none z-10">
             <RefreshCw size={26} className="text-zinc-400 animate-spin" />
             <span className="text-[11px] text-zinc-400 font-medium">
@@ -366,7 +368,7 @@ export const CodigoVestimentaModal: React.FC<CodigoVestimentaModalProps> = ({
         )}
       </div>
 
-      {/* Requirement / Status Notice - Error message is NOT duplicated here (Rule 10) */}
+      {/* Requirement / Status Notice */}
       {videoWatched ? (
         <div 
           id="video-requirement-notice" 

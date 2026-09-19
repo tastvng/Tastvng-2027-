@@ -42,7 +42,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
   const { language, t } = useLanguage();
   const activeYear = useActiveYear();
 
-  const [youtubeUrl, setYoutubeUrl] = useState('/videos/codi_vestimenta.mp4');
+  const [youtubeUrl, setYoutubeUrl] = useState('');
   const [submitError, setSubmitError] = useState<{ message: string; code?: string; details?: any } | null>(null);
 
   useEffect(() => {
@@ -50,7 +50,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
       try {
         const { getSupabaseSetting, isSupabaseConfigured } = await import('../supabaseClient');
         if (isSupabaseConfigured) {
-          const storedUrl = await getSupabaseSetting<string>('codigo_vestimenta_url', '/videos/codi_vestimenta.mp4');
+          const storedUrl = await getSupabaseSetting<string>('codigo_vestimenta_url', '');
           if (storedUrl) {
             setYoutubeUrl(storedUrl);
           }

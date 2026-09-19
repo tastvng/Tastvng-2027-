@@ -14,7 +14,7 @@ export default function AdminPersonalitzacio({ onAddLog }: AdminPersonalitzacioP
   const { language } = useLanguage();
   const [activeTab, setActiveTab] = useState<'diseno' | 'portada'>('diseno');
   
-  const [codigoVestimentaUrl, setCodigoVestimentaUrl] = useState('https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4');
+  const [codigoVestimentaUrl, setCodigoVestimentaUrl] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
@@ -22,7 +22,7 @@ export default function AdminPersonalitzacio({ onAddLog }: AdminPersonalitzacioP
       try {
         const { getSupabaseSetting, isSupabaseConfigured } = await import('../supabaseClient');
         if (isSupabaseConfigured) {
-          const val = await getSupabaseSetting<string>('codigo_vestimenta_url', 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4');
+          const val = await getSupabaseSetting<string>('codigo_vestimenta_url', '');
           if (val) {
             setCodigoVestimentaUrl(val);
           }
@@ -132,7 +132,7 @@ export default function AdminPersonalitzacio({ onAddLog }: AdminPersonalitzacioP
           <div className="flex flex-col sm:flex-row gap-3">
             <input
               type="text"
-              placeholder="https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4"
+              placeholder="https://.../video.mp4"
               value={codigoVestimentaUrl}
               onChange={(e) => setCodigoVestimentaUrl(e.target.value)}
               className="flex-1 bg-zinc-950 text-white border border-zinc-800 focus:border-[#ff0090] rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:ring-0 transition-all font-mono"
