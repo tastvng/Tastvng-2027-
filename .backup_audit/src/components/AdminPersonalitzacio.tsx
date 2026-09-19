@@ -22,7 +22,12 @@ export default function AdminPersonalitzacio({ onAddLog }: AdminPersonalitzacioP
       try {
         const { getSupabaseSetting, isSupabaseConfigured } = await import('../supabaseClient');
         if (isSupabaseConfigured) {
-          const val = await getSupabaseSetting<string>('codigo_vestimenta_url', '', true);
+          const val = await getSupabaseSetting<string>('codigo_vestimenta_url', '');
+          if (val) {
+            setCodigoVestimentaUrl(val);
+          }
+        } else {
+          const val = localStorage.getItem('codigo_vestimenta_url');
           if (val) {
             setCodigoVestimentaUrl(val);
           }
@@ -36,26 +41,20 @@ export default function AdminPersonalitzacio({ onAddLog }: AdminPersonalitzacioP
 
   const saveCodigoVestimentaUrl = async () => {
     setIsSaving(true);
-    const trimmed = codigoVestimentaUrl.trim();
     try {
       const { saveSupabaseSetting, isSupabaseConfigured } = await import('../supabaseClient');
       if (isSupabaseConfigured) {
-        const success = await saveSupabaseSetting('codigo_vestimenta_url', trimmed);
+        const success = await saveSupabaseSetting('codigo_vestimenta_url', codigoVestimentaUrl);
         if (success) {
-          // Broadcast change for instant live preview synchronization without localStorage
-          if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent('codigoVestimentaChanged', { detail: trimmed }));
-          }
-          if (onAddLog) onAddLog(language === 'ca' ? `S'ha actualitzat l'enllaç de vestimenta a: ${trimmed}` : `Se ha actualizado el enlace de vestimenta a: ${trimmed}`);
+          if (onAddLog) onAddLog(language === 'ca' ? `S'ha actualitzat l'enllaç de vestimenta a: ${codigoVestimentaUrl}` : `Se ha actualizado el enlace de vestimenta a: ${codigoVestimentaUrl}`);
           alert(language === 'ca' ? 'Enllaç desat correctament' : 'Enlace guardado correctamente');
         } else {
           alert(language === 'ca' ? 'Error al desar l\'enllaç' : 'Error al guardar el enlace');
         }
       } else {
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('codigoVestimentaChanged', { detail: trimmed }));
-        }
-        alert(language === 'ca' ? 'Desat correctament' : 'Guardado correctamente');
+        localStorage.setItem('codigo_vestimenta_url', codigoVestimentaUrl);
+        if (onAddLog) onAddLog(`[Local] S'ha desat l'enllaç: ${codigoVestimentaUrl}`);
+        alert(language === 'ca' ? 'Desat localment correctament' : 'Guardado localmente correctamente');
       }
     } catch (error) {
       console.error('Error saving URL:', error);

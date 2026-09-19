@@ -50,27 +50,16 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
       try {
         const { getSupabaseSetting, isSupabaseConfigured } = await import('../supabaseClient');
         if (isSupabaseConfigured) {
-          const storedUrl = await getSupabaseSetting<string>('codigo_vestimenta_url', '', true);
+          const storedUrl = await getSupabaseSetting<string>('codigo_vestimenta_url', '');
           if (storedUrl) {
             setYoutubeUrl(storedUrl);
           }
         }
       } catch (error) {
-        console.error('Error fetching dress code URL:', error);
+        console.error('Error fetching youtube URL:', error);
       }
     };
     fetchYoutubeUrl().catch(err => console.error("Error in fetchYoutubeUrl:", err));
-
-    const handleVideoChanged = (e: Event) => {
-      const customEvent = e as CustomEvent<string>;
-      if (customEvent.detail) {
-        setYoutubeUrl(customEvent.detail);
-      }
-    };
-    window.addEventListener('codigoVestimentaChanged', handleVideoChanged);
-    return () => {
-      window.removeEventListener('codigoVestimentaChanged', handleVideoChanged);
-    };
   }, []);
 
   // Form fields state
@@ -1872,6 +1861,13 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
           </div>
 
           <div className="flex flex-col items-center md:items-end gap-2 w-full md:w-auto relative z-10">
+            {videoWatched && (
+              <div id="video-submit-status-badge" className="flex items-center gap-1.5 text-xs font-bold text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-3 py-1.5 rounded-xl">
+                <CheckCircle2 size={14} className="text-emerald-400 shrink-0" />
+                <span>✅ {language === 'ca' ? "Vídeo vist correctament" : "Vídeo visto correctamente"}</span>
+              </div>
+            )}
+
             <button
               type="submit"
               disabled={!videoWatched || isSubmitting}

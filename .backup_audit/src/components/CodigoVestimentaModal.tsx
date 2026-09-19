@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { CheckCircle2, AlertTriangle, RefreshCw, Shirt, VideoOff } from 'lucide-react';
 import { useLanguage } from '../LanguageContext';
-import Player from '@vimeo/player';
 
 export interface CodigoVestimentaModalProps {
   youtubeUrl?: string;
@@ -17,49 +16,67 @@ export interface CodigoVestimentaModalProps {
 }
 
 /**
- * Parses Vimeo URLs into video ID and optional query params.
- * Matches formats:
- * - https://vimeo.com/1207785599
- * - https://vimeo.com/1207785599?fl=ip&fe=ec
- * - https://player.vimeo.com/video/1207785599
+ * Strict console logging for failures conforming to Rule 8:
+ * - URL utilizada
+ * - código HTTP
+ * - error de reproducción
+ * Nunca muestres credenciales.
  */
-export function parseVimeoUrl(url: string): { isVimeo: boolean; videoId: string | null; queryParams: string } {
-  if (!url || typeof url !== 'string') return { isVimeo: false, videoId: null, queryParams: '' };
-  const trimmed = url.trim();
+function logVideoFailure(url: string, httpStatus: number | string, playError: string) {
+  console.error('[Video Error]', {
+    'URL utilizada': url,
+    'código HTTP': httpStatus,
+    'error de reproducción': playError
+  });
+}
 
-  // Match vimeo.com/{id} or player.vimeo.com/video/{id}
-  const vimeoRegex = /(?:vimeo\.com\/(?:video\/)?|player\.vimeo\.com\/video\/)([0-9]+)/i;
-  const match = trimmed.match(vimeoRegex);
-
-  if (match && match[1]) {
-    const qIndex = trimmed.indexOf('?');
-    const queryParams = qIndex !== -1 ? trimmed.substring(qIndex) : '';
+/**
+ * Verifies if a video URL exists, is accessible, and returns HTTP 200 / 206
+ */
+async function verifyVideoSource(url: string): Promise<{ ok: boolean; status: number | string; error?: string }> {
+  try {
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: { Range: 'bytes=0-0' }
+    });
+    if (res.ok || res.status === 200 || res.status === 206) {
+      return { ok: true, status: res.status };
+    }
     return {
-      isVimeo: true,
-      videoId: match[1],
-      queryParams
+      ok: false,
+      status: res.status,
+      error: `HTTP ${res.status} ${res.statusText || 'Error de càrrega'}`
+    };
+  } catch (err: any) {
+    return {
+      ok: false,
+      status: 'N/A',
+      error: err?.message || 'Error de xarxa o connexió'
     };
   }
-
-  // Also check if domain contains vimeo
-  if (trimmed.includes('vimeo.com')) {
-    return { isVimeo: true, videoId: null, queryParams: '' };
-  }
-
-  return { isVimeo: false, videoId: null, queryParams: '' };
 }
 
 /**
  * Resolves Supabase Storage URLs (handles public bucket paths, signed URLs, and storage:// protocol)
  */
 async function resolveStorageOrPublicUrl(rawUrl: string): Promise<string | null> {
-  if (!rawUrl || typeof rawUrl !== 'string') return null;
+  if (!rawUrl || typeof rawUrl !== 'string') {
+    return null;
+  }
+
   const trimmed = rawUrl.trim();
-  if (!trimmed) return null;
+  if (!trimmed) {
+    return null;
+  }
 
-  if (trimmed.startsWith('/')) return trimmed;
+  // Handle absolute path directly
+  if (trimmed.startsWith('/')) {
+    return trimmed;
+  }
 
+  // If already an HTTP/HTTPS URL
   if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    // Check if it is a Supabase Storage URL that might need a fresh signed URL
     if (trimmed.includes('/storage/v1/object/')) {
       try {
         const { supabase, isSupabaseConfigured } = await import('../supabaseClient');
@@ -78,9 +95,11 @@ async function resolveStorageOrPublicUrl(rawUrl: string): Promise<string | null>
         console.warn('[CodigoVestimenta] Fallback for Supabase signed URL generation, keeping public URL');
       }
     }
+
     return trimmed;
   }
 
+  // Handle storage://bucket/path custom protocol
   if (trimmed.startsWith('storage://')) {
     try {
       const { supabase, isSupabaseConfigured } = await import('../supabaseClient');
@@ -91,9 +110,13 @@ async function resolveStorageOrPublicUrl(rawUrl: string): Promise<string | null>
           const bucket = pathWithoutProtocol.substring(0, firstSlash);
           const objectPath = pathWithoutProtocol.substring(firstSlash + 1);
           const { data, error } = await supabase.storage.from(bucket).createSignedUrl(objectPath, 86400);
-          if (!error && data?.signedUrl) return data.signedUrl;
+          if (!error && data?.signedUrl) {
+            return data.signedUrl;
+          }
           const pub = supabase.storage.from(bucket).getPublicUrl(objectPath);
-          if (pub?.data?.publicUrl) return pub.data.publicUrl;
+          if (pub?.data?.publicUrl) {
+            return pub.data.publicUrl;
+          }
         }
       }
     } catch (err) {
@@ -116,32 +139,29 @@ export const CodigoVestimentaModal: React.FC<CodigoVestimentaModalProps> = ({
   onVideoSeeking,
 }) => {
   const { language } = useLanguage();
-  const [activeUrl, setActiveUrl] = useState<string>(youtubeUrl || '');
-  const [isVimeo, setIsVimeo] = useState<boolean>(false);
-  const [vimeoEmbedSrc, setVimeoEmbedSrc] = useState<string>('');
+  const [videoUrl, setVideoUrl] = useState<string>('');
   const [isValidSource, setIsValidSource] = useState<boolean>(false);
   const [videoLoadError, setVideoLoadError] = useState<string | null>(null);
   const [isMissingOriginal, setIsMissingOriginal] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  // Reference to iframe container for Vimeo Player SDK
-  const vimeoIframeRef = useRef<HTMLIFrameElement | null>(null);
-  const vimeoPlayerInstanceRef = useRef<Player | null>(null);
-
-  // Sync / load URL from prop, Supabase or event
-  const loadVideoConfig = useCallback(async (forcedUrl?: string) => {
+  // Load and verify candidate video sources
+  const loadAndVerifyVideo = useCallback(async () => {
     setIsLoading(true);
     setVideoLoadError(null);
     setIsMissingOriginal(false);
 
-    let targetCandidate = forcedUrl !== undefined ? forcedUrl.trim() : (youtubeUrl?.trim() || '');
+    let targetCandidate = youtubeUrl?.trim();
 
     if (!targetCandidate) {
       try {
         const { getSupabaseSetting, isSupabaseConfigured } = await import('../supabaseClient');
         if (isSupabaseConfigured) {
-          const stored = await getSupabaseSetting<string>('codigo_vestimenta_url', '', true);
+          const stored = await getSupabaseSetting<string>('codigo_vestimenta_url', '');
           targetCandidate = stored?.trim() || '';
+        } else {
+          const local = typeof localStorage !== 'undefined' ? localStorage.getItem('codigo_vestimenta_url') : null;
+          targetCandidate = local?.trim() || '';
         }
       } catch {
         targetCandidate = '';
@@ -152,43 +172,8 @@ export const CodigoVestimentaModal: React.FC<CodigoVestimentaModalProps> = ({
       setIsMissingOriginal(true);
       setIsValidSource(false);
       setIsLoading(false);
-      setActiveUrl('');
-      setIsVimeo(false);
-      setVimeoEmbedSrc('');
       return;
     }
-
-    setActiveUrl(targetCandidate);
-
-    // Check if Vimeo URL
-    const vimeoInfo = parseVimeoUrl(targetCandidate);
-    if (vimeoInfo.isVimeo) {
-      if (!vimeoInfo.videoId) {
-        setIsLoading(false);
-        setIsValidSource(false);
-        setVideoLoadError(
-          language === 'ca'
-            ? "L'enllaç de Vimeo no té un identificador vàlid."
-            : "El enlace de Vimeo no contiene un identificador válido."
-        );
-        return;
-      }
-
-      setIsVimeo(true);
-      // Construct clean, secure Vimeo embed URL
-      // Use responsive, transparent, autopause parameters
-      const embedUrl = `https://player.vimeo.com/video/${vimeoInfo.videoId}?badge=0&autopause=0&player_id=0&app_id=58479`;
-      setVimeoEmbedSrc(embedUrl);
-      setIsValidSource(true);
-      setIsMissingOriginal(false);
-      setVideoLoadError(null);
-      setIsLoading(false);
-      return;
-    }
-
-    // Standard video (MP4, direct URL, Supabase storage)
-    setIsVimeo(false);
-    setVimeoEmbedSrc('');
 
     const resolvedUrl = await resolveStorageOrPublicUrl(targetCandidate);
     if (!resolvedUrl) {
@@ -198,126 +183,39 @@ export const CodigoVestimentaModal: React.FC<CodigoVestimentaModalProps> = ({
       return;
     }
 
-    setIsValidSource(true);
-    setVideoLoadError(null);
-    setIsLoading(false);
-  }, [youtubeUrl, language]);
-
-  // Initial load and listen for real-time changes
-  useEffect(() => {
-    loadVideoConfig();
-
-    const handleConfigEvent = (e: Event) => {
-      const customEvent = e as CustomEvent<string>;
-      if (customEvent.detail !== undefined) {
-        loadVideoConfig(customEvent.detail);
-      } else {
-        loadVideoConfig();
-      }
-    };
-
-    window.addEventListener('codigoVestimentaChanged', handleConfigEvent);
-    return () => {
-      window.removeEventListener('codigoVestimentaChanged', handleConfigEvent);
-    };
-  }, [loadVideoConfig]);
-
-  // Handle Vimeo Player SDK integration on iframe
-  useEffect(() => {
-    if (!isVimeo || !vimeoIframeRef.current) {
-      if (vimeoPlayerInstanceRef.current) {
-        try {
-          vimeoPlayerInstanceRef.current.destroy();
-        } catch {
-          // ignore
-        }
-        vimeoPlayerInstanceRef.current = null;
-      }
+    // Verify resolved URL
+    const check = await verifyVideoSource(resolvedUrl);
+    if (check.ok) {
+      setVideoUrl(resolvedUrl);
+      setIsValidSource(true);
+      setVideoLoadError(null);
+      setIsLoading(false);
       return;
     }
 
-    const iframe = vimeoIframeRef.current;
-    let player: Player | null = null;
+    // Logging in strict compliance with Rule 8
+    logVideoFailure(resolvedUrl, check.status, check.error || 'Font no accessible');
 
-    try {
-      player = new Player(iframe);
-      vimeoPlayerInstanceRef.current = player;
+    setIsValidSource(false);
+    setIsLoading(false);
+    const errMsg = language === 'ca'
+      ? "No s'ha pogut carregar el fitxer de vídeo original. Comproveu la connexió o contacteu amb l'organització."
+      : "No se ha podido cargar el archivo de vídeo original. Comprueba la conexión o contacta con la organización.";
+    setVideoLoadError(errMsg);
+  }, [youtubeUrl, language]);
 
-      player.on('loaded', () => {
-        setIsLoading(false);
-        setVideoLoadError(null);
-        // Trigger loadedmetadata callback
-        player?.getDuration().then(duration => {
-          const fakeVideoElement = {
-            duration,
-            currentTime: 0,
-            ended: false
-          } as unknown as HTMLVideoElement;
-          onVideoLoadedMetadata?.({ currentTarget: fakeVideoElement } as unknown as React.SyntheticEvent<HTMLVideoElement>);
-        }).catch(() => {});
-      });
+  useEffect(() => {
+    loadAndVerifyVideo();
+  }, [loadAndVerifyVideo]);
 
-      player.on('timeupdate', (data: { seconds: number; duration: number; percent: number }) => {
-        const fakeVideoElement = {
-          duration: data.duration,
-          currentTime: data.seconds,
-          ended: data.percent >= 0.99
-        } as unknown as HTMLVideoElement;
-
-        onVideoTimeUpdate?.({ currentTarget: fakeVideoElement } as unknown as React.SyntheticEvent<HTMLVideoElement>);
-
-        if (data.percent >= 0.95) {
-          onVideoEnded?.();
-        }
-      });
-
-      player.on('ended', () => {
-        onVideoEnded?.();
-      });
-
-      player.on('pause', () => {
-        onVideoPause?.();
-      });
-
-      player.on('seeked', () => {
-        onVideoSeeking?.({} as unknown as React.SyntheticEvent<HTMLVideoElement>);
-      });
-
-      player.on('error', (err) => {
-        console.error('[Vimeo Player Error]', err);
-        setVideoLoadError(
-          language === 'ca'
-            ? `Error en el reproductor de Vimeo: ${err.message || 'No s\'ha pogut reproduir el vídeo.'}`
-            : `Error en el reproductor de Vimeo: ${err.message || 'No se ha podido reproducir el vídeo.'}`
-        );
-      });
-    } catch (err: any) {
-      console.error('[Vimeo Init Error]', err);
-      setVideoLoadError(
-        language === 'ca'
-          ? "No s'ha pogut inicialitzar el reproductor de Vimeo."
-          : "No se ha podido inicializar el reproductor de Vimeo."
-      );
-    }
-
-    return () => {
-      if (player) {
-        try {
-          player.destroy();
-        } catch {
-          // ignore
-        }
-      }
-      vimeoPlayerInstanceRef.current = null;
-    };
-  }, [isVimeo, vimeoEmbedSrc, onVideoEnded, onVideoLoadedMetadata, onVideoPause, onVideoSeeking, onVideoTimeUpdate, language]);
-
-  // Native MP4 error handler
+  // Handle native video playback errors (Rule 8)
   const handleNativeVideoError = useCallback((e: React.SyntheticEvent<HTMLVideoElement, Event>) => {
     const video = e.currentTarget;
     const mediaErr = video?.error;
+    let code: string | number = 'N/A';
     let message = 'Error de reproducció en el fitxer de vídeo';
     if (mediaErr) {
+      code = mediaErr.code;
       switch (mediaErr.code) {
         case 1: message = 'Reproducció avortada per l\'usuari o navegador'; break;
         case 2: message = 'Error de descàrrega de xarxa en streaming'; break;
@@ -326,21 +224,23 @@ export const CodigoVestimentaModal: React.FC<CodigoVestimentaModalProps> = ({
       }
     }
 
+    logVideoFailure(videoUrl, code, message);
     setIsValidSource(false);
     const errMsg = language === 'ca'
-      ? `No s'ha pogut reproduir el vídeo: ${message}.`
-      : `No se ha podido reproducir el vídeo: ${message}.`;
+      ? "No s'ha pogut reproduir el vídeo original. Comproveu la connexió o contacteu amb l'organització."
+      : "No se ha podido reproducir el vídeo original. Comprueba la conexión o contacta con la organización.";
     setVideoLoadError(errMsg);
-  }, [language]);
+  }, [videoUrl, language]);
 
   const handleLoadedMetadata = useCallback((e: React.SyntheticEvent<HTMLVideoElement> | Event) => {
     setVideoLoadError(null);
     onVideoLoadedMetadata?.(e);
   }, [onVideoLoadedMetadata]);
 
+  // Retry handler (Rule 9)
   const handleRetry = () => {
     setVideoLoadError(null);
-    loadVideoConfig();
+    loadAndVerifyVideo();
   };
 
   const blockTitle = language === 'ca' ? "Codi de Vestimenta i Normativa" : "Código de Vestimenta y Normativa";
@@ -386,26 +286,13 @@ export const CodigoVestimentaModal: React.FC<CodigoVestimentaModalProps> = ({
         id="video-player-container"
         className="w-full aspect-video min-h-[220px] sm:min-h-[320px] md:min-h-[380px] bg-black rounded-2xl overflow-hidden relative shadow-inner border border-zinc-800 flex items-center justify-center"
       >
-        {/* Render Vimeo iframe player when source is Vimeo */}
-        {isVimeo && isValidSource && !isMissingOriginal && vimeoEmbedSrc && (
-          <iframe
-            ref={vimeoIframeRef}
-            id="vimeo-cuestionari-iframe"
-            key={vimeoEmbedSrc}
-            src={vimeoEmbedSrc}
-            className="w-full h-full border-0"
-            allow="autoplay; fullscreen; picture-in-picture; clipboard-write; encrypted-media"
-            title="Vídeo Codi de Vestimenta"
-          />
-        )}
-
-        {/* Render native HTML5 video player for direct MP4 / Supabase storage */}
-        {!isVimeo && isValidSource && !isMissingOriginal && activeUrl && (
+        {/* Render player ONLY when source is valid */}
+        {isValidSource && !isMissingOriginal && (
           <video
             ref={videoRef}
             id="video-cuestionari"
-            src={activeUrl}
-            key={activeUrl}
+            src={videoUrl}
+            key={videoUrl}
             controls
             playsInline
             preload="metadata"
@@ -418,7 +305,7 @@ export const CodigoVestimentaModal: React.FC<CodigoVestimentaModalProps> = ({
             onSeeking={onVideoSeeking}
             onError={handleNativeVideoError}
           >
-            <source src={activeUrl} type="video/mp4" />
+            <source src={videoUrl} type="video/mp4" />
             {language === 'ca' 
               ? "El vostre navegador no pot reproduir aquest vídeo." 
               : "Tu navegador no puede reproducir este vídeo."
@@ -426,22 +313,22 @@ export const CodigoVestimentaModal: React.FC<CodigoVestimentaModalProps> = ({
           </video>
         )}
 
-        {/* Rule 9: Show "Vídeo no configurat" / "Vídeo no configurado" when no URL is configured */}
+        {/* Rule 7: Clear message when original video is not available */}
         {isMissingOriginal && !isLoading && (
           <div 
             id="video-missing-original-notice"
             className="absolute inset-0 bg-black/95 flex flex-col items-center justify-center p-6 text-center space-y-3 z-20"
           >
-            <div className="p-3.5 bg-zinc-800/80 border border-zinc-700 rounded-2xl text-zinc-400">
+            <div className="p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-2xl text-amber-400">
               <VideoOff size={32} className="stroke-[2]" />
             </div>
             <h4 className="text-sm font-extrabold text-white">
-              {language === 'ca' ? "Vídeo no configurat" : "Vídeo no configurado"}
+              Falta cargar el vídeo original
             </h4>
             <p className="text-xs text-zinc-400 max-w-sm leading-relaxed">
               {language === 'ca'
-                ? "Encara no s'ha configurat cap vídeo des de Secretaria (Personalització > Codi de Vestimenta)."
-                : "Todavía no se ha configurado ningún vídeo desde Secretaría (Personalización > Código de Vestimenta)."
+                ? "Cal carregar el vídeo original des del panell d'administració (Personalització > Codi de vestimenta) per visualitzar la normativa."
+                : "Es necesario cargar el vídeo original desde el panel de administración (Personalización > Código de vestimenta) para visualizar la normativa."
               }
             </p>
           </div>
@@ -481,7 +368,7 @@ export const CodigoVestimentaModal: React.FC<CodigoVestimentaModalProps> = ({
         )}
       </div>
 
-      {/* Requirement / Status Notice (Appears only once) */}
+      {/* Requirement / Status Notice */}
       {videoWatched ? (
         <div 
           id="video-requirement-notice" 
