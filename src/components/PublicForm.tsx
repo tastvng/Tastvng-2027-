@@ -326,90 +326,95 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
 
   // Questionnaire / Informative Video verification state
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const maxWatchedTimeRef = useRef<number>(0);
-  const isVideoReallyFinishedRef = useRef<boolean>(false);
+  const videoWatchedRef = useRef<boolean>(false);
   const [videoWatched, setVideoWatched] = useState<boolean>(false);
   const [videoWatchedError, setVideoWatchedError] = useState<string | null>(null);
 
-  // Expose videoRef for external and DOM inspection
+  // Expose videoRef and state for external and DOM inspection / automated testing
   useEffect(() => {
     if (typeof window !== 'undefined') {
       (window as any).__videoRef = videoRef;
+      (window as any).__videoWatched = videoWatched;
+      (window as any).__videoWatchedRef = videoWatchedRef;
     }
-  }, []);
+  }, [videoWatched]);
 
-  const markVideoAsCompleted = () => {
-    isVideoReallyFinishedRef.current = true;
+  // Requirement 13: Temporary diagnostic logs with duration, current time, percentage, event, and videoVisto
+  const logVideoState = (eventoRecibido: string, video: HTMLVideoElement | null) => {
+    const duracion = video && !isNaN(video.duration) && isFinite(video.duration) ? video.duration : 0;
+    const tiempoActual = video && !isNaN(video.currentTime) ? video.currentTime : 0;
+    const porcentaje = duracion > 0 ? (tiempoActual / duracion * 100).toFixed(1) : '0';
+    const videoVisto = videoWatchedRef.current;
+    console.log(`[Video Codi Vestimenta] Evento: ${eventoRecibido} | Duración: ${duracion}s | Tiempo actual: ${tiempoActual}s | Porcentaje reproducido: ${porcentaje}% | videoVisto: ${videoVisto}`);
+  };
+
+  const markVideoAsCompleted = (reason: string, video: HTMLVideoElement | null) => {
+    if (videoWatchedRef.current) {
+      logVideoState(`${reason} (ja completat)`, video);
+      return;
+    }
+    videoWatchedRef.current = true;
     setVideoWatched(true);
     setVideoWatchedError(null);
+    logVideoState(`${reason} -> COMPLETAT`, video);
+  };
+
+  const handleVideoLoadedMetadata = (e?: React.SyntheticEvent<HTMLVideoElement> | Event) => {
+    const v = (e && 'currentTarget' in e && e.currentTarget) 
+      ? (e.currentTarget as HTMLVideoElement) 
+      : (videoRef.current || (document.getElementById('video-cuestionari') as HTMLVideoElement | null));
+    
+    logVideoState('loadedmetadata', v);
+    if (v && !isNaN(v.duration) && isFinite(v.duration) && v.duration > 0) {
+      if (v.ended || (v.currentTime / v.duration >= 0.95)) {
+        markVideoAsCompleted('loadedmetadata (>=95%)', v);
+      }
+    }
   };
 
   const handleVideoEnded = () => {
-    const v = videoRef.current;
-    // Anti-skip check: if video element has duration, verify it wasn't skipped
-    if (v && v.duration && v.duration > 0) {
-      if (maxWatchedTimeRef.current >= v.duration * 0.90 || v.currentTime >= v.duration * 0.90) {
-        markVideoAsCompleted();
-      } else {
-        // Skipped to the end without watching
-        isVideoReallyFinishedRef.current = false;
-        setVideoWatched(false);
-        setVideoWatchedError(language === 'ca'
-          ? "⚠️ Per continuar, cal veure el vídeo informatiu complet."
-          : "⚠️ Para continuar, es necesario ver el vídeo informativo completo.");
-      }
-    } else {
-      markVideoAsCompleted();
-    }
+    const v = videoRef.current || (document.getElementById('video-cuestionari') as HTMLVideoElement | null);
+    // Requirement 3 & 5: When ended event fires, unconditionally mark as completed
+    markVideoAsCompleted('ended', v);
   };
 
   const handleVideoTimeUpdate = (e?: React.SyntheticEvent<HTMLVideoElement> | Event) => {
     const v = (e && 'currentTarget' in e && e.currentTarget) 
       ? (e.currentTarget as HTMLVideoElement) 
-      : videoRef.current;
+      : (videoRef.current || (document.getElementById('video-cuestionari') as HTMLVideoElement | null));
     if (!v) return;
 
-    // Prevent skipping: if seeker jumps >2s ahead of recorded watch point, snap back
-    if (v.currentTime > maxWatchedTimeRef.current + 2) {
-      v.currentTime = maxWatchedTimeRef.current;
-      return;
-    }
-    if (v.currentTime > maxWatchedTimeRef.current) {
-      maxWatchedTimeRef.current = v.currentTime;
-    }
+    const duracion = (!isNaN(v.duration) && isFinite(v.duration)) ? v.duration : 0;
+    const tiempoActual = !isNaN(v.currentTime) ? v.currentTime : 0;
+    const ratio = duracion > 0 ? (tiempoActual / duracion) : 0;
 
-    // 95% completion threshold
-    if (v.duration && v.duration > 0) {
-      const ratio = v.currentTime / v.duration;
-      if (ratio >= 0.95 && maxWatchedTimeRef.current >= v.duration * 0.90) {
-        markVideoAsCompleted();
-      }
+    logVideoState('timeupdate', v);
+
+    // Requirement 3: Mark as watched if ended or currentTime / duration >= 0.95
+    if (v.ended) {
+      markVideoAsCompleted('ended', v);
+    } else if (duracion > 0 && ratio >= 0.95) {
+      markVideoAsCompleted('ratio >= 0.95', v);
     }
   };
 
   const handleVideoSeeking = (e?: React.SyntheticEvent<HTMLVideoElement> | Event) => {
     const v = (e && 'currentTarget' in e && e.currentTarget) 
       ? (e.currentTarget as HTMLVideoElement) 
-      : videoRef.current;
-    if (!v) return;
-    if (v.currentTime > maxWatchedTimeRef.current + 1) {
-      v.currentTime = maxWatchedTimeRef.current;
-    }
+      : (videoRef.current || (document.getElementById('video-cuestionari') as HTMLVideoElement | null));
+    logVideoState('seeking', v);
   };
 
   const handleVideoPause = () => {
-    if (!isVideoReallyFinishedRef.current) {
-      setVideoWatched(false);
-    }
+    const v = videoRef.current || (document.getElementById('video-cuestionari') as HTMLVideoElement | null);
+    logVideoState('pause', v);
+    // Requirement 10, 11, 12: Do NOT reset videoWatched when paused!
   };
 
   const handleVideoCloseModal = () => {
-    if (!isVideoReallyFinishedRef.current) {
-      setVideoWatched(false);
-      setVideoWatchedError(language === 'ca'
-        ? "⚠️ Per continuar, cal veure el vídeo informatiu complet."
-        : "⚠️ Para continuar, es necesario ver el vídeo informativo completo.");
-    }
+    const v = videoRef.current || (document.getElementById('video-cuestionari') as HTMLVideoElement | null);
+    logVideoState('closeModal', v);
+    // Requirement 10, 11, 12: Do NOT reset videoWatched on modal close!
   };
 
   // Calculate live total price
@@ -740,7 +745,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
     if (!acceptaPresencial) tempErrors.presencial = language === 'ca' ? "Heu d'acceptar pagar i recollir de manera presencial" : "Debe aceptar pagar y recoger de forma presencial";
 
     // Video verification: the informative video must be watched completely (ended or >= 95%)
-    if (!videoWatched || !isVideoReallyFinishedRef.current) {
+    if (!videoWatched && !videoWatchedRef.current) {
       const videoMsg = language === 'ca'
         ? "⚠️ Per continuar, cal veure el vídeo informatiu complet."
         : "⚠️ Para continuar, es necesario ver el vídeo informativo completo.";
@@ -830,7 +835,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
     e.preventDefault();
 
     // Block submission immediately if informative video has not been watched completely
-    if (!videoWatched || !isVideoReallyFinishedRef.current) {
+    if (!videoWatched && !videoWatchedRef.current) {
       const videoMsg = language === 'ca'
         ? "⚠️ Per continuar, cal veure el vídeo informatiu complet."
         : "⚠️ Para continuar, es necesario ver el vídeo informativo completo.";
@@ -1048,7 +1053,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
       }
 
       // Strict final validation right before saving to Supabase / dispatching email
-      if (!videoWatched || !isVideoReallyFinishedRef.current) {
+      if (!videoWatched && !videoWatchedRef.current) {
         console.warn("[PublicForm] Inscription aborted: informative video not completed.");
         const videoMsg = language === 'ca'
           ? "⚠️ Per continuar, cal veure el vídeo informatiu complet."
@@ -1824,6 +1829,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
             videoRef={videoRef}
             videoWatched={videoWatched}
             videoWatchedError={videoWatchedError}
+            onVideoLoadedMetadata={handleVideoLoadedMetadata}
             onVideoEnded={handleVideoEnded}
             onVideoTimeUpdate={handleVideoTimeUpdate}
             onVideoPause={handleVideoPause}
@@ -1855,19 +1861,10 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
           </div>
 
           <div className="flex flex-col items-center md:items-end gap-2 w-full md:w-auto relative z-10">
-            {videoWatched ? (
+            {videoWatched && (
               <div id="video-submit-status-badge" className="flex items-center gap-1.5 text-xs font-bold text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-3 py-1.5 rounded-xl">
                 <CheckCircle2 size={14} className="text-emerald-400 shrink-0" />
                 <span>✅ {language === 'ca' ? "Vídeo vist correctament" : "Vídeo visto correctamente"}</span>
-              </div>
-            ) : videoWatchedError ? (
-              <div id="video-requirement-notice-bottom" className="flex items-center gap-1.5 text-xs font-semibold text-amber-400 bg-amber-950/60 border border-amber-500/30 px-3 py-1.5 rounded-xl">
-                <AlertTriangle size={14} className="text-amber-400 shrink-0" />
-                <span>{videoWatchedError}</span>
-              </div>
-            ) : (
-              <div className="text-[11px] text-zinc-400 flex items-center gap-1.5 font-sans">
-                <span>🔒 {language === 'ca' ? "Cal veure el vídeo complet per activar l'enviament" : "Es necesario ver el vídeo completo para activar el envío"}</span>
               </div>
             )}
 

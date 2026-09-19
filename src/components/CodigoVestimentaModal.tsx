@@ -2,23 +2,27 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { X, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { useLanguage } from '../LanguageContext';
 
-interface CodigoVestimentaModalProps {
+export interface CodigoVestimentaModalProps {
   youtubeUrl?: string;
   videoRef?: React.RefObject<HTMLVideoElement | null>;
   videoWatched?: boolean;
   videoWatchedError?: string | null;
+  onVideoLoadedMetadata?: (e: React.SyntheticEvent<HTMLVideoElement> | Event) => void;
   onVideoEnded?: () => void;
-  onVideoTimeUpdate?: (e: React.SyntheticEvent<HTMLVideoElement>) => void;
+  onVideoTimeUpdate?: (e: React.SyntheticEvent<HTMLVideoElement> | Event) => void;
   onVideoPause?: () => void;
-  onVideoSeeking?: (e: React.SyntheticEvent<HTMLVideoElement>) => void;
+  onVideoSeeking?: (e: React.SyntheticEvent<HTMLVideoElement> | Event) => void;
   onCloseModal?: () => void;
 }
+
+const DEFAULT_VIDEO_SOURCE = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4";
 
 export const CodigoVestimentaModal: React.FC<CodigoVestimentaModalProps> = ({ 
   youtubeUrl,
   videoRef,
   videoWatched = false,
   videoWatchedError = null,
+  onVideoLoadedMetadata,
   onVideoEnded,
   onVideoTimeUpdate,
   onVideoPause,
@@ -61,6 +65,7 @@ export const CodigoVestimentaModal: React.FC<CodigoVestimentaModalProps> = ({
   const isYoutube = Boolean(videoUrl && (videoUrl.includes('youtube.com') || videoUrl.includes('youtu.be')));
   const isVimeo = Boolean(videoUrl && videoUrl.includes('vimeo.com'));
   const isEmbed = isYoutube || isVimeo;
+  const videoSrc = videoUrl || DEFAULT_VIDEO_SOURCE;
 
   // Enhance iframe URLs with postMessage API triggers for watch completion detection
   const embedUrl = useMemo(() => {
@@ -116,36 +121,41 @@ export const CodigoVestimentaModal: React.FC<CodigoVestimentaModalProps> = ({
     };
   }, [isOpen, onVideoEnded, onVideoPause]);
 
-  // Bind native DOM event listeners directly to videoRef.current for robust event handling
+  // Bind native DOM event listeners directly to the <video> element for robust event handling
   useEffect(() => {
-    const video = videoRef?.current;
+    const video = videoRef?.current || (document.getElementById('video-cuestionari') as HTMLVideoElement | null);
     if (!video) return;
 
+    const handleLoaded = (e: Event) => {
+      onVideoLoadedMetadata?.(e);
+    };
     const handleEnded = () => {
       onVideoEnded?.();
     };
     const handleTime = (e: Event) => {
-      onVideoTimeUpdate?.(e as any);
+      onVideoTimeUpdate?.(e);
     };
     const handlePause = () => {
       onVideoPause?.();
     };
     const handleSeek = (e: Event) => {
-      onVideoSeeking?.(e as any);
+      onVideoSeeking?.(e);
     };
 
+    video.addEventListener('loadedmetadata', handleLoaded);
     video.addEventListener('ended', handleEnded);
     video.addEventListener('timeupdate', handleTime);
     video.addEventListener('pause', handlePause);
     video.addEventListener('seeking', handleSeek);
 
     return () => {
+      video.removeEventListener('loadedmetadata', handleLoaded);
       video.removeEventListener('ended', handleEnded);
       video.removeEventListener('timeupdate', handleTime);
       video.removeEventListener('pause', handlePause);
       video.removeEventListener('seeking', handleSeek);
     };
-  }, [videoRef, onVideoEnded, onVideoTimeUpdate, onVideoPause, onVideoSeeking]);
+  }, [videoRef, onVideoLoadedMetadata, onVideoEnded, onVideoTimeUpdate, onVideoPause, onVideoSeeking, isOpen]);
 
   const handleClose = () => {
     onCloseModal?.();
@@ -173,18 +183,18 @@ export const CodigoVestimentaModal: React.FC<CodigoVestimentaModalProps> = ({
           {videoWatched && <span className="text-xs bg-black/20 px-2 py-0.5 rounded-md">✓ {language === 'ca' ? "Vist" : "Visto"}</span>}
         </button>
 
-        {/* Video status indicator banner */}
+        {/* Single authoritative video requirement / success notice */}
         {videoWatched ? (
-          <div id="video-status-success" className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-emerald-400 text-xs font-bold flex items-center gap-2">
+          <div id="video-requirement-notice" className="p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-emerald-400 text-xs font-bold flex items-center gap-2">
             <CheckCircle2 size={16} className="text-emerald-400 shrink-0" />
             <span>✅ {language === 'ca' ? "Vídeo vist correctament" : "Vídeo visto correctamente"}</span>
           </div>
-        ) : videoWatchedError ? (
+        ) : (
           <div id="video-requirement-notice" className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-400 text-xs font-semibold flex items-center gap-2">
             <AlertTriangle size={16} className="text-amber-400 shrink-0" />
-            <span>{videoWatchedError}</span>
+            <span>{videoWatchedError || (language === 'ca' ? "Per continuar, cal veure el vídeo informatiu complet." : "Para continuar, es necesario ver el vídeo informativo completo.")}</span>
           </div>
-        ) : null}
+        )}
       </div>
 
       {/* Persistent modal container - always keeps videoRef.current mounted in DOM */}
@@ -211,32 +221,20 @@ export const CodigoVestimentaModal: React.FC<CodigoVestimentaModalProps> = ({
 
           {/* Video Container - Aspect 9:16 */}
           <div className="bg-black flex-1 flex items-center justify-center relative overflow-hidden" style={{ aspectRatio: '9/16' }}>
-            {/* HTML5 video element with videoRef for native inspection, ended events and 95% duration */}
+            {/* Real HTML5 video element with videoRef for native playback, ended events and 95% duration */}
             <video
               ref={videoRef}
               id="video-cuestionari"
-              src={videoUrl || "https://player.vimeo.com/video/1207785599"}
-              controls={!isEmbed}
+              src={videoSrc}
+              controls
               playsInline
+              onLoadedMetadata={onVideoLoadedMetadata}
               onEnded={onVideoEnded}
               onTimeUpdate={onVideoTimeUpdate}
               onPause={onVideoPause}
               onSeeking={onVideoSeeking}
-              className={isEmbed ? "hidden" : "w-full h-full object-cover"}
+              className="w-full h-full object-cover"
             />
-
-            {isEmbed && (
-              <iframe
-                id="iframe-video-cuestionari"
-                src={embedUrl}
-                width="100%"
-                height="100%"
-                frameBorder="0"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-                className="w-full h-full object-cover"
-              ></iframe>
-            )}
           </div>
 
           {/* In-modal status banner if completed */}
