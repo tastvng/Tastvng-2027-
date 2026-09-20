@@ -1274,6 +1274,172 @@ export async function saveSistemaConfigItem(clau: string, valor: any): Promise<b
   }
 }
 
+/**
+ * Reads the dress code video URL strictly from Supabase ('sistema_config' or 'settings' table)
+ * or localStorage, without any obsolete mock/hardcoded fallback.
+ */
+export async function getCodigoVestimentaUrl(bypassCache: boolean = false): Promise<string> {
+  // Check memory cache first unless bypass requested
+  if (!bypassCache && settingCache.has('codigo_vestimenta_url')) {
+    return settingCache.get('codigo_vestimenta_url') || '';
+  }
+
+  let url = '';
+
+  // 1. Try 'sistema_config' table first
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('sistema_config')
+        .select('*');
+
+      if (!error && data && data.length > 0) {
+        const row = data.find((r: any) =>
+          r.clau === 'codigo_vestimenta_url' ||
+          r.key === 'codigo_vestimenta_url' ||
+          r.id === 'codigo_vestimenta_url'
+        );
+        if (row) {
+          let val = row.valor !== undefined ? row.valor : row.value;
+          if (typeof val === 'string') {
+            try {
+              const parsed = JSON.parse(val);
+              if (typeof parsed === 'string') val = parsed;
+              else if (parsed && typeof parsed === 'object') {
+                val = parsed.url || parsed.text || parsed.valor || parsed.value || val;
+              }
+            } catch {
+              // plain string
+            }
+          } else if (val && typeof val === 'object') {
+            val = val.url || val.text || val.valor || val.value || '';
+          }
+          if (typeof val === 'string' && val.trim()) {
+            url = val.trim();
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[getCodigoVestimentaUrl] Error reading from sistema_config:', err);
+    }
+  }
+
+  // 2. Try 'settings' table if not found yet
+  if (!url && supabase) {
+    try {
+      const settingVal = await getSupabaseSetting<any>('codigo_vestimenta_url', '', true);
+      if (typeof settingVal === 'string' && settingVal.trim()) {
+        url = settingVal.trim();
+      } else if (settingVal && typeof settingVal === 'object') {
+        const extracted = (settingVal.url || settingVal.text || settingVal.valor || settingVal.value || '').trim();
+        if (extracted) url = extracted;
+      }
+    } catch (err) {
+      console.warn('[getCodigoVestimentaUrl] Error reading from settings:', err);
+    }
+  }
+
+  // 3. Fallback to localStorage if still not found
+  if (!url) {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const local = localStorage.getItem('codigo_vestimenta_url');
+        if (local && typeof local === 'string' && local.trim()) {
+          let clean = local.trim();
+          if (clean.startsWith('"') && clean.endsWith('"')) {
+            try { clean = JSON.parse(clean); } catch {}
+          }
+          if (clean && typeof clean === 'string' && clean.trim()) {
+            url = clean.trim();
+          }
+        }
+      }
+    } catch {}
+  }
+
+  // If found anywhere, synchronize to localStorage and settingCache
+  if (url) {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('codigo_vestimenta_url', url);
+      }
+    } catch {}
+    settingCache.set('codigo_vestimenta_url', url);
+  } else {
+    settingCache.set('codigo_vestimenta_url', '');
+  }
+
+  return url;
+}
+
+/**
+ * Saves the dress code video URL simultaneously into Supabase ('sistema_config' and 'settings')
+ * and localStorage, broadcasting the change to all open views.
+ */
+export async function saveCodigoVestimentaUrl(url: string): Promise<boolean> {
+  const trimmed = (url || '').trim();
+
+  // 1. Always update memory cache immediately
+  settingCache.set('codigo_vestimenta_url', trimmed);
+
+  // 2. Always update localStorage immediately
+  try {
+    if (typeof localStorage !== 'undefined') {
+      if (trimmed) {
+        localStorage.setItem('codigo_vestimenta_url', trimmed);
+      } else {
+        localStorage.removeItem('codigo_vestimenta_url');
+      }
+    }
+  } catch {}
+
+  let success = false;
+
+  // 3. Save to 'sistema_config' table
+  if (supabase) {
+    try {
+      await logSupabaseWriteDiagnostic('sistema_config', `UPSERT (codigo_vestimenta_url: ${trimmed})`);
+      const payload: any = {
+        clau: 'codigo_vestimenta_url',
+        valor: trimmed,
+        key: 'codigo_vestimenta_url',
+        value: trimmed
+      };
+      const { error: err1 } = await supabase
+        .from('sistema_config')
+        .upsert(payload, { onConflict: 'clau' });
+
+      if (!err1) {
+        success = true;
+      } else {
+        const { error: err2 } = await supabase
+          .from('sistema_config')
+          .upsert({ clau: 'codigo_vestimenta_url', valor: trimmed });
+        if (!err2) success = true;
+      }
+    } catch (err) {
+      console.warn('[saveCodigoVestimentaUrl] Error saving to sistema_config:', err);
+    }
+
+    // 4. Save to 'settings' table
+    try {
+      const sOk = await saveSupabaseSetting('codigo_vestimenta_url', trimmed);
+      if (sOk) success = true;
+    } catch (err) {
+      console.warn('[saveCodigoVestimentaUrl] Error saving to settings:', err);
+    }
+  } else {
+    success = true;
+  }
+
+  // 5. Broadcast custom event
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('codigoVestimentaChanged', { detail: trimmed }));
+  }
+
+  return success;
+}
+
 export interface AdminUserRecord {
   id: string;
   email: string;

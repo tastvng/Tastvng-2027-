@@ -20,12 +20,10 @@ export default function AdminPersonalitzacio({ onAddLog }: AdminPersonalitzacioP
   useEffect(() => {
     const fetchUrl = async () => {
       try {
-        const { getSupabaseSetting, isSupabaseConfigured } = await import('../supabaseClient');
-        if (isSupabaseConfigured) {
-          const val = await getSupabaseSetting<string>('codigo_vestimenta_url', '', true);
-          if (val) {
-            setCodigoVestimentaUrl(val);
-          }
+        const { getCodigoVestimentaUrl } = await import('../supabaseClient');
+        const val = await getCodigoVestimentaUrl();
+        if (val) {
+          setCodigoVestimentaUrl(val);
         }
       } catch (err) {
         console.error('Error reading dress code url:', err);
@@ -34,28 +32,17 @@ export default function AdminPersonalitzacio({ onAddLog }: AdminPersonalitzacioP
     fetchUrl().catch(err => console.error("Error in fetchUrl:", err));
   }, []);
 
-  const saveCodigoVestimentaUrl = async () => {
+  const saveCodigoVestimentaUrlHandler = async () => {
     setIsSaving(true);
     const trimmed = codigoVestimentaUrl.trim();
     try {
-      const { saveSupabaseSetting, isSupabaseConfigured } = await import('../supabaseClient');
-      if (isSupabaseConfigured) {
-        const success = await saveSupabaseSetting('codigo_vestimenta_url', trimmed);
-        if (success) {
-          // Broadcast change for instant live preview synchronization without localStorage
-          if (typeof window !== 'undefined') {
-            window.dispatchEvent(new CustomEvent('codigoVestimentaChanged', { detail: trimmed }));
-          }
-          if (onAddLog) onAddLog(language === 'ca' ? `S'ha actualitzat l'enllaç de vestimenta a: ${trimmed}` : `Se ha actualizado el enlace de vestimenta a: ${trimmed}`);
-          alert(language === 'ca' ? 'Enllaç desat correctament' : 'Enlace guardado correctamente');
-        } else {
-          alert(language === 'ca' ? 'Error al desar l\'enllaç' : 'Error al guardar el enlace');
-        }
+      const { saveCodigoVestimentaUrl } = await import('../supabaseClient');
+      const success = await saveCodigoVestimentaUrl(trimmed);
+      if (success) {
+        if (onAddLog) onAddLog(language === 'ca' ? `S'ha actualitzat l'enllaç de vestimenta a: ${trimmed}` : `Se ha actualizado el enlace de vestimenta a: ${trimmed}`);
+        alert(language === 'ca' ? 'Enllaç desat correctament' : 'Enlace guardado correctamente');
       } else {
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('codigoVestimentaChanged', { detail: trimmed }));
-        }
-        alert(language === 'ca' ? 'Desat correctament' : 'Guardado correctamente');
+        alert(language === 'ca' ? 'Error al desar l\'enllaç' : 'Error al guardar el enlace');
       }
     } catch (error) {
       console.error('Error saving URL:', error);
@@ -139,7 +126,7 @@ export default function AdminPersonalitzacio({ onAddLog }: AdminPersonalitzacioP
               className="flex-1 bg-zinc-950 text-white border border-zinc-800 focus:border-[#ff0090] rounded-xl px-4 py-2.5 text-xs focus:outline-none focus:ring-0 transition-all font-mono"
             />
             <button
-              onClick={saveCodigoVestimentaUrl}
+              onClick={saveCodigoVestimentaUrlHandler}
               disabled={isSaving}
               className="px-6 py-2.5 bg-[#ff0090] hover:bg-[#d60079] disabled:bg-zinc-700 text-white font-sans font-extrabold text-xs uppercase tracking-wider rounded-xl shadow-lg transition-all cursor-pointer shrink-0"
             >

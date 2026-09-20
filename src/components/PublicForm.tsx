@@ -46,30 +46,41 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
   const [submitError, setSubmitError] = useState<{ message: string; code?: string; details?: any } | null>(null);
 
   useEffect(() => {
-    const fetchYoutubeUrl = async () => {
+    let isMounted = true;
+    const fetchVideoUrl = async () => {
       try {
-        const { getSupabaseSetting, isSupabaseConfigured } = await import('../supabaseClient');
-        if (isSupabaseConfigured) {
-          const storedUrl = await getSupabaseSetting<string>('codigo_vestimenta_url', '', true);
-          if (storedUrl) {
-            setYoutubeUrl(storedUrl);
-          }
+        const { getCodigoVestimentaUrl } = await import('../supabaseClient');
+        const storedUrl = await getCodigoVestimentaUrl();
+        if (isMounted) {
+          setYoutubeUrl(storedUrl || '');
         }
       } catch (error) {
         console.error('Error fetching dress code URL:', error);
       }
     };
-    fetchYoutubeUrl().catch(err => console.error("Error in fetchYoutubeUrl:", err));
+    fetchVideoUrl().catch(err => console.error("Error in fetchVideoUrl:", err));
 
     const handleVideoChanged = (e: Event) => {
       const customEvent = e as CustomEvent<string>;
-      if (customEvent.detail) {
+      if (customEvent.detail !== undefined) {
         setYoutubeUrl(customEvent.detail);
+      } else {
+        fetchVideoUrl().catch(err => console.error("Error in fetchVideoUrl:", err));
       }
     };
+
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'codigo_vestimenta_url') {
+        setYoutubeUrl(e.newValue || '');
+      }
+    };
+
     window.addEventListener('codigoVestimentaChanged', handleVideoChanged);
+    window.addEventListener('storage', handleStorageChange);
     return () => {
+      isMounted = false;
       window.removeEventListener('codigoVestimentaChanged', handleVideoChanged);
+      window.removeEventListener('storage', handleStorageChange);
     };
   }, []);
 

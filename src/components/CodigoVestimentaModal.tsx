@@ -134,15 +134,13 @@ export const CodigoVestimentaModal: React.FC<CodigoVestimentaModalProps> = ({
     setVideoLoadError(null);
     setIsMissingOriginal(false);
 
-    let targetCandidate = forcedUrl !== undefined ? forcedUrl.trim() : (youtubeUrl?.trim() || '');
+    let targetCandidate = forcedUrl !== undefined ? forcedUrl.trim() : (youtubeUrl !== undefined ? youtubeUrl.trim() : '');
 
     if (!targetCandidate) {
       try {
-        const { getSupabaseSetting, isSupabaseConfigured } = await import('../supabaseClient');
-        if (isSupabaseConfigured) {
-          const stored = await getSupabaseSetting<string>('codigo_vestimenta_url', '', true);
-          targetCandidate = stored?.trim() || '';
-        }
+        const { getCodigoVestimentaUrl } = await import('../supabaseClient');
+        const stored = await getCodigoVestimentaUrl();
+        targetCandidate = stored?.trim() || '';
       } catch {
         targetCandidate = '';
       }
@@ -215,9 +213,17 @@ export const CodigoVestimentaModal: React.FC<CodigoVestimentaModalProps> = ({
       }
     };
 
+    const handleStorageEvent = (e: StorageEvent) => {
+      if (e.key === 'codigo_vestimenta_url') {
+        loadVideoConfig(e.newValue || undefined);
+      }
+    };
+
     window.addEventListener('codigoVestimentaChanged', handleConfigEvent);
+    window.addEventListener('storage', handleStorageEvent);
     return () => {
       window.removeEventListener('codigoVestimentaChanged', handleConfigEvent);
+      window.removeEventListener('storage', handleStorageEvent);
     };
   }, [loadVideoConfig]);
 
