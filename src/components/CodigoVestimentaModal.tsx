@@ -393,8 +393,9 @@ export const CodigoVestimentaModal: React.FC<CodigoVestimentaModalProps> = ({
             key={vimeoEmbedSrc}
             src={vimeoEmbedSrc}
             title="Codi de Vestimenta i Normativa"
-            allow="autoplay; fullscreen; picture-in-picture"
+            allow="autoplay; fullscreen; picture-in-picture; clipboard-write; encrypted-media; web-share"
             allowFullScreen
+            referrerPolicy="strict-origin-when-cross-origin"
             className="w-full h-full"
             onLoad={() => {
               setIsLoading(false);
