@@ -175,9 +175,8 @@ export const CodigoVestimentaModal: React.FC<CodigoVestimentaModalProps> = ({
       }
 
       setIsVimeo(true);
-      // Construct clean, secure Vimeo embed URL
-      // Use responsive, transparent, autopause parameters
-      const embedUrl = `https://player.vimeo.com/video/${vimeoInfo.videoId}?badge=0&autopause=0&player_id=0&app_id=58479`;
+      // Convert URL to requested player URL format: https://player.vimeo.com/video/{id}
+      const embedUrl = `https://player.vimeo.com/video/${vimeoInfo.videoId}`;
       setVimeoEmbedSrc(embedUrl);
       setIsValidSource(true);
       setIsMissingOriginal(false);
@@ -393,9 +392,14 @@ export const CodigoVestimentaModal: React.FC<CodigoVestimentaModalProps> = ({
             id="vimeo-cuestionari-iframe"
             key={vimeoEmbedSrc}
             src={vimeoEmbedSrc}
-            className="w-full h-full border-0"
-            allow="autoplay; fullscreen; picture-in-picture; clipboard-write; encrypted-media"
-            title="Vídeo Codi de Vestimenta"
+            title="Codi de Vestimenta i Normativa"
+            allow="autoplay; fullscreen; picture-in-picture"
+            allowFullScreen
+            className="w-full h-full"
+            onLoad={() => {
+              setIsLoading(false);
+              setVideoLoadError(null);
+            }}
           />
         )}
 
