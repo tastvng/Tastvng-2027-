@@ -17,10 +17,19 @@ export interface EntityConfig {
  * Returns current entity configuration from localStorage or defaults.
  * Synchronous for immediate rendering.
  */
+const safeGetItem = (key: string): string | null => {
+  try {
+    if (typeof window !== 'undefined' && typeof window.localStorage !== 'undefined') {
+      return window.localStorage.getItem(key);
+    }
+  } catch (e) {}
+  return null;
+};
+
 export function getEntityConfigSync(language: 'ca' | 'es' = 'ca', fallbackConfig?: SistemaConfig): EntityConfig {
   let storedPersonalizacion: any = null;
   try {
-    const raw = localStorage.getItem('personalizacion');
+    const raw = safeGetItem('personalizacion');
     if (raw) storedPersonalizacion = JSON.parse(raw);
   } catch (e) {
     // Ignore JSON parse error
@@ -30,12 +39,11 @@ export function getEntityConfigSync(language: 'ca' | 'es' = 'ca', fallbackConfig
   const sec = storedPersonalizacion?.secretaria || {};
   const med = storedPersonalizacion?.medios || {};
 
-  const nom = ev.nombre || localStorage.getItem('tast_nom_esdeveniment') || fallbackConfig?.titolSeccioTarifes?.replace(/Tarifes\s*/i, '') || "Associació Cultural El Tast";
-  const direccio = ev.direccio || localStorage.getItem('tast_direccio_esdeveniment') || "Plaça Soler i Carbonell, 28, Vilanova i la Geltrú";
-  const rawEmail = ev.email || localStorage.getItem('tast_email_contacte') || "tastvng@gmail.com";
-  const email = (rawEmail.includes('secretaria@eltast.cat') || rawEmail.includes('secretaria@tast.cat')) ? "tastvng@gmail.com" : rawEmail;
-  const telefon = ev.telefon || localStorage.getItem('tast_telefon_contacte') || "600 000 000";
-  const anyEdicio = ev.any_edicio || localStorage.getItem('tast_any_edicio') || "2027";
+  const nom = ev.nombre || safeGetItem('tast_nom_esdeveniment') || fallbackConfig?.titolSeccioTarifes?.replace(/Tarifes\s*/i, '') || "Associació Cultural El Tast";
+  const direccio = ev.direccio || safeGetItem('tast_direccio_esdeveniment') || "Plaça Soler i Carbonell, 28, Vilanova i la Geltrú";
+  const email = "tastvng@gmail.com";
+  const telefon = "";
+  const anyEdicio = ev.any_edicio || safeGetItem('tast_any_edicio') || "2027";
   const nomEsdeveniment = ev.nombre ? `${ev.nombre} ${anyEdicio}` : `El Tast ${anyEdicio}`;
 
   const defaultHoursCa = "Dimecres i divendres, de 18:00h a 21:30h a la seu de l'entitat.";
@@ -44,16 +52,16 @@ export function getEntityConfigSync(language: 'ca' | 'es' = 'ca', fallbackConfig
   const defaultDeliveryEs = "Miércoles y viernes de 18:00h a 21:30h en la sede social.";
 
   const horari = (language === 'ca'
-    ? (sec.hours_ca || localStorage.getItem('tast_secretaria_hours_ca') || defaultHoursCa)
-    : (sec.hours_es || localStorage.getItem('tast_secretaria_hours_es') || defaultHoursEs)
+    ? (sec.hours_ca || safeGetItem('tast_secretaria_hours_ca') || defaultHoursCa)
+    : (sec.hours_es || safeGetItem('tast_secretaria_hours_es') || defaultHoursEs)
   ).trim();
 
   const diesEntrega = (language === 'ca'
-    ? (sec.dies_entrega_ca || localStorage.getItem('tast_dies_entrega_ca') || defaultDeliveryCa)
-    : (sec.dies_entrega_es || localStorage.getItem('tast_dies_entrega_es') || defaultDeliveryEs)
+    ? (sec.dies_entrega_ca || safeGetItem('tast_dies_entrega_ca') || defaultDeliveryCa)
+    : (sec.dies_entrega_es || safeGetItem('tast_dies_entrega_es') || defaultDeliveryEs)
   ).trim();
 
-  const logoUrl = med.logo || localStorage.getItem('tast_email_logo') || undefined;
+  const logoUrl = med.logo || safeGetItem('tast_email_logo') || undefined;
 
   return {
     nom,

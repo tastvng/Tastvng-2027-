@@ -51,6 +51,10 @@ import AdminPortada from './AdminPortada';
 import AdminPersonalitzacio from './AdminPersonalitzacio';
 import { AdminStaffManagement } from './AdminStaffManagement';
 import { calculateDailySummaries } from '../dailySummary';
+import { calculateInscriptionOrderBreakdown, validateInscriptionTotal } from '../utils/orderCalculations';
+import { buildUnifiedEmailHtml } from '../utils/ticketGenerator';
+import { getEntityConfigSync, fetchLiveEntityConfig } from '../utils/entityConfig';
+import { getDniSignedUrl } from '../supabaseClient';
 
 interface AdminDashboardProps {
   inscripcions: Inscripcio[];
@@ -239,156 +243,53 @@ export default function AdminDashboard({
         return;
       }
 
-      const activeYearLocal = localStorage.getItem('tast_any_edicio') || '2027';
-      const evNameRaw = localStorage.getItem('tast_nom_esdeveniment') || 'Carnaval 2027';
-      const evName = evNameRaw.replace(/2026/g, activeYearLocal).replace(/2027/g, activeYearLocal);
-      const evAddr = localStorage.getItem('tast_direccio_esdeveniment') || 'Plaça Soler i Carbonell, 28, Vilanova i la Geltrú';
-      const evHoursCa = localStorage.getItem('tast_secretaria_hours_ca') || "Dimecres i divendres, de 18:00h a 21:30h.";
-      const evHoursEs = localStorage.getItem('tast_secretaria_hours_es') || "Miércoles y viernes, de 18:00h a 21:30h.";
-      const smtpUsuariVal = smtpFrom || "secretaria@eltast.cat";
+      // 1. Calculate breakdown using canonical function
+      const breakdown = calculateInscriptionOrderBreakdown(item, config, language);
 
-      const emailSubjectCa = localStorage.getItem('tast_email_subject_ca') || `🎟️ El Tast ${evName} - Confirmació d'Inscripció`;
-      const emailSubjectEs = localStorage.getItem('tast_email_subject_es') || `🎟️ El Tast ${evName} - Confirmación de Inscripción`;
-      const emailSubject = `${language === 'ca' ? emailSubjectCa : emailSubjectEs} ${item.codiSeguiment}`;
-
-      const emailBodyText = language === 'ca' 
-        ? (localStorage.getItem('tast_email_body_ca') || `S'ha generat correctament el vostre comprovant per a ${evName}.`)
-        : (localStorage.getItem('tast_email_body_es') || `Se ha generado correctamente vuestro comprobante para ${evName}.`);
-
-      const subLogo = localStorage.getItem('tast_email_logo') || "";
-      let logoHtml = '';
-      const emailAttachments: any[] = [];
-
-      if (subLogo) {
-        if (subLogo.startsWith('data:')) {
-          logoHtml = `<div style="text-align: center; margin-bottom: 25px;"><img src="cid:tast-email-logo-cid" alt="Logo" style="max-height: 70px; max-width: 210px; object-fit: contain; margin: 0 auto; display: block; border-radius: 8px;" /></div>`;
-          emailAttachments.push({
-            filename: 'logo.png',
-            content: subLogo,
-            cid: 'tast-email-logo-cid'
-          });
-        } else {
-          logoHtml = `<div style="text-align: center; margin-bottom: 25px;"><img src="${subLogo}" alt="Logo" style="max-height: 70px; max-width: 210px; object-fit: contain; margin: 0 auto; display: block; border-radius: 8px;" /></div>`;
-        }
-      } else {
-        logoHtml = `<div style="text-align: center; margin-bottom: 25px;">
-            <span style="background-color: #ff0090; color: #ffffff; padding: 10px 24px; font-size: 13px; font-weight: bold; border-radius: 50px; letter-spacing: 1px; display: inline-block; text-transform: uppercase;">
-              Associació Cultural El Tast
-            </span>
-          </div>`;
+      // 2. Validate total against preinscription
+      const validation = validateInscriptionTotal(item, config, language);
+      if (!validation.valid) {
+        const errMsg = validation.errorMessage || (language === 'ca' ? "Error de concordança de preu entre el tiquet i la preinscripció." : "Error de concordancia de precio entre el ticket y la preinscripción.");
+        alert(errMsg);
+        setRowSmtpSending(prev => ({ ...prev, [item.id]: 'error' }));
+        return;
       }
 
-      const genericExtrasHtml = (item.extresSeleccionats || [])
-        .filter(ext => ext.quantitat > 0)
-        .map(ext => `<li>• ${ext.quantitat}x ${ext.nom} (${ext.quantitat * ext.preuUnitari}€)</li>`)
-        .join('');
+      // 3. Resolve live entity config
+      let entityConfig = getEntityConfigSync(language, config);
+      try {
+        const live = await fetchLiveEntityConfig(language);
+        if (live) entityConfig = live;
+      } catch (e) {}
 
-      const extrasHtml = genericExtrasHtml;
+      // 4. Resolve DNI signed URLs if present
+      let resolvedC1Dni: string | null = null;
+      let resolvedC2Dni: string | null = null;
+      if (item.c1DniUrl) {
+        try { resolvedC1Dni = await getDniSignedUrl(item.c1DniUrl); } catch (e) {}
+      }
+      if (item.c2DniUrl) {
+        try { resolvedC2Dni = await getDniSignedUrl(item.c2DniUrl); } catch (e) {}
+      }
 
-      const emailHtml = `
-        <div style="font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 30px; border: 1px solid #e1e1e6; border-radius: 24px; background-color: #ffffff; color: #111115;">
-          ${logoHtml}
-          
-          <h1 style="color: #111115; font-size: 24px; font-weight: 800; text-align: center; margin: 15px 0 5px 0; text-transform: uppercase; letter-spacing: -0.5px;">
-            ${language === 'ca' ? "Preinscripció Confirmada!" : "¡Preinscripción Confirmada!"}
-          </h1>
-          <p style="font-size: 14px; text-align: center; color: #666670; margin-top: 0; margin-bottom: 25px;">
-            ${emailBodyText}
-          </p>
+      // 5. Build Unified Single Source of Truth Template
+      const { subject: emailSubject, html: emailHtml } = buildUnifiedEmailHtml({
+        registration: item,
+        entityConfig,
+        breakdown,
+        c1DniSignedUrl: resolvedC1Dni,
+        c2DniSignedUrl: resolvedC2Dni,
+        language
+      });
 
-          <div style="border-top: 2px solid #ff0090; margin: 20px 0;"></div>
-
-          <div style="background-color: #fcf6fa; border: 1px dashed #ff0090; padding: 20px; border-radius: 18px; text-align: center; margin-bottom: 30px;">
-            <p style="font-size: 11px; font-family: monospace; color: #cc0073; margin: 0 0 5px 0; text-transform: uppercase; letter-spacing: 1.5px; font-weight: bold;">
-              ${language === 'ca' ? 'CODI DE SEGUIMENT OFICIAL' : 'CÓDIGO DE SEGUIMIENTO OFICIAL'}
-            </p>
-            <p style="font-size: 28px; font-family: monospace; font-weight: 900; color: #ff0090; margin: 0; letter-spacing: 1px;">
-              ${item.codiSeguiment}
-            </p>
-          </div>
-
-          <!-- QR Container -->
-          <div style="text-align: center; margin: 30px 0;">
-            <div style="display: inline-block; padding: 15px; background-color: #f8f9fa; border: 1px solid #e1e1e6; border-radius: 20px;">
-              <img src="https://api.qrserver.com/v1/create-qr-code/?size=250x250&color=e6007e&data=${encodeURIComponent(item.id)}" 
-                   alt="QR Code" width="180" height="180" style="display: block; border-radius: 10px;" />
-            </div>
-            <p style="font-size: 11px; color: #888890; margin-top: 10px; font-family: monospace; text-transform: uppercase; letter-spacing: 0.5px;">
-              ${language === 'ca' ? 'Presenteu aquest QR a Secretaria per pagar' : 'Presenten este QR en Secretaría para pagar'}
-            </p>
-          </div>
-
-          <!-- Couples and details table -->
-          <div style="border-top: 1px solid #e1e1e6; border-bottom: 1px solid #e1e1e6; padding: 15px 0; margin-bottom: 30px;">
-            <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
-              <tr>
-                <td style="padding: 8px 0; color: #666670; font-weight: bold; text-transform: uppercase; font-size: 11px;">
-                  ${language === 'ca' ? 'Parella:' : 'Pareja:'}
-                </td>
-                <td style="padding: 8px 0; text-align: right; font-weight: bold; color: #111115;">
-                  ${item.c1Nom} &amp; ${item.c2Nom}
-                </td>
-              </tr>
-              <tr>
-                <td style="padding: 8px 0; color: #666670; font-weight: bold; text-transform: uppercase; font-size: 11px;">
-                  ${language === 'ca' ? 'Categoria (Categoría):' : 'Categoría:'}
-                </td>
-                <td style="padding: 8px 0; text-align: right; color: #111115; font-family: monospace;">
-                  ${item.categoria === CategoriaParella.ADULT 
-                    ? (language === 'ca' ? 'PARELLA ADULTA' : 'PAREJA ADULTA') 
-                    : (language === 'ca' ? 'PARELLA JUVENIL' : 'PAREJA JUVENIL')}
-                </td>
-              </tr>
-              ${extrasHtml ? `
-              <tr>
-                <td style="padding: 8px 0; color: #666670; font-weight: bold; text-transform: uppercase; font-size: 11px; vertical-align: top;">
-                  ${language === 'ca' ? 'Complements:' : 'Complementos:'}
-                </td>
-                <td style="padding: 8px 0; text-align: right; color: #333338;">
-                  <ul style="margin: 0; padding: 0; list-style: none; line-height: 1.4;">
-                    ${extrasHtml}
-                  </ul>
-                </td>
-              </tr>
-              ` : ''}
-              <tr style="border-top: 1px dashed #e1e1e6;">
-                <td style="padding: 15px 0 8px 0; color: #111110; font-weight: 950; font-size: 14px; text-transform: uppercase;">
-                  ${language === 'ca' ? 'Total a Pagar:' : 'Total a Pagar:'}
-                </td>
-                <td style="padding: 15px 0 8px 0; text-align: right; font-weight: 950; color: #ff0090; font-size: 22px;">
-                  ${item.preuCalculat}€
-                </td>
-              </tr>
-            </table>
-          </div>
-
-          <!-- Next Steps -->
-          <div style="background-color: #f8f9fa; padding: 20px; border-radius: 18px; margin-bottom: 30px;">
-            <h3 style="margin-top: 0; margin-bottom: 12px; font-size: 13px; color: #111115; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 850;">
-              ${language === 'ca' ? '📦 PROXIMS PASOS I RECOLLIDA:' : '📦 PRÓXIMOS PASOS Y RECOGIDA:'}
-            </h3>
-            <div style="font-size: 13px; color: #44444f; line-height: 1.6;">
-              <p style="margin: 0 0 8px 0;">
-                <strong>1. ${language === 'ca' ? "Sede d'El Tast" : "Sede de El Tast"}:</strong><br/>
-                ${language === 'ca'
-                  ? "Presenteu-vos a la secretaria de l'associació cultural amb el codi QR adjunt."
-                  : "Preséntense en la secretaría de la asociación cultural mostrando el código QR adjunto."}
-              </p>
-              <p style="margin: 0;">
-                <strong>2. ${language === 'ca' ? 'Dies de lliurament i caixa' : 'Días de entrega y cobro'}:</strong><br/>
-                ${language === 'ca' ? evHoursCa : evHoursEs}
-              </p>
-            </div>
-          </div>
-
-          <div style="border-top: 1px solid #eaeaea; padding-top: 20px; text-align: center;">
-            <p style="font-size: 11px; color: #99999f; margin: 0; line-height: 1.5;">
-              <strong>Associació Cultural El Tast de Vilanova i la Geltrú</strong><br/>
-              ${evAddr} &bull; <a href="mailto:${smtpUsuariVal}" style="color: #ff0090; text-decoration: none;">${smtpUsuariVal}</a>
-            </p>
-          </div>
-        </div>
-      `;
+      const emailAttachments: any[] = [];
+      if (entityConfig.logoUrl && entityConfig.logoUrl.startsWith('data:')) {
+        emailAttachments.push({
+          filename: 'logo.png',
+          content: entityConfig.logoUrl,
+          cid: 'tast-email-logo-cid'
+        });
+      }
 
       let adminToken = '';
       try {

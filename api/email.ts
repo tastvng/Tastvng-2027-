@@ -245,7 +245,7 @@ export default async function emailHandler(req: any, res: any) {
                   <tr><td style="padding: 6px 0; color: #666;">Categoria:</td><td style="text-align: right; font-weight: bold;">${ins.categoria || 'Adult'}</td></tr>
                   <tr><td style="padding: 6px 0; color: #666;">Total a Pagar:</td><td style="text-align: right; font-weight: bold; color: #ff0090; font-size: 18px;">${ins.preuCalculat || 0}€</td></tr>
                 </table>
-                <p style="font-size: 12px; color: #888; text-align: center; margin-top: 30px;">Associació Cultural El Tast &bull; secretaria@eltast.cat</p>
+                <p style="font-size: 12px; color: #888; text-align: center; margin-top: 30px;">Associació Cultural El Tast &bull; tastvng@gmail.com</p>
               </div>
             `;
           }

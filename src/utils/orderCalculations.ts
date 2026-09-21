@@ -54,7 +54,7 @@ export function calculateInscriptionOrderBreakdown(
     const adultTariff = config?.tarifesDinamiques?.find(t => 
       t.actiu !== false && (t.tipus === 'categoria_adult' || t.id === 'adults')
     );
-    categoriaQuotaBase = adultTariff ? adultTariff.valor : (config?.preuAdult ?? 45);
+    categoriaQuotaBase = adultTariff ? adultTariff.valor : (config?.preuAdult ?? (config as any)?.preuAdults ?? (config as any)?.preu_adults ?? 45);
   } else {
     categoriaNom = language === 'ca'
       ? (config?.categoriaJuvenilNom || "Parella Juvenil")
@@ -63,7 +63,7 @@ export function calculateInscriptionOrderBreakdown(
     const juvenilTariff = config?.tarifesDinamiques?.find(t => 
       t.actiu !== false && (t.tipus === 'categoria_juvenil' || t.id === 'juvenils')
     );
-    categoriaQuotaBase = juvenilTariff ? juvenilTariff.valor : (config?.preuJuvenil ?? 45);
+    categoriaQuotaBase = juvenilTariff ? juvenilTariff.valor : (config?.preuJuvenil ?? (config as any)?.preu_juvenil ?? 45);
   }
 
   const materials: SelectedMaterialItem[] = [];
@@ -93,64 +93,91 @@ export function calculateInscriptionOrderBreakdown(
     const isOptional = !!(linia.opcional || linia.armilla_opcional || config?.armilla_opcional);
     const liniaNom = (language === 'es' ? (linia.nomES || linia.nom) : linia.nom) || 'Armilla';
 
-    // Participant 1 selection
+    // Check if armilla quantity is explicitly recorded in registration or questionnaire responses
+    const regAny = registration as any;
+    let explicitQty: number | null = null;
+    const candidates = [
+      regAny.armilla,
+      regAny.armilla_qty,
+      regAny.armillaQuantitat,
+      regAny.armilles,
+      registration.respostesCuestionari?.armilla,
+      registration.respostesCuestionari?.armilla_qty,
+      (sel as any)?.quantitat,
+      (sel as any)?.armilla
+    ];
+
+    for (const val of candidates) {
+      if (val !== undefined && val !== null && val !== '') {
+        if (typeof val === 'boolean') {
+          explicitQty = val ? 1 : 0;
+          break;
+        }
+        const parsed = Number(val);
+        if (!isNaN(parsed)) {
+          explicitQty = Math.max(0, parsed);
+          break;
+        }
+      }
+    }
+
+    // Participant wants & selections
     const c1Wants = sel 
       ? (isOptional ? (sel as any).c1Vol === true : (sel as any).c1Vol !== false)
       : (!isOptional && !!registration.c1Talla && registration.c1Talla.toLowerCase() !== 'cap');
 
-    if (c1Wants) {
-      const c1Tipus = (sel?.c1Tipus || registration.c1UniformeTipus || 'compra').toLowerCase();
-      const isLloguer = c1Tipus.includes('lloguer') || c1Tipus.includes('alquiler');
-      const unitPrice = isLloguer ? (linia.preuLloguer ?? linia.preu ?? 0) : (linia.preu ?? 0);
-      const qty1 = sel?.c1Quantitat !== undefined 
-        ? Math.max(0, sel.c1Quantitat) 
-        : (linia.requeixQuantitat ? 0 : 1);
-      const talla1 = sel?.c1Talla || registration.c1Talla || '';
-
-      if (qty1 > 0) {
-        const modalityLabel = isLloguer 
-          ? (language === 'ca' ? `Lloguer (P1${talla1 ? ` - Talla ${talla1}` : ''})` : `Alquiler (P1${talla1 ? ` - Talla ${talla1}` : ''})`)
-          : (language === 'ca' ? `Compra (P1${talla1 ? ` - Talla ${talla1}` : ''})` : `Compra (P1${talla1 ? ` - Talla ${talla1}` : ''})`);
-
-        materials.push({
-          id: `${linia.id}_p1`,
-          nom: liniaNom,
-          quantitat: qty1,
-          modalitat: modalityLabel,
-          preuUnitari: unitPrice,
-          subtotal: qty1 * unitPrice
-        });
-      }
-    }
-
-    // Participant 2 selection
     const c2Wants = sel 
       ? (isOptional ? (sel as any).c2Vol === true : (sel as any).c2Vol !== false)
       : (!isOptional && !!registration.c2Talla && registration.c2Talla.toLowerCase() !== 'cap');
 
-    if (c2Wants) {
-      const c2Tipus = (sel?.c2Tipus || registration.c2UniformeTipus || 'compra').toLowerCase();
-      const isLloguer = c2Tipus.includes('lloguer') || c2Tipus.includes('alquiler');
+    let finalQty = 0;
+    if (explicitQty !== null) {
+      finalQty = explicitQty;
+    } else if (c1Wants || c2Wants) {
+      // Single line item with quantity 1 for the couple; do not duplicate per participant
+      finalQty = 1;
+    }
+
+    if (finalQty > 0) {
+      const c1Tipus = ((sel as any)?.c1Tipus || registration.c1UniformeTipus || 'compra').toLowerCase();
+      const c2Tipus = ((sel as any)?.c2Tipus || registration.c2UniformeTipus || 'compra').toLowerCase();
+      const isLloguer = c1Tipus.includes('lloguer') || c1Tipus.includes('alquiler') || c2Tipus.includes('lloguer') || c2Tipus.includes('alquiler');
       const unitPrice = isLloguer ? (linia.preuLloguer ?? linia.preu ?? 0) : (linia.preu ?? 0);
-      const qty2 = sel?.c2Quantitat !== undefined 
-        ? Math.max(0, sel.c2Quantitat) 
-        : (linia.requeixQuantitat ? 0 : 1);
-      const talla2 = sel?.c2Talla || registration.c2Talla || '';
 
-      if (qty2 > 0) {
-        const modalityLabel = isLloguer 
-          ? (language === 'ca' ? `Lloguer (P2${talla2 ? ` - Talla ${talla2}` : ''})` : `Alquiler (P2${talla2 ? ` - Talla ${talla2}` : ''})`)
-          : (language === 'ca' ? `Compra (P2${talla2 ? ` - Talla ${talla2}` : ''})` : `Compra (P2${talla2 ? ` - Talla ${talla2}` : ''})`);
+      const talla1 = ((sel as any)?.c1Talla || registration.c1Talla || '').trim();
+      const talla2 = ((sel as any)?.c2Talla || registration.c2Talla || '').trim();
 
-        materials.push({
-          id: `${linia.id}_p2`,
-          nom: liniaNom,
-          quantitat: qty2,
-          modalitat: modalityLabel,
-          preuUnitari: unitPrice,
-          subtotal: qty2 * unitPrice
-        });
+      const baseModality = isLloguer 
+        ? (language === 'ca' ? 'Lloguer' : 'Alquiler') 
+        : (language === 'ca' ? 'Compra' : 'Compra');
+
+      // Las tallas de los dos participantes pueden aparecer como detalle, pero no deben duplicar cantidad ni precio.
+      let detail = '';
+      const hasT1 = talla1 && talla1.toLowerCase() !== 'cap';
+      const hasT2 = talla2 && talla2.toLowerCase() !== 'cap';
+
+      if (hasT1 && hasT2) {
+        detail = language === 'ca' ? `(Talles: P1 ${talla1}, P2 ${talla2})` : `(Tallas: P1 ${talla1}, P2 ${talla2})`;
+      } else if (hasT1) {
+        detail = language === 'ca' ? `(Talla: ${talla1})` : `(Talla: ${talla1})`;
+      } else if (hasT2) {
+        detail = language === 'ca' ? `(Talla: ${talla2})` : `(Talla: ${talla2})`;
       }
+
+      const modalityLabel = detail ? `${baseModality} ${detail}` : baseModality;
+
+      processedExtraIds.add(linia.id);
+      processedExtraIds.add('armilla');
+      processedExtraIds.add('chaleco');
+
+      materials.push({
+        id: linia.id,
+        nom: liniaNom,
+        quantitat: finalQty,
+        modalitat: modalityLabel,
+        preuUnitari: unitPrice,
+        subtotal: finalQty * unitPrice
+      });
     }
   }
 
@@ -167,9 +194,15 @@ export function calculateInscriptionOrderBreakdown(
       const isForbidden = /doma|mocador|pañuelo|panuelo/i.test(extId) || /doma|mocador|pañuelo|panuelo/i.test(extNom);
       const isClavells = /clavell/i.test(extId) || /clavell/i.test(extNom);
       const isCorbati = /corbat|pajarit/i.test(extId) || /corbat|pajarit/i.test(extNom);
+      const isArmillaExtra = /armilla|chaleco/i.test(extId) || /armilla|chaleco/i.test(extNom);
 
       // Discard legacy domàs / mocadors unless it was renamed to clavells / corbatí
       if (isForbidden && !isClavells && !isCorbati) {
+        continue;
+      }
+
+      // Do not duplicate armilla if already processed
+      if (isArmillaExtra && processedExtraIds.has('armilla')) {
         continue;
       }
 

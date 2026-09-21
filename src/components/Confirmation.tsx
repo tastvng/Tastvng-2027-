@@ -11,7 +11,7 @@ import { useLanguage } from '../LanguageContext';
 import { getEntityConfigSync, fetchLiveEntityConfig, EntityConfig } from '../utils/entityConfig';
 import { calculateInscriptionOrderBreakdown, validateInscriptionTotal, InscriptionOrderBreakdown } from '../utils/orderCalculations';
 import { buildUnifiedEmailHtml } from '../utils/ticketGenerator';
-import { getDniSignedUrl } from '../supabaseClient';
+import { getDniSignedUrl, getSupabaseInscripcionById } from '../supabaseClient';
 
 interface ConfirmationProps {
   registration: Inscripcio;
@@ -22,6 +22,7 @@ interface ConfirmationProps {
 
 export default function Confirmation({ registration, onClear, onUpdate, config }: ConfirmationProps) {
   const { language, t } = useLanguage();
+  const [currentReg, setCurrentReg] = useState<Inscripcio>(registration);
   const [showEmailPreview, setShowEmailPreview] = useState(false);
   const [smtpStatus, setSmtpStatus] = useState<'idle' | 'sending' | 'success' | 'error' | 'not_configured'>('idle');
   const [smtpError, setSmtpError] = useState('');
@@ -30,9 +31,20 @@ export default function Confirmation({ registration, onClear, onUpdate, config }
   const [c1DniSignedUrl, setC1DniSignedUrl] = useState<string | null>(null);
   const [c2DniSignedUrl, setC2DniSignedUrl] = useState<string | null>(null);
 
+  useEffect(() => {
+    setCurrentReg(registration);
+    if (registration.id && !registration.codiSeguiment) {
+      getSupabaseInscripcionById(registration.id).then(fresh => {
+        if (fresh && fresh.codiSeguiment) {
+          setCurrentReg(fresh);
+        }
+      }).catch(err => console.warn("Could not retrieve fresh registration code:", err));
+    }
+  }, [registration]);
+
   // Single Source of Truth Calculation & Validation
-  const breakdown: InscriptionOrderBreakdown = calculateInscriptionOrderBreakdown(registration, config, language);
-  const validation = validateInscriptionTotal(registration, config, language);
+  const breakdown: InscriptionOrderBreakdown = calculateInscriptionOrderBreakdown(currentReg, config, language);
+  const validation = validateInscriptionTotal(currentReg, config, language);
 
   useEffect(() => {
     // 1. Refresh entity configuration from Supabase
@@ -41,29 +53,49 @@ export default function Confirmation({ registration, onClear, onUpdate, config }
     }).catch(err => console.warn("Could not fetch live entity config:", err));
 
     // 2. Resolve signed Supabase DNI URLs
-    if (registration.c1DniUrl) {
-      getDniSignedUrl(registration.c1DniUrl).then(url => {
+    const c1Url = currentReg.c1DniUrl || registration.c1DniUrl;
+    const c2Url = currentReg.c2DniUrl || registration.c2DniUrl;
+
+    if (c1Url) {
+      getDniSignedUrl(c1Url).then(url => {
         if (url) setC1DniSignedUrl(url);
       }).catch(err => console.warn("Error resolving C1 DNI signed url:", err));
     }
-    if (registration.c2DniUrl) {
-      getDniSignedUrl(registration.c2DniUrl).then(url => {
+    if (c2Url) {
+      getDniSignedUrl(c2Url).then(url => {
         if (url) setC2DniSignedUrl(url);
       }).catch(err => console.warn("Error resolving C2 DNI signed url:", err));
     }
-  }, [language, registration.c1DniUrl, registration.c2DniUrl]);
+  }, [language, currentReg.c1DniUrl, currentReg.c2DniUrl, registration.c1DniUrl, registration.c2DniUrl]);
 
-  // Rule 10: QR code contains the exact saved tracking code
-  const qrIdentifier = registration.codiSeguiment || registration.id;
+  // QR code contains the exact saved tracking code
+  const realTrackingCode = (currentReg.codiSeguiment || registration.codiSeguiment || '').trim();
+  const qrIdentifier = realTrackingCode || currentReg.id || registration.id;
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&color=e6007e&data=${encodeURIComponent(qrIdentifier)}`;
 
   const sendRealEmail = async () => {
     setSmtpStatus('sending');
     setSmtpError('');
 
-    // Requirement 7: Block sending if totals mismatch!
-    if (!validation.valid) {
-      const err = validation.errorMessage || "Error de concordança de preu.";
+    let activeReg = currentReg;
+    if (activeReg.id && !activeReg.codiSeguiment) {
+      try {
+        const fresh = await getSupabaseInscripcionById(activeReg.id);
+        if (fresh && fresh.codiSeguiment) {
+          activeReg = fresh;
+          setCurrentReg(fresh);
+        }
+      } catch (e) {
+        console.warn("Could not load fresh registration code for email:", e);
+      }
+    }
+
+    const currentBreakdown = calculateInscriptionOrderBreakdown(activeReg, config, language);
+    const currentValidation = validateInscriptionTotal(activeReg, config, language);
+
+    // Requirement: Block sending if totals mismatch!
+    if (!currentValidation.valid) {
+      const err = currentValidation.errorMessage || "Error de concordança de preu.";
       console.error("[EMAIL BLOCKED - MISMATCH]:", err);
       setSmtpStatus('error');
       setSmtpError(err);
@@ -71,7 +103,7 @@ export default function Confirmation({ registration, onClear, onUpdate, config }
     }
 
     try {
-      const coupleEmail = (registration.emailContactoPareja || registration.c1Email || registration.c2Email || '').trim();
+      const coupleEmail = (activeReg.emailContactoPareja || activeReg.c1Email || activeReg.c2Email || registration.emailContactoPareja || registration.c1Email || registration.c2Email || '').trim();
       const emailList = coupleEmail && coupleEmail.includes('@') ? [coupleEmail] : [];
       if (emailList.length === 0) {
         setSmtpStatus('error');
@@ -85,18 +117,18 @@ export default function Confirmation({ registration, onClear, onUpdate, config }
       let resolvedC1Dni = c1DniSignedUrl;
       let resolvedC2Dni = c2DniSignedUrl;
 
-      if (!resolvedC1Dni && registration.c1DniUrl) {
-        resolvedC1Dni = await getDniSignedUrl(registration.c1DniUrl);
+      if (!resolvedC1Dni && (activeReg.c1DniUrl || registration.c1DniUrl)) {
+        resolvedC1Dni = await getDniSignedUrl(activeReg.c1DniUrl || registration.c1DniUrl);
       }
-      if (!resolvedC2Dni && registration.c2DniUrl) {
-        resolvedC2Dni = await getDniSignedUrl(registration.c2DniUrl);
+      if (!resolvedC2Dni && (activeReg.c2DniUrl || registration.c2DniUrl)) {
+        resolvedC2Dni = await getDniSignedUrl(activeReg.c2DniUrl || registration.c2DniUrl);
       }
 
       // Unified Single Source of Truth Template
       const { subject, html } = buildUnifiedEmailHtml({
-        registration,
+        registration: activeReg,
         entityConfig,
-        breakdown,
+        breakdown: currentBreakdown,
         c1DniSignedUrl: resolvedC1Dni,
         c2DniSignedUrl: resolvedC2Dni,
         language
@@ -119,15 +151,15 @@ export default function Confirmation({ registration, onClear, onUpdate, config }
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            id: registration.id,
-            inscriptionId: registration.id,
-            codiSeguiment: registration.codiSeguiment,
+            id: activeReg.id,
+            inscriptionId: activeReg.id,
+            codiSeguiment: activeReg.codiSeguiment,
             emailData: {
               to: emailTo,
               subject,
               html,
               attachments: emailAttachments,
-              codiSeguiment: registration.codiSeguiment
+              codiSeguiment: activeReg.codiSeguiment
             }
           })
         }).catch(err => {
@@ -159,41 +191,41 @@ export default function Confirmation({ registration, onClear, onUpdate, config }
       }
 
       if (errorsList.length === 0) {
-        console.log('[EMAIL ok]:', { to: emailList, codi: registration.codiSeguiment });
+        console.log('[EMAIL ok]:', { to: emailList, codi: activeReg.codiSeguiment });
         setSmtpStatus('success');
         if (onUpdate) {
           onUpdate({
-            ...registration,
+            ...activeReg,
             respostesCuestionari: {
-              ...registration.respostesCuestionari,
+              ...activeReg.respostesCuestionari,
               estatCorreu: 'enviat'
             }
           });
         }
       } else {
         const errorMsg = errorsList.join(', ');
-        console.error('[EMAIL error]:', { to: emailList, codi: registration.codiSeguiment, error: errorMsg });
+        console.error('[EMAIL error]:', { to: emailList, codi: activeReg.codiSeguiment, error: errorMsg });
         setSmtpStatus('error');
         setSmtpError(errorMsg);
         if (onUpdate) {
           onUpdate({
-            ...registration,
+            ...activeReg,
             respostesCuestionari: {
-              ...registration.respostesCuestionari,
+              ...activeReg.respostesCuestionari,
               estatCorreu: 'fallat'
             }
           });
         }
       }
     } catch (err: any) {
-      console.error("[EMAIL error]:", { to: registration.emailContactoPareja, codi: registration.codiSeguiment, error: err?.message || err });
+      console.error("[EMAIL error]:", { to: activeReg.emailContactoPareja, codi: activeReg.codiSeguiment, error: err?.message || err });
       setSmtpStatus('error');
       setSmtpError(err.message || 'Error de conexión');
       if (onUpdate) {
         onUpdate({
-          ...registration,
+          ...activeReg,
           respostesCuestionari: {
-            ...registration.respostesCuestionari,
+            ...activeReg.respostesCuestionari,
             estatCorreu: 'fallat'
           }
         });
@@ -338,7 +370,7 @@ export default function Confirmation({ registration, onClear, onUpdate, config }
             <span className="text-fuchsia-500">{entityConfig.nom}</span> &bull; {entityConfig.nomEsdeveniment}
           </h2>
           <div className="absolute -bottom-3.5 left-1/2 -translate-x-1/2 bg-fuchsia-600 text-white font-mono font-black text-xs px-5 py-1.5 rounded-full shadow-md tracking-wider">
-            {registration.codiSeguiment}
+            {realTrackingCode || registration.codiSeguiment}
           </div>
         </div>
 
@@ -375,10 +407,7 @@ export default function Confirmation({ registration, onClear, onUpdate, config }
                 {language === 'ca' ? 'Contacte:' : 'Contacto:'}
               </span>
               <span className="font-mono text-zinc-700 text-right text-[11px]">
-                {registration.emailContactoPareja || registration.c1Email || registration.c2Email}
-                {(registration.telefonContactoPareja || registration.c1Telefon || registration.c2Telefon) && (
-                  <> &bull; {registration.telefonContactoPareja || registration.c1Telefon || registration.c2Telefon}</>
-                )}
+                {currentReg.emailContactoPareja || currentReg.c1Email || currentReg.c2Email || registration.emailContactoPareja || registration.c1Email || registration.c2Email}
               </span>
             </div>
 
@@ -534,8 +563,7 @@ export default function Confirmation({ registration, onClear, onUpdate, config }
               </p>
               <p>
                 <strong className="text-zinc-800">{language === 'ca' ? 'Contacte oficial:' : 'Contacto oficial:'}</strong><br/>
-                <a href={`mailto:${entityConfig.email}`} className="text-fuchsia-600 font-bold hover:underline">{entityConfig.email}</a>
-                {entityConfig.telefon && <> &bull; Tel: <span className="font-mono font-bold">{entityConfig.telefon}</span></>}
+                <a href="mailto:tastvng@gmail.com" className="text-fuchsia-600 font-bold hover:underline">tastvng@gmail.com</a>
               </p>
             </div>
           </div>

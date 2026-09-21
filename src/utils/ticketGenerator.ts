@@ -21,10 +21,12 @@ export function buildUnifiedEmailHtml(options: TicketGenerationOptions): {
 } {
   const { registration, entityConfig, breakdown, c1DniSignedUrl, c2DniSignedUrl, language = 'ca' } = options;
 
+  const realCode = (registration.codiSeguiment || (registration as any).codigo || (registration as any).codigoInscripcion || (registration as any).codi || '').trim();
+
   const subjectBase = language === 'ca'
     ? `Confirmació de preinscripció - ${entityConfig.nomEsdeveniment}`
     : `Confirmación de preinscripción - ${entityConfig.nomEsdeveniment}`;
-  const subject = `${subjectBase} [${registration.codiSeguiment}]`;
+  const subject = realCode ? `${subjectBase} [${realCode}]` : subjectBase;
 
   const isAdult = String(registration.categoria || '').toUpperCase().includes('ADULT') || 
                   registration.categoria === CategoriaParella.ADULT;
@@ -52,8 +54,8 @@ export function buildUnifiedEmailHtml(options: TicketGenerationOptions): {
     `;
   }
 
-  // QR representation (Rule 10: QR contains the exact saved tracking code)
-  const qrIdentifier = registration.codiSeguiment;
+  // QR representation (QR contains the exact saved tracking code)
+  const qrIdentifier = realCode || registration.id;
   const qrImgUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&color=e6007e&data=${encodeURIComponent(qrIdentifier)}`;
 
   // DNI Status HTML
@@ -72,7 +74,7 @@ export function buildUnifiedEmailHtml(options: TicketGenerationOptions): {
   const itemizedTableHtml = generateItemizedBreakdownHtml(breakdown, language);
 
   const contactEmail = (registration.emailContactoPareja || registration.c1Email || registration.c2Email || '').trim();
-  const contactPhone = (registration.telefonContactoPareja || registration.c1Telefon || registration.c2Telefon || '').trim();
+  const officialContactEmail = "tastvng@gmail.com";
 
   const html = `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 620px; margin: 0 auto; padding: 32px 24px; border: 1px solid #e2e4e8; border-radius: 24px; background-color: #ffffff; color: #111115;">
@@ -93,7 +95,7 @@ export function buildUnifiedEmailHtml(options: TicketGenerationOptions): {
           ${language === 'ca' ? 'CODI DE SEGUIMENT OFICIAL' : 'CÓDIGO DE SEGUIMIENTO OFICIAL'}
         </span>
         <span style="font-size: 28px; font-family: monospace; font-weight: 950; color: #ff0090; letter-spacing: 1.5px;">
-          ${registration.codiSeguiment}
+          ${realCode}
         </span>
       </div>
 
@@ -125,16 +127,6 @@ export function buildUnifiedEmailHtml(options: TicketGenerationOptions): {
             </td>
             <td style="padding: 6px 0; text-align: right; color: #374151; font-family: monospace;">
               ${contactEmail}
-            </td>
-          </tr>
-          ` : ''}
-          ${contactPhone ? `
-          <tr>
-            <td style="padding: 6px 0; color: #6b7280; font-weight: bold; text-transform: uppercase; font-size: 11px;">
-              ${language === 'ca' ? 'Telèfon de contacte:' : 'Teléfono de contacto:'}
-            </td>
-            <td style="padding: 6px 0; text-align: right; color: #374151; font-family: monospace;">
-              ${contactPhone}
             </td>
           </tr>
           ` : ''}
@@ -170,7 +162,7 @@ export function buildUnifiedEmailHtml(options: TicketGenerationOptions): {
           </tr>
           ` : ''}
 
-          <!-- DNI Links section (Requirement 10) -->
+          <!-- DNI Links section -->
           <tr style="border-top: 1px dashed #e5e7eb;">
             <td style="padding: 8px 0 4px 0; color: #6b7280; font-weight: bold; text-transform: uppercase; font-size: 11px;">
               DNI ${registration.c1Nom || 'P1'}:
@@ -198,7 +190,7 @@ export function buildUnifiedEmailHtml(options: TicketGenerationOptions): {
         ${itemizedTableHtml}
       </div>
 
-      <!-- Logistics / Entity Delivery Information (Requirement 8 & 9) -->
+      <!-- Logistics / Entity Delivery Information -->
       <div style="background-color: #f9fafb; border: 1px solid #e5e7eb; padding: 20px; border-radius: 18px; margin-bottom: 28px;">
         <h3 style="margin-top: 0; margin-bottom: 12px; font-size: 12px; color: #111115; text-transform: uppercase; letter-spacing: 0.8px; font-weight: 900;">
           📍 ${language === 'ca' ? 'PUNT DE RECOLLIDA I ATENCIÓ:' : 'PUNTO DE RECOGIDA Y ATENCIÓN:'}
@@ -218,8 +210,7 @@ export function buildUnifiedEmailHtml(options: TicketGenerationOptions): {
           </p>
           <p style="margin: 0;">
             <strong>${language === 'ca' ? 'Contacte oficial:' : 'Contacto oficial:'}</strong><br/>
-            <a href="mailto:${entityConfig.email}" style="color: #ff0090; text-decoration: none; font-weight: bold;">${entityConfig.email}</a>
-            ${entityConfig.telefon ? ` &bull; Tel: <span style="font-family: monospace; font-weight: bold;">${entityConfig.telefon}</span>` : ''}
+            <a href="mailto:${officialContactEmail}" style="color: #ff0090; text-decoration: none; font-weight: bold;">${officialContactEmail}</a>
           </p>
         </div>
       </div>
@@ -228,7 +219,7 @@ export function buildUnifiedEmailHtml(options: TicketGenerationOptions): {
       <div style="border-top: 1px solid #e5e7eb; padding-top: 18px; text-align: center; font-size: 11px; color: #9ca3af; line-height: 1.5;">
         <p style="margin: 0;">
           <strong>${entityConfig.nom}</strong><br/>
-          ${entityConfig.direccio} &bull; <a href="mailto:${entityConfig.email}" style="color: #ff0090; text-decoration: none;">${entityConfig.email}</a>
+          ${entityConfig.direccio} &bull; <a href="mailto:${officialContactEmail}" style="color: #ff0090; text-decoration: none;">${officialContactEmail}</a>
         </p>
       </div>
     </div>
