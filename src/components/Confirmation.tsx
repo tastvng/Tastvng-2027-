@@ -369,8 +369,9 @@ export default function Confirmation({ registration, onClear, onUpdate, config }
           <h2 className="font-sans font-black text-xl text-white tracking-tight flex items-center justify-center gap-1.5 uppercase">
             <span className="text-fuchsia-500">{entityConfig.nom}</span> &bull; {entityConfig.nomEsdeveniment}
           </h2>
-          <div className="absolute -bottom-3.5 left-1/2 -translate-x-1/2 bg-fuchsia-600 text-white font-mono font-black text-xs px-5 py-1.5 rounded-full shadow-md tracking-wider">
-            {realTrackingCode || registration.codiSeguiment}
+          <div className="absolute -bottom-3.5 left-1/2 -translate-x-1/2 bg-fuchsia-600 text-white font-mono font-black text-xs px-5 py-1.5 rounded-full shadow-md tracking-wider flex items-center gap-1.5 whitespace-nowrap">
+            <span className="text-[10px] tracking-widest text-fuchsia-200 uppercase">CODI DE SEGUIMENT:</span>
+            <span>{realTrackingCode || registration.codiSeguiment}</span>
           </div>
         </div>
 
@@ -386,9 +387,6 @@ export default function Confirmation({ registration, onClear, onUpdate, config }
                 referrerPolicy="no-referrer"
               />
             </div>
-            <p className="text-[10px] text-zinc-400 font-mono text-center mt-3 uppercase tracking-wider">
-              {language === 'ca' ? 'Presenteu aquest QR a Secretaria per fer el pagament' : 'Presenten este QR en Secretaría para realizar el pago'}
-            </p>
           </div>
 
           {/* Couples detail blocks */}
@@ -419,6 +417,17 @@ export default function Confirmation({ registration, onClear, onUpdate, config }
                 {categoriaLabel}
               </span>
             </div>
+
+            {((currentReg as any).observacions || (currentReg as any).observaciones || currentReg.respostesCuestionari?.observacions || currentReg.respostesCuestionari?.observaciones) && (
+              <div className="flex justify-between items-center text-xs">
+                <span className="text-zinc-500 font-bold uppercase tracking-wide">
+                  {language === 'ca' ? 'Observacions:' : 'Observaciones:'}
+                </span>
+                <span className="font-medium text-zinc-800 text-right">
+                  {String((currentReg as any).observacions || (currentReg as any).observaciones || currentReg.respostesCuestionari?.observacions || currentReg.respostesCuestionari?.observaciones)}
+                </span>
+              </div>
+            )}
 
             <div className="flex justify-between items-center text-xs">
               <span className="text-zinc-500 font-bold uppercase tracking-wide">
@@ -541,32 +550,46 @@ export default function Confirmation({ registration, onClear, onUpdate, config }
             </div>
           </div>
 
-          {/* Real Logistics from sistema_config */}
-          <div className="bg-zinc-50 border border-zinc-200/80 rounded-2xl p-4 space-y-3">
-            <h4 className="font-sans font-bold text-zinc-900 text-xs uppercase tracking-wider flex items-center gap-1.5">
-              <MapPin size={14} className="text-fuchsia-600" />
-              {language === 'ca' ? 'PUNT DE RECOLLIDA I ATENCIÓ:' : 'PUNTO DE RECOGIDA Y ATENCIÓN:'}
-            </h4>
-            
-            <div className="text-xs text-zinc-600 space-y-2 leading-relaxed">
-              <p>
-                <strong className="text-zinc-800">{entityConfig.nom}</strong><br/>
-                {entityConfig.direccio}
-              </p>
-              <p>
-                <strong className="text-zinc-800">{language === 'ca' ? 'Dies de lliurament i caixa:' : 'Días de entrega y cobro:'}</strong><br/>
-                {entityConfig.diesEntrega}
-              </p>
-              <p>
-                <strong className="text-zinc-800">{language === 'ca' ? 'Horari de Secretaria:' : 'Horario de Secretaría:'}</strong><br/>
-                {entityConfig.horari}
-              </p>
-              <p>
-                <strong className="text-zinc-800">{language === 'ca' ? 'Contacte oficial:' : 'Contacto oficial:'}</strong><br/>
-                <a href="mailto:tastvng@gmail.com" className="text-fuchsia-600 font-bold hover:underline">tastvng@gmail.com</a>
+          {/* Real Logistics from Secretaria only if configured */}
+          {(entityConfig.direccio || entityConfig.diesEntrega || entityConfig.horari) ? (
+            <div className="bg-zinc-50 border border-zinc-200/80 rounded-2xl p-4 space-y-3">
+              <h4 className="font-sans font-bold text-zinc-900 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                <MapPin size={14} className="text-fuchsia-600" />
+                {language === 'ca' ? 'PUNT DE RECOLLIDA I ATENCIÓ:' : 'PUNTO DE RECOGIDA Y ATENCIÓN:'}
+              </h4>
+              
+              <div className="text-xs text-zinc-600 space-y-2 leading-relaxed">
+                {entityConfig.direccio && (
+                  <p>
+                    <strong className="text-zinc-800">{entityConfig.nom}</strong><br/>
+                    {entityConfig.direccio}
+                  </p>
+                )}
+                {entityConfig.diesEntrega && (
+                  <p>
+                    <strong className="text-zinc-800">{language === 'ca' ? 'Dies de lliurament i caixa:' : 'Días de entrega y cobro:'}</strong><br/>
+                    {entityConfig.diesEntrega}
+                  </p>
+                )}
+                {entityConfig.horari && (
+                  <p>
+                    <strong className="text-zinc-800">{language === 'ca' ? 'Horari de Secretaria:' : 'Horario de Secretaría:'}</strong><br/>
+                    {entityConfig.horari}
+                  </p>
+                )}
+                <p>
+                  <strong className="text-zinc-800">{language === 'ca' ? 'Contacte oficial:' : 'Contacto oficial:'}</strong><br/>
+                  <a href="mailto:tastvng@gmail.com" className="text-fuchsia-600 font-bold hover:underline">tastvng@gmail.com</a>
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-zinc-50 border border-zinc-200/80 rounded-2xl p-4 text-center">
+              <p className="text-xs text-zinc-600 m-0">
+                <strong className="text-zinc-800">{entityConfig.nom}</strong> &bull; <a href="mailto:tastvng@gmail.com" className="text-fuchsia-600 font-bold hover:underline">tastvng@gmail.com</a>
               </p>
             </div>
-          </div>
+          )}
         </div>
 
         {/* Decorative ticket notch borders */}

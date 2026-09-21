@@ -26,7 +26,7 @@ export function buildUnifiedEmailHtml(options: TicketGenerationOptions): {
   const subjectBase = language === 'ca'
     ? `Confirmació de preinscripció - ${entityConfig.nomEsdeveniment}`
     : `Confirmación de preinscripción - ${entityConfig.nomEsdeveniment}`;
-  const subject = realCode ? `${subjectBase} [${realCode}]` : subjectBase;
+  const subject = realCode ? `${subjectBase} [CODI DE SEGUIMENT: ${realCode}]` : subjectBase;
 
   const isAdult = String(registration.categoria || '').toUpperCase().includes('ADULT') || 
                   registration.categoria === CategoriaParella.ADULT;
@@ -76,6 +76,18 @@ export function buildUnifiedEmailHtml(options: TicketGenerationOptions): {
   const contactEmail = (registration.emailContactoPareja || registration.c1Email || registration.c2Email || '').trim();
   const officialContactEmail = "tastvng@gmail.com";
 
+  const observacions = (
+    (registration as any).observacions ||
+    (registration as any).observaciones ||
+    (registration as any).comentaris ||
+    registration.respostesCuestionari?.observacions ||
+    registration.respostesCuestionari?.observaciones ||
+    registration.respostesCuestionari?.comentaris ||
+    ''
+  ).toString().trim();
+
+  const hasLogistics = !!(entityConfig.direccio || entityConfig.diesEntrega || entityConfig.horari);
+
   const html = `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 620px; margin: 0 auto; padding: 32px 24px; border: 1px solid #e2e4e8; border-radius: 24px; background-color: #ffffff; color: #111115;">
       ${logoHtml}
@@ -91,8 +103,8 @@ export function buildUnifiedEmailHtml(options: TicketGenerationOptions): {
 
       <!-- Tracking Code Box -->
       <div style="background-color: #fcf6fa; border: 1.5px dashed #ff0090; padding: 18px; border-radius: 18px; text-align: center; margin-bottom: 28px;">
-        <span style="font-size: 10px; font-family: monospace; color: #cc0073; text-transform: uppercase; letter-spacing: 2px; font-weight: bold; display: block; margin-bottom: 4px;">
-          ${language === 'ca' ? 'CODI DE SEGUIMENT OFICIAL' : 'CÓDIGO DE SEGUIMIENTO OFICIAL'}
+        <span style="font-size: 11px; font-family: monospace; color: #cc0073; text-transform: uppercase; letter-spacing: 2px; font-weight: bold; display: block; margin-bottom: 4px;">
+          CODI DE SEGUIMENT
         </span>
         <span style="font-size: 28px; font-family: monospace; font-weight: 950; color: #ff0090; letter-spacing: 1.5px;">
           ${realCode}
@@ -104,9 +116,6 @@ export function buildUnifiedEmailHtml(options: TicketGenerationOptions): {
         <div style="display: inline-block; padding: 14px; background-color: #f8f9fa; border: 1px solid #e1e1e6; border-radius: 18px;">
           <img src="${qrImgUrl}" alt="QR Codi" width="180" height="180" style="display: block; border-radius: 10px;" />
         </div>
-        <p style="font-size: 11px; color: #666670; margin-top: 10px; font-family: monospace; text-transform: uppercase; letter-spacing: 0.5px;">
-          ${language === 'ca' ? 'Presenteu aquest codi QR a Secretaria per fer el pagament' : 'Presenten este código QR en Secretaría para realizar el pago'}
-        </p>
       </div>
 
       <!-- Couple and Registration Information Table -->
@@ -179,6 +188,17 @@ export function buildUnifiedEmailHtml(options: TicketGenerationOptions): {
               ${c2DniHtml}
             </td>
           </tr>
+
+          ${observacions ? `
+          <tr style="border-top: 1px dashed #e5e7eb;">
+            <td style="padding: 8px 0 4px 0; color: #6b7280; font-weight: bold; text-transform: uppercase; font-size: 11px;">
+              ${language === 'ca' ? 'Observacions:' : 'Observaciones:'}
+            </td>
+            <td style="padding: 8px 0 4px 0; text-align: right; font-size: 12px; color: #111115;">
+              ${observacions}
+            </td>
+          </tr>
+          ` : ''}
         </table>
       </div>
 
@@ -190,36 +210,43 @@ export function buildUnifiedEmailHtml(options: TicketGenerationOptions): {
         ${itemizedTableHtml}
       </div>
 
-      <!-- Logistics / Entity Delivery Information -->
+      <!-- Real Logistics from Secretaria if configured -->
+      ${hasLogistics ? `
       <div style="background-color: #f9fafb; border: 1px solid #e5e7eb; padding: 20px; border-radius: 18px; margin-bottom: 28px;">
         <h3 style="margin-top: 0; margin-bottom: 12px; font-size: 12px; color: #111115; text-transform: uppercase; letter-spacing: 0.8px; font-weight: 900;">
           📍 ${language === 'ca' ? 'PUNT DE RECOLLIDA I ATENCIÓ:' : 'PUNTO DE RECOGIDA Y ATENCIÓN:'}
         </h3>
         <div style="font-size: 12px; color: #374151; line-height: 1.6;">
+          ${entityConfig.direccio ? `
           <p style="margin: 0 0 8px 0;">
             <strong>${entityConfig.nom}</strong><br/>
             ${entityConfig.direccio}
           </p>
+          ` : ''}
+          ${entityConfig.diesEntrega ? `
           <p style="margin: 0 0 8px 0;">
             <strong>${language === 'ca' ? 'Dies de lliurament i caixa:' : 'Días de entrega y cobro:'}</strong><br/>
             ${entityConfig.diesEntrega}
           </p>
+          ` : ''}
+          ${entityConfig.horari ? `
           <p style="margin: 0 0 8px 0;">
             <strong>${language === 'ca' ? 'Horari de Secretaria:' : 'Horario de Secretaría:'}</strong><br/>
             ${entityConfig.horari}
           </p>
+          ` : ''}
           <p style="margin: 0;">
             <strong>${language === 'ca' ? 'Contacte oficial:' : 'Contacto oficial:'}</strong><br/>
             <a href="mailto:${officialContactEmail}" style="color: #ff0090; text-decoration: none; font-weight: bold;">${officialContactEmail}</a>
           </p>
         </div>
       </div>
+      ` : ''}
 
       <!-- Footer disclaimer -->
       <div style="border-top: 1px solid #e5e7eb; padding-top: 18px; text-align: center; font-size: 11px; color: #9ca3af; line-height: 1.5;">
         <p style="margin: 0;">
-          <strong>${entityConfig.nom}</strong><br/>
-          ${entityConfig.direccio} &bull; <a href="mailto:${officialContactEmail}" style="color: #ff0090; text-decoration: none;">${officialContactEmail}</a>
+          <strong>${entityConfig.nom}</strong>${entityConfig.direccio ? ` &bull; ${entityConfig.direccio}` : ''} &bull; <a href="mailto:${officialContactEmail}" style="color: #ff0090; text-decoration: none;">${officialContactEmail}</a>
         </p>
       </div>
     </div>

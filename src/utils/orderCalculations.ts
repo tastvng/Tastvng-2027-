@@ -101,6 +101,10 @@ export function calculateInscriptionOrderBreakdown(
       regAny.armilla_qty,
       regAny.armillaQuantitat,
       regAny.armilles,
+      regAny.totalArmilles,
+      regAny.total_armilles,
+      regAny.quantitat_armilla,
+      regAny.quantitat,
       registration.respostesCuestionari?.armilla,
       registration.respostesCuestionari?.armilla_qty,
       (sel as any)?.quantitat,
@@ -122,46 +126,104 @@ export function calculateInscriptionOrderBreakdown(
     }
 
     // Participant wants & selections
-    const c1Wants = sel 
-      ? (isOptional ? (sel as any).c1Vol === true : (sel as any).c1Vol !== false)
-      : (!isOptional && !!registration.c1Talla && registration.c1Talla.toLowerCase() !== 'cap');
+    const c1VolCandidate = (sel as any)?.c1Vol ?? regAny.c1Vol ?? regAny.c1_vol ?? regAny.c1VolArmilla ?? regAny.c1_vol_armilla;
+    const c2VolCandidate = (sel as any)?.c2Vol ?? regAny.c2Vol ?? regAny.c2_vol ?? regAny.c2VolArmilla ?? regAny.c2_vol_armilla;
 
-    const c2Wants = sel 
-      ? (isOptional ? (sel as any).c2Vol === true : (sel as any).c2Vol !== false)
-      : (!isOptional && !!registration.c2Talla && registration.c2Talla.toLowerCase() !== 'cap');
+    const hasExplicitC1Vol = typeof c1VolCandidate === 'boolean';
+    const hasExplicitC2Vol = typeof c2VolCandidate === 'boolean';
+
+    const c1Wants = hasExplicitC1Vol 
+      ? c1VolCandidate === true 
+      : (isOptional 
+          ? (explicitQty !== null ? explicitQty >= 1 : (!!registration.c1Talla && registration.c1Talla.toLowerCase() !== 'cap'))
+          : (!!registration.c1Talla && registration.c1Talla.toLowerCase() !== 'cap'));
+
+    const c2Wants = hasExplicitC2Vol 
+      ? c2VolCandidate === true 
+      : (isOptional 
+          ? (explicitQty !== null ? explicitQty >= 2 : (!!registration.c2Talla && registration.c2Talla.toLowerCase() !== 'cap'))
+          : (!!registration.c2Talla && registration.c2Talla.toLowerCase() !== 'cap'));
 
     let finalQty = 0;
     if (explicitQty !== null) {
       finalQty = explicitQty;
+    } else if (c1Wants && c2Wants) {
+      finalQty = 2;
     } else if (c1Wants || c2Wants) {
-      // Single line item with quantity 1 for the couple; do not duplicate per participant
       finalQty = 1;
     }
 
     if (finalQty > 0) {
       const c1Tipus = ((sel as any)?.c1Tipus || registration.c1UniformeTipus || 'compra').toLowerCase();
       const c2Tipus = ((sel as any)?.c2Tipus || registration.c2UniformeTipus || 'compra').toLowerCase();
-      const isLloguer = c1Tipus.includes('lloguer') || c1Tipus.includes('alquiler') || c2Tipus.includes('lloguer') || c2Tipus.includes('alquiler');
-      const unitPrice = isLloguer ? (linia.preuLloguer ?? linia.preu ?? 0) : (linia.preu ?? 0);
 
-      const talla1 = ((sel as any)?.c1Talla || registration.c1Talla || '').trim();
-      const talla2 = ((sel as any)?.c2Talla || registration.c2Talla || '').trim();
+      const rawTalla1 = ((sel as any)?.c1Talla || registration.c1Talla || '').trim();
+      const rawTalla2 = ((sel as any)?.c2Talla || registration.c2Talla || '').trim();
+      const hasT1 = !!rawTalla1 && rawTalla1.toLowerCase() !== 'cap';
+      const hasT2 = !!rawTalla2 && rawTalla2.toLowerCase() !== 'cap';
 
-      const baseModality = isLloguer 
-        ? (language === 'ca' ? 'Lloguer' : 'Alquiler') 
-        : (language === 'ca' ? 'Compra' : 'Compra');
+      // Strictly determine which size(s) were selected by the user
+      let p1Selected = false;
+      let p2Selected = false;
 
-      // Las tallas de los dos participantes pueden aparecer como detalle, pero no deben duplicar cantidad ni precio.
+      if (hasExplicitC1Vol || hasExplicitC2Vol) {
+        p1Selected = c1Wants && hasT1;
+        p2Selected = c2Wants && hasT2;
+      } else if (finalQty === 1) {
+        // Exactly one item: show exactly one size
+        if (c1Wants && !c2Wants && hasT1) {
+          p1Selected = true;
+        } else if (c2Wants && !c1Wants && hasT2) {
+          p2Selected = true;
+        } else if (hasT1) {
+          p1Selected = true;
+        } else if (hasT2) {
+          p2Selected = true;
+        }
+      } else if (finalQty >= 2) {
+        p1Selected = hasT1;
+        p2Selected = hasT2;
+      }
+
+      // If user only marked 1 size, show 1 size. If marked 2, show 2.
+      const activeTalla1 = p1Selected ? rawTalla1 : '';
+      const activeTalla2 = p2Selected ? rawTalla2 : '';
+
+      const p1IsLloguer = c1Tipus.includes('lloguer') || c1Tipus.includes('alquiler');
+      const p2IsLloguer = c2Tipus.includes('lloguer') || c2Tipus.includes('alquiler');
+
+      let baseModality = language === 'ca' ? 'Compra' : 'Compra';
+      let unitPrice = linia.preu ?? 0;
+
+      if (activeTalla1 && activeTalla2) {
+        if (p1IsLloguer && p2IsLloguer) {
+          baseModality = language === 'ca' ? 'Lloguer' : 'Alquiler';
+          unitPrice = linia.preuLloguer ?? linia.preu ?? 0;
+        } else if (p1IsLloguer || p2IsLloguer) {
+          baseModality = language === 'ca' 
+            ? (p1IsLloguer ? 'P1 Lloguer, P2 Compra' : 'P1 Compra, P2 Lloguer')
+            : (p1IsLloguer ? 'P1 Alquiler, P2 Compra' : 'P1 Compra, P2 Alquiler');
+          unitPrice = linia.preu ?? 0;
+        }
+      } else if (activeTalla2 && !activeTalla1) {
+        if (p2IsLloguer) {
+          baseModality = language === 'ca' ? 'Lloguer' : 'Alquiler';
+          unitPrice = linia.preuLloguer ?? linia.preu ?? 0;
+        }
+      } else {
+        if (p1IsLloguer) {
+          baseModality = language === 'ca' ? 'Lloguer' : 'Alquiler';
+          unitPrice = linia.preuLloguer ?? linia.preu ?? 0;
+        }
+      }
+
       let detail = '';
-      const hasT1 = talla1 && talla1.toLowerCase() !== 'cap';
-      const hasT2 = talla2 && talla2.toLowerCase() !== 'cap';
-
-      if (hasT1 && hasT2) {
-        detail = language === 'ca' ? `(Talles: P1 ${talla1}, P2 ${talla2})` : `(Tallas: P1 ${talla1}, P2 ${talla2})`;
-      } else if (hasT1) {
-        detail = language === 'ca' ? `(Talla: ${talla1})` : `(Talla: ${talla1})`;
-      } else if (hasT2) {
-        detail = language === 'ca' ? `(Talla: ${talla2})` : `(Talla: ${talla2})`;
+      if (activeTalla1 && activeTalla2) {
+        detail = language === 'ca' ? `(Talles: P1 ${activeTalla1}, P2 ${activeTalla2})` : `(Tallas: P1 ${activeTalla1}, P2 ${activeTalla2})`;
+      } else if (activeTalla1) {
+        detail = language === 'ca' ? `(Talla: ${activeTalla1})` : `(Talla: ${activeTalla1})`;
+      } else if (activeTalla2) {
+        detail = language === 'ca' ? `(Talla: ${activeTalla2})` : `(Talla: ${activeTalla2})`;
       }
 
       const modalityLabel = detail ? `${baseModality} ${detail}` : baseModality;

@@ -39,26 +39,21 @@ export function getEntityConfigSync(language: 'ca' | 'es' = 'ca', fallbackConfig
   const sec = storedPersonalizacion?.secretaria || {};
   const med = storedPersonalizacion?.medios || {};
 
-  const nom = ev.nombre || safeGetItem('tast_nom_esdeveniment') || fallbackConfig?.titolSeccioTarifes?.replace(/Tarifes\s*/i, '') || "Associació Cultural El Tast";
-  const direccio = ev.direccio || safeGetItem('tast_direccio_esdeveniment') || "Plaça Soler i Carbonell, 28, Vilanova i la Geltrú";
+  const nom = (ev.nombre || safeGetItem('tast_nom_esdeveniment') || fallbackConfig?.titolSeccioTarifes?.replace(/Tarifes\s*/i, '') || "Associació Cultural El Tast").trim();
+  const direccio = (ev.direccio || safeGetItem('tast_direccio_esdeveniment') || "").trim();
   const email = "tastvng@gmail.com";
   const telefon = "";
-  const anyEdicio = ev.any_edicio || safeGetItem('tast_any_edicio') || "2027";
+  const anyEdicio = (ev.any_edicio || safeGetItem('tast_any_edicio') || "2027").trim();
   const nomEsdeveniment = ev.nombre ? `${ev.nombre} ${anyEdicio}` : `El Tast ${anyEdicio}`;
 
-  const defaultHoursCa = "Dimecres i divendres, de 18:00h a 21:30h a la seu de l'entitat.";
-  const defaultHoursEs = "Miércoles y viernes, de 18:00h a 21:30h en la sede de la entidad.";
-  const defaultDeliveryCa = "Dimecres i divendres de 18:00h a 21:30h a la seu social.";
-  const defaultDeliveryEs = "Miércoles y viernes de 18:00h a 21:30h en la sede social.";
-
   const horari = (language === 'ca'
-    ? (sec.hours_ca || safeGetItem('tast_secretaria_hours_ca') || defaultHoursCa)
-    : (sec.hours_es || safeGetItem('tast_secretaria_hours_es') || defaultHoursEs)
+    ? (sec.hours_ca || safeGetItem('tast_secretaria_hours_ca') || "")
+    : (sec.hours_es || safeGetItem('tast_secretaria_hours_es') || "")
   ).trim();
 
   const diesEntrega = (language === 'ca'
-    ? (sec.dies_entrega_ca || safeGetItem('tast_dies_entrega_ca') || defaultDeliveryCa)
-    : (sec.dies_entrega_es || safeGetItem('tast_dies_entrega_es') || defaultDeliveryEs)
+    ? (sec.dies_entrega_ca || safeGetItem('tast_dies_entrega_ca') || "")
+    : (sec.dies_entrega_es || safeGetItem('tast_dies_entrega_es') || "")
   ).trim();
 
   const logoUrl = med.logo || safeGetItem('tast_email_logo') || undefined;
