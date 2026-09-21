@@ -128,48 +128,22 @@ export const CodigoVestimentaModal: React.FC<CodigoVestimentaModalProps> = ({
   const vimeoIframeRef = useRef<HTMLIFrameElement | null>(null);
   const vimeoPlayerInstanceRef = useRef<Player | null>(null);
 
-  // Stabilize external callbacks to prevent player re-initialization on parent render
-  const onVideoLoadedMetadataRef = useRef(onVideoLoadedMetadata);
-  const onVideoEndedRef = useRef(onVideoEnded);
-  const onVideoTimeUpdateRef = useRef(onVideoTimeUpdate);
-  const onVideoPauseRef = useRef(onVideoPause);
-  const onVideoSeekingRef = useRef(onVideoSeeking);
-
-  useEffect(() => {
-    onVideoLoadedMetadataRef.current = onVideoLoadedMetadata;
-    onVideoEndedRef.current = onVideoEnded;
-    onVideoTimeUpdateRef.current = onVideoTimeUpdate;
-    onVideoPauseRef.current = onVideoPause;
-    onVideoSeekingRef.current = onVideoSeeking;
-  });
-
   // Sync / load URL from prop, Supabase or event
   const loadVideoConfig = useCallback(async (forcedUrl?: string) => {
     setIsLoading(true);
     setVideoLoadError(null);
     setIsMissingOriginal(false);
 
-    let targetCandidate = (forcedUrl && forcedUrl.trim()) || (youtubeUrl && youtubeUrl.trim()) || '';
+    let targetCandidate = forcedUrl !== undefined ? forcedUrl.trim() : (youtubeUrl !== undefined ? youtubeUrl.trim() : '');
 
     if (!targetCandidate) {
       try {
         const { getCodigoVestimentaUrl } = await import('../supabaseClient');
-        const stored = await getCodigoVestimentaUrl(true);
+        const stored = await getCodigoVestimentaUrl();
         targetCandidate = stored?.trim() || '';
       } catch {
         targetCandidate = '';
       }
-    }
-
-    if (!targetCandidate) {
-      try {
-        if (typeof localStorage !== 'undefined') {
-          const local = localStorage.getItem('codigo_vestimenta_url');
-          if (local && typeof local === 'string' && local.trim()) {
-            targetCandidate = local.trim();
-          }
-        }
-      } catch {}
     }
 
     if (!targetCandidate) {
@@ -274,36 +248,6 @@ export const CodigoVestimentaModal: React.FC<CodigoVestimentaModalProps> = ({
       player = new Player(iframe);
       vimeoPlayerInstanceRef.current = player;
 
-      player.ready().then(() => {
-        setIsLoading(false);
-        setVideoLoadError(null);
-      }).catch((err: any) => {
-        console.error('[Vimeo Player Ready Error]', err);
-        setIsLoading(false);
-        const isBlocked = err?.name === 'PrivacyError' || 
-          err?.name === 'SecurityError' ||
-          (err?.message && (
-            err.message.toLowerCase().includes('privacy') || 
-            err.message.toLowerCase().includes('embed') || 
-            err.message.toLowerCase().includes('block') ||
-            err.message.toLowerCase().includes('permission')
-          ));
-
-        if (isBlocked) {
-          setVideoLoadError(
-            language === 'ca'
-              ? "Vimeo ha blocat la inserció d'aquest vídeo per configuració de privadesa o permisos del domini."
-              : "Vimeo ha bloqueado la inserción de este vídeo por configuración de privacidad o permisos del dominio."
-          );
-        } else {
-          setVideoLoadError(
-            language === 'ca'
-              ? `Error en el reproductor de Vimeo: ${err?.message || 'No s\'ha pogut inicialitzar el vídeo.'}`
-              : `Error en el reproductor de Vimeo: ${err?.message || 'No se ha podido inicializar el vídeo.'}`
-          );
-        }
-      });
-
       player.on('loaded', () => {
         setIsLoading(false);
         setVideoLoadError(null);
@@ -314,7 +258,7 @@ export const CodigoVestimentaModal: React.FC<CodigoVestimentaModalProps> = ({
             currentTime: 0,
             ended: false
           } as unknown as HTMLVideoElement;
-          onVideoLoadedMetadataRef.current?.({ currentTarget: fakeVideoElement } as unknown as React.SyntheticEvent<HTMLVideoElement>);
+          onVideoLoadedMetadata?.({ currentTarget: fakeVideoElement } as unknown as React.SyntheticEvent<HTMLVideoElement>);
         }).catch(() => {});
       });
 
@@ -325,51 +269,32 @@ export const CodigoVestimentaModal: React.FC<CodigoVestimentaModalProps> = ({
           ended: data.percent >= 0.99
         } as unknown as HTMLVideoElement;
 
-        onVideoTimeUpdateRef.current?.({ currentTarget: fakeVideoElement } as unknown as React.SyntheticEvent<HTMLVideoElement>);
+        onVideoTimeUpdate?.({ currentTarget: fakeVideoElement } as unknown as React.SyntheticEvent<HTMLVideoElement>);
 
-        // Rule: Unlock questionnaire after 95% completion or ended
         if (data.percent >= 0.95) {
-          onVideoEndedRef.current?.();
+          onVideoEnded?.();
         }
       });
 
       player.on('ended', () => {
-        onVideoEndedRef.current?.();
+        onVideoEnded?.();
       });
 
       player.on('pause', () => {
-        onVideoPauseRef.current?.();
+        onVideoPause?.();
       });
 
       player.on('seeked', () => {
-        onVideoSeekingRef.current?.({} as unknown as React.SyntheticEvent<HTMLVideoElement>);
+        onVideoSeeking?.({} as unknown as React.SyntheticEvent<HTMLVideoElement>);
       });
 
-      player.on('error', (err: any) => {
+      player.on('error', (err) => {
         console.error('[Vimeo Player Error]', err);
-        setIsLoading(false);
-        const isBlocked = err?.name === 'PrivacyError' || 
-          err?.name === 'SecurityError' ||
-          (err?.message && (
-            err.message.toLowerCase().includes('privacy') || 
-            err.message.toLowerCase().includes('embed') || 
-            err.message.toLowerCase().includes('block') ||
-            err.message.toLowerCase().includes('permission')
-          ));
-
-        if (isBlocked) {
-          setVideoLoadError(
-            language === 'ca'
-              ? "Vimeo ha blocat la inserció d'aquest vídeo per configuració de privadesa o permisos del domini."
-              : "Vimeo ha bloqueado la inserción de este vídeo por configuración de privacidad o permisos del dominio."
-          );
-        } else {
-          setVideoLoadError(
-            language === 'ca'
-              ? `Error en el reproductor de Vimeo: ${err?.message || 'No s\'ha pogut reproduir el vídeo.'}`
-              : `Error en el reproductor de Vimeo: ${err?.message || 'No se ha podido reproducir el vídeo.'}`
-          );
-        }
+        setVideoLoadError(
+          language === 'ca'
+            ? `Error en el reproductor de Vimeo: ${err.message || 'No s\'ha pogut reproduir el vídeo.'}`
+            : `Error en el reproductor de Vimeo: ${err.message || 'No se ha podido reproducir el vídeo.'}`
+        );
       });
     } catch (err: any) {
       console.error('[Vimeo Init Error]', err);
@@ -390,7 +315,7 @@ export const CodigoVestimentaModal: React.FC<CodigoVestimentaModalProps> = ({
       }
       vimeoPlayerInstanceRef.current = null;
     };
-  }, [isVimeo, vimeoEmbedSrc, language]);
+  }, [isVimeo, vimeoEmbedSrc, onVideoEnded, onVideoLoadedMetadata, onVideoPause, onVideoSeeking, onVideoTimeUpdate, language]);
 
   // Native MP4 error handler
   const handleNativeVideoError = useCallback((e: React.SyntheticEvent<HTMLVideoElement, Event>) => {
@@ -464,8 +389,7 @@ export const CodigoVestimentaModal: React.FC<CodigoVestimentaModalProps> = ({
       {/* Video Container: explicit visible height, aspect-video, no display:none */}
       <div 
         id="video-player-container"
-        className="w-full aspect-video min-h-[260px] sm:min-h-[340px] md:min-h-[400px] bg-black rounded-2xl overflow-hidden relative shadow-inner border border-zinc-800 flex items-center justify-center"
-        style={{ minHeight: '260px', display: 'flex' }}
+        className="w-full aspect-video min-h-[220px] sm:min-h-[320px] md:min-h-[380px] bg-black rounded-2xl overflow-hidden relative shadow-inner border border-zinc-800 flex items-center justify-center"
       >
         {/* Render Vimeo iframe player when source is Vimeo */}
         {isVimeo && isValidSource && !isMissingOriginal && vimeoEmbedSrc && (
@@ -479,7 +403,6 @@ export const CodigoVestimentaModal: React.FC<CodigoVestimentaModalProps> = ({
             allowFullScreen
             referrerPolicy="strict-origin-when-cross-origin"
             className="w-full h-full"
-            style={{ width: '100%', height: '100%', minHeight: '260px', display: 'block', border: 'none' }}
             onLoad={() => {
               setIsLoading(false);
               setVideoLoadError(null);
@@ -547,16 +470,6 @@ export const CodigoVestimentaModal: React.FC<CodigoVestimentaModalProps> = ({
             <p className="text-xs sm:text-sm text-red-300 max-w-md font-medium leading-relaxed">
               {videoLoadError}
             </p>
-            {activeUrl && (activeUrl.includes('vimeo.com') || isVimeo) && (
-              <a 
-                href={activeUrl.startsWith('http') ? activeUrl : `https://${activeUrl}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs text-[#ff0090] underline hover:text-[#d60079] font-bold"
-              >
-                {language === 'ca' ? "Obrir vídeo a Vimeo" : "Abrir vídeo en Vimeo"}
-              </a>
-            )}
             <button
               type="button"
               onClick={handleRetry}

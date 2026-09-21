@@ -31,7 +31,6 @@ import { ComparserCard } from './publicForm/ComparserCard';
 import { CameraModal } from './publicForm/CameraModal';
 import { CodigoVestimentaModal } from './CodigoVestimentaModal';
 import { DEFAULT_CATEGORIA_DESCRIPTIONS } from '../data';
-import { calculateInscriptionOrderBreakdown } from '../utils/orderCalculations';
 
 interface PublicFormProps {
   config: SistemaConfig;
@@ -43,83 +42,6 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
   const { language, t } = useLanguage();
   const activeYear = useActiveYear();
 
-  // Official prices and system settings synchronized from Supabase
-  const [liveConfig, setLiveConfig] = useState<SistemaConfig>(config);
-  const [isPriceLoading, setIsPriceLoading] = useState<boolean>(false);
-  const [priceLoadError, setPriceLoadError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let isMounted = true;
-
-    async function loadOfficialConfig() {
-      try {
-        setIsPriceLoading(true);
-        const { getSupabaseSetting, isSupabaseConfigured, fetchSistemaConfig } = await import('../supabaseClient');
-        if (isSupabaseConfigured) {
-          const dbConfig = await getSupabaseSetting<SistemaConfig | null>('tast_config_2026', null, true);
-          if (isMounted) {
-            if (dbConfig && typeof dbConfig === 'object') {
-              setLiveConfig(prev => ({ ...prev, ...dbConfig }));
-              setPriceLoadError(null);
-            } else {
-              const sysConfig = await fetchSistemaConfig();
-              if (sysConfig && Object.keys(sysConfig).length > 0) {
-                setLiveConfig(prev => ({ ...prev, ...sysConfig }));
-                setPriceLoadError(null);
-              } else if (config) {
-                setLiveConfig(config);
-                setPriceLoadError(null);
-              }
-            }
-          }
-        } else if (config) {
-          if (isMounted) {
-            setLiveConfig(config);
-            setPriceLoadError(null);
-          }
-        } else {
-          if (isMounted) {
-            setPriceLoadError(language === 'ca'
-              ? "No s'han pogut carregar les tarifes oficials de Secretaria."
-              : "No se han podido cargar las tarifas oficiales de Secretaría."
-            );
-          }
-        }
-      } catch (err) {
-        console.error('[PublicForm] Error loading official config from Supabase:', err);
-        if (isMounted) {
-          if (config) {
-            setLiveConfig(config);
-            setPriceLoadError(null);
-          } else {
-            setPriceLoadError(language === 'ca'
-              ? "Error en carregar les tarifes oficials de Secretaria."
-              : "Error al cargar las tarifas oficiales de Secretaría."
-            );
-          }
-        }
-      } finally {
-        if (isMounted) {
-          setIsPriceLoading(false);
-        }
-      }
-    }
-
-    loadOfficialConfig();
-
-    const handleConfigChange = () => {
-      loadOfficialConfig();
-    };
-
-    window.addEventListener('sistemaConfigChanged', handleConfigChange);
-    window.addEventListener('storage', handleConfigChange);
-    return () => {
-      isMounted = false;
-      window.removeEventListener('sistemaConfigChanged', handleConfigChange);
-      window.removeEventListener('storage', handleConfigChange);
-    };
-  }, [config, language]);
-
   const [youtubeUrl, setYoutubeUrl] = useState('');
   const [submitError, setSubmitError] = useState<{ message: string; code?: string; details?: any } | null>(null);
 
@@ -128,7 +50,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
     const fetchVideoUrl = async () => {
       try {
         const { getCodigoVestimentaUrl } = await import('../supabaseClient');
-        const storedUrl = await getCodigoVestimentaUrl(true);
+        const storedUrl = await getCodigoVestimentaUrl();
         if (isMounted) {
           setYoutubeUrl(storedUrl || '');
         }
@@ -196,8 +118,8 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
   const [c2UniformeTipus, setC2UniformeTipus] = useState<'compra' | 'lloguer'>('compra');
 
   // Dynamic uniform/equipment selections state
-  const [seleccionsUniforme, setSeleccionsUniforme] = useState<Record<string, { c1Talla: string; c2Talla: string; c1Quantitat: number; c2Quantitat: number; c1Tipus: 'compra' | 'lloguer'; c2Tipus: 'compra' | 'lloguer'; c1Vol?: boolean; c2Vol?: boolean }>>(() => {
-    const initial: Record<string, { c1Talla: string; c2Talla: string; c1Quantitat: number; c2Quantitat: number; c1Tipus: 'compra' | 'lloguer'; c2Tipus: 'compra' | 'lloguer'; c1Vol?: boolean; c2Vol?: boolean }> = {};
+  const [seleccionsUniforme, setSeleccionsUniforme] = useState<Record<string, { c1Talla: string; c2Talla: string; c1Quantitat: number; c2Quantitat: number; c1Tipus: 'compra' | 'lloguer'; c2Tipus: 'compra' | 'lloguer' }>>(() => {
+    const initial: Record<string, { c1Talla: string; c2Talla: string; c1Quantitat: number; c2Quantitat: number; c1Tipus: 'compra' | 'lloguer'; c2Tipus: 'compra' | 'lloguer' }> = {};
     const lines = config.liniisUniforme || [
       {
         id: 'lin-1',
@@ -214,9 +136,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
         c1Quantitat: 1,
         c2Quantitat: 1,
         c1Tipus: 'compra',
-        c2Tipus: 'compra',
-        c1Vol: false,
-        c2Vol: false
+        c2Tipus: 'compra'
       };
     });
     return initial;
@@ -228,9 +148,13 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
   const [preguntesLoadedFromDb, setPreguntesLoadedFromDb] = useState<boolean>(false);
   const [respostesCuestionari, setRespostesCuestionari] = useState<Record<string, string | boolean>>({});
   
-  // Extras: Only valid materials are chaleco (inside participant selection), clavells and pajarita (corbatí)
-  const [clavellsQty, setClavellsQty] = useState(0);
-  const [corbatiQty, setCorbatiQty] = useState(0);
+  // Extras
+  const [teDomasBalcoQty, setTeDomasBalcoQty] = useState(0);
+  const teDomasBalco = teDomasBalcoQty > 0;
+  const [teMocadorsExtra, setTeMocadorsExtra] = useState(0);
+  const [genericExtrasQty, setGenericExtrasQty] = useState<Record<string, number>>({});
+  const [c1ExtrasSeleccionats, setC1ExtrasSeleccionats] = useState<Record<string, number>>({});
+  const [c2ExtrasSeleccionats, setC2ExtrasSeleccionats] = useState<Record<string, number>>({});
   
   // Checkboxes
   const [acceptaRGPD, setAcceptaRGPD] = useState(false);
@@ -515,89 +439,64 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
     // Requirement 10, 11, 12: Do NOT reset videoWatched on modal close!
   };
 
-  // Dynamic lookup for valid materials (Clavells and Corbatí / Pajarita)
-  const clavellsTariff = useMemo(() => {
-    return (liveConfig.tarifesDinamiques || []).find(t => 
-      t.actiu !== false && (/clavell/i.test(t.id) || /clavell/i.test(t.nom))
-    );
-  }, [liveConfig.tarifesDinamiques]);
-  const clavellsPrice = clavellsTariff ? clavellsTariff.valor : 8;
-  const clavellsNom = language === 'ca' ? 'Clavells' : 'Claveles';
+  // Calculate live total price
+  const basePrice = categoria === CategoriaParella.ADULT 
+    ? (config.tarifesDinamiques?.find(t => t.id === 'adults')?.valor ?? config.preuAdult)
+    : (config.tarifesDinamiques?.find(t => t.id === 'juvenils')?.valor ?? config.preuJuvenil);
+  const domasCost = teDomasBalcoQty * (config.tarifesDinamiques?.find(t => t.id === 'domas')?.valor ?? config.preuDomasBalco);
+  const mocadorsCost = teMocadorsExtra * (config.tarifesDinamiques?.find(t => t.id === 'mocador')?.valor ?? config.preuMocadorExtra);
 
-  const corbatiTariff = useMemo(() => {
-    return (liveConfig.tarifesDinamiques || []).find(t => 
-      t.actiu !== false && (/corbat|pajarit/i.test(t.id) || /corbat|pajarit/i.test(t.nom))
-    );
-  }, [liveConfig.tarifesDinamiques]);
-  const corbatiPrice = corbatiTariff ? corbatiTariff.valor : 10;
-  const corbatiNom = language === 'ca' ? 'Corbatí' : 'Pajarita';
+  // Calculate any custom dynamically added active generic extras using selected quantities
+  const genericExtrasCost = (config.tarifesDinamiques || [])
+    .filter(t => t.tipus === 'extra_generic' && t.actiu)
+    .reduce((sum, t) => sum + (genericExtrasQty[t.id] || 0) * t.valor, 0);
 
-  // Construct current registration object for the single source of truth calculator
-  const currentRegistration: Inscripcio = useMemo(() => {
-    const extres: Array<{ id: string; nom: string; quantitat: number; preuUnitari: number; modalitat?: string }> = [];
+  const c1ExtrasCost = Object.entries(c1ExtrasSeleccionats).reduce((total, [id, qty]) => {
+    const extra = (config.tarifesDinamiques || []).find(t => t.id === id);
+    const price = extra ? extra.valor : 0;
+    return total + price * Number(qty);
+  }, 0);
 
-    if (clavellsQty > 0) {
-      extres.push({
-        id: 'clavells',
-        nom: clavellsNom,
-        quantitat: clavellsQty,
-        preuUnitari: clavellsPrice,
-        modalitat: language === 'ca' ? 'Complements' : 'Complementos'
-      });
+  const c2ExtrasCost = Object.entries(c2ExtrasSeleccionats).reduce((total, [id, qty]) => {
+    const extra = (config.tarifesDinamiques || []).find(t => t.id === id);
+    const price = extra ? extra.valor : 0;
+    return total + price * Number(qty);
+  }, 0);
+
+  const uniformesCost = (config.liniisUniforme || []).reduce((sum, linia) => {
+    let cost = 0;
+    const isOptional = !!(linia.opcional || linia.armilla_opcional || config.armilla_opcional);
+    const sel = seleccionsUniforme[linia.id];
+    
+    if (sel) {
+      const c1Wants = isOptional ? sel.c1Vol !== false : true;
+      if (c1Wants) {
+        const p1 = sel.c1Tipus === 'lloguer' ? (linia.preuLloguer || 0) : (linia.preu || 0);
+        if (sel.c1Quantitat) {
+          cost += p1 * sel.c1Quantitat;
+        } else if (!linia.requeixQuantitat) {
+          cost += p1;
+        }
+      }
+      
+      const c2Wants = isOptional ? sel.c2Vol !== false : true;
+      if (c2Wants) {
+        const p2 = sel.c2Tipus === 'lloguer' ? (linia.preuLloguer || 0) : (linia.preu || 0);
+        if (sel.c2Quantitat) {
+          cost += p2 * sel.c2Quantitat;
+        } else if (!linia.requeixQuantitat) {
+          cost += p2;
+        }
+      }
+    } else {
+      if (!isOptional) {
+        cost += (linia.preu || 0) * 2;
+      }
     }
+    return sum + cost;
+  }, 0);
 
-    if (corbatiQty > 0) {
-      extres.push({
-        id: 'corbati',
-        nom: corbatiNom,
-        quantitat: corbatiQty,
-        preuUnitari: corbatiPrice,
-        modalitat: language === 'ca' ? 'Complements' : 'Complementos'
-      });
-    }
-
-    return {
-      categoria,
-      c1Nom,
-      c1Cognoms,
-      c1Talla,
-      c1UniformeTipus,
-      c2Nom,
-      c2Cognoms,
-      c2Talla,
-      c2UniformeTipus,
-      seleccionsUniforme,
-      extresSeleccionats: extres,
-      respostesCuestionari
-    } as Inscripcio;
-  }, [
-    categoria,
-    c1Nom,
-    c1Cognoms,
-    c1Talla,
-    c1UniformeTipus,
-    c2Nom,
-    c2Cognoms,
-    c2Talla,
-    c2UniformeTipus,
-    seleccionsUniforme,
-    clavellsQty,
-    clavellsNom,
-    clavellsPrice,
-    corbatiQty,
-    corbatiNom,
-    corbatiPrice,
-    language,
-    respostesCuestionari
-  ]);
-
-  // Single source of truth calculation: matches Secretaría, PDF and Confirmation Email
-  const orderBreakdown = useMemo(() => {
-    if (priceLoadError) return null;
-    return calculateInscriptionOrderBreakdown(currentRegistration, liveConfig, language);
-  }, [currentRegistration, liveConfig, language, priceLoadError]);
-
-  const totalCalculat = orderBreakdown ? orderBreakdown.totalCalculat : 0;
+  const totalCalculat = basePrice + domasCost + mocadorsCost + genericExtrasCost + c1ExtrasCost + c2ExtrasCost + uniformesCost;
 
   // Load questions actively from Supabase ('preguntes' table as primary, config.preguntesFormulari as fallback)
   useEffect(() => {
@@ -970,17 +869,6 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
       return;
     }
 
-    // Block submission if prices could not be loaded or calculated
-    if (priceLoadError || totalCalculat <= 0) {
-      const errorMsg = priceLoadError || (
-        language === 'ca'
-          ? "⚠️ No s'han pogut carregar les tarifes oficials de Secretaria. L'enviament està bloquejat."
-          : "⚠️ No se han podido cargar las tarifas oficiales de Secretaría. El envío está bloqueado."
-      );
-      setSubmitError({ message: errorMsg });
-      return;
-    }
-
     if (!validateForm()) {
       const scrollTarget = document.getElementById('public-form-title');
       if (scrollTarget) {
@@ -1063,21 +951,51 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
         ...respostesCuestionari as Record<string, string>
       };
 
-      if (clavellsQty > 0) finalRespostes['clavells_qty'] = String(clavellsQty);
-      if (corbatiQty > 0) finalRespostes['corbati_qty'] = String(corbatiQty);
+      if (teDomasBalcoQty > 0) finalRespostes['domas_qty'] = String(teDomasBalcoQty);
+      if (teMocadorsExtra > 0) finalRespostes['mocadors_qty'] = String(teMocadorsExtra);
+      
+      Object.keys(genericExtrasQty).forEach(key => {
+        const q = Number(genericExtrasQty[key] || 0);
+        if (q > 0) {
+          finalRespostes[`extra_qty_${key}`] = String(q);
+          if (key === 'clavells') finalRespostes['clavells_qty'] = String(q);
+          if (key === 'corbati') finalRespostes['corbati_qty'] = String(q);
+        }
+      });
 
-      const extresGuardats: { id: string; nom: string; quantitat: number; preuUnitari: number; modalitat?: string }[] = [];
-      if (orderBreakdown && orderBreakdown.materials) {
-        orderBreakdown.materials.forEach(m => {
-          extresGuardats.push({
-            id: m.id,
-            nom: m.nom,
-            quantitat: m.quantitat,
-            preuUnitari: m.preuUnitari,
-            modalitat: m.modalitat
-          });
+      const extresGuardats: { id: string; nom: string; quantitat: number; preuUnitari: number }[] = [];
+
+      // Add all active dynamic generic extras selected by the couple
+      (config.tarifesDinamiques || [])
+        .filter(t => t.tipus === 'extra_generic' && t.actiu)
+        .forEach(t => {
+          const qty = Number(genericExtrasQty[t.id] || 0);
+          if (qty > 0) {
+            const displayName = language === 'es' && t.nomES ? t.nomES : t.nom;
+            extresGuardats.push({
+              id: t.id,
+              nom: displayName,
+              quantitat: qty,
+              preuUnitari: t.valor
+            });
+          }
         });
-      }
+
+      // Backward compatibility for any extras recorded via participant or legacy state
+      Object.entries(genericExtrasQty).forEach(([id, rawQty]) => {
+        const qty = Number(rawQty || 0);
+        if (qty > 0 && !extresGuardats.some(e => e.id === id)) {
+          const extraDef = (config.tarifesDinamiques || []).find((t: any) => t.id === id);
+          if (extraDef) {
+            const nom = language === 'es' && extraDef.nomES ? extraDef.nomES : extraDef.nom;
+            extresGuardats.push({ id, nom, quantitat: qty, preuUnitari: extraDef.valor });
+          } else if (id === 'clavells') {
+            extresGuardats.push({ id, nom: language === 'ca' ? 'Clavells' : 'Claveles', quantitat: qty, preuUnitari: 8 });
+          } else if (id === 'corbati') {
+            extresGuardats.push({ id, nom: language === 'ca' ? 'Corbatí' : 'Corbatín', quantitat: qty, preuUnitari: 10 });
+          }
+        }
+      });
 
       const novaInscripcio: Inscripcio = {
         id: randomId,
@@ -1112,9 +1030,9 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
         respostesCuestionari: finalRespostes,
         seleccionsUniforme,
         extresSeleccionats: extresGuardats,
-        preuCalculat: orderBreakdown?.totalCalculat ?? totalCalculat,
-        teDomasBalco: false,
-        teMocadorsExtra: 0,
+        preuCalculat: totalCalculat,
+        teDomasBalco,
+        teMocadorsExtra,
         videoWatched: true,
         estatPagament: EstatPagament.PENDENT,
         metodePagament: null,
@@ -1589,11 +1507,11 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
             setSeleccionsUniforme={setSeleccionsUniforme}
             setTallaBackwards={setC1Talla}
             setUniformeTipusBackwards={setC1UniformeTipus}
-            extrasSeleccionats={{}}
-            setExtrasSeleccionats={() => {}}
+            extrasSeleccionats={c1ExtrasSeleccionats}
+            setExtrasSeleccionats={setC1ExtrasSeleccionats}
             isNameDuplicate={isC1NameDuplicate}
             errors={errors}
-            config={liveConfig}
+            config={config}
             handleFileUpload={handleFileUpload}
             startCamera={startCamera}
           />
@@ -1622,212 +1540,162 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
             setSeleccionsUniforme={setSeleccionsUniforme}
             setTallaBackwards={setC2Talla}
             setUniformeTipusBackwards={setC2UniformeTipus}
-            extrasSeleccionats={{}}
-            setExtrasSeleccionats={() => {}}
+            extrasSeleccionats={c2ExtrasSeleccionats}
+            setExtrasSeleccionats={setC2ExtrasSeleccionats}
             isNameDuplicate={isC2NameDuplicate}
             errors={errors}
-            config={liveConfig}
+            config={config}
             handleFileUpload={handleFileUpload}
             startCamera={startCamera}
           />
         </div>
 
-        {/* Material i Complements de la Parella: Únics materials vàlids: clavells i pajarita/corbatí */}
-        <div className="bg-[#0a0a0a] rounded-3xl p-6 sm:p-8 border border-zinc-800 shadow-xl space-y-6" id="seccio-material-parella">
-          <div className="border-b border-zinc-800/80 pb-4">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-fuchsia-950/40 border border-fuchsia-800/40 flex items-center justify-center text-[#ff0090]">
-                <Package size={18} />
+        {/* Dynamic Material Lines & Complements Section for the Couple */}
+        {(() => {
+          const activeMaterialLines = (config.tarifesDinamiques || []).filter(
+            t => (t.tipus === 'extra_generic' || t.tipus === 'extra_domas' || t.tipus === 'extra_mocador') && t.actiu === true
+          );
+
+          if (activeMaterialLines.length === 0) return null;
+
+          return (
+            <div className="bg-[#0a0a0a] rounded-3xl p-6 sm:p-8 border border-zinc-800 shadow-xl space-y-6" id="seccio-material-parella">
+              <div className="border-b border-zinc-800/80 pb-4">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-fuchsia-950/40 border border-fuchsia-800/40 flex items-center justify-center text-[#ff0090]">
+                    <Package size={18} />
+                  </div>
+                  <div>
+                    <h3 className="font-sans font-black text-white text-lg tracking-tight uppercase">
+                      {language === 'ca' ? 'Material i Complements de la Parella' : 'Material y Complementos de la Pareja'}
+                    </h3>
+                    <p className="text-xs text-zinc-400 mt-0.5 leading-relaxed">
+                      {language === 'ca'
+                        ? 'Opcions de material addicionals per a la parella (actualitzades automàticament des de Secretaria).'
+                        : 'Opciones de material adicionales para la pareja (actualizadas automáticamente desde Secretaría).'}
+                    </p>
+                  </div>
+                </div>
               </div>
-              <div>
-                <h3 className="font-sans font-black text-white text-lg tracking-tight uppercase">
-                  {language === 'ca' ? 'Material i Complements de la Parella' : 'Material y Complementos de la Pareja'}
-                </h3>
-                <p className="text-xs text-zinc-400 mt-0.5 leading-relaxed">
-                  {language === 'ca'
-                    ? 'Complements opcionals per a la comparsa (preus oficials sincronitzats des de Secretaria).'
-                    : 'Complementos opcionales para la comparsa (precios oficiales sincronizados desde Secretaría).'}
-                </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {activeMaterialLines.map((line) => {
+                  let qty = 0;
+                  let onQtyChange: (newVal: number) => void = () => {};
+
+                  if (line.tipus === 'extra_domas' || line.id === 'domas') {
+                    qty = teDomasBalcoQty;
+                    onQtyChange = (val) => setTeDomasBalcoQty(Math.max(0, val));
+                  } else if (line.tipus === 'extra_mocador' || line.id === 'mocador') {
+                    qty = teMocadorsExtra;
+                    onQtyChange = (val) => setTeMocadorsExtra(Math.max(0, val));
+                  } else {
+                    qty = genericExtrasQty[line.id] || 0;
+                    onQtyChange = (val) => setGenericExtrasQty(prev => ({
+                      ...prev,
+                      [line.id]: Math.max(0, val)
+                    }));
+                  }
+
+                  const displayName = language === 'es' && line.nomES ? line.nomES : line.nom;
+                  const isSelected = qty > 0;
+                  const lineTotal = qty * line.valor;
+
+                  return (
+                    <div 
+                      key={line.id}
+                      className={`material-card relative rounded-2xl p-4 border transition-all duration-200 flex flex-col justify-between gap-3 cursor-pointer ${
+                        isSelected 
+                          ? 'border-[#ff0090] bg-[#ff0090]/15 shadow-sm ring-1 ring-[#ff0090]/30' 
+                          : 'border-zinc-800 bg-[#121212]'
+                      }`}
+                      id={`material-card-${line.id}`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div 
+                          className="flex-1 select-none"
+                          onClick={() => {
+                            if (qty === 0) onQtyChange(1);
+                          }}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-extrabold text-white tracking-tight block">
+                              {displayName}
+                            </span>
+                            {isSelected && (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold font-mono bg-[#ff0090] text-white">
+                                {qty}x
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span className="material-price text-xs font-mono font-bold text-[#ff0090]">
+                              {line.valor.toFixed(2)}€ <span className="text-[10px] text-zinc-400 font-normal">/ unitat</span>
+                            </span>
+                            {isSelected && (
+                              <span className="text-xs font-mono font-black text-white bg-zinc-900 px-2 py-0.5 rounded-md border border-[#ff0090]/30">
+                                Total: {lineTotal.toFixed(2)}€
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Quick Checkbox button */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onQtyChange(isSelected ? 0 : 1);
+                          }}
+                          className={`w-7 h-7 rounded-xl border flex items-center justify-center transition-all cursor-pointer shrink-0 ${
+                            isSelected 
+                              ? 'bg-[#ff0090] border-[#ff0090] text-white shadow-sm' 
+                              : 'bg-zinc-900 border-zinc-700 text-transparent hover:border-[#ff0090]'
+                          }`}
+                          title={isSelected ? (language === 'ca' ? 'Treure selecció' : 'Quitar selección') : (language === 'ca' ? 'Seleccionar 1 unitat' : 'Seleccionar 1 unidad')}
+                        >
+                          <Check size={14} className={isSelected ? 'block' : 'opacity-0'} />
+                        </button>
+                      </div>
+
+                      {/* Quantity selector stepper */}
+                      <div 
+                        className="flex items-center justify-between pt-2 border-t border-zinc-800/80"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wide">
+                          {language === 'ca' ? 'Quantitat:' : 'Cantidad:'}
+                        </span>
+                        <div className="flex items-center gap-1 bg-zinc-900 border border-zinc-700 rounded-xl p-0.5 shadow-2xs">
+                          <button
+                            type="button"
+                            onClick={() => onQtyChange(Math.max(0, qty - 1))}
+                            disabled={qty <= 0}
+                            className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-300 hover:bg-zinc-800 disabled:opacity-30 disabled:hover:bg-transparent transition cursor-pointer"
+                            aria-label="Disminuir quantitat"
+                          >
+                            <Minus size={13} />
+                          </button>
+                          <span className="w-8 text-center font-mono font-black text-xs text-white select-none">
+                            {qty}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => onQtyChange(qty + 1)}
+                            className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-300 hover:bg-zinc-800 transition cursor-pointer"
+                            aria-label="Augmentar quantitat"
+                          >
+                            <Plus size={13} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* Clavells / Claveles */}
-            <div 
-              className={`material-card relative rounded-2xl p-4 border transition-all duration-200 flex flex-col justify-between gap-3 cursor-pointer ${
-                clavellsQty > 0 
-                  ? 'border-[#ff0090] bg-[#ff0090]/15 shadow-sm ring-1 ring-[#ff0090]/30' 
-                  : 'border-zinc-800 bg-[#121212]'
-              }`}
-              id="material-card-clavells"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div 
-                  className="flex-1 select-none"
-                  onClick={() => {
-                    if (clavellsQty === 0) setClavellsQty(1);
-                  }}
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-extrabold text-white tracking-tight block">
-                      {clavellsNom}
-                    </span>
-                    {clavellsQty > 0 && (
-                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold font-mono bg-[#ff0090] text-white">
-                        {clavellsQty}x
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="material-price text-xs font-mono font-bold text-[#ff0090]">
-                      {clavellsPrice.toFixed(2)}€ <span className="text-[10px] text-zinc-400 font-normal">/ unitat</span>
-                    </span>
-                    {clavellsQty > 0 && (
-                      <span className="text-xs font-mono font-black text-white bg-zinc-900 px-2 py-0.5 rounded-md border border-[#ff0090]/30">
-                        Total: {(clavellsQty * clavellsPrice).toFixed(2)}€
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setClavellsQty(clavellsQty > 0 ? 0 : 1);
-                  }}
-                  className={`w-7 h-7 rounded-xl border flex items-center justify-center transition-all cursor-pointer shrink-0 ${
-                    clavellsQty > 0 
-                      ? 'bg-[#ff0090] border-[#ff0090] text-white shadow-sm' 
-                      : 'bg-zinc-900 border-zinc-700 text-transparent hover:border-[#ff0090]'
-                  }`}
-                  title={clavellsQty > 0 ? (language === 'ca' ? 'Treure selecció' : 'Quitar selección') : (language === 'ca' ? 'Seleccionar 1 unitat' : 'Seleccionar 1 unidad')}
-                >
-                  <Check size={14} className={clavellsQty > 0 ? 'block' : 'opacity-0'} />
-                </button>
-              </div>
-
-              <div 
-                className="flex items-center justify-between pt-2 border-t border-zinc-800/80"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wide">
-                  {language === 'ca' ? 'Quantitat:' : 'Cantidad:'}
-                </span>
-                <div className="flex items-center gap-1 bg-zinc-900 border border-zinc-700 rounded-xl p-0.5 shadow-2xs">
-                  <button
-                    type="button"
-                    onClick={() => setClavellsQty(Math.max(0, clavellsQty - 1))}
-                    disabled={clavellsQty <= 0}
-                    className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-300 hover:bg-zinc-800 disabled:opacity-30 disabled:hover:bg-transparent transition cursor-pointer"
-                    aria-label="Disminuir quantitat"
-                  >
-                    <Minus size={13} />
-                  </button>
-                  <span className="w-8 text-center font-mono font-black text-xs text-white select-none">
-                    {clavellsQty}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setClavellsQty(clavellsQty + 1)}
-                    className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-300 hover:bg-zinc-800 transition cursor-pointer"
-                    aria-label="Augmentar quantitat"
-                  >
-                    <Plus size={13} />
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Pajarita / Corbatí */}
-            <div 
-              className={`material-card relative rounded-2xl p-4 border transition-all duration-200 flex flex-col justify-between gap-3 cursor-pointer ${
-                corbatiQty > 0 
-                  ? 'border-[#ff0090] bg-[#ff0090]/15 shadow-sm ring-1 ring-[#ff0090]/30' 
-                  : 'border-zinc-800 bg-[#121212]'
-              }`}
-              id="material-card-corbati"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div 
-                  className="flex-1 select-none"
-                  onClick={() => {
-                    if (corbatiQty === 0) setCorbatiQty(1);
-                  }}
-                >
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-extrabold text-white tracking-tight block">
-                      {corbatiNom}
-                    </span>
-                    {corbatiQty > 0 && (
-                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold font-mono bg-[#ff0090] text-white">
-                        {corbatiQty}x
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2 mt-1">
-                    <span className="material-price text-xs font-mono font-bold text-[#ff0090]">
-                      {corbatiPrice.toFixed(2)}€ <span className="text-[10px] text-zinc-400 font-normal">/ unitat</span>
-                    </span>
-                    {corbatiQty > 0 && (
-                      <span className="text-xs font-mono font-black text-white bg-zinc-900 px-2 py-0.5 rounded-md border border-[#ff0090]/30">
-                        Total: {(corbatiQty * corbatiPrice).toFixed(2)}€
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setCorbatiQty(corbatiQty > 0 ? 0 : 1);
-                  }}
-                  className={`w-7 h-7 rounded-xl border flex items-center justify-center transition-all cursor-pointer shrink-0 ${
-                    corbatiQty > 0 
-                      ? 'bg-[#ff0090] border-[#ff0090] text-white shadow-sm' 
-                      : 'bg-zinc-900 border-zinc-700 text-transparent hover:border-[#ff0090]'
-                  }`}
-                  title={corbatiQty > 0 ? (language === 'ca' ? 'Treure selecció' : 'Quitar selección') : (language === 'ca' ? 'Seleccionar 1 unitat' : 'Seleccionar 1 unidad')}
-                >
-                  <Check size={14} className={corbatiQty > 0 ? 'block' : 'opacity-0'} />
-                </button>
-              </div>
-
-              <div 
-                className="flex items-center justify-between pt-2 border-t border-zinc-800/80"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wide">
-                  {language === 'ca' ? 'Quantitat:' : 'Cantidad:'}
-                </span>
-                <div className="flex items-center gap-1 bg-zinc-900 border border-zinc-700 rounded-xl p-0.5 shadow-2xs">
-                  <button
-                    type="button"
-                    onClick={() => setCorbatiQty(Math.max(0, corbatiQty - 1))}
-                    disabled={corbatiQty <= 0}
-                    className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-300 hover:bg-zinc-800 disabled:opacity-30 disabled:hover:bg-transparent transition cursor-pointer"
-                    aria-label="Disminuir quantitat"
-                  >
-                    <Minus size={13} />
-                  </button>
-                  <span className="w-8 text-center font-mono font-black text-xs text-white select-none">
-                    {corbatiQty}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setCorbatiQty(corbatiQty + 1)}
-                    className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-300 hover:bg-zinc-800 transition cursor-pointer"
-                    aria-label="Augmentar quantitat"
-                  >
-                    <Plus size={13} />
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+          );
+        })()}
 
         {/* Dynamic Custom Questionnaire Sections */}
         {config.cuestionariActiu !== false && preguntesList && preguntesList.filter(q => q.activa).length > 0 && (
@@ -1993,71 +1861,34 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
         </div>
 
         {/* Floating/Bottom Action price breakdown bar */}
-        <div className="bg-zinc-950 rounded-3xl p-6 border border-zinc-850 shadow-2xl flex flex-col md:flex-row justify-between items-center gap-6 relative overflow-hidden" id="seccio-detall-pagament">
+        <div className="bg-zinc-950 rounded-3xl p-6 border border-zinc-850 shadow-2xl flex flex-col md:flex-row justify-between items-center gap-6 relative overflow-hidden">
           <div className="absolute top-0 left-0 p-8 text-zinc-900/40 pointer-events-none">
             <Sparkles size={80} className="stroke-[0.5]" />
           </div>
 
-          <div className="space-y-3 relative z-10 w-full md:w-auto text-center md:text-left">
-            <div className="flex items-center justify-center md:justify-start gap-2">
-              <span className="text-[9px] font-bold font-mono text-fuchsia-400 tracking-widest uppercase bg-fuchsia-950/60 px-2 py-1 rounded border border-fuchsia-900">
-                {language === 'ca' ? 'Detall de pagament total' : 'Detalle de pago total'}
-              </span>
-              {isPriceLoading && (
-                <span className="text-[10px] text-zinc-400 font-mono animate-pulse">
-                  {language === 'ca' ? 'Actualitzant tarifes...' : 'Actualizando tarifas...'}
-                </span>
-              )}
+          <div className="space-y-1 relative z-10 text-center md:text-left">
+            <span className="text-[9px] font-bold font-mono text-fuchsia-400 tracking-widest uppercase bg-fuchsia-950/60 px-2 py-1 rounded border border-fuchsia-900">
+              {language === 'ca' ? 'Detall de pagament total' : 'Detalle de pago total'}
+            </span>
+            <div className="flex items-baseline gap-1 justify-center md:justify-start mt-2">
+              <span className="font-sans font-black text-white text-3xl md:text-4xl tracking-tight leading-none">{totalCalculat}€</span>
+              <span className="text-zinc-400 text-xs font-mono">EUR</span>
             </div>
-
-            {priceLoadError ? (
-              <div className="bg-red-950/40 border border-red-800/60 rounded-xl p-3 text-red-300 text-xs font-medium max-w-md">
-                <p className="flex items-center gap-1.5 font-bold text-red-200">
-                  <AlertTriangle size={14} className="shrink-0 text-red-400" />
-                  {language === 'ca' ? 'Tarifes no disponibles' : 'Tarifas no disponibles'}
-                </p>
-                <p className="mt-1 text-[11px] text-red-300/90">{priceLoadError}</p>
-              </div>
-            ) : orderBreakdown ? (
-              <div className="space-y-1.5 min-w-[260px] text-xs">
-                {/* Cuota base de la categoría */}
-                <div className="flex justify-between items-center text-zinc-300">
-                  <span className="font-semibold">{orderBreakdown.categoriaNom}</span>
-                  <span className="font-mono font-bold text-white">{orderBreakdown.categoriaQuotaBase.toFixed(2)}€</span>
-                </div>
-
-                {/* Materiales y complementos desglosados */}
-                {orderBreakdown.materials.length > 0 ? (
-                  orderBreakdown.materials.map((m) => (
-                    <div key={m.id} className="flex justify-between items-center text-zinc-400 text-[11px]">
-                      <span>{m.nom} {m.quantitat > 1 ? `x${m.quantitat}` : ''}</span>
-                      <span className="font-mono text-zinc-300">{m.subtotal.toFixed(2)}€</span>
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-[11px] text-zinc-400 italic">
-                    {language === 'ca' ? 'Sense materials addicionals' : 'Sin materiales adicionales'}
-                  </div>
-                )}
-              </div>
-            ) : null}
-
-            <div className="flex items-baseline gap-1.5 justify-center md:justify-start pt-1 border-t border-zinc-850">
-              <span className="text-xs uppercase font-mono font-bold text-zinc-400">Total:</span>
-              <span className="font-sans font-black text-white text-3xl md:text-4xl tracking-tight leading-none" id="total-calculat-display">
-                {priceLoadError ? '--' : `${totalCalculat.toFixed(2)}€`}
-              </span>
-              {!priceLoadError && <span className="text-zinc-400 text-xs font-mono">EUR</span>}
-            </div>
+            <p className="text-[10px] text-zinc-400 leading-normal max-w-sm">
+              {language === 'ca'
+                ? "El preu reflecteix la parella de comparsers, les talles d'uniformes seleccionades i qualsevol complement adquirit."
+                : "El precio refleja la pareja de comparseros, las tallas de uniformes seleccionadas y cualquier complemento adquirido."
+              }
+            </p>
           </div>
 
           <div className="flex flex-col items-center md:items-end gap-2 w-full md:w-auto relative z-10">
             <button
               type="submit"
-              disabled={!videoWatched || isSubmitting || !!priceLoadError || totalCalculat <= 0}
+              disabled={!videoWatched || isSubmitting}
               id="btn-submit-registration"
               className={`w-full md:w-auto font-sans font-extrabold text-sm uppercase tracking-wider px-8 py-4.5 rounded-2xl shadow-xl transition-all flex items-center justify-center gap-2 group shrink-0 ${
-                videoWatched && !isSubmitting && !priceLoadError && totalCalculat > 0
+                videoWatched && !isSubmitting
                   ? "bg-[#ff0090] hover:bg-[#d60079] text-white shadow-fuchsia-900/30 cursor-pointer"
                   : "bg-zinc-800 text-zinc-400 opacity-60 cursor-not-allowed border border-zinc-700 shadow-none"
               }`}
@@ -2070,25 +1901,10 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
               ) : (
                 <>
                   <span>{language === 'ca' ? "Enviar Preinscripció" : "Enviar Preinscripción"}</span>
-                  <ChevronRight size={16} className={videoWatched && !priceLoadError ? "group-hover:translate-x-1 transition-transform" : "opacity-40"} />
+                  <ChevronRight size={16} className={videoWatched ? "group-hover:translate-x-1 transition-transform" : "opacity-40"} />
                 </>
               )}
             </button>
-
-            {!videoWatched && (
-              <span className="text-amber-400 text-xs font-semibold flex items-center gap-1.5 mt-1" id="video-requirement-hint">
-                <AlertTriangle size={13} className="shrink-0" />
-                {language === 'ca'
-                  ? "Cal veure el vídeo complet per desbloquejar l'enviament"
-                  : "Debes ver el vídeo completo para desbloquear el envío"}
-              </span>
-            )}
-            {priceLoadError && (
-              <span className="text-red-400 text-xs font-semibold flex items-center gap-1.5 mt-1">
-                <AlertCircle size={13} className="shrink-0" />
-                {language === 'ca' ? "Enviament bloquejat per error en tarifes" : "Envío bloqueado por error en tarifas"}
-              </span>
-            )}
           </div>
         </div>
       </form>

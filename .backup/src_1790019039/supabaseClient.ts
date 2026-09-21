@@ -1,0 +1,1774 @@
+import { createClient } from '@supabase/supabase-js';
+import { Inscripcio, CategoriaParella } from './types';
+
+const metaEnv = (import.meta as any).env || {};
+const envUrl = metaEnv.VITE_SUPABASE_URL || '';
+const envAnon = metaEnv.VITE_SUPABASE_ANON_KEY || '';
+
+// Fallback to localStorage keys if env is not defined (e.g. in development/preview)
+const localUrl = typeof localStorage !== 'undefined' ? localStorage.getItem('VITE_SUPABASE_URL') || '' : '';
+const localAnon = typeof localStorage !== 'undefined' ? localStorage.getItem('VITE_SUPABASE_ANON_KEY') || '' : '';
+
+const supabaseUrl = envUrl || localUrl;
+const supabaseAnonKey = envAnon || localAnon;
+
+export const isSupabaseConfigured = !!(supabaseUrl && supabaseAnonKey && supabaseUrl.startsWith('http'));
+
+// Unique session storage key to prevent conflicting auth sessions
+export const SUPABASE_AUTH_STORAGE_KEY = 'tast_carnaval_supabase_auth_token';
+
+declare global {
+  interface Window {
+    __TAST_SUPABASE_SINGLETON__?: any;
+  }
+}
+
+/**
+ * Singleton factory: returns a single shared SupabaseClient instance
+ * across all frontend components and hooks, preventing duplicate GoTrueClient instances.
+ */
+function getOrCreateSupabaseSingleton(): any {
+  if (!isSupabaseConfigured) return null;
+
+  if (typeof window !== 'undefined' && window.__TAST_SUPABASE_SINGLETON__) {
+    return window.__TAST_SUPABASE_SINGLETON__;
+  }
+
+  const client = createClient(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+      storageKey: SUPABASE_AUTH_STORAGE_KEY,
+      storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+    },
+    realtime: {
+      params: {
+        eventsPerSecond: 10,
+      },
+    },
+  });
+
+  if (typeof window !== 'undefined') {
+    window.__TAST_SUPABASE_SINGLETON__ = client;
+  }
+
+  return client;
+}
+
+export const supabase = getOrCreateSupabaseSingleton();
+
+/**
+ * Shared singleton reference for anonymous operations.
+ * Reuses the single SupabaseClient instance, eliminating duplicate GoTrueClient warnings.
+ */
+export const publicAnonSupabase = supabase;
+
+// Clean logging
+if (isSupabaseConfigured) {
+  console.log("Supabase client initialized successfully using config: " + (envUrl ? "ENV" : "LocalStorage"));
+} else {
+  console.log("Supabase is not yet fully configured in your environment. Falling back gracefully to LocalStorage for interface settings.");
+}
+
+export interface SupabaseWriteDiagnosticResult {
+  sessionExists: boolean;
+  uid: string | null;
+  email: string | null;
+  sessionError: any;
+}
+
+/**
+ * Diagnòstic temporal abans de cada escriptura:
+ * - auth.uid() o ID de l'usuari autenticat.
+ * - existència de session.
+ * - email de l'usuari autenticat.
+ * - resultat de supabase.auth.getSession().
+ * - taula i operació que s'intenta executar.
+ * - error complet retornat per Supabase (si n'hi ha).
+ */
+export async function logSupabaseWriteDiagnostic(table: string, operation: string): Promise<SupabaseWriteDiagnosticResult> {
+  if (!supabase) {
+    console.warn(`[Supabase Write Diagnostic] Taula: '${table}', Operació: '${operation}' -> Client Supabase no configurat.`);
+    return { sessionExists: false, uid: null, email: null, sessionError: 'No Supabase client' };
+  }
+  try {
+    const { data, error } = await supabase.auth.getSession();
+    const session = data?.session;
+    const uid = session?.user?.id || null;
+    const email = session?.user?.email || null;
+    const sessionExists = !!session;
+
+    console.log(`[logSupabaseWriteDiagnostic]
+--------------------------------------------------
+Taula: '${table}'
+Operació: '${operation}'
+Existència de session: ${sessionExists}
+auth.uid() / ID: ${uid || '(cap / anònim)'}
+Email: ${email || '(cap / anònim)'}
+Resultat supabase.auth.getSession(): ${error ? `ERROR: ${error.message}` : (session ? 'Sessió activa trobada' : 'Sense sessió (Anònim)')}
+Access Token: ${session?.access_token ? 'Present' : 'Absent'}
+--------------------------------------------------`, {
+      table,
+      operation,
+      sessionExists,
+      uid,
+      email,
+      sessionError: error || null
+    });
+
+    return { sessionExists, uid, email, sessionError: error };
+  } catch (err) {
+    console.error(`[Supabase Write Diagnostic] Error obtenint sessió abans d'escriure a '${table}':`, err);
+    return { sessionExists: false, uid: null, email: null, sessionError: err };
+  }
+}
+
+// In-memory cache to prevent duplicate settings queries during application lifecycle
+const settingCache = new Map<string, any>();
+let isSettingCacheInitialized = false;
+
+let hasKeyColumn: boolean | null = null;
+
+async function checkKeyColumnExists(): Promise<boolean> {
+  if (hasKeyColumn !== null) return hasKeyColumn;
+  if (!supabase) return false;
+  try {
+    const { error } = await supabase
+      .from('settings')
+      .select('key')
+      .limit(1);
+    if (error) {
+      if (error.code === '42703' || error.message?.includes('column') || error.message?.includes('does not exist')) {
+        hasKeyColumn = false;
+        return false;
+      }
+      if (error.code === '42P01') {
+        // Table does not exist yet
+        return false;
+      }
+      return false;
+    }
+    hasKeyColumn = true;
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
+/**
+ * Generic getter function for any setting in Supabase.
+ * Supports adaptive schema formats where columns are named 'id' or 'key' 
+ * and payloads are named 'value', 'config' or 'settings'.
+ */
+export async function getSupabaseSetting<T>(key: string, defaultValue: T, bypassCache: boolean = false): Promise<T> {
+  if (!supabase) {
+    return defaultValue;
+  }
+
+  // Check memory cache first to completely eliminate redundant fetches
+  if (settingCache.has(key) && !bypassCache) {
+    return settingCache.get(key) as T;
+  }
+
+  if (isSettingCacheInitialized && !bypassCache) {
+    // Cache has been initialized and the key was not found. Cache and return default.
+    settingCache.set(key, defaultValue);
+    return defaultValue;
+  }
+  
+  try {
+    // Safe multi-column schema-agnostic fetch: Query all rows once, then index by either key or id in memory.
+    // This avoids throwing a 400 error in Supabase if we queried .eq('key') but the column is 'id', or vice versa.
+    const { data, error } = await supabase
+      .from('settings')
+      .select('*');
+      
+    if (error) {
+      console.warn(`Warning reading settings table from Supabase:`, error.message || error);
+      return defaultValue;
+    }
+    
+    if (data && data.length > 0) {
+      // Determine if the key column exists directly from rows
+      hasKeyColumn = data[0].key !== undefined;
+
+      for (const row of data) {
+        const rowKey = row.key !== undefined ? row.key : row.id;
+        if (rowKey !== undefined && rowKey !== null) {
+          let configPayload = row.value !== undefined ? row.value 
+                          : row.config !== undefined ? row.config 
+                          : row.settings !== undefined ? row.settings 
+                          : row;
+          
+          if (typeof configPayload === 'string') {
+            try {
+              configPayload = JSON.parse(configPayload);
+            } catch(e) {
+              // Not double-serialized
+            }
+          }
+          settingCache.set(String(rowKey), configPayload);
+        }
+      }
+    }
+
+    if (!bypassCache) {
+      isSettingCacheInitialized = true;
+    }
+
+    if (settingCache.has(key)) {
+      return settingCache.get(key) as T;
+    }
+    
+    // Cache the default value if the key does not exist yet to prevent repeated DB misses
+    if (!bypassCache) {
+      settingCache.set(key, defaultValue);
+    }
+    return defaultValue;
+  } catch (err) {
+    console.warn(`Exception fetching settings from Supabase/Settings for key [${key}]:`, err);
+    return defaultValue;
+  }
+}
+
+/**
+ * Generic setter function for any setting in Supabase.
+ * Adaptive Column Mapping is done automatically.
+ */
+export async function saveSupabaseSetting(key: string, value: any): Promise<boolean> {
+  if (!supabase) {
+    return false;
+  }
+
+  // Diagnòstic abans d'escriure a 'settings'
+  await logSupabaseWriteDiagnostic('settings', `UPSERT (key: ${key})`);
+
+  try {
+    // Update/invalidate memory cache first so all consecutive reads see the fresh value
+    settingCache.set(key, value);
+
+    // Remedy 3: Formatter guard - serialize object/array, keep string plain
+    const normalizedValue = typeof value === 'object' && value !== null
+      ? JSON.stringify(value)
+      : value;
+
+    const keyExistsInTable = await checkKeyColumnExists();
+    const isNumericKey = /^\d+$/.test(key);
+
+    let upsertPayload: any = { value: normalizedValue };
+    let upsertOptions: any = {};
+
+    if (keyExistsInTable) {
+      upsertPayload.key = key;
+      // If we have a 'key' column, and the string key is purely numeric, we can also pass it as 'id' to be safe.
+      // If it's non-numeric, we MUST NOT pass 'id: key' because id is likely a bigint PK.
+      if (isNumericKey) {
+        upsertPayload.id = parseInt(key, 10);
+      }
+      upsertOptions.onConflict = 'key';
+    } else {
+      // No key column exists, so we must be using 'id' as the text primary key column.
+      upsertPayload.id = key;
+    }
+
+    const { error: upsertError } = await supabase
+      .from('settings')
+      .upsert(upsertPayload, upsertOptions);
+
+    if (!upsertError) {
+      console.log(`[Supabase Write Success] Taula: 'settings', Operació: UPSERT (key: ${key}) completada amb èxit.`);
+      return true;
+    }
+
+    console.error(`[Supabase Write Error] Taula: 'settings', Operació: UPSERT (key: ${key}), Error complet:`, upsertError);
+
+    // Update fallback
+    if (keyExistsInTable) {
+      const { error: updateKeyError } = await supabase
+        .from('settings')
+        .update({ value: normalizedValue })
+        .eq('key', key);
+      if (!updateKeyError) return true;
+    } else {
+      const { error: updateIdError } = await supabase
+        .from('settings')
+        .update({ value: normalizedValue })
+        .eq('id', key);
+      if (!updateIdError) return true;
+    }
+
+    // Insert fallback
+    if (keyExistsInTable) {
+      const insertPayload: any = { key: key, value: normalizedValue };
+      if (isNumericKey) {
+        insertPayload.id = parseInt(key, 10);
+      }
+      const { error: insertKeyError } = await supabase
+        .from('settings')
+        .insert(insertPayload);
+      if (!insertKeyError) return true;
+    } else {
+      const { error: insertIdError } = await supabase
+        .from('settings')
+        .insert({ id: key, value: normalizedValue });
+      if (!insertIdError) return true;
+    }
+
+    return false;
+  } catch (err) {
+    console.error(`Exception saving setting to Supabase for key [${key}]:`, err);
+    return false;
+  }
+}
+
+// Keep old exports in case any module is importing them
+export async function getSupabaseSettings(): Promise<any | null> {
+  return getSupabaseSetting('tast_portada_config_2026', null);
+}
+
+export async function saveSupabaseSettings(config: any): Promise<boolean> {
+  return saveSupabaseSetting('tast_portada_config_2026', config);
+}
+
+/* ==========================================
+ * REAL INSCRIPTIONS PERSISTENCE (SUPABASE)
+ * ========================================== */
+
+function parseJSON(val: any): any {
+  if (typeof val === 'object' && val !== null) return val;
+  try {
+    return JSON.parse(val);
+  } catch(e) {}
+  return {};
+}
+
+function parseInscripcionesRows(rows: any[]): Inscripcio[] {
+  if (!rows) return [];
+  return rows.filter(Boolean).map(r => {
+    // Fallback if the whole object was saved inside a single JSON field
+    if (r.value && typeof r.value === 'object') return r.value;
+    if (r.data && typeof r.data === 'object') return r.data;
+    if (r.payload && typeof r.payload === 'object') return r.payload;
+    if (r.config && typeof r.config === 'object') return r.config;
+
+    // Common couple contact extraction with migration from old c1/c2 fields
+    const rawC1Email = r.c1Email !== undefined ? r.c1Email : (r.c1_email || r.c1email || '');
+    const rawC2Email = r.c2Email !== undefined ? r.c2Email : (r.c2_email || r.c2email || '');
+    const rawC1Telefon = r.c1Telefon !== undefined ? r.c1Telefon : (r.c1_telefon || r.c1telefon || '');
+    const rawC2Telefon = r.c2Telefon !== undefined ? r.c2Telefon : (r.c2_telefon || r.c2telefon || '');
+
+    const explicitEmail = r.emailContactoPareja !== undefined ? r.emailContactoPareja
+      : (r.email_contacto_pareja || r.emailcontactopareja || '');
+    const explicitTelefon = r.telefonContactoPareja !== undefined ? r.telefonContactoPareja
+      : (r.telefon_contacto_pareja || r.telefoncontactopareja || '');
+
+    // Migration rule: Use explicit if set, otherwise first valid email/phone found
+    const emailContactoPareja = explicitEmail ||
+      (rawC1Email && rawC1Email.includes('@') ? rawC1Email : '') ||
+      (rawC2Email && rawC2Email.includes('@') ? rawC2Email : '') ||
+      rawC1Email || rawC2Email || '';
+
+    const telefonContactoPareja = explicitTelefon ||
+      (rawC1Telefon && String(rawC1Telefon).trim().length > 0 ? rawC1Telefon : '') ||
+      (rawC2Telefon && String(rawC2Telefon).trim().length > 0 ? rawC2Telefon : '') ||
+      rawC1Telefon || rawC2Telefon || '';
+
+    const rawRespostes: Record<string, any> = typeof r.respostesCuestionari === 'object' && r.respostesCuestionari ? { ...r.respostesCuestionari } :
+                          typeof r.respostes_cuestionari === 'object' && r.respostes_cuestionari ? { ...r.respostes_cuestionari } :
+                          typeof r.respostes === 'object' && r.respostes ? { ...r.respostes } :
+                          parseJSON(r.respostesCuestionari || r.respostes_cuestionari || r.respostes || '{}');
+
+    // Purge legacy, contact, and internal fields from questionnaire answers
+    const FORBIDDEN_KEYS = [
+      'estatCorreu', 'domas_qty', 'mocadors_qty', 'correuContacteParella',
+      'telefonContacteParella', 'emailContactoPareja', 'telefonContactoPareja',
+      'teDomasBalco', 'teMocadorsExtra', 'clavells_qty', 'corbati_qty'
+    ];
+    FORBIDDEN_KEYS.forEach(k => delete rawRespostes[k]);
+    Object.keys(rawRespostes).forEach(k => {
+      if (k.startsWith('extra_qty_')) {
+        delete rawRespostes[k];
+      }
+    });
+
+    // Safe status normalization that never drops records on unknown or missing values
+    const rawPagament = String(r.estatPagament || r.estat_pagament || r.estatpagament || 'PENDENT').toUpperCase();
+    const estatPagament = rawPagament === 'PAGAT' ? 'PAGAT' : 'PENDENT';
+
+    const rawDni = String(r.estatDni || r.estat_dni || r.estatdni || 'PENDENT').toUpperCase();
+    const estatDni = rawDni === 'VALIDAT' ? 'VALIDAT' : (rawDni === 'REBUTJAT' ? 'REBUTJAT' : 'PENDENT');
+
+    const rawEntrega = String(r.entregaMaterial || r.entrega_material || r.entregamaterial || 'PENDENT').toUpperCase();
+    const entregaMaterial = rawEntrega === 'ENTREGAT' ? 'ENTREGAT' : 'PENDENT';
+
+    const rawEstat = String(r.estatInscripcio || r.estat_inscripcio || r.estatinscripcio || 'obertes').toLowerCase();
+    const estatInscripcio = rawEstat.includes('espera') ? 'llista_espera' : 'obertes';
+
+    const rawCategoria = String(r.categoria || 'ADULT').toUpperCase();
+    const categoria = rawCategoria === 'JUVENIL' ? CategoriaParella.JUVENIL : CategoriaParella.ADULT;
+
+    // Standard column parse with snake_case and casing fallback modes
+    return {
+      id: String(r.id || r.key || ''),
+      codiSeguiment: String(r.codiSeguiment !== undefined ? r.codiSeguiment 
+                    : (r.codi_seguiment || r.codiseguiment || '')),
+      categoria,
+
+      // Single couple contact
+      emailContactoPareja: String(emailContactoPareja || ''),
+      telefonContactoPareja: String(telefonContactoPareja || ''),
+      
+      c1Nom: String(r.c1Nom !== undefined ? r.c1Nom : (r.c1_nom || r.c1nom || '')),
+      c1Cognoms: String(r.c1Cognoms !== undefined ? r.c1Cognoms : (r.c1_cognoms || r.c1cognoms || '')),
+      c1Email: String(emailContactoPareja || ''),
+      c1Telefon: String(telefonContactoPareja || ''),
+      c1Talla: String(r.c1Talla !== undefined ? r.c1Talla : (r.c1_talla || r.c1talla || '')),
+      c1DniUrl: String(r.c1DniUrl !== undefined ? r.c1DniUrl : (r.c1_dni_url || r.c1dni_url || r.c1_dni || r.c1dni || '')),
+      c1EsMenor: r.c1EsMenor !== undefined ? !!r.c1EsMenor : !!(r.c1_es_menor || r.c1esmenor),
+      c1TutorNom: r.c1TutorNom ? String(r.c1TutorNom) : '',
+      c1TutorCognoms: r.c1TutorCognoms ? String(r.c1TutorCognoms) : '',
+      c1TutorDni: r.c1TutorDni ? String(r.c1TutorDni) : '',
+      c1TutorTelefon: r.c1TutorTelefon ? String(r.c1TutorTelefon) : '',
+      c1UniformeTipus: String(r.c1UniformeTipus !== undefined ? r.c1UniformeTipus : (r.c1_uniforme_tipus || r.c1uniformetipus || 'compra')),
+
+      c2Nom: String(r.c2Nom !== undefined ? r.c2Nom : (r.c2_nom || r.c2nom || '')),
+      c2Cognoms: String(r.c2Cognoms !== undefined ? r.c2Cognoms : (r.c2_cognoms || r.c2cognoms || '')),
+      c2Email: String(emailContactoPareja || ''),
+      c2Telefon: String(telefonContactoPareja || ''),
+      c2Talla: String(r.c2Talla !== undefined ? r.c2Talla : (r.c2_talla || r.c2talla || '')),
+      c2DniUrl: String(r.c2DniUrl !== undefined ? r.c2DniUrl : (r.c2_dni_url || r.c2dni_url || r.c2_dni || r.c2dni || '')),
+      c2EsMenor: r.c2EsMenor !== undefined ? !!r.c2EsMenor : !!(r.c2_es_menor || r.c2esmenor),
+      c2TutorNom: r.c2TutorNom ? String(r.c2TutorNom) : '',
+      c2TutorCognoms: r.c2TutorCognoms ? String(r.c2TutorCognoms) : '',
+      c2TutorDni: r.c2TutorDni ? String(r.c2TutorDni) : '',
+      c2TutorTelefon: r.c2TutorTelefon ? String(r.c2TutorTelefon) : '',
+      c2UniformeTipus: String(r.c2UniformeTipus !== undefined ? r.c2UniformeTipus : (r.c2_uniforme_tipus || r.c2uniformetipus || 'compra')),
+
+      respostesCuestionari: rawRespostes || {},
+    
+      seleccionsUniforme: typeof r.seleccionsUniforme === 'object' && r.seleccionsUniforme ? r.seleccionsUniforme :
+                          typeof r.seleccions_uniforme === 'object' && r.seleccions_uniforme ? r.seleccions_uniforme :
+                          parseJSON(r.seleccionsUniforme || r.seleccions_uniforme || '{}'),
+
+      preuCalculat: Number(r.preuCalculat !== undefined ? r.preuCalculat : (r.preu_calculat || r.preucalculat || 0)),
+      teDomasBalco: r.teDomasBalco !== undefined ? !!r.teDomasBalco : !!(r.te_domas_balco || r.tedomasbalco),
+      teMocadorsExtra: Number(r.teMocadorsExtra !== undefined ? r.teMocadorsExtra : (r.te_mocadors_extra || r.temocadorsextra || 0)),
+
+      estatPagament: estatPagament as any,
+      metodePagament: r.metodePagament || r.metode_pagament || r.metodepagament || null,
+      estatDni: estatDni as any,
+      entregaMaterial: entregaMaterial as any,
+      estatInscripcio,
+      posicioGlobal: r.posicioGlobal !== undefined ? Number(r.posicioGlobal) : (r.posicio_global !== undefined ? Number(r.posicio_global) : undefined),
+      bandera: r.bandera !== undefined ? Number(r.bandera) : 0,
+
+      creadoEn: String(r.creadoEn || r.creado_en || r.created_at || new Date().toISOString()),
+      actualizadoEn: String(r.actualizadoEn || r.actualizado_en || r.updated_at || new Date().toISOString())
+    };
+  });
+}
+
+const CAMEL_COLUMNS = "id, codiSeguiment, categoria, c1Nom, c1Cognoms, c1Email, c1Telefon, c1Talla, c1DniUrl, c1EsMenor, c1TutorNom, c1TutorCognoms, c1TutorDni, c1TutorTelefon, c1UniformeTipus, c2Nom, c2Cognoms, c2Email, c2Telefon, c2Talla, c2DniUrl, c2EsMenor, c2TutorNom, c2TutorCognoms, c2TutorDni, c2TutorTelefon, c2UniformeTipus, respostesCuestionari, seleccionsUniforme, preuCalculat, teDomasBalco, teMocadorsExtra, estatPagament, metodePagament, estatDni, entregaMaterial, estat_inscripcio, posicio_global, bandera, creadoEn, actualizadoEn";
+
+const SNAKE_COLUMNS = "id, codi_seguiment, categoria, c1_nom, c1_cognoms, c1_email, c1_telefon, c1_talla, c1_dni_url, c1_es_menor, c1_tutor_nom, c1_tutor_cognoms, c1_tutor_dni, c1_tutor_telefon, c1_uniforme_tipus, c2_nom, c2_cognoms, c2_email, c2_telefon, c2_talla, c2_dni_url, c2_es_menor, c2_tutor_nom, c2_tutor_cognoms, c2_tutor_dni, c2_tutor_telefon, c2_uniforme_tipus, respostes_cuestionari, seleccions_uniforme, preu_calculat, te_domas_balco, te_mocadors_extra, estat_pagament, metode_pagament, estat_dni, entrega_material, estat_inscripcio, posicio_global, bandera, creado_en, actualizado_en";
+
+export interface InscripcionesQueryResult {
+  ok: boolean;
+  table: string;
+  data: Inscripcio[];
+  count: number;
+  error?: string | null;
+  code?: string | null;
+  details?: any;
+}
+
+export interface SaveInscripcionResult {
+  ok: boolean;
+  step?: string;
+  id?: string;
+  codiSeguiment?: string;
+  error?: string;
+  code?: string;
+  details?: any;
+  hint?: string;
+  data?: any;
+}
+
+/**
+ * Downloads lightweight metadata of inscriptions directly from Supabase (excluding highly heavy Base64 DNI blobs).
+ * Reads directly from public.inscripciones using authoritative server API or direct Supabase client.
+ * Returns both the normalized inscriptions array and detailed diagnostic metadata.
+ */
+export async function getSupabaseInscripcionesResult(): Promise<InscripcionesQueryResult> {
+  const table = 'public.inscripciones';
+
+  // 1. Authoritative API route reading directly from public.inscripciones with Service Role
+  try {
+    const apiRes = await fetch('/api/inscriptions?action=list', {
+      cache: 'no-store'
+    });
+    if (apiRes.ok) {
+      const json = await apiRes.json();
+      if (json && json.ok && Array.isArray(json.data)) {
+        const parsed = parseInscripcionesRows(json.data);
+        console.log('[Secretaría SELECT ok]:', {
+          tabla: table,
+          filasDevueltas: parsed.length,
+          errorRealSupabase: null
+        });
+        return {
+          ok: true,
+          table,
+          data: parsed,
+          count: parsed.length,
+          error: null
+        };
+      } else if (json && json.error) {
+        console.warn('[Secretaría SELECT api error response]:', {
+          tabla: table,
+          errorRealSupabase: json.error,
+          code: json.code
+        });
+      }
+    }
+  } catch (e: any) {
+    console.warn("Could not fetch /api/inscriptions?action=list, attempting direct Supabase client query:", e?.message || e);
+  }
+
+  // 2. Direct Supabase Client Query from public.inscripciones
+  if (!supabase) {
+    const err = "El client de Supabase no està inicialitzat";
+    console.error('[Secretaría SELECT error]:', { tabla: table, errorRealSupabase: err });
+    return {
+      ok: false,
+      table,
+      data: [],
+      count: 0,
+      error: err
+    };
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('inscripciones')
+      .select('*')
+      .order('creadoEn', { ascending: false })
+      .limit(3000);
+
+    if (error) {
+      console.error('[Secretaría SELECT error]:', {
+        tabla: table,
+        errorRealSupabase: {
+          message: error.message,
+          code: error.code,
+          details: error.details,
+          hint: error.hint
+        }
+      });
+      return {
+        ok: false,
+        table,
+        data: [],
+        count: 0,
+        error: error.message || "Error desconegut consultant public.inscripciones",
+        code: error.code,
+        details: error.details
+      };
+    }
+
+    const parsed = parseInscripcionesRows(data || []);
+    console.log('[Secretaría SELECT ok]:', {
+      tabla: table,
+      filasDevueltas: parsed.length,
+      errorRealSupabase: null
+    });
+
+    return {
+      ok: true,
+      table,
+      data: parsed,
+      count: parsed.length,
+      error: null
+    };
+  } catch (err: any) {
+    const msg = err?.message || String(err);
+    console.error('[Secretaría SELECT exception]:', {
+      tabla: table,
+      errorRealSupabase: msg
+    });
+    return {
+      ok: false,
+      table,
+      data: [],
+      count: 0,
+      error: msg
+    };
+  }
+}
+
+export async function getSupabaseInscripciones(): Promise<Inscripcio[]> {
+  const result = await getSupabaseInscripcionesResult();
+  return result.data;
+}
+
+/**
+ * Downloads a single inscription by ID with all details (including heavy binary DNI attachments).
+ */
+export async function getSupabaseInscripcionById(id: string): Promise<Inscripcio | null> {
+  // Strategy 1: Server endpoint using Service Role (bypasses RLS issues for admin ficha)
+  try {
+    const res = await fetch(`/api/inscriptions?action=get&id=${encodeURIComponent(id)}`);
+    if (res.ok) {
+      const json = await res.json();
+      if (json.ok && json.data) {
+        return parseInscripcionesRows([json.data])[0] || null;
+      }
+    }
+  } catch (apiErr) {
+    console.warn("API get-by-id failed, falling back to direct client Supabase:", apiErr);
+  }
+
+  if (!supabase) return null;
+  try {
+    const { data, error } = await supabase
+      .from('inscripciones')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+      
+    if (error || !data) {
+      // try fallback table name
+      const resFallback = await supabase
+        .from('inscripcions')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle();
+      if (resFallback.error || !resFallback.data) {
+        return null;
+      }
+      return parseInscripcionesRows([resFallback.data])[0] || null;
+    }
+    return parseInscripcionesRows([data])[0] || null;
+  } catch (err) {
+    console.error("Exception fetching single inscription details by ID:", err);
+    return null;
+  }
+}
+
+/**
+ * Searches and retrieves a single inscription by tracking code (codiSeguiment) or UUID/ID.
+ * Validates the format, queries Supabase securely, and returns the full parsed registration.
+ */
+export async function getSupabaseInscripcionByCodeOrId(codeOrId: string): Promise<Inscripcio | null> {
+  if (!supabase || !codeOrId) return null;
+  const clean = codeOrId.trim();
+  if (!clean) return null;
+
+  try {
+    // 1. Try finding by codiSeguiment in 'inscripciones'
+    let { data, error } = await supabase
+      .from('inscripciones')
+      .select('*')
+      .ilike('codiSeguiment', clean)
+      .maybeSingle();
+
+    // 2. Try finding by snake_case 'codi_seguiment'
+    if (!data) {
+      const resCodiSnake = await supabase
+        .from('inscripciones')
+        .select('*')
+        .ilike('codi_seguiment', clean)
+        .maybeSingle();
+      data = resCodiSnake.data;
+    }
+
+    // 3. Try finding by id
+    if (!data) {
+      const resId = await supabase
+        .from('inscripciones')
+        .select('*')
+        .eq('id', clean)
+        .maybeSingle();
+      data = resId.data;
+    }
+
+    // 4. Try fallback table 'inscripcions'
+    if (!data) {
+      const resFallback = await supabase
+        .from('inscripcions')
+        .select('*')
+        .ilike('codiSeguiment', clean)
+        .maybeSingle();
+      if (resFallback.data) {
+        data = resFallback.data;
+      } else {
+        const resFallbackSnake = await supabase
+          .from('inscripcions')
+          .select('*')
+          .ilike('codi_seguiment', clean)
+          .maybeSingle();
+        if (resFallbackSnake.data) {
+          data = resFallbackSnake.data;
+        } else {
+          const resFallbackId = await supabase
+            .from('inscripcions')
+            .select('*')
+            .eq('id', clean)
+            .maybeSingle();
+          data = resFallbackId.data;
+        }
+      }
+    }
+
+    if (data) {
+      const parsed = parseInscripcionesRows([data])[0];
+      return parsed || null;
+    }
+    return null;
+  } catch (err) {
+    console.error("Exception fetching inscription by code or ID:", err);
+    return null;
+  }
+}
+
+
+/**
+ * Saves and updates a single inscription on the 'inscripciones' table (Supabase).
+ * Uses the authoritative server API route (/api/inscriptions?action=create) with Service Role,
+ * preventing RLS rejection and returning the real Supabase error if the INSERT fails.
+ */
+export async function saveSupabaseInscripcion(ins: Inscripcio): Promise<SaveInscripcionResult> {
+  const contactEmail = (ins.emailContactoPareja || ins.c1Email || ins.c2Email || '').trim();
+  const contactTelefon = (ins.telefonContactoPareja || ins.c1Telefon || ins.c2Telefon || '').trim();
+
+  // 1. Authoritative primary route via backend server (uses Service Role to bypass RLS)
+  try {
+    const apiRes = await fetch('/api/inscriptions?action=create', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ registration: ins })
+    });
+
+    const resJson = await apiRes.json().catch(() => null);
+
+    if (apiRes.ok && resJson?.ok) {
+      console.log(`[INSERT ok]: table public.inscripciones, id: ${resJson.id || ins.id}, codi: ${resJson.codiSeguiment || ins.codiSeguiment}, user: ${ins.c1Nom} & ${ins.c2Nom}`);
+      return {
+        ok: true,
+        step: 'database_insert',
+        id: resJson.id || ins.id,
+        codiSeguiment: resJson.codiSeguiment || ins.codiSeguiment,
+        data: resJson.data
+      };
+    }
+
+    if (resJson && resJson.ok === false) {
+      console.error("[INSERT error]:", {
+        table: "public.inscripciones",
+        step: resJson.step,
+        message: resJson.error,
+        code: resJson.code,
+        details: resJson.details,
+        hint: resJson.hint
+      });
+      return {
+        ok: false,
+        step: resJson.step || 'database_insert',
+        error: resJson.error || "Error en guardar la inscripció a la base de dades.",
+        code: resJson.code || String(apiRes.status),
+        details: resJson.details,
+        hint: resJson.hint
+      };
+    }
+  } catch (netErr: any) {
+    console.warn("Could not reach /api/inscriptions?action=create, trying direct client fallback:", netErr);
+  }
+
+  // 2. Direct client fallback (using public anonymous client to strictly adhere to anon_insert_inscripciones RLS)
+  const insertClient = publicAnonSupabase || supabase;
+  if (!insertClient) {
+    return {
+      ok: false,
+      step: 'database_insert',
+      error: "Supabase no està configurat ni disponible.",
+      code: "NO_CLIENT"
+    };
+  }
+
+  await logSupabaseWriteDiagnostic('inscripciones', `INSERT (id: ${ins.id}, codi: ${ins.codiSeguiment})`);
+
+  try {
+    const tableName = 'inscripciones';
+    const enrichedRespostes = {
+      ...(ins.respostesCuestionari || {}),
+      emailContactoPareja: contactEmail,
+      telefonContactoPareja: contactTelefon
+    };
+
+    // Clean column mapping strictly adhering to public.inscripciones schema
+    // Note: NEVER use .upsert() or .select() here to ensure no 42501 RLS select/update violation occurs
+    const insertRow = {
+      id: ins.id,
+      codiSeguiment: ins.codiSeguiment,
+      categoria: ins.categoria,
+      c1Nom: ins.c1Nom,
+      c1Cognoms: ins.c1Cognoms,
+      c1Email: contactEmail,
+      c1Telefon: contactTelefon,
+      c1Talla: ins.c1Talla,
+      c1DniUrl: ins.c1DniUrl || null,
+      c1EsMenor: Boolean(ins.c1EsMenor),
+      c1TutorNom: ins.c1TutorNom || null,
+      c1TutorCognoms: ins.c1TutorCognoms || null,
+      c1TutorDni: ins.c1TutorDni || null,
+      c1TutorTelefon: ins.c1TutorTelefon || null,
+      c1UniformeTipus: ins.c1UniformeTipus || null,
+      c2Nom: ins.c2Nom,
+      c2Cognoms: ins.c2Cognoms,
+      c2Email: contactEmail,
+      c2Telefon: contactTelefon,
+      c2Talla: ins.c2Talla,
+      c2DniUrl: ins.c2DniUrl || null,
+      c2EsMenor: Boolean(ins.c2EsMenor),
+      c2TutorNom: ins.c2TutorNom || null,
+      c2TutorCognoms: ins.c2TutorCognoms || null,
+      c2TutorDni: ins.c2TutorDni || null,
+      c2TutorTelefon: ins.c2TutorTelefon || null,
+      c2UniformeTipus: ins.c2UniformeTipus || null,
+      respostesCuestionari: enrichedRespostes,
+      seleccionsUniforme: ins.seleccionsUniforme || {},
+      preuCalculat: Number(ins.preuCalculat || 0),
+      teDomasBalco: Boolean(ins.teDomasBalco),
+      teMocadorsExtra: Number(ins.teMocadorsExtra || 0),
+      estatPagament: ins.estatPagament || 'PENDENT',
+      metodePagament: ins.metodePagament || null,
+      estatDni: ins.estatDni || 'PENDENT',
+      entregaMaterial: ins.entregaMaterial || 'PENDENT',
+      estat_inscripcio: ins.estatInscripcio || 'obertes',
+      posicio_global: typeof ins.posicioGlobal === 'number' ? ins.posicioGlobal : null,
+      bandera: typeof ins.bandera === 'number' ? ins.bandera : 0,
+      creadoEn: ins.creadoEn || new Date().toISOString(),
+      actualizadoEn: ins.actualizadoEn || new Date().toISOString()
+    };
+
+    const response = await insertClient
+      .from(tableName)
+      .insert(insertRow);
+
+    if (!response.error) {
+      console.log(`[INSERT ok]: table public.inscripciones, id: ${ins.id}, codi: ${ins.codiSeguiment}, user: ${ins.c1Nom} & ${ins.c2Nom}`);
+      return {
+        ok: true,
+        step: 'database_insert',
+        id: ins.id,
+        codiSeguiment: ins.codiSeguiment
+      };
+    }
+
+    console.error("[INSERT error]:", {
+      table: "public.inscripciones",
+      message: response.error.message,
+      code: response.error.code,
+      details: response.error.details,
+      hint: response.error.hint
+    });
+
+    return {
+      ok: false,
+      step: 'database_insert',
+      error: response.error.message,
+      code: response.error.code,
+      details: response.error.details,
+      hint: response.error.hint
+    };
+  } catch (err: any) {
+    console.error("[INSERT error]: Exception saving inscription to Supabase:", err);
+    return {
+      ok: false,
+      step: 'database_insert',
+      error: err?.message || "Excepció no controlada registrant a Supabase.",
+      code: err?.code || "UNEXPECTED_ERROR"
+    };
+  }
+}
+
+/**
+ * Updates an existing inscription in public.inscripciones.
+ */
+export async function updateSupabaseInscripcion(ins: Inscripcio): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const apiRes = await fetch(`/api/inscriptions?action=update&id=${encodeURIComponent(ins.id)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: ins.id,
+        updates: {
+          codiSeguiment: ins.codiSeguiment,
+          categoria: ins.categoria,
+          c1Nom: ins.c1Nom,
+          c1Cognoms: ins.c1Cognoms,
+          c1Email: ins.emailContactoPareja || ins.c1Email,
+          c1Telefon: ins.telefonContactoPareja || ins.c1Telefon,
+          c1Talla: ins.c1Talla,
+          c1UniformeTipus: ins.c1UniformeTipus,
+          c1TutorNom: ins.c1TutorNom,
+          c1TutorCognoms: ins.c1TutorCognoms,
+          c1TutorDni: ins.c1TutorDni,
+          c1TutorTelefon: ins.c1TutorTelefon,
+          c2Nom: ins.c2Nom,
+          c2Cognoms: ins.c2Cognoms,
+          c2Email: ins.emailContactoPareja || ins.c2Email,
+          c2Telefon: ins.telefonContactoPareja || ins.c2Telefon,
+          c2Talla: ins.c2Talla,
+          c2UniformeTipus: ins.c2UniformeTipus,
+          c2TutorNom: ins.c2TutorNom,
+          c2TutorCognoms: ins.c2TutorCognoms,
+          c2TutorDni: ins.c2TutorDni,
+          c2TutorTelefon: ins.c2TutorTelefon,
+          preuCalculat: ins.preuCalculat,
+          estatPagament: ins.estatPagament,
+          metodePagament: ins.metodePagament,
+          estatDni: ins.estatDni,
+          entregaMaterial: ins.entregaMaterial,
+          estat_inscripcio: ins.estatInscripcio,
+          bandera: ins.bandera,
+          actualizadoEn: new Date().toISOString()
+        }
+      })
+    });
+    if (apiRes.ok) {
+      const data = await apiRes.json();
+      if (data.ok) return { ok: true };
+    }
+  } catch (err: any) {
+    console.warn("API update failed, trying direct Supabase client:", err);
+  }
+
+  if (!supabase) return { ok: false, error: "Supabase no disponible" };
+  const { error } = await supabase
+    .from('inscripciones')
+    .update({
+      codiSeguiment: ins.codiSeguiment,
+      categoria: ins.categoria,
+      c1Nom: ins.c1Nom,
+      c1Cognoms: ins.c1Cognoms,
+      c1Talla: ins.c1Talla,
+      c1UniformeTipus: ins.c1UniformeTipus,
+      c2Nom: ins.c2Nom,
+      c2Cognoms: ins.c2Cognoms,
+      c2Talla: ins.c2Talla,
+      c2UniformeTipus: ins.c2UniformeTipus,
+      preuCalculat: ins.preuCalculat,
+      estatPagament: ins.estatPagament,
+      metodePagament: ins.metodePagament,
+      estatDni: ins.estatDni,
+      entregaMaterial: ins.entregaMaterial,
+      estat_inscripcio: ins.estatInscripcio,
+      bandera: ins.bandera,
+      actualizadoEn: new Date().toISOString()
+    })
+    .eq('id', ins.id);
+
+  if (error) {
+    return { ok: false, error: error.message };
+  }
+  return { ok: true };
+}
+
+/**
+ * Removes an inscription by its ID.
+ */
+export async function deleteSupabaseInscripcion(id: string): Promise<boolean> {
+  try {
+    const res = await fetch('/api/inscriptions?action=delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id })
+    });
+    if (res.ok) {
+      const json = await res.json();
+      if (json.ok) return true;
+    }
+  } catch (e) {
+    console.warn("API delete route unavailable, falling back to direct client:", e);
+  }
+
+  if (!supabase) return false;
+  await logSupabaseWriteDiagnostic('inscripciones', `DELETE (id: ${id})`);
+  try {
+    let response = await supabase
+      .from('inscripciones')
+      .delete()
+      .eq('id', id);
+    if (!response.error) return true;
+    console.error(`[Supabase Write Error] Taula: 'inscripciones', Operació: DELETE (id: ${id}), Error complet:`, response.error);
+    
+    // Fallback Catalan
+    response = await supabase
+      .from('inscripcions')
+      .delete()
+      .eq('id', id);
+    if (response.error) {
+      console.error("[Supabase Write Error] Fallback 'inscripcions' DELETE també ha fallat:", response.error);
+    }
+    return !response.error;
+  } catch(e) {
+    console.error("Exception deleting inscription from Supabase:", e);
+    return false;
+  }
+}
+
+/**
+ * Mass deletes multiple inscriptions by ID.
+ */
+export async function deleteMultipleSupabaseInscripciones(ids: string[]): Promise<boolean> {
+  if (!supabase) return false;
+  await logSupabaseWriteDiagnostic('inscripciones', `DELETE MULTIPLE (${ids.length} registres)`);
+  try {
+    let response = await supabase
+      .from('inscripciones')
+      .delete()
+      .in('id', ids);
+    if (!response.error) return true;
+    console.error("[Supabase Write Error] Taula: 'inscripciones', Operació: DELETE MULTIPLE, Error complet:", response.error);
+    
+    // Fallback Catalan
+    response = await supabase
+      .from('inscripcions')
+      .delete()
+      .in('id', ids);
+    if (response.error) {
+      console.error("[Supabase Write Error] Fallback 'inscripcions' DELETE MULTIPLE també ha fallat:", response.error);
+    }
+    return !response.error;
+  } catch(e) {
+    console.error("Exception deleting multi inscriptions from Supabase:", e);
+    return false;
+  }
+}
+
+/**
+ * Deletes all registrations completely.
+ */
+export async function clearAllSupabaseInscripciones(): Promise<boolean> {
+  if (!supabase) return false;
+  await logSupabaseWriteDiagnostic('inscripciones', 'DELETE ALL');
+  try {
+    let response = await supabase
+      .from('inscripciones')
+      .delete()
+      .neq('id', '_dummy_placeholder_id_string_that_does_not_exist_');
+    if (!response.error) return true;
+    console.error("[Supabase Write Error] Taula: 'inscripciones', Operació: DELETE ALL, Error complet:", response.error);
+    
+    // Fallback Catalan
+    response = await supabase
+      .from('inscripcions')
+      .delete()
+      .neq('id', '_dummy_placeholder_id_string_that_does_not_exist_');
+    if (response.error) {
+      console.error("[Supabase Write Error] Fallback 'inscripcions' DELETE ALL també ha fallat:", response.error);
+    }
+    return !response.error;
+  } catch(e) {
+    console.error("Exception clearing inscriptions from Supabase:", e);
+    return false;
+  }
+}
+
+/**
+ * Checks if the current authenticated user has the 'admin' role in public.profiles.
+ * Authenticated alone does NOT mean admin.
+ */
+export async function checkCurrentUserIsAdmin(userId?: string): Promise<boolean> {
+  if (!supabase) return false;
+  try {
+    let targetId = userId;
+    let targetEmail = '';
+    if (!targetId) {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return false;
+      targetId = user.id;
+      targetEmail = user.email || '';
+    }
+
+    const { data: profile, error } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', targetId)
+      .maybeSingle();
+
+    if (!error && profile && profile.role === 'admin') {
+      return true;
+    }
+
+    return false;
+  } catch (err) {
+    console.warn("Failed checking admin profile role:", err);
+    return false;
+  }
+}
+
+/**
+ * Resolves a signed URL for a protected DNI stored in the private 'dnis' bucket.
+ * Uses server-side endpoint with service role credentials first, with fallback to client SDK.
+ */
+export async function getDniSignedUrl(pathOrUrl: string): Promise<string> {
+  if (!pathOrUrl || typeof pathOrUrl !== 'string') return '';
+  const trimmed = pathOrUrl.trim();
+  if (!trimmed) return '';
+
+  if (trimmed.startsWith('data:') || trimmed.startsWith('blob:')) {
+    return trimmed;
+  }
+
+  // If already an external non-supabase storage URL, return it
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    const isSupabaseDniStorage = trimmed.includes('/storage/v1/object/') && trimmed.includes('/dnis/');
+    if (!isSupabaseDniStorage) {
+      return trimmed;
+    }
+  }
+
+  // 1. Try server endpoint first (uses service role, generates secure 1-hour signed URL)
+  try {
+    const res = await fetch('/api/inscriptions?action=signed-dni-url', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: trimmed })
+    });
+    if (res.ok) {
+      const json = await res.json();
+      if (json && json.ok && json.signedUrl) {
+        return json.signedUrl;
+      }
+    }
+  } catch (e) {
+    // fallback to client SDK
+  }
+
+  // 2. Client SDK fallback
+  if (supabase) {
+    try {
+      const cleanPath = trimmed
+        .replace(/^https?:\/\/[^/]+\/storage\/v1\/object\/(?:public|sign)\/dnis\//, '')
+        .replace(/^storage:\/\/dnis\//, '')
+        .replace(/^dnis\//, '');
+      const { data, error } = await supabase.storage.from('dnis').createSignedUrl(cleanPath, 3600);
+      if (!error && data?.signedUrl) {
+        return data.signedUrl;
+      }
+    } catch (e) {
+      console.warn("Could not create signed URL for DNI via client SDK:", e);
+    }
+  }
+
+  return trimmed;
+}
+
+export interface SistemaConfigItem {
+  clau: string;
+  valor: any;
+}
+
+/**
+ * Fetches all configuration records from the 'sistema_config' table.
+ * Falls back to local storage and default entries.
+ */
+export async function fetchSistemaConfig(): Promise<SistemaConfigItem[]> {
+  const defaults: SistemaConfigItem[] = [
+    { 
+      clau: 'descripcio_parella_adulta_ca', 
+      valor: { text: localStorage.getItem('descripcio_parella_adulta_ca') || "Especialista para a partir de 16 anys o més. Inclou samarretres exclusives de la collada i purs dolços." } 
+    },
+    { 
+      clau: 'descripcio_parella_adulta_es', 
+      valor: { text: localStorage.getItem('descripcio_parella_adulta_es') || "Especial para a partir de 16 años o más. Incluye camisetas exclusivas de la colla y puros dulces." } 
+    },
+    { 
+      clau: 'descripcio_parella_juvenil_ca', 
+      valor: { text: localStorage.getItem('descripcio_parella_juvenil_ca') || "Ideal per a parelles de 5 a 15 anys d'edat. Inclou fulard petit de color fucsia." } 
+    },
+    { 
+      clau: 'descripcio_parella_juvenil_es', 
+      valor: { text: localStorage.getItem('descripcio_parella_juvenil_es') || "Ideal para parejas de 5 a 15 años de edad. Incluye pañuelo pequeño de color fucsia." } 
+    },
+    { 
+      clau: 'armilla_opcional', 
+      valor: { opcional: localStorage.getItem('armilla_opcional') === 'true' } 
+    },
+  ];
+
+  if (!supabase) {
+    return defaults;
+  }
+
+  try {
+    const { data, error } = await supabase.from('sistema_config').select('*');
+    if (!error && data && data.length > 0) {
+      const items: SistemaConfigItem[] = data.map((row: any) => {
+        const clau = row.clau || row.key;
+        let valor = row.valor !== undefined ? row.valor : row.value;
+        if (typeof valor === 'string') {
+          try { valor = JSON.parse(valor); } catch {}
+        }
+        return { clau, valor };
+      });
+      return items;
+    }
+  } catch (err) {
+    console.warn("Could not fetch sistema_config directly:", err);
+  }
+
+  return defaults;
+}
+
+/**
+ * Saves a single configuration record to 'sistema_config' (and synchronizes with 'settings' and localStorage).
+ */
+export async function saveSistemaConfigItem(clau: string, valor: any): Promise<boolean> {
+  try {
+    if (typeof valor === 'object' && valor !== null && valor.text) {
+      localStorage.setItem(clau, valor.text);
+    } else if (typeof valor === 'object' && valor !== null && valor.opcional !== undefined) {
+      localStorage.setItem(clau, String(valor.opcional));
+    } else if (typeof valor === 'string') {
+      localStorage.setItem(clau, valor);
+    }
+
+    if (!supabase) return true;
+
+    // Diagnòstic abans d'escriure a 'sistema_config'
+    await logSupabaseWriteDiagnostic('sistema_config', `UPSERT (clau: ${clau})`);
+
+    const payload = {
+      clau,
+      valor,
+      key: clau,
+      value: valor
+    };
+
+    const { error } = await supabase
+      .from('sistema_config')
+      .upsert(payload, { onConflict: 'clau' });
+
+    if (error) {
+      console.error(`[Supabase Write Error] Taula: 'sistema_config', Operació: UPSERT (clau: ${clau}), Error complet:`, error);
+      const { error: err2 } = await supabase
+        .from('sistema_config')
+        .upsert({ clau, valor }, { onConflict: 'clau' });
+      if (err2) {
+        console.error(`[Supabase Write Error] Taula: 'sistema_config', Fallback UPSERT (clau: ${clau}), Error complet:`, err2);
+      }
+    }
+
+    // Also synchronize to settings table for backward compatibility
+    await saveSupabaseSetting(clau, typeof valor === 'object' ? JSON.stringify(valor) : valor);
+    return true;
+  } catch (e) {
+    console.warn(`Exception saving sistema_config item [${clau}]:`, e);
+    return false;
+  }
+}
+
+/**
+ * Reads the dress code video URL strictly from Supabase ('sistema_config' or 'settings' table)
+ * or localStorage, without any obsolete mock/hardcoded fallback.
+ */
+export async function getCodigoVestimentaUrl(bypassCache: boolean = false): Promise<string> {
+  // Check memory cache first unless bypass requested
+  if (!bypassCache && settingCache.has('codigo_vestimenta_url')) {
+    return settingCache.get('codigo_vestimenta_url') || '';
+  }
+
+  let url = '';
+
+  // 1. Try 'sistema_config' table first
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('sistema_config')
+        .select('*');
+
+      if (!error && data && data.length > 0) {
+        const row = data.find((r: any) =>
+          r.clau === 'codigo_vestimenta_url' ||
+          r.key === 'codigo_vestimenta_url' ||
+          r.id === 'codigo_vestimenta_url'
+        );
+        if (row) {
+          let val = row.valor !== undefined ? row.valor : row.value;
+          if (typeof val === 'string') {
+            try {
+              const parsed = JSON.parse(val);
+              if (typeof parsed === 'string') val = parsed;
+              else if (parsed && typeof parsed === 'object') {
+                val = parsed.url || parsed.text || parsed.valor || parsed.value || val;
+              }
+            } catch {
+              // plain string
+            }
+          } else if (val && typeof val === 'object') {
+            val = val.url || val.text || val.valor || val.value || '';
+          }
+          if (typeof val === 'string' && val.trim()) {
+            url = val.trim();
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[getCodigoVestimentaUrl] Error reading from sistema_config:', err);
+    }
+  }
+
+  // 2. Try 'settings' table if not found yet
+  if (!url && supabase) {
+    try {
+      const settingVal = await getSupabaseSetting<any>('codigo_vestimenta_url', '', true);
+      if (typeof settingVal === 'string' && settingVal.trim()) {
+        url = settingVal.trim();
+      } else if (settingVal && typeof settingVal === 'object') {
+        const extracted = (settingVal.url || settingVal.text || settingVal.valor || settingVal.value || '').trim();
+        if (extracted) url = extracted;
+      }
+    } catch (err) {
+      console.warn('[getCodigoVestimentaUrl] Error reading from settings:', err);
+    }
+  }
+
+  // 3. Fallback to localStorage if still not found
+  if (!url) {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const local = localStorage.getItem('codigo_vestimenta_url');
+        if (local && typeof local === 'string' && local.trim()) {
+          let clean = local.trim();
+          if (clean.startsWith('"') && clean.endsWith('"')) {
+            try { clean = JSON.parse(clean); } catch {}
+          }
+          if (clean && typeof clean === 'string' && clean.trim()) {
+            url = clean.trim();
+          }
+        }
+      }
+    } catch {}
+  }
+
+  // If found anywhere, synchronize to localStorage and settingCache
+  if (url) {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('codigo_vestimenta_url', url);
+      }
+    } catch {}
+    settingCache.set('codigo_vestimenta_url', url);
+  } else {
+    settingCache.set('codigo_vestimenta_url', '');
+  }
+
+  return url;
+}
+
+/**
+ * Saves the dress code video URL simultaneously into Supabase ('sistema_config' and 'settings')
+ * and localStorage, broadcasting the change to all open views.
+ */
+export async function saveCodigoVestimentaUrl(url: string): Promise<boolean> {
+  const trimmed = (url || '').trim();
+
+  // 1. Always update memory cache immediately
+  settingCache.set('codigo_vestimenta_url', trimmed);
+
+  // 2. Always update localStorage immediately
+  try {
+    if (typeof localStorage !== 'undefined') {
+      if (trimmed) {
+        localStorage.setItem('codigo_vestimenta_url', trimmed);
+      } else {
+        localStorage.removeItem('codigo_vestimenta_url');
+      }
+    }
+  } catch {}
+
+  let success = false;
+
+  // 3. Save to 'sistema_config' table
+  if (supabase) {
+    try {
+      await logSupabaseWriteDiagnostic('sistema_config', `UPSERT (codigo_vestimenta_url: ${trimmed})`);
+      const payload: any = {
+        clau: 'codigo_vestimenta_url',
+        valor: trimmed,
+        key: 'codigo_vestimenta_url',
+        value: trimmed
+      };
+      const { error: err1 } = await supabase
+        .from('sistema_config')
+        .upsert(payload, { onConflict: 'clau' });
+
+      if (!err1) {
+        success = true;
+      } else {
+        const { error: err2 } = await supabase
+          .from('sistema_config')
+          .upsert({ clau: 'codigo_vestimenta_url', valor: trimmed });
+        if (!err2) success = true;
+      }
+    } catch (err) {
+      console.warn('[saveCodigoVestimentaUrl] Error saving to sistema_config:', err);
+    }
+
+    // 4. Save to 'settings' table
+    try {
+      const sOk = await saveSupabaseSetting('codigo_vestimenta_url', trimmed);
+      if (sOk) success = true;
+    } catch (err) {
+      console.warn('[saveCodigoVestimentaUrl] Error saving to settings:', err);
+    }
+  } else {
+    success = true;
+  }
+
+  // 5. Broadcast custom event
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('codigoVestimentaChanged', { detail: trimmed }));
+  }
+
+  return success;
+}
+
+export interface AdminUserRecord {
+  id: string;
+  email: string;
+  name: string;
+  nombre?: string;
+  role: 'admin' | 'staff';
+  rol?: 'admin' | 'staff';
+  created_at: string;
+  fecha_creacion?: string;
+  updated_at?: string;
+  last_sign_in_at?: string | null;
+  actiu: boolean;
+  estado?: 'actiu' | 'inactiu';
+  isCurrentCaller?: boolean;
+}
+
+/**
+ * Gets the current Supabase session access token for authenticated requests to /api/admin/*
+ */
+export async function getAdminAccessToken(): Promise<string | null> {
+  if (!supabase) return null;
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.access_token || null;
+  } catch (e) {
+    console.warn("Failed retrieving access token:", e);
+    return null;
+  }
+}
+
+/**
+ * Safely executes a fetch request expecting a JSON response.
+ * Strictly verifies response.ok and Content-Type before executing any JSON parsing.
+ * Extracts text first to avoid syntax errors like "Unexpected token < in JSON at position 0"
+ * if the server returns HTML or plain text (e.g. FUNCTION_INVOCATION_FAILED).
+ */
+async function safeFetchJson<T = any>(
+  url: string,
+  options: RequestInit
+): Promise<{ ok: boolean; status: number; data?: T; error?: string; rawBody?: string }> {
+  try {
+    const res = await fetch(url, options);
+    const contentType = (res.headers.get('content-type') || '').toLowerCase();
+    const rawText = await res.text();
+
+    // Check if the response is not JSON
+    if (!contentType.includes('application/json')) {
+      const snippet = rawText.trim().slice(0, 180).replace(/\s+/g, ' ');
+      const isHtml = rawText.includes('<html') || rawText.includes('<!DOCTYPE') || rawText.includes('The page') || rawText.includes('FUNCTION_INVOCATION_FAILED');
+      const errDetail = isHtml
+        ? `El servidor ha retornat un error intern (HTTP ${res.status}): ${snippet || 'Servei no disponible'}`
+        : `El servidor no ha retornat JSON (HTTP ${res.status}): "${snippet || 'buit'}"`;
+      return {
+        ok: false,
+        status: res.status,
+        rawBody: rawText,
+        error: errDetail
+      };
+    }
+
+    let parsed: any;
+    try {
+      parsed = JSON.parse(rawText);
+    } catch (parseErr: any) {
+      const snippet = rawText.trim().slice(0, 160).replace(/\s+/g, ' ');
+      return {
+        ok: false,
+        status: res.status,
+        rawBody: rawText,
+        error: `Error de format JSON en la resposta del servidor (HTTP ${res.status}): ${parseErr.message}. Contingut: "${snippet}"`
+      };
+    }
+
+    // Check standard response errors (HTTP error or JSON payload with ok: false)
+    if (!res.ok || parsed?.ok === false) {
+      const serverErrMsg = parsed?.message || parsed?.error || `Error del servidor (HTTP ${res.status})`;
+      return {
+        ok: false,
+        status: res.status,
+        data: parsed,
+        error: typeof serverErrMsg === 'string' ? serverErrMsg : JSON.stringify(serverErrMsg)
+      };
+    }
+
+    return {
+      ok: true,
+      status: res.status,
+      data: parsed
+    };
+  } catch (netErr: any) {
+    return {
+      ok: false,
+      status: 0,
+      error: `Error de connexió de xarxa amb '${url}': ${netErr?.message || String(netErr)}`
+    };
+  }
+}
+
+/**
+ * Diagnostic health check for the admin module: GET /api/admin?action=health
+ */
+export async function checkAdminHealth(): Promise<{ ok: boolean; status: number; data?: any; error?: string }> {
+  return safeFetchJson('/api/admin?action=health', { method: 'GET' });
+}
+
+/**
+ * Fetches the real list of administrators and staff directly from the secure /api/admin?action=list endpoint
+ * (which queries auth.users + public.profiles on the server).
+ */
+export async function fetchAdminUsers(): Promise<{ users: AdminUserRecord[]; error?: string }> {
+  try {
+    const token = await getAdminAccessToken();
+    if (!token) {
+      return { users: [], error: "No s'ha trobat cap sessió d'administrador activa (token no disponible)." };
+    }
+
+    const res = await safeFetchJson<{
+      ok?: boolean;
+      success?: boolean;
+      data?: { users?: any[]; count?: number };
+      users?: any[];
+      error?: string;
+      message?: string;
+    }>('/api/admin?action=list', {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+
+    if (!res.ok || !res.data) {
+      return { users: [], error: res.error || `Error HTTP ${res.status} al sol·licitar /api/admin` };
+    }
+
+    const rawList: any[] = res.data.data?.users || res.data.users || (Array.isArray(res.data.data) ? res.data.data : []);
+
+    const normalizedUsers: AdminUserRecord[] = rawList.map((u: any) => {
+      const name = String(u.nombre || u.name || (u.email ? u.email.split('@')[0] : 'Usuari')).trim();
+      const role: 'admin' | 'staff' = (u.rol === 'admin' || u.role === 'admin') ? 'admin' : 'staff';
+      const isActiu = u.actiu !== undefined
+        ? Boolean(u.actiu)
+        : (u.estado === 'actiu' || u.estado === 'activo' || u.estado !== 'inactiu');
+
+      return {
+        id: String(u.id),
+        email: String(u.email || ''),
+        name,
+        nombre: name,
+        role,
+        rol: role,
+        created_at: u.created_at || u.fecha_creacion || '',
+        fecha_creacion: u.fecha_creacion || u.created_at || '',
+        updated_at: u.updated_at,
+        last_sign_in_at: u.last_sign_in_at || null,
+        actiu: isActiu,
+        estado: isActiu ? 'actiu' : 'inactiu',
+        isCurrentCaller: Boolean(u.isCurrentCaller)
+      };
+    });
+
+    return { users: normalizedUsers };
+  } catch (err: any) {
+    console.error("fetchAdminUsers failed:", err);
+    return { users: [], error: err?.message || "Error de connexió amb el servidor" };
+  }
+}
+
+/**
+ * Creates a new administrator or staff user securely via /api/admin?action=create.
+ * Never stores or transmits the password outside of this protected API call.
+ */
+export async function createAdminUser(params: {
+  nom: string;
+  email: string;
+  role: 'admin' | 'staff';
+  password: string;
+  confirmPassword: string;
+}): Promise<{ success: boolean; user?: AdminUserRecord; error?: string }> {
+  try {
+    const token = await getAdminAccessToken();
+    if (!token) {
+      return { success: false, error: "Cal tenir una sessió activa d'administrador per donar d'alta personal." };
+    }
+
+    const res = await safeFetchJson<{
+      ok?: boolean;
+      success?: boolean;
+      data?: { user?: any; message?: string };
+      user?: any;
+      error?: string;
+      message?: string;
+    }>('/api/admin?action=create', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify(params)
+    });
+
+    if (!res.ok || !res.data) {
+      return { success: false, error: res.error || `Error HTTP ${res.status} al crear usuari` };
+    }
+
+    const rawUser = res.data.data?.user || res.data.user;
+    if (!rawUser) {
+      return { success: true };
+    }
+
+    const name = String(rawUser.nombre || rawUser.name || params.nom).trim();
+    const role: 'admin' | 'staff' = (rawUser.rol === 'admin' || rawUser.role === 'admin' || params.role === 'admin') ? 'admin' : 'staff';
+    const isActiu = rawUser.actiu !== undefined ? Boolean(rawUser.actiu) : true;
+
+    const normalizedUser: AdminUserRecord = {
+      id: String(rawUser.id),
+      email: String(rawUser.email || params.email),
+      name,
+      nombre: name,
+      role,
+      rol: role,
+      created_at: rawUser.created_at || rawUser.fecha_creacion || new Date().toISOString(),
+      fecha_creacion: rawUser.fecha_creacion || rawUser.created_at || new Date().toISOString(),
+      updated_at: rawUser.updated_at,
+      last_sign_in_at: rawUser.last_sign_in_at || null,
+      actiu: isActiu,
+      estado: isActiu ? 'actiu' : 'inactiu',
+      isCurrentCaller: false
+    };
+
+    return { success: true, user: normalizedUser };
+  } catch (err: any) {
+    console.error("createAdminUser failed:", err);
+    return { success: false, error: err?.message || "Error de connexió en crear l'usuari" };
+  }
+}
+
+/**
+ * Updates an admin/staff user role via /api/admin?action=update.
+ */
+export async function updateAdminUserRole(
+  id: string,
+  role: 'admin' | 'staff'
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const token = await getAdminAccessToken();
+    if (!token) {
+      return { success: false, error: "Cal tenir una sessió activa d'administrador." };
+    }
+
+    const res = await safeFetchJson<{ ok?: boolean; success?: boolean; error?: string; message?: string }>('/api/admin?action=update', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ id, role, rol: role })
+    });
+
+    if (!res.ok) {
+      return { success: false, error: res.error || `Error HTTP ${res.status} en actualitzar rol` };
+    }
+
+    return { success: true };
+  } catch (err: any) {
+    console.error("updateAdminUserRole failed:", err);
+    return { success: false, error: err?.message || "Error de connexió en actualitzar el rol" };
+  }
+}
+
+/**
+ * Toggles an admin/staff user's active status via /api/admin?action=update.
+ */
+export async function toggleAdminUserActive(
+  id: string,
+  actiu: boolean
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const token = await getAdminAccessToken();
+    if (!token) {
+      return { success: false, error: "Cal tenir una sessió activa d'administrador." };
+    }
+
+    const res = await safeFetchJson<{ ok?: boolean; success?: boolean; error?: string; message?: string }>('/api/admin?action=update', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ id, actiu, estado: actiu ? 'actiu' : 'inactiu' })
+    });
+
+    if (!res.ok) {
+      return { success: false, error: res.error || `Error HTTP ${res.status} en actualitzar l'estat` };
+    }
+
+    return { success: true };
+  } catch (err: any) {
+    console.error("toggleAdminUserActive failed:", err);
+    return { success: false, error: err?.message || "Error de connexió en actualitzar l'estat" };
+  }
+}
+
+/**
+ * Deletes an admin/staff user securely via /api/admin?action=delete.
+ * Crucially, does NOT touch inscriptions or any event data.
+ */
+export async function deleteAdminUser(id: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const token = await getAdminAccessToken();
+    if (!token) {
+      return { success: false, error: "Cal tenir una sessió activa d'administrador." };
+    }
+
+    const res = await safeFetchJson<{ ok?: boolean; success?: boolean; error?: string; message?: string }>('/api/admin?action=delete', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ id })
+    });
+
+    if (!res.ok) {
+      return { success: false, error: res.error || `Error HTTP ${res.status} en eliminar l'usuari` };
+    }
+
+    return { success: true };
+  } catch (err: any) {
+    console.error("deleteAdminUser failed:", err);
+    return { success: false, error: err?.message || "Error de connexió en eliminar l'usuari" };
+  }
+}
+

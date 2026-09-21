@@ -296,13 +296,11 @@ export const ComparserCard: React.FC<ComparserCardProps> = ({
         ]).filter(l => l.actiu !== false).map((linia) => {
           const isOptional = !!(linia.opcional || linia.armilla_opcional || config.armilla_opcional);
           const keyVol = num === 1 ? 'c1Vol' : 'c2Vol';
-          const defaultVol = !isOptional;
-          const rawSel = seleccionsUniforme[linia.id];
-          const volProducte = rawSel && rawSel[keyVol] !== undefined ? !!rawSel[keyVol] : defaultVol;
-          const sel = rawSel || { [keyTalla]: linia.opcions[0] || 'M', [keyQuantitat]: 1, [keyTipus]: 'compra', [keyVol]: defaultVol };
+          const sel = seleccionsUniforme[linia.id] || { [keyTalla]: linia.opcions[0] || 'M', [keyQuantitat]: 1, [keyTipus]: 'compra', [keyVol]: true };
           const tallaVal = sel[keyTalla] || linia.opcions[0] || 'M';
           const quantitatVal = sel[keyQuantitat] || 1;
           const tipusVal = sel[keyTipus] || 'compra';
+          const volProducte = sel[keyVol] !== undefined ? !!sel[keyVol] : true;
 
           const displayNom = language === 'ca' 
             ? linia.nom.replace(/armilla/gi, t('armilla')) 
