@@ -379,18 +379,13 @@ function parseInscripcionesRows(rows: any[]): Inscripcio[] {
                           typeof r.respostes === 'object' && r.respostes ? { ...r.respostes } :
                           parseJSON(r.respostesCuestionari || r.respostes_cuestionari || r.respostes || '{}');
 
-    // Purge legacy, contact, and internal fields from questionnaire answers
+    // Purge legacy fields from questionnaire answers (do NOT delete clavells or corbati)
     const FORBIDDEN_KEYS = [
       'estatCorreu', 'domas_qty', 'mocadors_qty', 'correuContacteParella',
       'telefonContacteParella', 'emailContactoPareja', 'telefonContactoPareja',
-      'teDomasBalco', 'teMocadorsExtra', 'clavells_qty', 'corbati_qty'
+      'teDomasBalco', 'teMocadorsExtra'
     ];
     FORBIDDEN_KEYS.forEach(k => delete rawRespostes[k]);
-    Object.keys(rawRespostes).forEach(k => {
-      if (k.startsWith('extra_qty_')) {
-        delete rawRespostes[k];
-      }
-    });
 
     // Safe status normalization that never drops records on unknown or missing values
     const rawPagament = String(r.estatPagament || r.estat_pagament || r.estatpagament || 'PENDENT').toUpperCase();
@@ -409,10 +404,17 @@ function parseInscripcionesRows(rows: any[]): Inscripcio[] {
     const categoria = rawCategoria === 'JUVENIL' ? CategoriaParella.JUVENIL : CategoriaParella.ADULT;
 
     // Standard column parse with snake_case and casing fallback modes
+    const codiSeguiment = String(
+      r.codiSeguiment !== undefined && r.codiSeguiment !== null ? r.codiSeguiment :
+      (r.codi_seguiment || r.codigo || r.codigo_inscripcion || r.codigo_seguimiento || r.codiseguiment || r.codi || '')
+    ).trim();
+
+    const extresRaw = r.extresSeleccionats || r.extres_seleccionats || rawRespostes?.extresSeleccionats || rawRespostes?.extres_seleccionats;
+    const extresSeleccionats = Array.isArray(extresRaw) ? extresRaw : (typeof extresRaw === 'string' ? parseJSON(extresRaw) : undefined);
+
     return {
       id: String(r.id || r.key || ''),
-      codiSeguiment: String(r.codiSeguiment !== undefined ? r.codiSeguiment 
-                    : (r.codi_seguiment || r.codiseguiment || '')),
+      codiSeguiment,
       categoria,
 
       // Single couple contact
@@ -446,6 +448,7 @@ function parseInscripcionesRows(rows: any[]): Inscripcio[] {
       c2UniformeTipus: String(r.c2UniformeTipus !== undefined ? r.c2UniformeTipus : (r.c2_uniforme_tipus || r.c2uniformetipus || 'compra')),
 
       respostesCuestionari: rawRespostes || {},
+      extresSeleccionats,
     
       seleccionsUniforme: typeof r.seleccionsUniforme === 'object' && r.seleccionsUniforme ? r.seleccionsUniforme :
                           typeof r.seleccions_uniforme === 'object' && r.seleccions_uniforme ? r.seleccions_uniforme :

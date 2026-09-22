@@ -21,7 +21,17 @@ export function buildUnifiedEmailHtml(options: TicketGenerationOptions): {
 } {
   const { registration, entityConfig, breakdown, c1DniSignedUrl, c2DniSignedUrl, language = 'ca' } = options;
 
-  const realCode = (registration.codiSeguiment || (registration as any).codigo || (registration as any).codigoInscripcion || (registration as any).codi || '').trim();
+  const realCode = (
+    registration.codiSeguiment || 
+    (registration as any).codi_seguiment || 
+    (registration as any).codigo || 
+    (registration as any).codigoInscripcion || 
+    (registration as any).codigo_inscripcion ||
+    (registration as any).codigo_seguimiento ||
+    (registration as any).codiseguiment ||
+    (registration as any).codi || 
+    ''
+  ).trim();
 
   const subjectBase = language === 'ca'
     ? `Confirmació de preinscripció - ${entityConfig.nomEsdeveniment}`

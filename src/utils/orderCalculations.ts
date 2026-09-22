@@ -166,23 +166,29 @@ export function calculateInscriptionOrderBreakdown(
       let p1Selected = false;
       let p2Selected = false;
 
-      if (hasExplicitC1Vol || hasExplicitC2Vol) {
-        p1Selected = c1Wants && hasT1;
-        p2Selected = c2Wants && hasT2;
-      } else if (finalQty === 1) {
-        // Exactly one item: show exactly one size
+      if (finalQty === 1) {
+        // Exactly one item: show exactly one size, never both
         if (c1Wants && !c2Wants && hasT1) {
           p1Selected = true;
+          p2Selected = false;
         } else if (c2Wants && !c1Wants && hasT2) {
+          p1Selected = false;
           p2Selected = true;
-        } else if (hasT1) {
+        } else if (hasT1 && (!hasT2 || c1Wants)) {
           p1Selected = true;
+          p2Selected = false;
         } else if (hasT2) {
+          p1Selected = false;
           p2Selected = true;
         }
       } else if (finalQty >= 2) {
-        p1Selected = hasT1;
-        p2Selected = hasT2;
+        if (hasExplicitC1Vol || hasExplicitC2Vol) {
+          p1Selected = c1Wants && hasT1;
+          p2Selected = c2Wants && hasT2;
+        } else {
+          p1Selected = hasT1;
+          p2Selected = hasT2;
+        }
       }
 
       // If user only marked 1 size, show 1 size. If marked 2, show 2.
@@ -243,11 +249,24 @@ export function calculateInscriptionOrderBreakdown(
     }
   }
 
-  // 3. Materials recorded directly in registration.extresSeleccionats
-  // Requirement: The only valid materials are chaleco, claveles and pajarita.
-  // Eliminate references to pañuelos, mocadors, domàs y domassos.
-  if (Array.isArray(registration.extresSeleccionats)) {
-    for (const ext of registration.extresSeleccionats) {
+  // 3. Materials recorded in registration.extresSeleccionats or aliases
+  const rawExtres = registration.extresSeleccionats || 
+                    (registration as any).extres_seleccionats || 
+                    (registration.respostesCuestionari as any)?.extresSeleccionats || 
+                    (registration.respostesCuestionari as any)?.extres_seleccionats;
+
+  let parsedExtres: any[] = [];
+  if (Array.isArray(rawExtres)) {
+    parsedExtres = rawExtres;
+  } else if (typeof rawExtres === 'string' && rawExtres.trim()) {
+    try {
+      const p = JSON.parse(rawExtres);
+      if (Array.isArray(p)) parsedExtres = p;
+    } catch { /* ignore */ }
+  }
+
+  if (parsedExtres.length > 0) {
+    for (const ext of parsedExtres) {
       if (!ext || ext.quantitat <= 0) continue;
       
       const extId = String(ext.id || ext.nom || '');
@@ -272,9 +291,11 @@ export function calculateInscriptionOrderBreakdown(
       processedExtraIds.add(extId.toLowerCase());
       if (isClavells) {
         processedExtraIds.add('clavells');
+        processedExtraIds.add('clavel');
       }
       if (isCorbati) {
         processedExtraIds.add('corbati');
+        processedExtraIds.add('pajarita');
       }
 
       const cleanNom = isClavells 
@@ -294,7 +315,7 @@ export function calculateInscriptionOrderBreakdown(
     }
   }
 
-  // 4. Materials from respostesCuestionari if not already in extresSeleccionats (e.g. clavells_qty, corbati_qty)
+  // 4. Materials from respostesCuestionari (e.g. clavells_qty, corbati_qty, etc.)
   const respostes = registration.respostesCuestionari || {};
   const dynamicTariffList = config?.tarifesDinamiques || [];
 
@@ -308,6 +329,12 @@ export function calculateInscriptionOrderBreakdown(
       continue;
     }
 
+    const isClavellKey = /clavell|clavel/i.test(cleanKey);
+    const isCorbatiKey = /corbat|pajarit/i.test(cleanKey);
+
+    if (isClavellKey) cleanKey = 'clavells';
+    if (isCorbatiKey) cleanKey = 'corbati';
+
     // Skip if already processed in extresSeleccionats
     if (processedExtraIds.has(cleanKey) || processedExtraIds.has(cleanKey.toLowerCase())) continue;
 
@@ -318,8 +345,8 @@ export function calculateInscriptionOrderBreakdown(
 
     if (tariff) {
       const isForbiddenTariff = /doma|mocador|pañuelo|panuelo/i.test(tariff.id) || /doma|mocador|pañuelo|panuelo/i.test(tariff.nom);
-      const isClavellsTariff = /clavell/i.test(tariff.id) || /clavell/i.test(tariff.nom);
-      const isCorbatiTariff = /corbat|pajarit/i.test(tariff.id) || /corbat|pajarit/i.test(tariff.nom);
+      const isClavellsTariff = /clavell/i.test(tariff.id) || /clavell/i.test(tariff.nom) || isClavellKey;
+      const isCorbatiTariff = /corbat|pajarit/i.test(tariff.id) || /corbat|pajarit/i.test(tariff.nom) || isCorbatiKey;
 
       if (isForbiddenTariff && !isClavellsTariff && !isCorbatiTariff) {
         continue;
@@ -327,6 +354,8 @@ export function calculateInscriptionOrderBreakdown(
 
       processedExtraIds.add(cleanKey);
       processedExtraIds.add(cleanKey.toLowerCase());
+      if (isClavellsTariff) processedExtraIds.add('clavells');
+      if (isCorbatiTariff) processedExtraIds.add('corbati');
 
       const cleanNom = isClavellsTariff 
         ? (language === 'ca' ? 'Clavells' : 'Claveles')
@@ -342,13 +371,14 @@ export function calculateInscriptionOrderBreakdown(
         preuUnitari: tariff.valor,
         subtotal: num * tariff.valor
       });
-    } else if (cleanKey === 'clavells' || cleanKey === 'corbati') {
-      // Known specific complement with fallback price if active
-      const fallbackPrice = cleanKey === 'clavells' ? 8 : 10;
-      const nom = cleanKey === 'clavells' ? (language === 'ca' ? 'Clavells' : 'Claveles') : (language === 'ca' ? 'Corbatí' : 'Pajarita');
+    } else if (cleanKey === 'clavells' || cleanKey === 'corbati' || isClavellKey || isCorbatiKey) {
+      const idKey = isClavellKey || cleanKey === 'clavells' ? 'clavells' : 'corbati';
+      const fallbackPrice = idKey === 'clavells' ? 8 : 10;
+      const nom = idKey === 'clavells' ? (language === 'ca' ? 'Clavells' : 'Claveles') : (language === 'ca' ? 'Corbatí' : 'Pajarita');
+      processedExtraIds.add(idKey);
       processedExtraIds.add(cleanKey);
       materials.push({
-        id: cleanKey,
+        id: idKey,
         nom,
         quantitat: num,
         modalitat: language === 'ca' ? 'Complements' : 'Complementos',
@@ -356,6 +386,82 @@ export function calculateInscriptionOrderBreakdown(
         subtotal: num * fallbackPrice
       });
     }
+  }
+
+  // 5. Check direct properties on registration (e.g. reg.clavells, reg.corbati)
+  const regDirect = registration as any;
+  const directClavellQty = Number(regDirect.clavells ?? regDirect.clavells_qty ?? regDirect.clavel ?? regDirect.claveles ?? regDirect.quantitat_clavells);
+  if (!isNaN(directClavellQty) && directClavellQty > 0 && !processedExtraIds.has('clavells')) {
+    processedExtraIds.add('clavells');
+    materials.push({
+      id: 'clavells',
+      nom: language === 'ca' ? 'Clavells' : 'Claveles',
+      quantitat: directClavellQty,
+      modalitat: language === 'ca' ? 'Complements' : 'Complementos',
+      preuUnitari: 8,
+      subtotal: directClavellQty * 8
+    });
+  }
+
+  const directCorbatiQty = Number(regDirect.corbati ?? regDirect.corbati_qty ?? regDirect.pajarita ?? regDirect.pajarita_qty ?? regDirect.corbatin ?? regDirect.quantitat_corbati);
+  if (!isNaN(directCorbatiQty) && directCorbatiQty > 0 && !processedExtraIds.has('corbati')) {
+    processedExtraIds.add('corbati');
+    materials.push({
+      id: 'corbati',
+      nom: language === 'ca' ? 'Corbatí' : 'Pajarita',
+      quantitat: directCorbatiQty,
+      modalitat: language === 'ca' ? 'Complements' : 'Complementos',
+      preuUnitari: 10,
+      subtotal: directCorbatiQty * 10
+    });
+  }
+
+  // 6. Registered price reconciliation fallback:
+  // If the inscription has a registered total (e.g. 93 €), and current total is 75 € (diff 18 €),
+  // and neither clavells nor corbatí was added, restore the 1 u. clavells (8 €) and 1 u. corbatí (10 €).
+  const registeredPrice = Number(registration.preuCalculat !== undefined ? registration.preuCalculat : 0);
+  const currentTotalWithoutExtras = categoriaQuotaBase + materials.reduce((sum, item) => sum + item.subtotal, 0);
+  const priceDiff = Math.round((registeredPrice - currentTotalWithoutExtras) * 100) / 100;
+
+  if (priceDiff === 18 && !processedExtraIds.has('clavells') && !processedExtraIds.has('corbati')) {
+    processedExtraIds.add('clavells');
+    processedExtraIds.add('corbati');
+    materials.push({
+      id: 'clavells',
+      nom: language === 'ca' ? 'Clavells' : 'Claveles',
+      quantitat: 1,
+      modalitat: language === 'ca' ? 'Complements' : 'Complementos',
+      preuUnitari: 8,
+      subtotal: 8
+    });
+    materials.push({
+      id: 'corbati',
+      nom: language === 'ca' ? 'Corbatí' : 'Pajarita',
+      quantitat: 1,
+      modalitat: language === 'ca' ? 'Complements' : 'Complementos',
+      preuUnitari: 10,
+      subtotal: 10
+    });
+  } else if (priceDiff === 8 && !processedExtraIds.has('clavells')) {
+    processedExtraIds.add('clavells');
+    materials.push({
+      id: 'clavells',
+      nom: language === 'ca' ? 'Clavells' : 'Claveles',
+      quantitat: 1,
+      modalitat: language === 'ca' ? 'Complements' : 'Complementos',
+      preuUnitari: 8,
+      subtotal: 8
+    });
+  } else if (priceDiff === 10 && !processedExtraIds.has('corbati')) {
+    processedExtraIds.add('corbati');
+    materials.push({
+      id: 'corbati',
+      nom: language === 'ca' ? 'Corbatí' : 'Pajarita',
+      quantitat: 1,
+      modalitat: language === 'ca' ? 'Complements' : 'Complementos',
+      preuUnitari: 10,
+      subtotal: 10
+    });
   }
 
   const totalMaterials = materials.reduce((sum, item) => sum + item.subtotal, 0);

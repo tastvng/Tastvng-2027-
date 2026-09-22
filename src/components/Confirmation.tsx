@@ -69,7 +69,25 @@ export default function Confirmation({ registration, onClear, onUpdate, config }
   }, [language, currentReg.c1DniUrl, currentReg.c2DniUrl, registration.c1DniUrl, registration.c2DniUrl]);
 
   // QR code contains the exact saved tracking code
-  const realTrackingCode = (currentReg.codiSeguiment || registration.codiSeguiment || '').trim();
+  const realTrackingCode = (
+    currentReg.codiSeguiment || 
+    registration.codiSeguiment || 
+    (currentReg as any).codi_seguiment || 
+    (registration as any).codi_seguiment || 
+    (currentReg as any).codigo || 
+    (registration as any).codigo || 
+    (currentReg as any).codigoInscripcion || 
+    (registration as any).codigoInscripcion || 
+    (currentReg as any).codigo_inscripcion || 
+    (registration as any).codigo_inscripcion || 
+    (currentReg as any).codigo_seguimiento || 
+    (registration as any).codigo_seguimiento || 
+    (currentReg as any).codiseguiment || 
+    (registration as any).codiseguiment || 
+    (currentReg as any).codi || 
+    (registration as any).codi || 
+    ''
+  ).trim();
   const qrIdentifier = realTrackingCode || currentReg.id || registration.id;
   const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&color=e6007e&data=${encodeURIComponent(qrIdentifier)}`;
 

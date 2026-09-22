@@ -387,8 +387,8 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
         </button>
 
         <div className="text-center">
-          <span className="font-mono text-[9px] text-zinc-500 uppercase">
-            {language === 'ca' ? 'CODI DETALL DE FITXA' : 'CÓDIGO DETALLE DE FICHA'}
+          <span className="font-mono text-[9px] text-fuchsia-400 font-bold uppercase tracking-wider">
+            CODI DE SEGUIMENT
           </span>
           <div className="flex items-center justify-center gap-2">
             <h2 className="font-sans font-extrabold text-base tracking-tight text-fuchsia-400">{codiSeguiment}</h2>
@@ -458,20 +458,7 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
                   {language === 'ca' ? 'Comú per a la parella' : 'Común para la pareja'}
                 </span>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                <div>
-                  <label className="block text-[10px] text-zinc-600 font-bold uppercase font-mono mb-1">
-                    {language === 'ca' ? 'Telèfon de contacte *' : 'Teléfono de contacto *'}
-                  </label>
-                  <input 
-                    type="tel" 
-                    value={telefonContactoPareja} 
-                    onChange={(e) => setTelefonContactoPareja(e.target.value)}
-                    className="w-full bg-white border border-zinc-200 focus:border-fuchsia-500 rounded-xl px-3 py-2 text-xs font-bold font-sans focus:outline-none" 
-                    placeholder={language === 'ca' ? 'Ex. 600123456' : 'Ej. 600123456'}
-                    id="admin-input-couple-phone"
-                  />
-                </div>
+              <div className="pt-1">
                 <div>
                   <label className="block text-[10px] text-zinc-600 font-bold uppercase font-mono mb-1">
                     {language === 'ca' ? 'Correu electrònic *' : 'Correo electrónico *'}
@@ -1371,42 +1358,6 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
                 </span>
 
                 <div className="space-y-2 text-[11px]">
-                  {/* Comparser 1 size if present */}
-                  {c1Talla && (
-                    <label className="flex items-center gap-2.5 text-zinc-300 hover:text-white cursor-pointer select-none">
-                      <input 
-                        type="checkbox"
-                        checked={entregaMaterial === EstatInscripcio.ENTREGAT || entregaC1Uniforme}
-                        onChange={(e) => setEntregaC1Uniforme(e.target.checked)}
-                        className="rounded border-zinc-800 bg-[#121212] text-[#ff0090] focus:ring-0 focus:ring-offset-0 w-3.5 h-3.5 cursor-pointer accent-[#ff0090]"
-                        id="chk-entrega-c1"
-                      />
-                      <span className="leading-tight">
-                        {language === 'ca' ? "👚 Vestidor Coparticipant 1 - Talla: " : "👚 Vestuario Coparticipante 1 - Talla: "}
-                        <strong className="font-mono text-[#ff0090]">{c1Talla}</strong> 
-                        <span className="text-[10px] text-zinc-500 ml-1">({c1UniformeTipus})</span>
-                      </span>
-                    </label>
-                  )}
-
-                  {/* Comparser 2 size if present */}
-                  {c2Talla && (
-                    <label className="flex items-center gap-2.5 text-zinc-300 hover:text-white cursor-pointer select-none">
-                      <input 
-                        type="checkbox"
-                        checked={entregaMaterial === EstatInscripcio.ENTREGAT || entregaC2Uniforme}
-                        onChange={(e) => setEntregaC2Uniforme(e.target.checked)}
-                        className="rounded border-zinc-800 bg-[#121212] text-[#ff0090] focus:ring-0 focus:ring-offset-0 w-3.5 h-3.5 cursor-pointer accent-[#ff0090]"
-                        id="chk-entrega-c2"
-                      />
-                      <span className="leading-tight">
-                        {language === 'ca' ? "👚 Vestidor Coparticipant 2 - Talla: " : "👚 Vestuario Coparticipante 2 - Talla: "}
-                        <strong className="font-mono text-[#ff0090]">{c2Talla}</strong> 
-                        <span className="text-[10px] text-zinc-500 ml-1">({c2UniformeTipus})</span>
-                      </span>
-                    </label>
-                  )}
-
                   {/* Real selected materials from breakdown */}
                   {breakdown.materials.map((mat) => (
                     <label key={mat.id} className="flex items-center gap-2.5 text-zinc-300 hover:text-white cursor-pointer select-none">

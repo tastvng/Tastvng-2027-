@@ -237,18 +237,20 @@ export default async function inscriptionsHandler(req: any, res: any) {
         try { respostesCuestionari = JSON.parse(reg.respostesCuestionari); } catch { respostesCuestionari = {}; }
       }
 
-      // Purge legacy, contact, and internal fields from questionnaire answers
+      // Purge legacy contact and internal fields from questionnaire answers (do NOT delete clavells or corbati)
       const FORBIDDEN_RESPOSTES_KEYS = [
         'estatCorreu', 'domas_qty', 'mocadors_qty', 'correuContacteParella',
         'telefonContacteParella', 'emailContactoPareja', 'telefonContactoPareja',
-        'teDomasBalco', 'teMocadorsExtra', 'clavells_qty', 'corbati_qty'
+        'teDomasBalco', 'teMocadorsExtra'
       ];
       FORBIDDEN_RESPOSTES_KEYS.forEach(k => delete respostesCuestionari[k]);
-      Object.keys(respostesCuestionari).forEach(k => {
-        if (k.startsWith('extra_qty_')) {
-          delete respostesCuestionari[k];
-        }
-      });
+
+      // Preserve selected materials in respostesCuestionari so they are persisted to Supabase
+      if (Array.isArray(reg.extresSeleccionats) && reg.extresSeleccionats.length > 0) {
+        respostesCuestionari.extresSeleccionats = reg.extresSeleccionats;
+      }
+      if (reg.clavells !== undefined) respostesCuestionari.clavells = reg.clavells;
+      if (reg.corbati !== undefined) respostesCuestionari.corbati = reg.corbati;
 
       let seleccionsUniforme: Record<string, any> = {};
       if (typeof reg.seleccionsUniforme === 'object' && reg.seleccionsUniforme !== null) {
