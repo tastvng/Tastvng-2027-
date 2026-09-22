@@ -238,7 +238,7 @@ export default async function emailHandler(req: any, res: any) {
                 <p style="text-align: center; color: #555;">Gràcies per la vostra inscripció a El Tast 2027.</p>
                 <div style="background: #fdf2f8; border: 1px dashed #ff0090; padding: 15px; border-radius: 12px; text-align: center; margin: 20px 0;">
                   <span style="font-size: 11px; font-family: monospace; color: #be185d;">CODI DE SEGUIMENT</span><br/>
-                  <strong style="font-size: 24px; color: #ff0090; font-family: monospace;">${codiSeguiment}</strong>
+                  <strong style="font-size: 24px; color: #ff0090; font-family: monospace;">CODI DE SEGUIMENT: ${codiSeguiment}</strong>
                 </div>
                 <table style="width: 100%; border-collapse: collapse; font-size: 14px; margin: 20px 0;">
                   <tr><td style="padding: 6px 0; color: #666;">Parella:</td><td style="text-align: right; font-weight: bold;">${ins.c1Nom || ''} &amp; ${ins.c2Nom || ''}</td></tr>
@@ -253,6 +253,37 @@ export default async function emailHandler(req: any, res: any) {
       } catch (dbErr) {
         console.warn("[SMTP Lookup Inscription warning]:", dbErr);
       }
+    }
+
+    // If codiSeguiment is empty and inscriptionId is provided, look it up from Supabase
+    if (!codiSeguiment && inscriptionId) {
+      try {
+        const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+        const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+        if (supabaseUrl && supabaseKey) {
+          const supabase = createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false } });
+          const { data: ins } = await supabase
+            .from('inscripciones')
+            .select('codiSeguiment, codi_seguiment, codigo')
+            .eq('id', inscriptionId)
+            .maybeSingle();
+          if (ins) {
+            codiSeguiment = (ins.codiSeguiment || (ins as any).codi_seguiment || (ins as any).codigo || '').trim();
+          }
+        }
+      } catch (e) {
+        console.warn("[SMTP resolve codi warning]:", e);
+      }
+    }
+
+    // REQUIREMENT 8: Stop sending if tracking code is empty
+    if (!codiSeguiment) {
+      return res.status(400).json({
+        ok: false,
+        emailSent: false,
+        error: "TRACKING_CODE_EMPTY",
+        message: "El codi de seguiment real de la inscripció està buit a Supabase. S'ha aturat l'enviament del correu."
+      });
     }
 
     if (!to || !html) {

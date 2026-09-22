@@ -243,6 +243,25 @@ export default function AdminDashboard({
         return;
       }
 
+      // Check real tracking code from Supabase
+      const itemCode = (
+        item.codiSeguiment ||
+        (item as any).codi_seguiment ||
+        (item as any).codigo ||
+        (item as any).codigoInscripcion ||
+        (item as any).codigo_inscripcion ||
+        ''
+      ).trim();
+
+      if (!itemCode) {
+        const errMsg = language === 'ca'
+          ? "El codi de seguiment real està buit a la inscripció de Supabase. S'ha aturat l'enviament del correu."
+          : "El código de seguimiento real está vacío en la inscripción de Supabase. Se ha detenido el envío del correo.";
+        alert(errMsg);
+        setRowSmtpSending(prev => ({ ...prev, [item.id]: 'error' }));
+        return;
+      }
+
       // 1. Calculate breakdown using canonical function
       const breakdown = calculateInscriptionOrderBreakdown(item, config, language);
 

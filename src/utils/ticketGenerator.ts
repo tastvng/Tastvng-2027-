@@ -65,8 +65,10 @@ export function buildUnifiedEmailHtml(options: TicketGenerationOptions): {
   }
 
   // QR representation (QR contains the exact saved tracking code)
-  const qrIdentifier = realCode || registration.id;
-  const qrImgUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&color=e6007e&data=${encodeURIComponent(qrIdentifier)}`;
+  const qrIdentifier = realCode;
+  const qrImgUrl = qrIdentifier
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=250x250&color=e6007e&data=${encodeURIComponent(qrIdentifier)}`
+    : '';
 
   // DNI Status HTML
   const dniMissingText = language === 'ca' ? 'DNI no adjuntat' : 'DNI no adjuntado';
@@ -113,18 +115,18 @@ export function buildUnifiedEmailHtml(options: TicketGenerationOptions): {
 
       <!-- Tracking Code Box -->
       <div style="background-color: #fcf6fa; border: 1.5px dashed #ff0090; padding: 18px; border-radius: 18px; text-align: center; margin-bottom: 28px;">
-        <span style="font-size: 11px; font-family: monospace; color: #cc0073; text-transform: uppercase; letter-spacing: 2px; font-weight: bold; display: block; margin-bottom: 4px;">
+        <span style="font-size: 11px; font-family: monospace; color: #cc0073; text-transform: uppercase; letter-spacing: 2px; font-weight: bold; display: block; margin-bottom: 6px;">
           CODI DE SEGUIMENT
         </span>
-        <span style="font-size: 28px; font-family: monospace; font-weight: 950; color: #ff0090; letter-spacing: 1.5px;">
-          ${realCode}
+        <span style="font-size: 24px; font-family: monospace; font-weight: 950; color: #ff0090; letter-spacing: 1.5px; display: block;">
+          ${realCode ? `CODI DE SEGUIMENT: ${realCode}` : `<span style="color: #dc2626; font-size: 14px;">⚠️ ERROR: CODI DE SEGUIMENT BUIT</span>`}
         </span>
       </div>
 
       <!-- QR Representation -->
       <div style="text-align: center; margin: 24px 0;">
         <div style="display: inline-block; padding: 14px; background-color: #f8f9fa; border: 1px solid #e1e1e6; border-radius: 18px;">
-          <img src="${qrImgUrl}" alt="QR Codi" width="180" height="180" style="display: block; border-radius: 10px;" />
+          ${qrImgUrl ? `<img src="${qrImgUrl}" alt="QR Codi" width="180" height="180" style="display: block; border-radius: 10px;" />` : `<div style="width: 180px; height: 180px; display: flex; align-items: center; justify-content: center; color: #dc2626; font-size: 12px; font-weight: bold;">Sense QR</div>`}
         </div>
       </div>
 

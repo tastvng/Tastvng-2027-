@@ -88,25 +88,51 @@ export default function Confirmation({ registration, onClear, onUpdate, config }
     (registration as any).codi || 
     ''
   ).trim();
-  const qrIdentifier = realTrackingCode || currentReg.id || registration.id;
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&color=e6007e&data=${encodeURIComponent(qrIdentifier)}`;
+  const qrIdentifier = realTrackingCode;
+  const qrUrl = qrIdentifier 
+    ? `https://api.qrserver.com/v1/create-qr-code/?size=250x250&color=e6007e&data=${encodeURIComponent(qrIdentifier)}`
+    : '';
 
   const sendRealEmail = async () => {
     setSmtpStatus('sending');
     setSmtpError('');
 
     let activeReg = currentReg;
-    if (activeReg.id && !activeReg.codiSeguiment) {
+    let code = (
+      activeReg.codiSeguiment || 
+      registration.codiSeguiment || 
+      (activeReg as any).codi_seguiment || 
+      (registration as any).codi_seguiment || 
+      (activeReg as any).codigo || 
+      (registration as any).codigo || 
+      ''
+    ).trim();
+
+    if (!code && (activeReg.id || registration.id)) {
       try {
-        const fresh = await getSupabaseInscripcionById(activeReg.id);
+        const fresh = await getSupabaseInscripcionById(activeReg.id || registration.id);
         if (fresh && fresh.codiSeguiment) {
           activeReg = fresh;
           setCurrentReg(fresh);
+          code = fresh.codiSeguiment.trim();
         }
       } catch (e) {
         console.warn("Could not load fresh registration code for email:", e);
       }
     }
+
+    // REQUIREMENT 8: Stop sending and display clear error if tracking code is empty
+    if (!code) {
+      const err = language === 'ca'
+        ? "El codi de seguiment real de la inscripció està buit a Supabase. S'ha aturat l'enviament del correu."
+        : "El código de seguimiento real de la inscripción está vacío en Supabase. Se ha detenido el envío del correo.";
+      console.error("[EMAIL BLOCKED - EMPTY TRACKING CODE]:", err);
+      setSmtpStatus('error');
+      setSmtpError(err);
+      return;
+    }
+
+    activeReg.codiSeguiment = code;
 
     const currentBreakdown = calculateInscriptionOrderBreakdown(activeReg, config, language);
     const currentValidation = validateInscriptionTotal(activeReg, config, language);
@@ -268,7 +294,7 @@ export default function Confirmation({ registration, onClear, onUpdate, config }
 
   // Unified Email HTML for preview
   const unifiedEmailContent = buildUnifiedEmailHtml({
-    registration,
+    registration: currentReg,
     entityConfig,
     breakdown,
     c1DniSignedUrl,
@@ -398,12 +424,28 @@ export default function Confirmation({ registration, onClear, onUpdate, config }
           {/* QR representation */}
           <div className="flex flex-col items-center justify-center pt-2 pb-2">
             <div className="p-3 bg-zinc-50 rounded-2xl border-2 border-fuchsia-500/20 shadow-md relative group">
-              <img 
-                src={qrUrl} 
-                alt="Codi QR de Registre" 
-                className="w-44 h-44 block rounded-xl"
-                referrerPolicy="no-referrer"
-              />
+              {qrUrl ? (
+                <img 
+                  src={qrUrl} 
+                  alt="Codi QR de Registre" 
+                  className="w-44 h-44 block rounded-xl"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <div className="w-44 h-44 flex items-center justify-center text-red-500 text-xs font-bold font-mono">
+                  {language === 'ca' ? 'Sense codi QR' : 'Sin código QR'}
+                </div>
+              )}
+            </div>
+            <div className="mt-3 text-center">
+              <span className="text-[10px] font-mono font-bold text-zinc-500 uppercase tracking-widest block mb-0.5">
+                CODI DE SEGUIMENT
+              </span>
+              <span className="text-base font-mono font-black text-[#ff0090] tracking-wider block">
+                {realTrackingCode ? `CODI DE SEGUIMENT: ${realTrackingCode}` : (
+                  <span className="text-red-500 text-xs">⚠️ ERROR: CODI DE SEGUIMENT BUIT</span>
+                )}
+              </span>
             </div>
           </div>
 
