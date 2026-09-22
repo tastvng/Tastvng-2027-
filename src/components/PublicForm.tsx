@@ -422,11 +422,13 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
-  // Questionnaire / Informative Video verification state
+  // Questionnaire / Informative Video verification state with session persistence
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const videoWatchedRef = useRef<boolean>(false);
-  const [videoWatched, setVideoWatched] = useState<boolean>(false);
+  const initialVideoWatched = typeof sessionStorage !== 'undefined' && sessionStorage.getItem('tast_video_completed') === 'true';
+  const videoWatchedRef = useRef<boolean>(initialVideoWatched);
+  const [videoWatched, setVideoWatched] = useState<boolean>(initialVideoWatched);
   const [videoWatchedError, setVideoWatchedError] = useState<string | null>(null);
+  const maxWatchedTimeRef = useRef<number>(0);
 
   // Expose videoRef and state for external and DOM inspection / automated testing
   useEffect(() => {
@@ -447,6 +449,11 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
   };
 
   const markVideoAsCompleted = (reason: string, video: HTMLVideoElement | null) => {
+    try {
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.setItem('tast_video_completed', 'true');
+      }
+    } catch {}
     if (videoWatchedRef.current) {
       logVideoState(`${reason} (ja completat)`, video);
       return;
@@ -486,6 +493,10 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
     const tiempoActual = !isNaN(v.currentTime) ? v.currentTime : 0;
     const ratio = duracion > 0 ? (tiempoActual / duracion) : 0;
 
+    if (tiempoActual > maxWatchedTimeRef.current && tiempoActual <= maxWatchedTimeRef.current + 2.5) {
+      maxWatchedTimeRef.current = tiempoActual;
+    }
+
     logVideoState('timeupdate', v);
 
     // Requirement 3: Mark as watched if ended or currentTime / duration >= 0.95
@@ -500,6 +511,11 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
     const v = (e && 'currentTarget' in e && e.currentTarget) 
       ? (e.currentTarget as HTMLVideoElement) 
       : (videoRef.current || (document.getElementById('video-cuestionari') as HTMLVideoElement | null));
+    if (v && !videoWatchedRef.current) {
+      if (v.currentTime > maxWatchedTimeRef.current + 2) {
+        v.currentTime = maxWatchedTimeRef.current;
+      }
+    }
     logVideoState('seeking', v);
   };
 

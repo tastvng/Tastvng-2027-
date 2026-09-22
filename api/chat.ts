@@ -298,7 +298,7 @@ function extractActivePrices(sistemaConfig: any, settingsRows?: any[]): ActivePr
   let preuClavells: number | null = null;
   let preuCorbati: number | null = null;
 
-  const tastRow = settingsRows?.find((r: any) => r.key === 'tast_config_2026');
+  const tastRow = settingsRows?.find((r: any) => r.key === 'tast_config_2027' || r.key === 'tast_config_2026');
   let tc = tastRow?.value;
   if (typeof tc === 'string') {
     try { tc = JSON.parse(tc); } catch {}
@@ -979,16 +979,20 @@ async function generateIntentAnswer(
 
   // 12. CONTACTO
   if (intent === ChatIntent.CONTACTO) {
+    const hasPhone = typeof telefon === 'string' && telefon.trim().length > 0;
+    const phonePartCA = hasPhone ? `\n📞 **Telèfon**: ${telefon}` : '';
+    const phonePartES = hasPhone ? `\n📞 **Teléfono**: ${telefon}` : '';
+
     if (lang === 'ca') {
       return `Pots contactar directament amb Secretaria de **${nomEntitat}** mitjançant:\n\n` +
-        `✉️ **Correu electrònic**: [${email}](mailto:${email})\n` +
-        `📞 **Telèfon**: ${telefon}\n` +
-        `📍 **Atenció presencial a la seu**: ${direccio} (${horari})`;
+        `✉️ **Correu electrònic**: [${email}](mailto:${email})` +
+        phonePartCA +
+        `\n📍 **Atenció presencial a la seu**: ${direccio} (${horari})`;
     } else {
       return `Puedes contactar directamente con Secretaría de **${nomEntitat}** mediante:\n\n` +
-        `✉️ **Correo electrónico**: [${email}](mailto:${email})\n` +
-        `📞 **Teléfono**: ${telefon}\n` +
-        `📍 **Atención presencial en la sede**: ${direccio} (${horari})`;
+        `✉️ **Correo electrónico**: [${email}](mailto:${email})` +
+        phonePartES +
+        `\n📍 **Atención presencial en la sede**: ${direccio} (${horari})`;
     }
   }
 

@@ -25,7 +25,7 @@ export const COMPARTIDES_XARXES: NoticiaXarxes[] = [
     id: 'not-1',
     xarxa: 'instagram',
     usuari: '@eltastvng',
-    text: '🔥 CALENTANT MOTORS PER LES COMPARSES 2026! 🔥 Ja tenim data per a la recollida d\'armilles i mocadors oficinals. Recordeu fer la vostra inscripció digital per tenir el vostre QR a mà i evitar cues! Ens trobem a la seu. 🎀💃 #comparses #eltast #vilanova #vilanovaigeltrú',
+    text: '🔥 CALENTANT MOTORS PER LES COMPARSES 2027! 🔥 Ja tenim data per a la recollida d\'armilles, clavells i corbatins oficials. Recordeu fer la vostra inscripció digital per tenir el vostre QR a mà i evitar cues! Ens trobem a la seu. 🎀💃 #comparses #eltast #vilanova #vilanovaigeltrú',
     imatgeUrl: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?q=80&w=800&auto=format&fit=crop',
     dataPublicacio: 'Fa 2 hores',
     enllacUrl: 'https://instagram.com',
@@ -35,7 +35,7 @@ export const COMPARTIDES_XARXES: NoticiaXarxes[] = [
     id: 'not-2',
     xarxa: 'facebook',
     usuari: 'Associació Cultural El Tast',
-    text: '📢 ATENCIÓ COMPARSERES I COMPARSERS! Enguany facilitem el sistema d\'inscripció. Podeu carregar el DNI directament des de la web i rebreu el codi QR de confirmació al vostre correu. En el moment de la recollida del material a la seu, només ens heu d\'ensenyar el QR, farem el pagament (Bizum o efectiu) i us endureu el mocador i la comanda en segons! 🍬🍬🍬 El Tast, cada any millor!',
+    text: '📢 ATENCIÓ COMPARSERES I COMPARSERS! Enguany facilitem el sistema d\'inscripció. Podeu carregar el DNI directament des de la web i rebreu el codi QR de confirmació al vostre correu. En el moment de la recollida del material a la seu, només ens heu d\'ensenyar el QR, farem el pagament (Bizum o efectiu) i us endureu els materials oficials en segons! 🍬🍬🍬 El Tast, cada any millor!',
     dataPublicacio: 'Ahir',
     enllacUrl: 'https://facebook.com',
     likes: 128
@@ -53,10 +53,10 @@ export const COMPARTIDES_XARXES: NoticiaXarxes[] = [
 ];
 
 export const DEFAULT_CATEGORIA_DESCRIPTIONS = {
-  categoria_adulta_desc_ca: "Especialista para a partir de 16 anys o més. Inclou samarretres exclusives de la collada i purs dolços.",
-  categoria_adulta_desc_es: "Especial para a partir de 16 años o más. Incluye camisetas exclusivas de la colla y puros dulces.",
-  categoria_juvenil_desc_ca: "Ideal per a parelles de 5 a 15 anys d'edat. Inclou fulard petit de color fucsia.",
-  categoria_juvenil_desc_es: "Ideal para parejas de 5 a 15 años de edad. Incluye pañuelo pequeño de color fucsia."
+  categoria_adulta_desc_ca: "Especial per a majors de 18 anys (o 16-17 amb autorització).",
+  categoria_adulta_desc_es: "Especial para mayores de 18 años (o 16-17 con autorización).",
+  categoria_juvenil_desc_ca: "Especial per a parelles de 14 a 17 anys amb autorització de pares/tutors.",
+  categoria_juvenil_desc_es: "Especial para parejas de 14 a 17 años con autorización de padres/tutores."
 };
 
 export const CONFIG_INICIAL: SistemaConfig = {
@@ -64,10 +64,12 @@ export const CONFIG_INICIAL: SistemaConfig = {
   preuJuvenil: 60.00,
   estatInscripcions: 'obertes',
   armilla_opcional: true,
-  titolSeccioTarifes: 'Tarifes i Cànons 2026',
+  titolSeccioTarifes: 'Tarifes i Cànons 2027',
   tarifesDinamiques: [
     { id: 'adults', nom: 'Preu Parella Adulta (€)', nomES: 'Precio Pareja Adulta (€)', valor: 90.00, actiu: true, tipus: 'categoria_adult' },
-    { id: 'juvenils', nom: 'Preu Parella Juvenil (€)', nomES: 'Precio Pareja Juvenil (€)', valor: 60.00, actiu: true, tipus: 'categoria_juvenil' }
+    { id: 'juvenils', nom: 'Preu Parella Juvenil (€)', nomES: 'Precio Pareja Juvenil (€)', valor: 60.00, actiu: true, tipus: 'categoria_juvenil' },
+    { id: 'clavells', nom: 'Clavells (€)', nomES: 'Claveles (€)', valor: 8.00, actiu: true, tipus: 'extra_generic' },
+    { id: 'corbati', nom: 'Corbatí (€)', nomES: 'Corbatín (€)', valor: 10.00, actiu: true, tipus: 'extra_generic' }
   ],
   titolFormulariDinamic: "Preguntes del Qüestionari d'El Tast",
   cuestionariActiu: true,
@@ -98,7 +100,7 @@ export const CONFIG_INICIAL: SistemaConfig = {
   logoText: 'T',
   titolPrincipal: 'EL TAST',
   titolSecundari: 'VILANOVA',
-  subtitol: 'Vilanova i la Geltrú 2026',
+  subtitol: 'Vilanova i la Geltrú 2027',
   logoColor: '#ff0090',
   logoImgUrl: '',
   logoUseImage: false,
@@ -144,8 +146,8 @@ export const CONFIG_INICIAL: SistemaConfig = {
   titolConfirmacioES: "¡Inscripción Confirmada!",
   missatgeConfirmacioCA: "Hem registrat la vostra parella per a l'esdeveniment de l'entitat El Tast.",
   missatgeConfirmacioES: "Hemos registrado a vuestra pareja para el evento de la entidad El Tast.",
-  textLegalAutoritzacioMenors: "AUTORITZACIÓ DE MENORS D'EDAT\n\nEn condició de tutor/a legal del menor inscrit, declaro sota la meva responsabilitat que autoritzo expressament la seva participació a l'esdeveniment i activitats organitzades per l'Associació Cultural El Tast (Vilanova i la Geltrú 2026).\n\nCertifico que el menor es troba en condicions físiques i de salut aptes per al correcte desenvolupament de l'activitat, i m'en faig responsable de qualsevol incidència que se'n derivi del seu estat previ de salut, així com del compliment de la normativa vigent de l'organització.",
-  textLegalAutoritzacioMenorsES: "AUTORIZACIÓN DE MENORES DE EDAD\n\nEn condición de tutor/a legal del menor inscrito, declaro bajo mi responsabilidad que autorizo expresamente su participación en el evento y actividades organizadas por la Associació Cultural El Tast (Vilanova i la Geltrú 2026).\n\nCertifico que el menor se encuentra en condiciones físicas y de salud aptas para el correcto desarrollo de la actividad, y me hago responsable de cualquier incidencia que se derive de su estado previo de salud, así como del cumplimiento de la normativa de la organización."
+  textLegalAutoritzacioMenors: "AUTORITZACIÓ DE MENORS D'EDAT\n\nEn condició de tutor/a legal del menor inscrit, declaro sota la meva responsabilitat que autoritzo expressament la seva participació a l'esdeveniment i activitats organitzades per l'Associació Cultural El Tast (Vilanova i la Geltrú 2027).\n\nCertifico que el menor es troba en condicions físiques i de salut aptes per al correcte desenvolupament de l'activitat, i m'en faig responsable de qualsevol incidència que se'n derivi del seu estat previ de salut, així com del compliment de la normativa vigent de l'organització.",
+  textLegalAutoritzacioMenorsES: "AUTORIZACIÓN DE MENORES DE EDAD\n\nEn condición de tutor/a legal del menor inscrito, declaro bajo mi responsabilidad que autorizo expresamente su participación en el evento y actividades organizadas por la Associació Cultural El Tast (Vilanova i la Geltrú 2027).\n\nCertifico que el menor se encuentra en condiciones físicas y de salud aptas para el correcto desarrollo de la actividad, y me hago responsable de cualquier incidencia que se derive de su estado previo de salud, así como del cumplimiento de la normativa de la organización."
 };
 
 export const INSCRIPCIONS_INICIALS: Inscripcio[] = [

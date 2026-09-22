@@ -1369,7 +1369,9 @@ export async function getCodigoVestimentaUrl(bypassCache: boolean = false): Prom
     } catch {}
     settingCache.set('codigo_vestimenta_url', url);
   } else {
-    settingCache.set('codigo_vestimenta_url', '');
+    // Official verified Vimeo URL for dress code video
+    url = 'https://vimeo.com/1207785599';
+    settingCache.set('codigo_vestimenta_url', url);
   }
 
   return url;

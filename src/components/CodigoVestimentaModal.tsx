@@ -173,13 +173,8 @@ export const CodigoVestimentaModal: React.FC<CodigoVestimentaModalProps> = ({
     }
 
     if (!targetCandidate) {
-      setIsMissingOriginal(true);
-      setIsValidSource(false);
-      setIsLoading(false);
-      setActiveUrl('');
-      setIsVimeo(false);
-      setVimeoEmbedSrc('');
-      return;
+      // Fallback to official Vimeo video URL
+      targetCandidate = 'https://vimeo.com/1207785599';
     }
 
     setActiveUrl(targetCandidate);
@@ -318,7 +313,13 @@ export const CodigoVestimentaModal: React.FC<CodigoVestimentaModalProps> = ({
         }).catch(() => {});
       });
 
+      let maxWatchedSeconds = 0;
+
       player.on('timeupdate', (data: { seconds: number; duration: number; percent: number }) => {
+        if (data.seconds > maxWatchedSeconds && data.seconds <= maxWatchedSeconds + 3) {
+          maxWatchedSeconds = data.seconds;
+        }
+
         const fakeVideoElement = {
           duration: data.duration,
           currentTime: data.seconds,
@@ -341,7 +342,11 @@ export const CodigoVestimentaModal: React.FC<CodigoVestimentaModalProps> = ({
         onVideoPauseRef.current?.();
       });
 
-      player.on('seeked', () => {
+      player.on('seeked', (data: any) => {
+        const seekTime = (data && typeof data.seconds === 'number') ? data.seconds : 0;
+        if (seekTime > maxWatchedSeconds + 2) {
+          player?.setCurrentTime(maxWatchedSeconds).catch(() => {});
+        }
         onVideoSeekingRef.current?.({} as unknown as React.SyntheticEvent<HTMLVideoElement>);
       });
 

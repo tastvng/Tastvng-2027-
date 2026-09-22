@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import crypto from "crypto";
-import { applyCorsHeaders } from "./_cors.ts";
-import { checkRateLimit, getClientIp } from "./_rate-limit.ts";
+import { applyCorsHeaders } from "./_cors";
+import { checkRateLimit, getClientIp } from "./_rate-limit";
 import { 
   determineCodeGroup, 
   allocateNextCode, 
@@ -10,7 +10,7 @@ import {
   findLowestAvailableNumber,
   isLegacyCode,
   CodeGroup 
-} from "./_code-allocator.ts";
+} from "./_code-allocator";
 
 // In-process serialized queue to prevent concurrent requests in the same container from colliding
 let inMemoryLockQueue: Promise<any> = Promise.resolve();

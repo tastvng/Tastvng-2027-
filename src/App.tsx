@@ -1430,14 +1430,16 @@ export default function App() {
         </p>
       </footer>
 
-      {/* Floating System Status logs panel (Visible to logged-in admins) */}
-      <AdminStatusPanel 
-        isAdmin={isAdminLoggedIn} 
-        inscripcions={inscripcions}
-        isLoading={isLoadingInscripcions}
-        error={inscripcionsError}
-        onRefresh={handleRefreshInscripcions}
-      />
+      {/* Floating System Status logs panel (Visible ONLY to authenticated admins in admin views) */}
+      {isAdminLoggedIn && !['portada', 'public', 'confirmacio'].includes(view) && (
+        <AdminStatusPanel 
+          isAdmin={isAdminLoggedIn} 
+          inscripcions={inscripcions}
+          isLoading={isLoadingInscripcions}
+          error={inscripcionsError}
+          onRefresh={handleRefreshInscripcions}
+        />
+      )}
 
       {/* Floating Help Chatbot (Visible on Portada, Questionnaire, and Confirmation) */}
       {(view === 'portada' || view === 'public' || view === 'confirmacio') && (
