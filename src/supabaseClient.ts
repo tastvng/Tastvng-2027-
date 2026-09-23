@@ -1182,22 +1182,36 @@ export interface SistemaConfigItem {
  * Falls back to local storage and default entries.
  */
 export async function fetchSistemaConfig(): Promise<SistemaConfigItem[]> {
+  const sanitizeCategoryText = (key: string, fallback: string): string => {
+    try {
+      const stored = localStorage.getItem(key);
+      if (stored) {
+        if (/samarretr|samarreta|camiseta|purs dol|puro.*dulce|fulard|pañuelo|domas|mocador/i.test(stored)) {
+          localStorage.setItem(key, fallback);
+          return fallback;
+        }
+        return stored;
+      }
+    } catch {}
+    return fallback;
+  };
+
   const defaults: SistemaConfigItem[] = [
     { 
       clau: 'descripcio_parella_adulta_ca', 
-      valor: { text: localStorage.getItem('descripcio_parella_adulta_ca') || "Especialista para a partir de 16 anys o més. Inclou samarretres exclusives de la collada i purs dolços." } 
+      valor: { text: sanitizeCategoryText('descripcio_parella_adulta_ca', "Especial per a majors de 18 anys (o 16-17 amb autorització).") } 
     },
     { 
       clau: 'descripcio_parella_adulta_es', 
-      valor: { text: localStorage.getItem('descripcio_parella_adulta_es') || "Especial para a partir de 16 años o más. Incluye camisetas exclusivas de la colla y puros dulces." } 
+      valor: { text: sanitizeCategoryText('descripcio_parella_adulta_es', "Especial para mayores de 18 años (o 16-17 con autorización).") } 
     },
     { 
       clau: 'descripcio_parella_juvenil_ca', 
-      valor: { text: localStorage.getItem('descripcio_parella_juvenil_ca') || "Ideal per a parelles de 5 a 15 anys d'edat. Inclou fulard petit de color fucsia." } 
+      valor: { text: sanitizeCategoryText('descripcio_parella_juvenil_ca', "Especial per a parelles de 14 a 17 anys amb autorització de pares/tutors.") } 
     },
     { 
       clau: 'descripcio_parella_juvenil_es', 
-      valor: { text: localStorage.getItem('descripcio_parella_juvenil_es') || "Ideal para parejas de 5 a 15 años de edad. Incluye pañuelo pequeño de color fucsia." } 
+      valor: { text: sanitizeCategoryText('descripcio_parella_juvenil_es', "Especial para parejas de 14 a 17 años con autorización de padres/tutores.") } 
     },
     { 
       clau: 'armilla_opcional', 

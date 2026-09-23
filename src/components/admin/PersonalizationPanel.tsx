@@ -118,7 +118,7 @@ export const PERSONALIZATION_SCHEMA = {
         type: 'textarea',
         description: 'Text del missatge en català / Texto del mensaje en catalán',
         required: true,
-        default: "S'ha generat correctament el vostre comprovant per a les comparses 2026."
+        default: "S'ha generat correctament el vostre comprovant per a les comparses 2027."
       },
       {
         id: 'body_es',
@@ -126,7 +126,7 @@ export const PERSONALIZATION_SCHEMA = {
         type: 'textarea',
         description: 'Cuerpo del correo en castellano / Cuerpo del correo en castellano',
         required: true,
-        default: "Se ha generado correctamente vuestro comprobante para las comparsas 2026."
+        default: "Se ha generado correctamente vuestro comprobante para las comparsas 2027."
       }
     ]
   },

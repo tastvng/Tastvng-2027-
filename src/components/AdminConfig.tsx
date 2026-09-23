@@ -307,16 +307,32 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
 
   // Parella descriptions (JSONB in sistema_config)
   const [descripcioAdultaCA, setDescripcioAdultaCA] = useState(
-    () => localStorage.getItem('descripcio_parella_adulta_ca') || "Especialista para a partir de 16 anys o més. Inclou samarretres exclusives de la collada i purs dolços."
+    () => {
+      const v = localStorage.getItem('descripcio_parella_adulta_ca');
+      if (v && !/samarretr|samarreta|camiseta|purs dol|puro.*dulce|fulard|pañuelo|domas|mocador/i.test(v)) return v;
+      return "Especial per a majors de 18 anys (o 16-17 amb autorització).";
+    }
   );
   const [descripcioAdultaES, setDescripcioAdultaES] = useState(
-    () => localStorage.getItem('descripcio_parella_adulta_es') || "Especial para a partir de 16 años o más. Incluye camisetas exclusivas de la colla y puros dulces."
+    () => {
+      const v = localStorage.getItem('descripcio_parella_adulta_es');
+      if (v && !/samarretr|samarreta|camiseta|purs dol|puro.*dulce|fulard|pañuelo|domas|mocador/i.test(v)) return v;
+      return "Especial para mayores de 18 años (o 16-17 con autorización).";
+    }
   );
   const [descripcioJuvenilCA, setDescripcioJuvenilCA] = useState(
-    () => localStorage.getItem('descripcio_parella_juvenil_ca') || "Ideal per a parelles de 5 a 15 anys d'edat. Inclou fulard petit de color fucsia."
+    () => {
+      const v = localStorage.getItem('descripcio_parella_juvenil_ca');
+      if (v && !/samarretr|samarreta|camiseta|purs dol|puro.*dulce|fulard|pañuelo|domas|mocador/i.test(v)) return v;
+      return "Especial per a parelles de 14 a 17 anys amb autorització de pares/tutors.";
+    }
   );
   const [descripcioJuvenilES, setDescripcioJuvenilES] = useState(
-    () => localStorage.getItem('descripcio_parella_juvenil_es') || "Ideal para parejas de 5 a 15 años de edad. Incluye pañuelo pequeño de color fucsia."
+    () => {
+      const v = localStorage.getItem('descripcio_parella_juvenil_es');
+      if (v && !/samarretr|samarreta|camiseta|purs dol|puro.*dulce|fulard|pañuelo|domas|mocador/i.test(v)) return v;
+      return "Especial para parejas de 14 a 17 años con autorización de padres/tutores.";
+    }
   );
   const [armillaOpcional, setArmillaOpcional] = useState(
     () => config.armilla_opcional !== undefined ? config.armilla_opcional : (localStorage.getItem('armilla_opcional') !== 'false')
@@ -2140,7 +2156,7 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                         }
                       }}
                       className="w-full bg-white border border-zinc-250 focus:border-[#ff0090] rounded-xl px-3 py-2 text-xs font-bold focus:outline-none"
-                      placeholder={language === 'ca' ? "Ex: Talla de Samarreta" : "Ex: Talla de Camiseta"}
+                      placeholder={language === 'ca' ? "Ex: Talla d'Armilla" : "Ex: Talla de Chaleco"}
                     />
                   </div>
 

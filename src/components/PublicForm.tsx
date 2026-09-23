@@ -201,8 +201,8 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
     const lines = config.liniisUniforme || [
       {
         id: 'lin-1',
-        nom: config.nomUniforme || 'Talla de Samarreta',
-        nomES: config.nomUniformeES || 'Talla de Camiseta',
+        nom: config.nomUniforme || "Talla d'Armilla",
+        nomES: config.nomUniformeES || "Talla de Chaleco",
         opcions: config.opcionsUniforme || ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'],
         requeixQuantitat: false
       }
