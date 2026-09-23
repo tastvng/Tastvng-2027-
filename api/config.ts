@@ -1,6 +1,76 @@
 import { createClient } from "@supabase/supabase-js";
-import { applyCorsHeaders } from "./_cors";
-import { verifySupabaseAdminToken } from "./_supabase-auth";
+
+function applyCorsHeaders(
+  req: { headers?: Record<string, string | string[] | undefined>; method?: string } | undefined | null,
+  res: { setHeader?: (name: string, value: string) => void } | undefined | null,
+  allowedMethods: string = 'GET, POST, DELETE, OPTIONS'
+): void {
+  try {
+    const rawOrigin = req?.headers?.origin;
+    const origin = typeof rawOrigin === 'string' ? rawOrigin : undefined;
+    if (res && typeof res.setHeader === 'function') {
+      res.setHeader('Access-Control-Allow-Origin', origin || '*');
+      res.setHeader('Access-Control-Allow-Credentials', 'true');
+      res.setHeader('Access-Control-Allow-Methods', allowedMethods);
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+    }
+  } catch (err) {
+    // ignore
+  }
+}
+
+async function verifySupabaseAdminToken(token: string): Promise<{ valid: boolean; userId?: string; email?: string }> {
+  const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+  const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || (!supabaseAnonKey && !serviceRoleKey) || !token) {
+    return { valid: false };
+  }
+
+  try {
+    const baseClient = createClient(supabaseUrl, serviceRoleKey || supabaseAnonKey!, {
+      auth: { persistSession: false }
+    });
+
+    const { data: { user }, error: userError } = await baseClient.auth.getUser(token);
+    if (userError || !user) {
+      return { valid: false };
+    }
+
+    let profileRole: string | null = null;
+    if (serviceRoleKey) {
+      const { data: profile } = await baseClient
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .maybeSingle();
+      profileRole = profile?.role || null;
+    } else {
+      const userClient = createClient(supabaseUrl, supabaseAnonKey!, {
+        global: { headers: { Authorization: `Bearer ${token}` } },
+        auth: { persistSession: false }
+      });
+      const { data: profile } = await userClient
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .maybeSingle();
+      profileRole = profile?.role || null;
+    }
+
+    if (profileRole === 'admin') {
+      return { valid: true, userId: user.id, email: user.email };
+    }
+
+    return { valid: false };
+  } catch (err) {
+    console.error("Error verifying admin token:", err);
+    return { valid: false };
+  }
+}
 
 /**
  * Consolidated Config Serverless Handler: /api/config
