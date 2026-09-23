@@ -1,12 +1,4 @@
 {
-  "functions": {
-    "api/inscriptions.ts": {
-      "includeFiles": "api/**"
-    },
-    "api/*.ts": {
-      "includeFiles": "api/**"
-    }
-  },
   "headers": [
     {
       "source": "/(.*)",

@@ -3,7 +3,6 @@ import http from "http";
 import path from "path";
 import { createClient } from "@supabase/supabase-js";
 import dotenv from "dotenv";
-import { applyCorsHeaders } from "./api/_cors";
 import { verifySupabaseAdminToken } from "./api/_supabase-auth";
 import adminHandler from "./api/admin";
 import emailHandler from "./api/email";
@@ -32,9 +31,17 @@ async function startServer() {
     next();
   });
 
-  // CORS handling with strict origin validation
+  // CORS handling with origin validation
   app.use((req, res, next) => {
-    applyCorsHeaders(req as any, res as any, "GET, POST, OPTIONS");
+    const origin = req.headers.origin;
+    if (origin) {
+      res.setHeader("Access-Control-Allow-Origin", origin);
+      res.setHeader("Access-Control-Allow-Credentials", "true");
+    } else {
+      res.setHeader("Access-Control-Allow-Origin", "https://tastvng-2027.vercel.app");
+    }
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
     if (req.method === "OPTIONS") {
       return res.sendStatus(200);
     }
