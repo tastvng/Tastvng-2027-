@@ -1,16 +1,217 @@
 import { createClient } from "@supabase/supabase-js";
 import crypto from "crypto";
-import { applyCorsHeaders } from "./_cors";
-import { checkRateLimit, getClientIp } from "./_rate-limit";
-import { 
-  determineCodeGroup, 
-  allocateNextCode, 
-  formatCode, 
-  extractUsedNumbers, 
-  findLowestAvailableNumber,
-  isLegacyCode,
-  CodeGroup 
-} from "./_code-allocator";
+// ==========================================
+// SELF-CONTAINED CORS & SECURITY HELPERS
+// (Inlined to prevent runtime ESM ERR_MODULE_NOT_FOUND on Vercel Node runtime)
+// ==========================================
+
+export function getStrictAllowedOrigins(): Set<string> {
+  const allowed = new Set<string>();
+  allowed.add('https://tastvng-2027.vercel.app');
+
+  if (process.env.ALLOWED_ORIGINS) {
+    const customList = process.env.ALLOWED_ORIGINS.split(',');
+    for (const item of customList) {
+      const trimmed = item.trim();
+      if (trimmed) allowed.add(trimmed);
+    }
+  }
+
+  if (process.env.APP_URL) {
+    const trimmed = process.env.APP_URL.trim();
+    if (trimmed) allowed.add(trimmed);
+  }
+
+  if (process.env.NODE_ENV !== 'production') {
+    allowed.add('http://localhost:3000');
+    allowed.add('http://127.0.0.1:3000');
+    allowed.add('http://localhost:5173');
+    allowed.add('http://127.0.0.1:5173');
+  }
+
+  return allowed;
+}
+
+export function isOriginAllowed(origin: string | undefined): boolean {
+  if (!origin) return true;
+  const allowed = getStrictAllowedOrigins();
+  if (allowed.has(origin)) return true;
+  if (/^https:\/\/[a-zA-Z0-9_\-.]+\.vercel\.app$/.test(origin)) return true;
+  if (/^https:\/\/[a-zA-Z0-9_\-.]+\.run\.app$/.test(origin)) return true;
+  return false;
+}
+
+export function applyCorsHeaders(
+  req: { headers?: Record<string, string | string[] | undefined>; method?: string } | undefined | null,
+  res: { setHeader?: (name: string, value: string) => void } | undefined | null,
+  allowedMethods: string = 'GET, POST, OPTIONS'
+): boolean {
+  try {
+    const rawOrigin = req?.headers?.origin;
+    const origin = typeof rawOrigin === 'string' ? rawOrigin : undefined;
+    const isAllowed = isOriginAllowed(origin);
+
+    if (res && typeof res.setHeader === 'function') {
+      if (origin && isAllowed) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+        res.setHeader('Access-Control-Allow-Credentials', 'true');
+      } else {
+        res.setHeader('Access-Control-Allow-Origin', 'https://tastvng-2027.vercel.app');
+      }
+
+      res.setHeader('Access-Control-Allow-Methods', allowedMethods);
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+    }
+
+    return isAllowed;
+  } catch (err) {
+    console.error('Error applying CORS headers:', err);
+    return false;
+  }
+}
+
+// ==========================================
+// SELF-CONTAINED RATE LIMITING
+// ==========================================
+
+const rateLimitMaps = new Map<string, Map<string, { count: number; resetTime: number }>>();
+
+export function checkRateLimit(
+  bucket: string,
+  key: string,
+  maxRequests: number,
+  windowMs: number
+): boolean {
+  if (!rateLimitMaps.has(bucket)) {
+    rateLimitMaps.set(bucket, new Map());
+  }
+  const map = rateLimitMaps.get(bucket)!;
+  const now = Date.now();
+  const current = map.get(key);
+
+  if (!current || now > current.resetTime) {
+    map.set(key, { count: 1, resetTime: now + windowMs });
+    return true;
+  }
+
+  if (current.count >= maxRequests) {
+    return false;
+  }
+
+  current.count += 1;
+  return true;
+}
+
+export function getClientIp(req: any): string {
+  const forwarded = req?.headers?.['x-forwarded-for'];
+  if (typeof forwarded === 'string') {
+    return forwarded.split(',')[0].trim();
+  }
+  if (Array.isArray(forwarded) && forwarded.length > 0) {
+    return forwarded[0].split(',')[0].trim();
+  }
+  return req?.socket?.remoteAddress || req?.ip || 'unknown';
+}
+
+// ==========================================
+// SELF-CONTAINED CODE ALLOCATION
+// ==========================================
+
+export type CodeGroup = 'ADULT' | 'JUVENIL' | 'ESPERA';
+
+export function determineCodeGroup(
+  categoria: string | undefined | null,
+  isWaitlist: boolean
+): CodeGroup {
+  if (isWaitlist) {
+    return 'ESPERA';
+  }
+  const cat = String(categoria || 'ADULT').trim().toUpperCase();
+  if (cat === 'JUVENIL') {
+    return 'JUVENIL';
+  }
+  return 'ADULT';
+}
+
+export function formatCode(group: CodeGroup, seq: number): string {
+  const safeSeq = Math.max(1, Math.floor(seq));
+  if (group === 'ESPERA') {
+    return `LE${String(safeSeq).padStart(5, '0')}`;
+  }
+  if (group === 'JUVENIL') {
+    return `J${String(safeSeq).padStart(4, '0')}`;
+  }
+  return `A${String(safeSeq).padStart(4, '0')}`;
+}
+
+export function extractUsedNumbers(
+  codes: (string | null | undefined)[],
+  group: CodeGroup
+): Set<number> {
+  const used = new Set<number>();
+  
+  const regex = group === 'ESPERA'
+    ? /^LE0*([1-9]\d*)$/i
+    : group === 'JUVENIL'
+      ? /^J0*([1-9]\d*)$/i
+      : /^A0*([1-9]\d*)$/i;
+
+  for (const raw of codes) {
+    if (!raw) continue;
+    const clean = String(raw).trim().toUpperCase();
+    const match = clean.match(regex);
+    if (match && match[1]) {
+      const parsed = parseInt(match[1], 10);
+      if (!isNaN(parsed) && parsed > 0) {
+        used.add(parsed);
+      }
+    }
+  }
+
+  return used;
+}
+
+export function findLowestAvailableNumber(
+  usedNumbers: Set<number>,
+  existingExactCodes?: Set<string>,
+  group?: CodeGroup
+): number {
+  let candidate = 1;
+  while (true) {
+    if (!usedNumbers.has(candidate)) {
+      if (group && existingExactCodes) {
+        const candidateStr = formatCode(group, candidate).toUpperCase();
+        if (!existingExactCodes.has(candidateStr)) {
+          return candidate;
+        }
+      } else {
+        return candidate;
+      }
+    }
+    candidate++;
+  }
+}
+
+export function allocateNextCode(
+  existingCodes: (string | null | undefined)[],
+  group: CodeGroup
+): string {
+  const existingSet = new Set<string>();
+  for (const c of existingCodes) {
+    if (c) existingSet.add(String(c).trim().toUpperCase());
+  }
+
+  const usedNumbers = extractUsedNumbers(existingCodes, group);
+  const nextNum = findLowestAvailableNumber(usedNumbers, existingSet, group);
+  return formatCode(group, nextNum);
+}
+
+export function isLegacyCode(code: string | null | undefined): boolean {
+  if (!code) return false;
+  return String(code).trim().toUpperCase().startsWith('TAST-');
+}
 
 // In-process serialized queue to prevent concurrent requests in the same container from colliding
 let inMemoryLockQueue: Promise<any> = Promise.resolve();
