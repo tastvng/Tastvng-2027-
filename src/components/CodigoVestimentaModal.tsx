@@ -194,8 +194,8 @@ export const CodigoVestimentaModal: React.FC<CodigoVestimentaModalProps> = ({
       }
 
       setIsVimeo(true);
-      // Convert URL to requested player URL format: https://player.vimeo.com/video/{id}
-      const embedUrl = `https://player.vimeo.com/video/${vimeoInfo.videoId}`;
+      // Official Vimeo player embed URL with official app_id and dnt (do not track)
+      const embedUrl = `https://player.vimeo.com/video/${vimeoInfo.videoId}?app_id=122963&dnt=1`;
       setVimeoEmbedSrc(embedUrl);
       setIsValidSource(true);
       setIsMissingOriginal(false);
@@ -264,15 +264,28 @@ export const CodigoVestimentaModal: React.FC<CodigoVestimentaModalProps> = ({
 
     const iframe = vimeoIframeRef.current;
     let player: Player | null = null;
+    let isMounted = true;
+
+    // Safety timeout: stop spinner after 5 seconds so user can see and interact with Vimeo player
+    const safetyTimeout = setTimeout(() => {
+      if (isMounted) {
+        setIsLoading(false);
+      }
+    }, 5000);
 
     try {
       player = new Player(iframe);
       vimeoPlayerInstanceRef.current = player;
 
       player.ready().then(() => {
-        setIsLoading(false);
-        setVideoLoadError(null);
+        clearTimeout(safetyTimeout);
+        if (isMounted) {
+          setIsLoading(false);
+          setVideoLoadError(null);
+        }
       }).catch((err: any) => {
+        clearTimeout(safetyTimeout);
+        if (!isMounted) return;
         console.error('[Vimeo Player Ready Error]', err);
         setIsLoading(false);
         const isBlocked = err?.name === 'PrivacyError' || 
@@ -293,15 +306,18 @@ export const CodigoVestimentaModal: React.FC<CodigoVestimentaModalProps> = ({
         } else {
           setVideoLoadError(
             language === 'ca'
-              ? `Error en el reproductor de Vimeo: ${err?.message || 'No s\'ha pogut inicialitzar el vídeo.'}`
-              : `Error en el reproductor de Vimeo: ${err?.message || 'No se ha podido inicializar el vídeo.'}`
+              ? `No s'ha pogut carregar el vídeo oficial de Vimeo (ID 1207785599): ${err?.message || 'Error d\'inicialització'}`
+              : `No se ha podido cargar el vídeo oficial de Vimeo (ID 1207785599): ${err?.message || 'Error de inicialización'}`
           );
         }
       });
 
       player.on('loaded', () => {
-        setIsLoading(false);
-        setVideoLoadError(null);
+        clearTimeout(safetyTimeout);
+        if (isMounted) {
+          setIsLoading(false);
+          setVideoLoadError(null);
+        }
         // Trigger loadedmetadata callback
         player?.getDuration().then(duration => {
           const fakeVideoElement = {
@@ -323,13 +339,13 @@ export const CodigoVestimentaModal: React.FC<CodigoVestimentaModalProps> = ({
         const fakeVideoElement = {
           duration: data.duration,
           currentTime: data.seconds,
-          ended: data.percent >= 0.99
+          ended: data.percent >= 0.999 || (data.duration > 0 && data.seconds >= data.duration - 0.5)
         } as unknown as HTMLVideoElement;
 
         onVideoTimeUpdateRef.current?.({ currentTarget: fakeVideoElement } as unknown as React.SyntheticEvent<HTMLVideoElement>);
 
-        // Rule: Unlock questionnaire after 95% completion or ended
-        if (data.percent >= 0.95) {
+        // Requirement 6: The button unlocks ONLY when the correct video has been completely played
+        if (data.duration > 0 && (data.seconds >= data.duration - 0.5 || data.percent >= 0.999)) {
           onVideoEndedRef.current?.();
         }
       });
@@ -351,6 +367,8 @@ export const CodigoVestimentaModal: React.FC<CodigoVestimentaModalProps> = ({
       });
 
       player.on('error', (err: any) => {
+        clearTimeout(safetyTimeout);
+        if (!isMounted) return;
         console.error('[Vimeo Player Error]', err);
         setIsLoading(false);
         const isBlocked = err?.name === 'PrivacyError' || 
@@ -371,12 +389,13 @@ export const CodigoVestimentaModal: React.FC<CodigoVestimentaModalProps> = ({
         } else {
           setVideoLoadError(
             language === 'ca'
-              ? `Error en el reproductor de Vimeo: ${err?.message || 'No s\'ha pogut reproduir el vídeo.'}`
-              : `Error en el reproductor de Vimeo: ${err?.message || 'No se ha podido reproducir el vídeo.'}`
+              ? `No s'ha pogut carregar el vídeo oficial de Vimeo (ID 1207785599). Comproveu la connexió o permisos.`
+              : `No se ha podido cargar el vídeo oficial de Vimeo (ID 1207785599). Compruebe la conexión o permisos.`
           );
         }
       });
     } catch (err: any) {
+      clearTimeout(safetyTimeout);
       console.error('[Vimeo Init Error]', err);
       setVideoLoadError(
         language === 'ca'
@@ -386,6 +405,8 @@ export const CodigoVestimentaModal: React.FC<CodigoVestimentaModalProps> = ({
     }
 
     return () => {
+      isMounted = false;
+      clearTimeout(safetyTimeout);
       if (player) {
         try {
           player.destroy();
@@ -574,7 +595,7 @@ export const CodigoVestimentaModal: React.FC<CodigoVestimentaModalProps> = ({
         )}
 
         {/* Loading Spinner */}
-        {isLoading && !videoLoadError && !isMissingOriginal && (
+        {isLoading && !videoLoadError && !isMissingOriginal && !vimeoEmbedSrc && (
           <div className="absolute inset-0 bg-black/80 flex flex-col items-center justify-center space-y-2 pointer-events-none z-10">
             <RefreshCw size={26} className="text-zinc-400 animate-spin" />
             <span className="text-[11px] text-zinc-400 font-medium">

@@ -360,11 +360,24 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
     };
   }, [config.categoriaAdultaDescCA, config.categoriaAdultaDescES, config.categoriaJuvenilDescCA, config.categoriaJuvenilDescES]);
 
+  // Helper to remove any legacy materials (fulard petit, pañuelo, mocador, domassos, camisetas) and ensure 2027
+  const cleanCategoryText = (text: string) => {
+    if (!text) return '';
+    return text
+      .replace(/\.?\s*inclou\s+(fulard|mocador|pañuelo|panuelo)[^.]*(\.|$)/gi, '.')
+      .replace(/\.?\s*incluye\s+(fulard|mocador|pañuelo|panuelo)[^.]*(\.|$)/gi, '.')
+      .replace(/fulard\s+petit/gi, '')
+      .replace(/pañuelo\s+pequeño/gi, '')
+      .replace(/2026/g, '2027')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+  };
+
   // Descriptions with config prop as primary Single Source of Truth
-  const descripcioDultaCA = config.categoriaAdultaDescCA || configData.find(c => c.clau === 'descripcio_parella_adulta_ca')?.valor?.text || categoriaDesc.categoria_adulta_desc_ca || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_adulta_desc_ca;
-  const descripcioDultaES = config.categoriaAdultaDescES || configData.find(c => c.clau === 'descripcio_parella_adulta_es')?.valor?.text || categoriaDesc.categoria_adulta_desc_es || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_adulta_desc_es;
-  const descripcioJuvenilCA = config.categoriaJuvenilDescCA || configData.find(c => c.clau === 'descripcio_parella_juvenil_ca')?.valor?.text || categoriaDesc.categoria_juvenil_desc_ca || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_juvenil_desc_ca;
-  const descripcioJuvenilES = config.categoriaJuvenilDescES || configData.find(c => c.clau === 'descripcio_parella_juvenil_es')?.valor?.text || categoriaDesc.categoria_juvenil_desc_es || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_juvenil_desc_es;
+  const descripcioDultaCA = cleanCategoryText(config.categoriaAdultaDescCA || configData.find(c => c.clau === 'descripcio_parella_adulta_ca')?.valor?.text || categoriaDesc.categoria_adulta_desc_ca || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_adulta_desc_ca);
+  const descripcioDultaES = cleanCategoryText(config.categoriaAdultaDescES || configData.find(c => c.clau === 'descripcio_parella_adulta_es')?.valor?.text || categoriaDesc.categoria_adulta_desc_es || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_adulta_desc_es);
+  const descripcioJuvenilCA = cleanCategoryText(config.categoriaJuvenilDescCA || configData.find(c => c.clau === 'descripcio_parella_juvenil_ca')?.valor?.text || categoriaDesc.categoria_juvenil_desc_ca || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_juvenil_desc_ca);
+  const descripcioJuvenilES = cleanCategoryText(config.categoriaJuvenilDescES || configData.find(c => c.clau === 'descripcio_parella_juvenil_es')?.valor?.text || categoriaDesc.categoria_juvenil_desc_es || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_juvenil_desc_es);
 
   // Live duplicate check flags for Comparser 1 & 2
   const isC1NameDuplicate = useMemo(() => {

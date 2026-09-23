@@ -125,75 +125,37 @@ export function calculateInscriptionOrderBreakdown(
       }
     }
 
-    // Participant wants & selections
+    // Participant wants & selections:
+    // Strictly respect individual participant choices.
+    // "una armilla seleccionada debe contabilizarse una sola vez por participante"
     const c1VolCandidate = (sel as any)?.c1Vol ?? regAny.c1Vol ?? regAny.c1_vol ?? regAny.c1VolArmilla ?? regAny.c1_vol_armilla;
     const c2VolCandidate = (sel as any)?.c2Vol ?? regAny.c2Vol ?? regAny.c2_vol ?? regAny.c2VolArmilla ?? regAny.c2_vol_armilla;
 
     const hasExplicitC1Vol = typeof c1VolCandidate === 'boolean';
     const hasExplicitC2Vol = typeof c2VolCandidate === 'boolean';
 
-    const c1Wants = hasExplicitC1Vol 
-      ? c1VolCandidate === true 
-      : (isOptional 
-          ? (explicitQty !== null ? explicitQty >= 1 : (!!registration.c1Talla && registration.c1Talla.toLowerCase() !== 'cap'))
-          : (!!registration.c1Talla && registration.c1Talla.toLowerCase() !== 'cap'));
+    const rawTalla1 = ((sel as any)?.c1Talla || registration.c1Talla || '').trim();
+    const rawTalla2 = ((sel as any)?.c2Talla || registration.c2Talla || '').trim();
+    const hasT1 = !!rawTalla1 && rawTalla1.toLowerCase() !== 'cap';
+    const hasT2 = !!rawTalla2 && rawTalla2.toLowerCase() !== 'cap';
 
-    const c2Wants = hasExplicitC2Vol 
-      ? c2VolCandidate === true 
-      : (isOptional 
-          ? (explicitQty !== null ? explicitQty >= 2 : (!!registration.c2Talla && registration.c2Talla.toLowerCase() !== 'cap'))
-          : (!!registration.c2Talla && registration.c2Talla.toLowerCase() !== 'cap'));
+    const p1Wants = hasExplicitC1Vol
+      ? c1VolCandidate === true
+      : (isOptional ? false : hasT1);
 
-    let finalQty = 0;
-    if (explicitQty !== null) {
-      finalQty = explicitQty;
-    } else if (c1Wants && c2Wants) {
-      finalQty = 2;
-    } else if (c1Wants || c2Wants) {
-      finalQty = 1;
-    }
+    const p2Wants = hasExplicitC2Vol
+      ? c2VolCandidate === true
+      : (isOptional ? false : hasT2);
+
+    // Each participant gets at most 1 armilla. Never duplicated.
+    const finalQty = (p1Wants ? 1 : 0) + (p2Wants ? 1 : 0);
 
     if (finalQty > 0) {
       const c1Tipus = ((sel as any)?.c1Tipus || registration.c1UniformeTipus || 'compra').toLowerCase();
       const c2Tipus = ((sel as any)?.c2Tipus || registration.c2UniformeTipus || 'compra').toLowerCase();
 
-      const rawTalla1 = ((sel as any)?.c1Talla || registration.c1Talla || '').trim();
-      const rawTalla2 = ((sel as any)?.c2Talla || registration.c2Talla || '').trim();
-      const hasT1 = !!rawTalla1 && rawTalla1.toLowerCase() !== 'cap';
-      const hasT2 = !!rawTalla2 && rawTalla2.toLowerCase() !== 'cap';
-
-      // Strictly determine which size(s) were selected by the user
-      let p1Selected = false;
-      let p2Selected = false;
-
-      if (finalQty === 1) {
-        // Exactly one item: show exactly one size, never both
-        if (c1Wants && !c2Wants && hasT1) {
-          p1Selected = true;
-          p2Selected = false;
-        } else if (c2Wants && !c1Wants && hasT2) {
-          p1Selected = false;
-          p2Selected = true;
-        } else if (hasT1 && (!hasT2 || c1Wants)) {
-          p1Selected = true;
-          p2Selected = false;
-        } else if (hasT2) {
-          p1Selected = false;
-          p2Selected = true;
-        }
-      } else if (finalQty >= 2) {
-        if (hasExplicitC1Vol || hasExplicitC2Vol) {
-          p1Selected = c1Wants && hasT1;
-          p2Selected = c2Wants && hasT2;
-        } else {
-          p1Selected = hasT1;
-          p2Selected = hasT2;
-        }
-      }
-
-      // If user only marked 1 size, show 1 size. If marked 2, show 2.
-      const activeTalla1 = p1Selected ? rawTalla1 : '';
-      const activeTalla2 = p2Selected ? rawTalla2 : '';
+      const activeTalla1 = p1Wants ? rawTalla1 : '';
+      const activeTalla2 = p2Wants ? rawTalla2 : '';
 
       const p1IsLloguer = c1Tipus.includes('lloguer') || c1Tipus.includes('alquiler');
       const p2IsLloguer = c2Tipus.includes('lloguer') || c2Tipus.includes('alquiler');
@@ -235,8 +197,10 @@ export function calculateInscriptionOrderBreakdown(
       const modalityLabel = detail ? `${baseModality} ${detail}` : baseModality;
 
       processedExtraIds.add(linia.id);
+      processedExtraIds.add(linia.id.toLowerCase());
       processedExtraIds.add('armilla');
       processedExtraIds.add('chaleco');
+      processedExtraIds.add('uniforme');
 
       materials.push({
         id: linia.id,
@@ -413,54 +377,6 @@ export function calculateInscriptionOrderBreakdown(
       modalitat: language === 'ca' ? 'Complements' : 'Complementos',
       preuUnitari: 10,
       subtotal: directCorbatiQty * 10
-    });
-  }
-
-  // 6. Registered price reconciliation fallback:
-  // If the inscription has a registered total (e.g. 93 €), and current total is 75 € (diff 18 €),
-  // and neither clavells nor corbatí was added, restore the 1 u. clavells (8 €) and 1 u. corbatí (10 €).
-  const registeredPrice = Number(registration.preuCalculat !== undefined ? registration.preuCalculat : 0);
-  const currentTotalWithoutExtras = categoriaQuotaBase + materials.reduce((sum, item) => sum + item.subtotal, 0);
-  const priceDiff = Math.round((registeredPrice - currentTotalWithoutExtras) * 100) / 100;
-
-  if (priceDiff === 18 && !processedExtraIds.has('clavells') && !processedExtraIds.has('corbati')) {
-    processedExtraIds.add('clavells');
-    processedExtraIds.add('corbati');
-    materials.push({
-      id: 'clavells',
-      nom: language === 'ca' ? 'Clavells' : 'Claveles',
-      quantitat: 1,
-      modalitat: language === 'ca' ? 'Complements' : 'Complementos',
-      preuUnitari: 8,
-      subtotal: 8
-    });
-    materials.push({
-      id: 'corbati',
-      nom: language === 'ca' ? 'Corbatí' : 'Pajarita',
-      quantitat: 1,
-      modalitat: language === 'ca' ? 'Complements' : 'Complementos',
-      preuUnitari: 10,
-      subtotal: 10
-    });
-  } else if (priceDiff === 8 && !processedExtraIds.has('clavells')) {
-    processedExtraIds.add('clavells');
-    materials.push({
-      id: 'clavells',
-      nom: language === 'ca' ? 'Clavells' : 'Claveles',
-      quantitat: 1,
-      modalitat: language === 'ca' ? 'Complements' : 'Complementos',
-      preuUnitari: 8,
-      subtotal: 8
-    });
-  } else if (priceDiff === 10 && !processedExtraIds.has('corbati')) {
-    processedExtraIds.add('corbati');
-    materials.push({
-      id: 'corbati',
-      nom: language === 'ca' ? 'Corbatí' : 'Pajarita',
-      quantitat: 1,
-      modalitat: language === 'ca' ? 'Complements' : 'Complementos',
-      preuUnitari: 10,
-      subtotal: 10
     });
   }
 
