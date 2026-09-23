@@ -350,10 +350,15 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
         const dJuvES = items.find(i => i.clau === 'descripcio_parella_juvenil_es')?.valor?.text;
         const armOpc = items.find(i => i.clau === 'armilla_opcional')?.valor?.opcional;
 
-        if (dAdultCA) setDescripcioAdultaCA(dAdultCA);
-        if (dAdultES) setDescripcioAdultaES(dAdultES);
-        if (dJuvCA) setDescripcioJuvenilCA(dJuvCA);
-        if (dJuvES) setDescripcioJuvenilES(dJuvES);
+        const cleanT = (v?: string) => {
+          if (!v) return undefined;
+          if (/samarretr|samarreta|camiseta|purs dol|puro.*dulce|fulard|pañuelo|domas|mocador/i.test(v)) return undefined;
+          return v;
+        };
+        if (cleanT(dAdultCA)) setDescripcioAdultaCA(dAdultCA!);
+        if (cleanT(dAdultES)) setDescripcioAdultaES(dAdultES!);
+        if (cleanT(dJuvCA)) setDescripcioJuvenilCA(dJuvCA!);
+        if (cleanT(dJuvES)) setDescripcioJuvenilES(dJuvES!);
         if (armOpc !== undefined) setArmillaOpcional(armOpc);
       } catch (err) {
         console.warn("Could not load sistema_config in AdminConfig:", err);

@@ -1054,10 +1054,9 @@ export default function AdminDashboard({
       // H (Correu Electronic de Contacte)
       const correuElectronic = i.emailContactoPareja || i.c1Email || i.c2Email || "";
 
-      // I (Preu Parella)
-      const preuParella = i.categoria === CategoriaParella.ADULT 
-        ? (config.preuAdult || 90) 
-        : (config.preuJuvenil || 60);
+      // I (Preu Parella) - Uses active Secretaria configuration
+      const rowBreakdown = calculateInscriptionOrderBreakdown(i, config);
+      const preuParella = rowBreakdown.categoriaQuotaBase;
 
       // J (Armilla)
       const liniaIdFirst = config.liniisUniforme?.[0]?.id || 'lin-1';

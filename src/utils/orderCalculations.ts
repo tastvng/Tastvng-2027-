@@ -54,7 +54,8 @@ export function calculateInscriptionOrderBreakdown(
     const adultTariff = config?.tarifesDinamiques?.find(t => 
       t.actiu !== false && (t.tipus === 'categoria_adult' || t.id === 'adults')
     );
-    categoriaQuotaBase = adultTariff ? adultTariff.valor : (config?.preuAdult ?? (config as any)?.preuAdults ?? (config as any)?.preu_adults ?? 45);
+    const fallbackAdult = typeof config?.preuAdult === 'number' ? config.preuAdult : (typeof (config as any)?.preuAdults === 'number' ? (config as any).preuAdults : 0);
+    categoriaQuotaBase = adultTariff ? adultTariff.valor : fallbackAdult;
   } else {
     categoriaNom = language === 'ca'
       ? (config?.categoriaJuvenilNom || "Parella Juvenil")
@@ -63,7 +64,8 @@ export function calculateInscriptionOrderBreakdown(
     const juvenilTariff = config?.tarifesDinamiques?.find(t => 
       t.actiu !== false && (t.tipus === 'categoria_juvenil' || t.id === 'juvenils')
     );
-    categoriaQuotaBase = juvenilTariff ? juvenilTariff.valor : (config?.preuJuvenil ?? (config as any)?.preu_juvenil ?? 45);
+    const fallbackJuvenil = typeof config?.preuJuvenil === 'number' ? config.preuJuvenil : (typeof (config as any)?.preu_juvenil === 'number' ? (config as any).preu_juvenil : 0);
+    categoriaQuotaBase = juvenilTariff ? juvenilTariff.valor : fallbackJuvenil;
   }
 
   const materials: SelectedMaterialItem[] = [];

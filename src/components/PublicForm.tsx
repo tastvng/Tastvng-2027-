@@ -120,7 +120,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
     };
   }, [config, language]);
 
-  const [youtubeUrl, setYoutubeUrl] = useState('');
+  const [youtubeUrl, setYoutubeUrl] = useState('https://vimeo.com/1207785599');
   const [submitError, setSubmitError] = useState<{ message: string; code?: string; details?: any } | null>(null);
 
   useEffect(() => {
@@ -360,24 +360,34 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
     };
   }, [config.categoriaAdultaDescCA, config.categoriaAdultaDescES, config.categoriaJuvenilDescCA, config.categoriaJuvenilDescES]);
 
-  // Helper to remove any legacy materials (fulard petit, pañuelo, mocador, domassos, camisetas) and ensure 2027
+  // Helper to remove any legacy materials (fulard petit, pañuelo, mocador, domassos, camisetas, samarretres, purs dolços) and ensure 2027
   const cleanCategoryText = (text: string) => {
     if (!text) return '';
     return text
-      .replace(/\.?\s*inclou\s+(fulard|mocador|pañuelo|panuelo)[^.]*(\.|$)/gi, '.')
-      .replace(/\.?\s*incluye\s+(fulard|mocador|pañuelo|panuelo)[^.]*(\.|$)/gi, '.')
-      .replace(/fulard\s+petit/gi, '')
-      .replace(/pañuelo\s+pequeño/gi, '')
+      .replace(/\.?\s*inclou\s+(fulard|mocador|pañuelo|panuelo|samarretr|samarreta|camiseta|pur|puro)[^.]*(\.|$)/gi, '.')
+      .replace(/\.?\s*incluye\s+(fulard|mocador|pañuelo|panuelo|samarretr|samarreta|camiseta|pur|puro)[^.]*(\.|$)/gi, '.')
+      .replace(/samarretres?\s*(exclusives?)?/gi, '')
+      .replace(/samarretes?\s*(exclusives?)?/gi, '')
+      .replace(/camisetas?\s*(exclusivas?)?/gi, '')
+      .replace(/purs?\s*(dolços?)?/gi, '')
+      .replace(/puros?\s*(dulces?)?/gi, '')
+      .replace(/fulard\s*petit/gi, '')
+      .replace(/pañuelo\s*pequeño/gi, '')
+      .replace(/pañuelo/gi, '')
+      .replace(/fulard/gi, '')
+      .replace(/mocador/gi, '')
+      .replace(/domassos/gi, '')
+      .replace(/domas/gi, '')
       .replace(/2026/g, '2027')
       .replace(/\s{2,}/g, ' ')
       .trim();
   };
 
-  // Descriptions with config prop as primary Single Source of Truth
-  const descripcioDultaCA = cleanCategoryText(config.categoriaAdultaDescCA || configData.find(c => c.clau === 'descripcio_parella_adulta_ca')?.valor?.text || categoriaDesc.categoria_adulta_desc_ca || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_adulta_desc_ca);
-  const descripcioDultaES = cleanCategoryText(config.categoriaAdultaDescES || configData.find(c => c.clau === 'descripcio_parella_adulta_es')?.valor?.text || categoriaDesc.categoria_adulta_desc_es || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_adulta_desc_es);
-  const descripcioJuvenilCA = cleanCategoryText(config.categoriaJuvenilDescCA || configData.find(c => c.clau === 'descripcio_parella_juvenil_ca')?.valor?.text || categoriaDesc.categoria_juvenil_desc_ca || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_juvenil_desc_ca);
-  const descripcioJuvenilES = cleanCategoryText(config.categoriaJuvenilDescES || configData.find(c => c.clau === 'descripcio_parella_juvenil_es')?.valor?.text || categoriaDesc.categoria_juvenil_desc_es || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_juvenil_desc_es);
+  // Descriptions with liveConfig as primary Single Source of Truth
+  const descripcioDultaCA = cleanCategoryText(liveConfig.categoriaAdultaDescCA || configData.find(c => c.clau === 'descripcio_parella_adulta_ca')?.valor?.text || categoriaDesc.categoria_adulta_desc_ca || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_adulta_desc_ca);
+  const descripcioDultaES = cleanCategoryText(liveConfig.categoriaAdultaDescES || configData.find(c => c.clau === 'descripcio_parella_adulta_es')?.valor?.text || categoriaDesc.categoria_adulta_desc_es || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_adulta_desc_es);
+  const descripcioJuvenilCA = cleanCategoryText(liveConfig.categoriaJuvenilDescCA || configData.find(c => c.clau === 'descripcio_parella_juvenil_ca')?.valor?.text || categoriaDesc.categoria_juvenil_desc_ca || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_juvenil_desc_ca);
+  const descripcioJuvenilES = cleanCategoryText(liveConfig.categoriaJuvenilDescES || configData.find(c => c.clau === 'descripcio_parella_juvenil_es')?.valor?.text || categoriaDesc.categoria_juvenil_desc_es || DEFAULT_CATEGORIA_DESCRIPTIONS.categoria_juvenil_desc_es);
 
   // Live duplicate check flags for Comparser 1 & 2
   const isC1NameDuplicate = useMemo(() => {
@@ -435,11 +445,10 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
 
-  // Questionnaire / Informative Video verification state with session persistence
+  // Questionnaire / Informative Video verification state
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const initialVideoWatched = typeof sessionStorage !== 'undefined' && sessionStorage.getItem('tast_video_completed') === 'true';
-  const videoWatchedRef = useRef<boolean>(initialVideoWatched);
-  const [videoWatched, setVideoWatched] = useState<boolean>(initialVideoWatched);
+  const videoWatchedRef = useRef<boolean>(false);
+  const [videoWatched, setVideoWatched] = useState<boolean>(false);
   const [videoWatchedError, setVideoWatchedError] = useState<string | null>(null);
   const maxWatchedTimeRef = useRef<number>(0);
 
@@ -483,11 +492,6 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
       : (videoRef.current || (document.getElementById('video-cuestionari') as HTMLVideoElement | null));
     
     logVideoState('loadedmetadata', v);
-    if (v && !isNaN(v.duration) && isFinite(v.duration) && v.duration > 0) {
-      if (v.ended || (v.currentTime / v.duration >= 0.95)) {
-        markVideoAsCompleted('loadedmetadata (>=95%)', v);
-      }
-    }
   };
 
   const handleVideoEnded = () => {
@@ -1402,8 +1406,9 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {(() => {
-              const adultTarifaObj = (config.tarifesDinamiques || []).find(t => t.id === 'adults') || { nom: 'Parella Adulta', valor: config.preuAdult, actiu: !(config.tarifesDinamiques && config.tarifesDinamiques.length > 0) };
-              const isAdultDisabled = config.categoriaAdultaActiva === false || !adultTarifaObj.actiu;
+              const adultTarif = (liveConfig.tarifesDinamiques || []).find(t => t.actiu !== false && (t.tipus === 'categoria_adult' || t.id === 'adults'));
+              const adultValor = adultTarif ? adultTarif.valor : (liveConfig.preuAdult ?? 0);
+              const isAdultDisabled = liveConfig.categoriaAdultaActiva === false || (adultTarif && adultTarif.actiu === false);
 
               return (
                 <div 
@@ -1428,13 +1433,13 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
                     )}
                   </div>
                   <h4 className="font-sans font-bold text-xl text-white">
-                    {language === 'ca' ? (config.categoriaAdultaNom || 'Parella Adulta') : (config.categoriaAdultaNomES || 'Pareja Adulta')}
+                    {language === 'ca' ? (liveConfig.categoriaAdultaNom || 'Parella Adulta') : (liveConfig.categoriaAdultaNomES || 'Pareja Adulta')}
                   </h4>
                   <p className="text-zinc-400 text-xs mt-1 leading-relaxed">
                     {language === 'ca' ? descripcioDultaCA : descripcioDultaES}
                   </p>
                   <div className="text-right mt-3">
-                    <span className="font-sans font-extrabold text-2xl text-fuchsia-500">{adultTarifaObj.valor}€</span>
+                    <span className="font-sans font-extrabold text-2xl text-fuchsia-500">{adultValor}€</span>
                     <span className="text-zinc-400 text-xs font-mono"> / {language === 'ca' ? 'parella' : 'pareja'}</span>
                   </div>
                 </div>
@@ -1442,8 +1447,9 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
             })()}
 
             {(() => {
-              const juvenilTarifaObj = (config.tarifesDinamiques || []).find(t => t.id === 'juvenils') || { nom: 'Parella Juvenil', valor: config.preuJuvenil, actiu: !(config.tarifesDinamiques && config.tarifesDinamiques.length > 0) };
-              const isJuvenilDisabled = config.categoriaJuvenilActiva === false || !juvenilTarifaObj.actiu;
+              const juvenilTarif = (liveConfig.tarifesDinamiques || []).find(t => t.actiu !== false && (t.tipus === 'categoria_juvenil' || t.id === 'juvenils'));
+              const juvenilValor = juvenilTarif ? juvenilTarif.valor : (liveConfig.preuJuvenil ?? 0);
+              const isJuvenilDisabled = liveConfig.categoriaJuvenilActiva === false || (juvenilTarif && juvenilTarif.actiu === false);
 
               return (
                 <div 
@@ -1468,13 +1474,13 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
                     )}
                   </div>
                   <h4 className="font-sans font-bold text-xl text-white">
-                    {language === 'ca' ? (config.categoriaJuvenilNom || 'Parella Juvenil') : (config.categoriaJuvenilNomES || 'Pareja Juvenil')}
+                    {language === 'ca' ? (liveConfig.categoriaJuvenilNom || 'Parella Juvenil') : (liveConfig.categoriaJuvenilNomES || 'Pareja Juvenil')}
                   </h4>
                   <p className="text-zinc-400 text-xs mt-1 leading-relaxed">
                     {language === 'ca' ? descripcioJuvenilCA : descripcioJuvenilES}
                   </p>
                   <div className="text-right mt-3">
-                    <span className="font-sans font-extrabold text-2xl text-fuchsia-500">{juvenilTarifaObj.valor}€</span>
+                    <span className="font-sans font-extrabold text-2xl text-fuchsia-500">{juvenilValor}€</span>
                     <span className="text-zinc-400 text-xs font-mono"> / {language === 'ca' ? 'parella' : 'pareja'}</span>
                   </div>
                 </div>
