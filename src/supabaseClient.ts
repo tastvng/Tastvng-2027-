@@ -425,27 +425,35 @@ function parseInscripcionesRows(rows: any[]): Inscripcio[] {
       c1Cognoms: String(r.c1Cognoms !== undefined ? r.c1Cognoms : (r.c1_cognoms || r.c1cognoms || '')),
       c1Email: String(emailContactoPareja || ''),
       c1Telefon: String(telefonContactoPareja || ''),
-      c1Talla: String(r.c1Talla !== undefined ? r.c1Talla : (r.c1_talla || r.c1talla || '')),
+      c1Talla: (r.c1Talla !== undefined && r.c1Talla !== null) 
+        ? (String(r.c1Talla).trim() === 'null' || String(r.c1Talla).trim() === 'undefined' ? '' : String(r.c1Talla).trim())
+        : ((r.c1_talla || r.c1talla) ? String(r.c1_talla || r.c1talla).trim() : ''),
       c1DniUrl: String(r.c1DniUrl !== undefined ? r.c1DniUrl : (r.c1_dni_url || r.c1dni_url || r.c1_dni || r.c1dni || '')),
       c1EsMenor: r.c1EsMenor !== undefined ? !!r.c1EsMenor : !!(r.c1_es_menor || r.c1esmenor),
       c1TutorNom: r.c1TutorNom ? String(r.c1TutorNom) : '',
       c1TutorCognoms: r.c1TutorCognoms ? String(r.c1TutorCognoms) : '',
       c1TutorDni: r.c1TutorDni ? String(r.c1TutorDni) : '',
       c1TutorTelefon: r.c1TutorTelefon ? String(r.c1TutorTelefon) : '',
-      c1UniformeTipus: String(r.c1UniformeTipus !== undefined ? r.c1UniformeTipus : (r.c1_uniforme_tipus || r.c1uniformetipus || 'compra')),
+      c1UniformeTipus: (r.c1UniformeTipus !== undefined && r.c1UniformeTipus !== null)
+        ? (String(r.c1UniformeTipus).trim() === 'null' || String(r.c1UniformeTipus).trim() === 'undefined' ? '' : String(r.c1UniformeTipus).trim())
+        : ((r.c1_uniforme_tipus || r.c1uniformetipus) ? String(r.c1_uniforme_tipus || r.c1uniformetipus).trim() : ''),
 
       c2Nom: String(r.c2Nom !== undefined ? r.c2Nom : (r.c2_nom || r.c2nom || '')),
       c2Cognoms: String(r.c2Cognoms !== undefined ? r.c2Cognoms : (r.c2_cognoms || r.c2cognoms || '')),
       c2Email: String(emailContactoPareja || ''),
       c2Telefon: String(telefonContactoPareja || ''),
-      c2Talla: String(r.c2Talla !== undefined ? r.c2Talla : (r.c2_talla || r.c2talla || '')),
+      c2Talla: (r.c2Talla !== undefined && r.c2Talla !== null)
+        ? (String(r.c2Talla).trim() === 'null' || String(r.c2Talla).trim() === 'undefined' ? '' : String(r.c2Talla).trim())
+        : ((r.c2_talla || r.c2talla) ? String(r.c2_talla || r.c2talla).trim() : ''),
       c2DniUrl: String(r.c2DniUrl !== undefined ? r.c2DniUrl : (r.c2_dni_url || r.c2dni_url || r.c2_dni || r.c2dni || '')),
       c2EsMenor: r.c2EsMenor !== undefined ? !!r.c2EsMenor : !!(r.c2_es_menor || r.c2esmenor),
       c2TutorNom: r.c2TutorNom ? String(r.c2TutorNom) : '',
       c2TutorCognoms: r.c2TutorCognoms ? String(r.c2TutorCognoms) : '',
       c2TutorDni: r.c2TutorDni ? String(r.c2TutorDni) : '',
       c2TutorTelefon: r.c2TutorTelefon ? String(r.c2TutorTelefon) : '',
-      c2UniformeTipus: String(r.c2UniformeTipus !== undefined ? r.c2UniformeTipus : (r.c2_uniforme_tipus || r.c2uniformetipus || 'compra')),
+      c2UniformeTipus: (r.c2UniformeTipus !== undefined && r.c2UniformeTipus !== null)
+        ? (String(r.c2UniformeTipus).trim() === 'null' || String(r.c2UniformeTipus).trim() === 'undefined' ? '' : String(r.c2UniformeTipus).trim())
+        : ((r.c2_uniforme_tipus || r.c2uniformetipus) ? String(r.c2_uniforme_tipus || r.c2uniformetipus).trim() : ''),
 
       respostesCuestionari: rawRespostes || {},
       extresSeleccionats,

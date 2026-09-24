@@ -233,10 +233,44 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
     registration.telefonContactoPareja || registration.c1Telefon || registration.c2Telefon || ''
   );
 
+  // Determine if Participant 1 and Participant 2 explicitly chose an armilla/equipment
+  const p1HasArmilla = React.useMemo(() => {
+    const selUni = registration.seleccionsUniforme?.['lin-1'] || 
+                   registration.seleccionsUniforme?.['uniforme'] || 
+                   registration.seleccionsUniforme?.['armilla'] || 
+                   (registration.seleccionsUniforme ? Object.values(registration.seleccionsUniforme)[0] : undefined);
+    const isOptional = !!(config?.armilla_opcional ?? true);
+    const c1VolCandidate = (selUni as any)?.c1Vol ?? (registration as any).c1Vol ?? (registration as any).c1_vol;
+    const hasExplicitC1Vol = typeof c1VolCandidate === 'boolean';
+    const rawTalla1 = ((selUni as any)?.c1Talla || registration.c1Talla || '').trim();
+    const hasT1 = !!rawTalla1 && rawTalla1.toLowerCase() !== 'cap' && rawTalla1.toLowerCase() !== 'null' && rawTalla1.toLowerCase() !== 'undefined';
+    return hasExplicitC1Vol ? c1VolCandidate === true : (isOptional ? false : hasT1);
+  }, [registration, config]);
+
+  const p2HasArmilla = React.useMemo(() => {
+    const selUni = registration.seleccionsUniforme?.['lin-1'] || 
+                   registration.seleccionsUniforme?.['uniforme'] || 
+                   registration.seleccionsUniforme?.['armilla'] || 
+                   (registration.seleccionsUniforme ? Object.values(registration.seleccionsUniforme)[0] : undefined);
+    const isOptional = !!(config?.armilla_opcional ?? true);
+    const c2VolCandidate = (selUni as any)?.c2Vol ?? (registration as any).c2Vol ?? (registration as any).c2_vol;
+    const hasExplicitC2Vol = typeof c2VolCandidate === 'boolean';
+    const rawTalla2 = ((selUni as any)?.c2Talla || registration.c2Talla || '').trim();
+    const hasT2 = !!rawTalla2 && rawTalla2.toLowerCase() !== 'cap' && rawTalla2.toLowerCase() !== 'null' && rawTalla2.toLowerCase() !== 'undefined';
+    return hasExplicitC2Vol ? c2VolCandidate === true : (isOptional ? false : hasT2);
+  }, [registration, config]);
+
   const [c1Nom, setC1Nom] = useState(registration.c1Nom);
   const [c1Cognoms, setC1Cognoms] = useState(registration.c1Cognoms);
-  const [c1Talla, setC1Talla] = useState(registration.c1Talla);
-  const [c1UniformeTipus, setC1UniformeTipus] = useState<'compra' | 'lloguer'>(registration.c1UniformeTipus || 'compra');
+  const [c1Talla, setC1Talla] = useState<string>(() => {
+    if (!p1HasArmilla) return '';
+    const raw = (registration.c1Talla || '').trim();
+    if (!raw || raw.toLowerCase() === 'cap' || raw.toLowerCase() === 'null' || raw.toLowerCase() === 'undefined') return '';
+    return raw;
+  });
+  const [c1UniformeTipus, setC1UniformeTipus] = useState<'compra' | 'lloguer'>(() => {
+    return (registration.c1UniformeTipus as 'compra' | 'lloguer') || 'compra';
+  });
 
   const [c1TutorNom, setC1TutorNom] = useState(registration.c1TutorNom || '');
   const [c1TutorCognoms, setC1TutorCognoms] = useState(registration.c1TutorCognoms || '');
@@ -245,8 +279,15 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
 
   const [c2Nom, setC2Nom] = useState(registration.c2Nom);
   const [c2Cognoms, setC2Cognoms] = useState(registration.c2Cognoms);
-  const [c2Talla, setC2Talla] = useState(registration.c2Talla);
-  const [c2UniformeTipus, setC2UniformeTipus] = useState<'compra' | 'lloguer'>(registration.c2UniformeTipus || 'compra');
+  const [c2Talla, setC2Talla] = useState<string>(() => {
+    if (!p2HasArmilla) return '';
+    const raw = (registration.c2Talla || '').trim();
+    if (!raw || raw.toLowerCase() === 'cap' || raw.toLowerCase() === 'null' || raw.toLowerCase() === 'undefined') return '';
+    return raw;
+  });
+  const [c2UniformeTipus, setC2UniformeTipus] = useState<'compra' | 'lloguer'>(() => {
+    return (registration.c2UniformeTipus as 'compra' | 'lloguer') || 'compra';
+  });
 
   const [c2TutorNom, setC2TutorNom] = useState(registration.c2TutorNom || '');
   const [c2TutorCognoms, setC2TutorCognoms] = useState(registration.c2TutorCognoms || '');
@@ -337,8 +378,8 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
       c1Cognoms: c1Cognoms.trim(),
       c1Email: emailContactoPareja.trim(),
       c1Telefon: telefonContactoPareja.trim(),
-      c1Talla,
-      c1UniformeTipus,
+      c1Talla: c1Talla.trim(),
+      c1UniformeTipus: c1Talla.trim() ? c1UniformeTipus : '',
       c1TutorNom: c1TutorNom.trim(),
       c1TutorCognoms: c1TutorCognoms.trim(),
       c1TutorDni: c1TutorDni.trim(),
@@ -347,8 +388,8 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
       c2Cognoms: c2Cognoms.trim(),
       c2Email: emailContactoPareja.trim(),
       c2Telefon: telefonContactoPareja.trim(),
-      c2Talla,
-      c2UniformeTipus,
+      c2Talla: c2Talla.trim(),
+      c2UniformeTipus: c2Talla.trim() ? c2UniformeTipus : '',
       c2TutorNom: c2TutorNom.trim(),
       c2TutorCognoms: c2TutorCognoms.trim(),
       c2TutorDni: c2TutorDni.trim(),
@@ -511,6 +552,7 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
                         onChange={(e) => setC1Talla(e.target.value)}
                         className="w-full bg-white border border-zinc-200 rounded-lg px-2 py-1.5 text-xs font-bold font-sans focus:outline-none cursor-pointer"
                       >
+                        <option value="">{language === 'ca' ? 'Sense armilla' : 'Sin chaleco'}</option>
                         <option value="XS">XS</option>
                         <option value="S">S</option>
                         <option value="M">M</option>
@@ -533,25 +575,41 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
                     </div>
                   </div>
 
-                  {registration.seleccionsUniforme && Object.keys(registration.seleccionsUniforme).length > 0 && (
-                    <div className="space-y-1 bg-white p-2 border border-zinc-150 rounded-xl">
-                      <span className="block text-[8px] font-mono text-zinc-400 uppercase font-bold tracking-wider mb-1">
-                        {language === 'ca' ? "Comanda d'Equipament (Detalls):" : "Pedido de Equipamiento (Detalles):"}
-                      </span>
-                      {Object.entries(registration.seleccionsUniforme).map(([liniaId, sel]) => {
-                        const linia = config?.liniisUniforme?.find(l => l.id === liniaId);
-                        const nomLinia = linia ? linia.nom : liniaId;
-                        return (
-                          <div key={liniaId} className="flex justify-between items-center text-[10px] py-0.5">
-                            <span className="text-zinc-500 truncate pr-1">{nomLinia}:</span>
-                            <span className="font-mono text-zinc-900 font-extrabold">
-                              {sel.c1Talla} {linia?.requeixQuantitat && `(${sel.c1Quantitat || sel.quantitat || 1} u)`} {sel.c1Tipus ? `[${sel.c1Tipus.substring(0,3).toUpperCase()}]` : ''}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
+                  {(() => {
+                    const entries = Object.entries(registration.seleccionsUniforme || {}).filter(([liniaId, sel]) => {
+                      const linia = config?.liniisUniforme?.find(l => l.id === liniaId);
+                      const isOptional = !!(linia?.opcional || linia?.armilla_opcional || config?.armilla_opcional);
+                      const c1VolCandidate = (sel as any)?.c1Vol ?? (registration as any).c1Vol ?? (registration as any).c1_vol;
+                      const hasExplicitC1Vol = typeof c1VolCandidate === 'boolean';
+                      const rawTalla1 = (sel.c1Talla || registration.c1Talla || '').trim();
+                      const hasT1 = !!rawTalla1 && rawTalla1.toLowerCase() !== 'cap' && rawTalla1.toLowerCase() !== 'null' && rawTalla1.toLowerCase() !== 'undefined';
+                      const p1Wants = hasExplicitC1Vol ? c1VolCandidate === true : (isOptional ? false : hasT1);
+                      // Si material.armilla es null, undefined o vacío -> no renderizar esa fila
+                      return p1Wants && hasT1 && !!sel.c1Talla;
+                    });
+
+                    if (entries.length === 0) return null;
+
+                    return (
+                      <div className="space-y-1 bg-white p-2 border border-zinc-150 rounded-xl">
+                        <span className="block text-[8px] font-mono text-zinc-400 uppercase font-bold tracking-wider mb-1">
+                          {language === 'ca' ? "Comanda d'Equipament (Detalls):" : "Pedido de Equipamiento (Detalles):"}
+                        </span>
+                        {entries.map(([liniaId, sel]) => {
+                          const linia = config?.liniisUniforme?.find(l => l.id === liniaId);
+                          const nomLinia = linia ? (language === 'es' ? (linia.nomES || linia.nom) : linia.nom) : liniaId;
+                          return (
+                            <div key={liniaId} className="flex justify-between items-center text-[10px] py-0.5">
+                              <span className="text-zinc-500 truncate pr-1">{nomLinia}:</span>
+                              <span className="font-mono text-zinc-900 font-extrabold">
+                                {sel.c1Talla} {linia?.requeixQuantitat && `(${sel.c1Quantitat || sel.quantitat || 1} u)`} {sel.c1Tipus ? `[${sel.c1Tipus.substring(0,3).toUpperCase()}]` : ''}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
 
                   {registration.c1EsMenor && (
                     <div className="bg-amber-50/60 border border-amber-200/60 rounded-xl p-2.5 space-y-2 mt-1">
@@ -635,6 +693,7 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
                         onChange={(e) => setC2Talla(e.target.value)}
                         className="w-full bg-white border border-zinc-200 rounded-lg px-2 py-1.5 text-xs font-bold font-sans focus:outline-none cursor-pointer"
                       >
+                        <option value="">{language === 'ca' ? 'Sense armilla' : 'Sin chaleco'}</option>
                         <option value="XS">XS</option>
                         <option value="S">S</option>
                         <option value="M">M</option>
@@ -657,25 +716,41 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
                     </div>
                   </div>
 
-                  {registration.seleccionsUniforme && Object.keys(registration.seleccionsUniforme).length > 0 && (
-                    <div className="space-y-1 bg-white p-2 border border-zinc-150 rounded-xl">
-                      <span className="block text-[8px] font-mono text-zinc-400 uppercase font-bold tracking-wider mb-1">
-                        {language === 'ca' ? "Comanda d'Equipament (Detalls):" : "Pedido de Equipamiento (Detalles):"}
-                      </span>
-                      {Object.entries(registration.seleccionsUniforme).map(([liniaId, sel]) => {
-                        const linia = config?.liniisUniforme?.find(l => l.id === liniaId);
-                        const nomLinia = linia ? linia.nom : liniaId;
-                        return (
-                          <div key={liniaId} className="flex justify-between items-center text-[10px] py-0.5">
-                            <span className="text-zinc-500 truncate pr-1">{nomLinia}:</span>
-                            <span className="font-mono text-zinc-900 font-extrabold font-sans">
-                              {sel.c2Talla} {linia?.requeixQuantitat && `(${sel.c2Quantitat || sel.quantitat || 1} u)`} {sel.c2Tipus ? `[${sel.c2Tipus.substring(0,3).toUpperCase()}]` : ''}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
+                  {(() => {
+                    const entries = Object.entries(registration.seleccionsUniforme || {}).filter(([liniaId, sel]) => {
+                      const linia = config?.liniisUniforme?.find(l => l.id === liniaId);
+                      const isOptional = !!(linia?.opcional || linia?.armilla_opcional || config?.armilla_opcional);
+                      const c2VolCandidate = (sel as any)?.c2Vol ?? (registration as any).c2Vol ?? (registration as any).c2_vol;
+                      const hasExplicitC2Vol = typeof c2VolCandidate === 'boolean';
+                      const rawTalla2 = (sel.c2Talla || registration.c2Talla || '').trim();
+                      const hasT2 = !!rawTalla2 && rawTalla2.toLowerCase() !== 'cap' && rawTalla2.toLowerCase() !== 'null' && rawTalla2.toLowerCase() !== 'undefined';
+                      const p2Wants = hasExplicitC2Vol ? c2VolCandidate === true : (isOptional ? false : hasT2);
+                      // Si material.armilla es null, undefined o vacío -> no renderizar esa fila
+                      return p2Wants && hasT2 && !!sel.c2Talla;
+                    });
+
+                    if (entries.length === 0) return null;
+
+                    return (
+                      <div className="space-y-1 bg-white p-2 border border-zinc-150 rounded-xl">
+                        <span className="block text-[8px] font-mono text-zinc-400 uppercase font-bold tracking-wider mb-1">
+                          {language === 'ca' ? "Comanda d'Equipament (Detalls):" : "Pedido de Equipamiento (Detalles):"}
+                        </span>
+                        {entries.map(([liniaId, sel]) => {
+                          const linia = config?.liniisUniforme?.find(l => l.id === liniaId);
+                          const nomLinia = linia ? (language === 'es' ? (linia.nomES || linia.nom) : linia.nom) : liniaId;
+                          return (
+                            <div key={liniaId} className="flex justify-between items-center text-[10px] py-0.5">
+                              <span className="text-zinc-500 truncate pr-1">{nomLinia}:</span>
+                              <span className="font-mono text-zinc-900 font-extrabold font-sans">
+                                {sel.c2Talla} {linia?.requeixQuantitat && `(${sel.c2Quantitat || sel.quantitat || 1} u)`} {sel.c2Tipus ? `[${sel.c2Tipus.substring(0,3).toUpperCase()}]` : ''}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
 
                   {registration.c2EsMenor && (
                     <div className="bg-amber-50/60 border border-amber-200/60 rounded-xl p-2.5 space-y-2 mt-1">
