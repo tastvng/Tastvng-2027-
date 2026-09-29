@@ -11,6 +11,7 @@ import scannerHandler from "./api/scanner";
 import configHandler from "./api/config";
 import healthHandler from "./api/health";
 import chatHandler from "./api/chat";
+import socialHandler from "./api/social";
 
 dotenv.config();
 
@@ -67,6 +68,7 @@ async function startServer() {
   // Consolidated Inscriptions & DNI upload endpoint
   app.all("/api/inscriptions", inscriptionsHandler);
   app.all("/api/upload-dni", inscriptionsHandler);
+  app.all("/api/social", socialHandler);
 
   // Dynamic Questionnaire Endpoints (preguntes table)
   app.get("/api/preguntes", async (req, res) => {

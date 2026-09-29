@@ -349,18 +349,34 @@ export default function App() {
         // Sensitive inscription loading has been deferred and is handled dynamically only after admin logs in!
 
         try {
-          // 3. Fetch social news / noticies
-          const dbNoticies = await getSupabaseSetting<NoticiaXarxes[] | null>('tast_noticies_2026', null);
-          if (dbNoticies) {
-            setNoticies(dbNoticies);
-            localStorage.setItem('tast_noticies_2026', JSON.stringify(dbNoticies));
+          // 3. Fetch social news / noticies (via serverless API with auto-cache refresh & Supabase fallback)
+          let fetchedNoticies: NoticiaXarxes[] | null = null;
+          try {
+            const feedRes = await fetch('/api/social?action=feed');
+            if (feedRes.ok) {
+              const feedData = await feedRes.json();
+              if (feedData && Array.isArray(feedData.noticies) && feedData.noticies.length > 0) {
+                fetchedNoticies = feedData.noticies;
+              }
+            }
+          } catch {
+            // Silently fall through to direct Supabase read
+          }
+
+          if (!fetchedNoticies || fetchedNoticies.length === 0) {
+            fetchedNoticies = await getSupabaseSetting<NoticiaXarxes[] | null>('tast_noticies_2026', null);
+          }
+
+          if (fetchedNoticies && fetchedNoticies.length > 0) {
+            setNoticies(fetchedNoticies);
+            localStorage.setItem('tast_noticies_2026', JSON.stringify(fetchedNoticies));
           } else {
             const module = await import('./data');
             setNoticies(module.COMPARTIDES_XARXES);
             localStorage.setItem('tast_noticies_2026', JSON.stringify(module.COMPARTIDES_XARXES));
           }
         } catch (e) {
-          console.error("Error loading news from Supabase:", e);
+          console.error("Error loading news:", e);
         }
 
         try {

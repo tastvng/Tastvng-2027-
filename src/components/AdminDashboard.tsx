@@ -139,34 +139,16 @@ export default function AdminDashboard({
   const [smtpTestStatus, setSmtpTestStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [smtpTestMsg, setSmtpTestMsg] = useState('');
 
-  // Social Network integrations channels
+  // Social Network integrations channels (Official Meta Graph API v19.0)
   const [scInstagramConnected, setScInstagramConnected] = useState(() => localStorage.getItem('tast_sc_instagram_connected') === 'true');
   const [scInstagramHandle, setScInstagramHandle] = useState(() => localStorage.getItem('tast_sc_instagram_handle') || '@eltastvng');
   const [scFacebookConnected, setScFacebookConnected] = useState(() => localStorage.getItem('tast_sc_facebook_connected') === 'true');
   const [scFacebookHandle, setScFacebookHandle] = useState(() => localStorage.getItem('tast_sc_facebook_handle') || 'Associació Cultural El Tast');
-  const [scTikTokConnected, setScTikTokConnected] = useState(() => localStorage.getItem('tast_sc_tiktok_connected') === 'true');
-  const [scTikTokHandle, setScTikTokHandle] = useState(() => localStorage.getItem('tast_sc_tiktok_handle') || '@eltast_vng');
-
-  // Simulated Connect popup modal state
-  const [showConnectModal, setShowConnectModal] = useState<string | null>(null); // 'instagram' | 'facebook' | 'tiktok'
-  const [connectUsername, setConnectUsername] = useState('');
-  const [connectPassword, setConnectPassword] = useState('');
+  const [scTikTokConnected] = useState(false);
+  const [scTikTokHandle] = useState('@eltast_vng');
+  const [metaLastSync, setMetaLastSync] = useState('');
+  const [isSyncingMeta, setIsSyncingMeta] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
-
-  // Social Publisher state hooks
-  const [socialPostText, setSocialPostText] = useState('');
-  const [socialPostPlatform, setSocialPostPlatform] = useState<'instagram' | 'facebook' | 'tiktok'>('instagram');
-  const [socialPostMediaPreset, setSocialPostMediaPreset] = useState('caramels');
-  const [socialPublishSuccess, setSocialPublishSuccess] = useState(false);
-  const [socialPostLikes, setSocialPostLikes] = useState(150);
-
-  // Media presets dictionary
-  const mediaPresets: Record<string, string> = {
-    caramels: 'https://images.unsplash.com/photo-1533227268428-f9ed0900fb3b?q=80&w=800&auto=format&fit=crop',
-    armilles: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?q=80&w=800&auto=format&fit=crop',
-    placa: 'https://images.unsplash.com/photo-1511578314322-379afb476865?q=80&w=800&auto=format&fit=crop',
-    platja: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?q=80&w=800&auto=format&fit=crop'
-  };
 
   // Search and filter states
   const [searchQuery, setSearchQuery] = useState('');
@@ -214,15 +196,27 @@ export default function AdminDashboard({
         const instHnd = await getSupabaseSetting('tast_sc_instagram_handle', '');
         const fbConn = await getSupabaseSetting('tast_sc_facebook_connected', '');
         const fbHnd = await getSupabaseSetting('tast_sc_facebook_handle', '');
-        const tkConn = await getSupabaseSetting('tast_sc_tiktok_connected', '');
-        const tkHnd = await getSupabaseSetting('tast_sc_tiktok_handle', '');
-
         if (instConn !== null && instConn !== '') setScInstagramConnected(instConn === 'true');
         if (instHnd) setScInstagramHandle(instHnd);
         if (fbConn !== null && fbConn !== '') setScFacebookConnected(fbConn === 'true');
         if (fbHnd) setScFacebookHandle(fbHnd);
-        if (tkConn !== null && tkConn !== '') setScTikTokConnected(tkConn === 'true');
-        if (tkHnd) setScTikTokHandle(tkHnd);
+
+        // Fetch authoritative Meta connection status from backend
+        try {
+          const res = await fetch('/api/social?action=status');
+          if (res.ok) {
+            const data = await res.json();
+            if (data && data.ok) {
+              setScInstagramConnected(!!data.instagramConnected);
+              setScFacebookConnected(!!data.facebookConnected);
+              if (data.instagramHandle) setScInstagramHandle(data.instagramHandle);
+              if (data.facebookHandle) setScFacebookHandle(data.facebookHandle);
+              if (data.lastSync) setMetaLastSync(data.lastSync);
+            }
+          }
+        } catch {
+          // ignore network error
+        }
       } catch (err) {
         console.error("Failed to load admin settings from Supabase:", err);
       }
@@ -539,159 +533,166 @@ export default function AdminDashboard({
     }
   };
 
-  // Open oauth simulation modal
-  const handleOpenConnect = (platform: string) => {
-    setShowConnectModal(platform);
-    setConnectUsername(
-      platform === 'instagram' ? scInstagramHandle :
-      platform === 'facebook' ? scFacebookHandle : scTikTokHandle
-    );
-    setConnectPassword('');
-  };
-
-  // Connect social platform via mock oauth flow
-  const handleConfirmConnectSocial = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!connectUsername.trim()) return;
-
-    setIsConnecting(true);
-
-    setTimeout(async () => {
-      const target = showConnectModal;
-      try {
-        const { isSupabaseConfigured, saveSupabaseSetting } = await import('../supabaseClient');
-
-        if (target === 'instagram') {
-          setScInstagramConnected(true);
-          setScInstagramHandle(connectUsername);
-          localStorage.setItem('tast_sc_instagram_connected', 'true');
-          localStorage.setItem('tast_sc_instagram_handle', connectUsername);
-          if (isSupabaseConfigured) {
-            await saveSupabaseSetting('tast_sc_instagram_connected', 'true');
-            await saveSupabaseSetting('tast_sc_instagram_handle', connectUsername);
-          }
-        } else if (target === 'facebook') {
-          setScFacebookConnected(true);
-          setScFacebookHandle(connectUsername);
-          localStorage.setItem('tast_sc_facebook_connected', 'true');
-          localStorage.setItem('tast_sc_facebook_handle', connectUsername);
-          if (isSupabaseConfigured) {
-            await saveSupabaseSetting('tast_sc_facebook_connected', 'true');
-            await saveSupabaseSetting('tast_sc_facebook_handle', connectUsername);
-          }
-        } else if (target === 'tiktok') {
-          setScTikTokConnected(true);
-          setScTikTokHandle(connectUsername);
-          localStorage.setItem('tast_sc_tiktok_connected', 'true');
-          localStorage.setItem('tast_sc_tiktok_handle', connectUsername);
-          if (isSupabaseConfigured) {
-            await saveSupabaseSetting('tast_sc_tiktok_connected', 'true');
-            await saveSupabaseSetting('tast_sc_tiktok_handle', connectUsername);
-          }
-        }
-
-        if (onAddLog) {
-          onAddLog(language === 'ca'
-            ? `🔗 Canal ${target?.toUpperCase()} connectat correctament: ${connectUsername}`
-            : `🔗 Canal ${target?.toUpperCase()} conectado correctamente: ${connectUsername}`
-          );
-        }
-      } catch (err) {
-        console.error("Error saving social connection to Supabase:", err);
-      } finally {
-        setIsConnecting(false);
-        setShowConnectModal(null);
-      }
-    }, 1500);
-  };
-
-  // Disconnect social channel
-  const handleDisconnectSocial = async (platform: string) => {
+  // Load authoritative Meta connection status
+  const loadSocialStatus = async () => {
     try {
-      const { isSupabaseConfigured, saveSupabaseSetting } = await import('../supabaseClient');
-
-      if (platform === 'instagram') {
-        setScInstagramConnected(false);
-        localStorage.setItem('tast_sc_instagram_connected', 'false');
-        if (isSupabaseConfigured) {
-          await saveSupabaseSetting('tast_sc_instagram_connected', 'false');
+      const res = await fetch('/api/social?action=status');
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.ok) {
+          setScInstagramConnected(!!data.instagramConnected);
+          setScFacebookConnected(!!data.facebookConnected);
+          if (data.instagramHandle) setScInstagramHandle(data.instagramHandle);
+          if (data.facebookHandle) setScFacebookHandle(data.facebookHandle);
+          if (data.lastSync) setMetaLastSync(data.lastSync);
         }
-      } else if (platform === 'facebook') {
-        setScFacebookConnected(false);
-        localStorage.setItem('tast_sc_facebook_connected', 'false');
-        if (isSupabaseConfigured) {
-          await saveSupabaseSetting('tast_sc_facebook_connected', 'false');
-        }
-      } else if (platform === 'tiktok') {
-        setScTikTokConnected(false);
-        localStorage.setItem('tast_sc_tiktok_connected', 'false');
-        if (isSupabaseConfigured) {
-          await saveSupabaseSetting('tast_sc_tiktok_connected', 'false');
-        }
-      }
-
-      if (onAddLog) {
-        onAddLog(language === 'ca'
-          ? `🔌 Canal ${platform.toUpperCase()} desconnectat.`
-          : `🔌 Canal ${platform.toUpperCase()} desconectado.`
-        );
       }
     } catch (err) {
-      console.error("Error disconnecting social channel from Supabase:", err);
+      console.warn("Could not load social status:", err);
     }
   };
 
-  // Publish interactive Social post and sync to NotificationFeed!
-  const handlePublishSocialPost = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!socialPostText.trim()) return;
-
-    // Check if the platform is connected first
-    const isConn = 
-      socialPostPlatform === 'instagram' ? scInstagramConnected :
-      socialPostPlatform === 'facebook' ? scFacebookConnected : scTikTokConnected;
-
-    if (!isConn) {
-      alert(language === 'ca'
-        ? `Si us plau, connecta primer el canal d'${socialPostPlatform.toUpperCase()} per permetre la publicació i sincronització automàtica.`
-        : `Por favor, conecta primero el canal de ${socialPostPlatform.toUpperCase()} para permitir la publicación y sincronización automática.`
-      );
+  // Open official Meta OAuth flow in popup
+  const handleOpenConnect = async (platform: string) => {
+    if (platform === 'tiktok') {
+      alert(language === 'ca' ? "TikTok queda reservat per a una fase posterior." : "TikTok queda reservado para una fase posterior.");
       return;
     }
 
-    const currentHandle = 
-      socialPostPlatform === 'instagram' ? scInstagramHandle :
-      socialPostPlatform === 'facebook' ? scFacebookHandle : scTikTokHandle;
+    try {
+      setIsConnecting(true);
+      const { supabase } = await import('../supabaseClient');
+      const { data: { session } } = await supabase?.auth.getSession() || { data: { session: null } };
+      const token = session?.access_token || '';
 
-    const newPostId = 'not-pub-' + Math.floor(Math.random() * 100000);
-    const newPost: NoticiaXarxes = {
-      id: newPostId,
-      xarxa: socialPostPlatform,
-      usuari: currentHandle,
-      text: socialPostText,
-      imatgeUrl: mediaPresets[socialPostMediaPreset] || mediaPresets.caramels,
-      dataPublicacio: language === 'ca' ? "Fa uns instants" : "Hace unos instantes",
-      enllacUrl: `https://${socialPostPlatform}.com/${currentHandle.replace('@', '')}`,
-      likes: socialPostLikes
-    };
+      if (!token) {
+        alert(language === 'ca' ? "Sessió d'administrador requerida." : "Sesión de administrador requerida.");
+        setIsConnecting(false);
+        return;
+      }
 
-    const updatedNoticies = [newPost, ...noticies];
-    if (onSaveNoticies) {
-      onSaveNoticies(updatedNoticies);
-    } else {
-      localStorage.setItem('tast_noticies_2026', JSON.stringify(updatedNoticies));
+      const res = await fetch('/api/social?action=auth-url', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.authUrl) {
+        throw new Error(data.error || "No s'ha pogut generar l'enllaç d'autorització de Meta. Verifica que META_APP_ID estigui configurat.");
+      }
+
+      // Open official Meta OAuth popup
+      const popup = window.open(data.authUrl, 'meta_oauth_window', 'width=620,height=720,status=yes,scrollbars=yes');
+      if (!popup) {
+        window.location.href = data.authUrl;
+        return;
+      }
+
+      const handleOAuthMessage = (event: MessageEvent) => {
+        if (event.data?.type === 'META_AUTH_SUCCESS') {
+          loadSocialStatus();
+          window.removeEventListener('message', handleOAuthMessage);
+          if (onAddLog) {
+            onAddLog(language === 'ca'
+              ? `🔗 Canal Meta (${event.data.pageName || 'El Tast'}) vinculat oficialment!`
+              : `🔗 ¡Canal Meta (${event.data.pageName || 'El Tast'}) vinculado oficialmente!`
+            );
+          }
+        }
+      };
+      window.addEventListener('message', handleOAuthMessage);
+    } catch (err: any) {
+      alert(err?.message || "Error connectant amb Meta");
+    } finally {
+      setIsConnecting(false);
     }
+  };
 
-    setSocialPostText('');
-    setSocialPublishSuccess(true);
-    if (onAddLog) {
-      onAddLog(language === 'ca'
-        ? `📢 S'ha publicat un post a ${socialPostPlatform.toUpperCase()} i s'ha reflectit automàticament a la web!`
-        : `📢 ¡Se ha publicado un post en ${socialPostPlatform.toUpperCase()} y se ha reflejado automáticamente en la web!`
+  // Disconnect social channel via serverless endpoint
+  const handleDisconnectSocial = async (platform: string) => {
+    if (!confirm(language === 'ca' ? `Estàs segur de desvincular el compte oficial de Meta (${platform.toUpperCase()})?` : `¿Estás seguro de desvincular la cuenta oficial de Meta (${platform.toUpperCase()})?`)) {
+      return;
+    }
+    try {
+      const { supabase } = await import('../supabaseClient');
+      const { data: { session } } = await supabase?.auth.getSession() || { data: { session: null } };
+      const token = session?.access_token || '';
+
+      const res = await fetch('/api/social?action=disconnect', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (res.ok) {
+        setScInstagramConnected(false);
+        setScFacebookConnected(false);
+        loadSocialStatus();
+        if (onAddLog) {
+          onAddLog(language === 'ca'
+            ? `🔌 Canal de Meta desvinculat correctament.`
+            : `🔌 Canal de Meta desvinculado correctamente.`
+          );
+        }
+      }
+    } catch (err) {
+      console.error("Error disconnecting social channel:", err);
+    }
+  };
+
+  // Manual immediate synchronization of Meta posts
+  const handleSyncMetaNow = async () => {
+    setIsSyncingMeta(true);
+    try {
+      const { supabase } = await import('../supabaseClient');
+      const { data: { session } } = await supabase?.auth.getSession() || { data: { session: null } };
+      const token = session?.access_token || '';
+
+      const res = await fetch('/api/social?action=sync', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Error en sincronitzar publicacions");
+      }
+
+      // Refresh feed
+      const feedRes = await fetch('/api/social?action=feed');
+      if (feedRes.ok) {
+        const feedData = await feedRes.json();
+        if (feedData && Array.isArray(feedData.noticies)) {
+          if (onSaveNoticies) {
+            onSaveNoticies(feedData.noticies);
+          } else {
+            localStorage.setItem('tast_noticies_2026', JSON.stringify(feedData.noticies));
+          }
+        }
+      }
+
+      loadSocialStatus();
+
+      alert(language === 'ca'
+        ? `✓ S'han sincronitzat ${data.count || 0} publicacions reals de Meta (${data.instagramCount || 0} d'Instagram i ${data.facebookCount || 0} de Facebook).`
+        : `✓ Se han sincronizado ${data.count || 0} publicaciones reales de Meta (${data.instagramCount || 0} de Instagram y ${data.facebookCount || 0} de Facebook).`
       );
-    }
 
-    setTimeout(() => setSocialPublishSuccess(false), 4000);
+      if (onAddLog) {
+        onAddLog(language === 'ca'
+          ? `🔄 Sincronització de Meta completada: ${data.count || 0} posts importats.`
+          : `🔄 Sincronización de Meta completada: ${data.count || 0} posts importados.`
+        );
+      }
+    } catch (err: any) {
+      alert(err?.message || "Error sincronitzant publicacions");
+    } finally {
+      setIsSyncingMeta(false);
+    }
   };
 
   const handleSubmitManual = (e: React.FormEvent) => {
@@ -2274,20 +2275,39 @@ export default function AdminDashboard({
 
       {activePanelTab === 'xarxes' && (
         <div className="bg-white rounded-3xl border border-zinc-200 shadow-md p-6 sm:p-8 space-y-8 animate-fade-in" id="panel-view-xarxes">
-          <div className="flex items-start gap-4 pb-4 border-b border-zinc-100">
-            <div className="p-3 bg-fuchsia-50 text-[#ff0090] rounded-2xl">
-              <Share2 size={24} />
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-zinc-100">
+            <div className="flex items-start gap-4">
+              <div className="p-3 bg-fuchsia-50 text-[#ff0090] rounded-2xl">
+                <Share2 size={24} />
+              </div>
+              <div>
+                <h3 className="font-sans font-black text-lg text-zinc-900 uppercase tracking-tight">
+                  {language === 'ca' ? "SINCRO DE COMPTES SOCIALS" : "SINCRO DE CUENTAS SOCIALES"}
+                </h3>
+                <p className="text-xs text-zinc-500">
+                  {language === 'ca'
+                    ? "Vincula oficialment els comptes de Meta (Instagram & Facebook) d'El Tast per mostrar automàticament les novetats reals al canal d'avisos del qüestionari."
+                    : "Vincula oficialmente las cuentas de Meta (Instagram y Facebook) de El Tast para mostrar automáticamente las novedades reales en el canal de avisos del cuestionario."}
+                </p>
+                {metaLastSync && (
+                  <p className="text-[10px] text-zinc-400 font-mono mt-1">
+                    {language === 'ca' ? `Darrera sincronització: ${metaLastSync}` : `Última sincronización: ${metaLastSync}`}
+                  </p>
+                )}
+              </div>
             </div>
-            <div>
-              <h3 className="font-sans font-black text-lg text-zinc-900 uppercase tracking-tight">
-                {language === 'ca' ? "SINCRO DE COMPTES SOCIALS" : "SINCRO DE CUENTAS SOCIALES"}
-              </h3>
-              <p className="text-xs text-zinc-500">
-                {language === 'ca'
-                  ? "Vincula els comptes d'Instagram, Facebook o TikTok de l'associació El Tast. Quan publiquis posts a les teves xarxes socials, aquests es reflectiran automàticament a la pàgina de benvinguda de l'app."
-                  : "Vincula las cuentas de Instagram, Facebook o TikTok de la asociación El Tast. Cuando publiques posts en tus redes sociales, estos se reflejarán automáticamente en la página de bienvenida de la app."}
-              </p>
-            </div>
+
+            <button
+              type="button"
+              onClick={handleSyncMetaNow}
+              disabled={isSyncingMeta}
+              className="inline-flex items-center justify-center gap-2 bg-[#ff0090] hover:bg-[#d90077] text-white px-4 py-2.5 rounded-xl font-bold text-xs uppercase tracking-wider transition shadow-sm cursor-pointer shrink-0 disabled:opacity-50"
+            >
+              <RefreshCw size={14} className={isSyncingMeta ? "animate-spin" : ""} />
+              {isSyncingMeta 
+                ? (language === 'ca' ? "Sincronitzant..." : "Sincronizando...") 
+                : (language === 'ca' ? "Sincronitzar Ara" : "Sincronizar Ahora")}
+            </button>
           </div>
 
           {/* Connected Channels Grid */}
@@ -2375,145 +2395,79 @@ export default function AdminDashboard({
               </div>
             </div>
 
-            {/* TikTok integrated card */}
-            <div className={`p-5 rounded-3xl border transition-all space-y-4 ${
-              scTikTokConnected 
-                ? 'bg-zinc-100 border-zinc-300 shadow-md' 
-                : 'bg-zinc-50 border-zinc-200'
-            }`}>
+            {/* TikTok integrated card (Phase 2 - Reserved) */}
+            <div className="p-5 rounded-3xl border transition-all space-y-4 bg-zinc-50/70 border-zinc-200/80 opacity-80">
               <div className="flex justify-between items-start">
-                <span className="p-2.5 bg-black text-white rounded-xl flex items-center justify-center font-bold text-[9px] uppercase tracking-wider leading-none">
+                <span className="p-2.5 bg-zinc-800 text-white rounded-xl flex items-center justify-center font-bold text-[9px] uppercase tracking-wider leading-none">
                   TikTok
                 </span>
-                {scTikTokConnected ? (
-                  <span className="text-[9px] bg-emerald-500/20 text-emerald-600 font-bold px-2 py-0.5 rounded uppercase font-mono tracking-wider">ACTIU</span>
-                ) : (
-                  <span className="text-[9px] bg-zinc-200 text-zinc-500 font-bold px-2 py-0.5 rounded uppercase font-mono tracking-wider">DESCONNECTAT</span>
-                )}
+                <span className="text-[9px] bg-amber-500/10 text-amber-700 font-bold px-2 py-0.5 rounded uppercase font-mono tracking-wider">
+                  {language === 'ca' ? "FASE POSTERIOR" : "FASE POSTERIOR"}
+                </span>
               </div>
               <div>
-                <h4 className="font-bold text-zinc-900 font-sans text-xs">TikTok Embed Creator</h4>
-                <p className="text-[10px] text-zinc-500 font-mono mt-0.5">{scTikTokConnected ? scTikTokHandle : "@eltast_vng"}</p>
+                <h4 className="font-bold text-zinc-800 font-sans text-xs">TikTok Embed Creator</h4>
+                <p className="text-[10px] text-zinc-400 font-mono mt-0.5">@eltast_vng</p>
               </div>
               <div className="pt-2">
-                {scTikTokConnected ? (
-                  <button 
-                    type="button"
-                    onClick={() => handleDisconnectSocial('tiktok')}
-                    className="w-full bg-zinc-100 hover:bg-zinc-200 text-zinc-650 text-[10px] font-bold py-2.5 px-3 rounded-xl transition uppercase tracking-wider cursor-pointer"
-                  >
-                    {language === 'ca' ? "Desvincular" : "Desvincular"}
-                  </button>
-                ) : (
-                  <button 
-                    type="button"
-                    onClick={() => handleOpenConnect('tiktok')}
-                    className="w-full bg-[#010101] hover:bg-black text-white text-[10px] font-bold py-2.5 px-3 rounded-xl transition uppercase tracking-wider cursor-pointer"
-                  >
-                    {language === 'ca' ? "Vincular Compte" : "Vincular Cuenta"}
-                  </button>
-                )}
+                <div className="w-full bg-zinc-100 text-zinc-400 text-[10px] font-bold py-2.5 px-3 rounded-xl uppercase tracking-wider text-center font-mono">
+                  {language === 'ca' ? "Reservat per a la Fase 2" : "Reservado para la Fase 2"}
+                </div>
               </div>
             </div>
 
           </div>
 
-          {/* Interactive simulator: Publicar un post i sincronització automàtica! */}
-          <div className="border border-zinc-200 rounded-3xl p-6 bg-zinc-50 space-y-6">
+          {/* Real-time official Meta architecture & sync information */}
+          <div className="border border-zinc-200 rounded-3xl p-6 bg-zinc-50 space-y-4">
             <div className="pb-3 border-b border-zinc-200/60 flex items-center gap-2">
-              <Sparkles size={16} className="text-fuchsia-600 animate-pulse" />
+              <Sparkles size={16} className="text-fuchsia-600" />
               <div>
                 <h4 className="font-sans font-black text-xs text-zinc-900 uppercase tracking-widest">
-                  {language === 'ca' ? "PUBLICADOR I SIMULADOR DE FEED AUTOMÀTIC" : "PUBLICADOR Y SIMULADOR DE FEED AUTOMÁTICO"}
+                  {language === 'ca' ? "SISTEMA DE SINCRONITZACIÓ OFICIAL META" : "SISTEMA DE SINCRONIZACIÓN OFICIAL META"}
                 </h4>
                 <p className="text-[10px] text-zinc-500 mt-0.5">
                   {language === 'ca'
-                    ? "Quan publiqui un post a les xarxes socials de l'entitat, el webhook de sincronització automàtica l'importarà i el llistará de forma immediata."
-                    : "Cuando publique un post en las redes sociales de la entidad, el webhook de sincronización automática lo importará y lo listará de forma inmediata."}
+                    ? "Connexió oficial de només lectura mitjançant Meta Graph API v19.0 per nodrir el canal d'avisos públic sense costos afegits (0 €)."
+                    : "Conexión oficial de solo lectura mediante Meta Graph API v19.0 para nutrir el canal de avisos público sin costes añadidos (0 €)."}
                 </p>
               </div>
             </div>
 
-            <form onSubmit={handlePublishSocialPost} className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                
-                {/* Platform select */}
-                <div className="space-y-1">
-                  <label className="block text-[10px] font-bold text-zinc-400 uppercase font-mono">{language === 'ca' ? "Xarxa d'Origen de la Publicació" : "Red de Origen de la Publicación"}</label>
-                  <select
-                    value={socialPostPlatform}
-                    onChange={(e) => setSocialPostPlatform(e.target.value as any)}
-                    className="w-full bg-white border border-zinc-200 focus:border-fuchsia-500 rounded-2xl px-3.5 py-2.5 text-xs text-zinc-800 focus:outline-none transition cursor-pointer"
-                  >
-                    <option value="instagram">Instagram {scInstagramConnected ? " (✓ Connectat)" : (language === 'ca' ? " (⚠️ Requerix Connexió)" : " (⚠️ Requiere Conexión)")}</option>
-                    <option value="facebook">Facebook {scFacebookConnected ? " (✓ Connectat)" : (language === 'ca' ? " (⚠️ Requerix Connexió)" : " (⚠️ Requiere Conexión)")}</option>
-                    <option value="tiktok">TikTok {scTikTokConnected ? " (✓ Connectat)" : (language === 'ca' ? " (⚠️ Requerix Connexió)" : " (⚠️ Requiere Conexión)")}</option>
-                  </select>
-                </div>
-
-                {/* Preset image selector */}
-                <div className="space-y-1">
-                  <label className="block text-[10px] font-bold text-zinc-400 uppercase font-mono">{language === 'ca' ? "Imatge temàtica adjunta" : "Imagen temática adjunta"}</label>
-                  <select
-                    value={socialPostMediaPreset}
-                    onChange={(e) => setSocialPostMediaPreset(e.target.value)}
-                    className="w-full bg-white border border-zinc-200 focus:border-fuchsia-500 rounded-2xl px-3.5 py-2.5 text-xs text-zinc-850 focus:outline-none transition cursor-pointer"
-                  >
-                    <option value="caramels">{language === 'ca' ? "🍬 Caramels i dolços de Vilanova" : "🍬 Caramelos y dulces de Vilanova"}</option>
-                    <option value="armilles">{language === 'ca' ? `🎀 Armilles de Comparsa ${activeYear}` : `🎀 Chalecos de Comparsa ${activeYear}`}</option>
-                    <option value="placa">{language === 'ca' ? "💃 Salt de Comparsa a la Plaça" : "💃 Salto de Comparsa en la Plaza"}</option>
-                    <option value="platja">{language === 'ca' ? "⛱️ Platja de Ribes Roges" : "⛱️ Playa de Ribes Roges"}</option>
-                  </select>
-                </div>
-
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-[11px] text-zinc-600">
+              <div className="bg-white p-3.5 rounded-2xl border border-zinc-200 space-y-1">
+                <span className="font-bold text-zinc-900 font-mono text-[10px] uppercase flex items-center gap-1">
+                  🔒 {language === 'ca' ? "Seguretat i Criptografia" : "Seguridad y Criptografía"}
+                </span>
+                <p className="text-[10px] text-zinc-500 leading-relaxed">
+                  {language === 'ca'
+                    ? "Els tokens d'accés oficials es desen xifrats amb AES-256-GCM a la base de dades privada de Supabase i mai s'exposen al navegador ni a variables públiques."
+                    : "Los tokens de acceso oficiales se guardan cifrados con AES-256-GCM en la base de datos privada de Supabase y nunca se exponen al navegador ni a variables públicas."}
+                </p>
               </div>
 
-              {/* Text Area post */}
-              <div className="space-y-1">
-                <label className="block text-[10px] font-bold text-zinc-400 uppercase font-mono">{language === 'ca' ? "Contingut / Text del Post" : "Contenido / Texto del Post"}</label>
-                <textarea
-                  rows={3}
-                  value={socialPostText}
-                  onChange={(e) => setSocialPostText(e.target.value)}
-                  placeholder={language === 'ca' ? "Escriviu el cos de la publicació..." : "Escribe el cuerpo de la publicación..."}
-                  className="w-full bg-white border border-zinc-250 focus:border-fuchsia-500 rounded-2xl p-4 text-xs focus:outline-none text-zinc-800 transition placeholder-zinc-400"
-                />
+              <div className="bg-white p-3.5 rounded-2xl border border-zinc-200 space-y-1">
+                <span className="font-bold text-zinc-900 font-mono text-[10px] uppercase flex items-center gap-1">
+                  ⚡ {language === 'ca' ? "Refresc Automàtic (Caché 60m)" : "Refresco Automático (Caché 60m)"}
+                </span>
+                <p className="text-[10px] text-zinc-500 leading-relaxed">
+                  {language === 'ca'
+                    ? "El canal d'avisos del qüestionari s'actualitza automàticament cada hora en segon pla quan rep visites, respectant estrictament els límits gratuïts de Meta i Vercel."
+                    : "El canal de avisos del cuestionario se actualiza automáticamente cada hora en segundo plano al recibir visitas, respetando estrictamente los límites gratuitos de Meta y Vercel."}
+                </p>
               </div>
 
-              {/* Action row */}
-              <div className="flex justify-between items-center flex-wrap gap-2 pt-2 border-t border-zinc-150">
-                <div className="flex gap-2 items-center">
-                  <span className="text-[10px] text-zinc-450 font-mono">{language === 'ca' ? "Simular Likes: " : "Simular Likes: "}</span>
-                  <input
-                    type="number"
-                    value={socialPostLikes}
-                    onChange={(e) => setSocialPostLikes(Number(e.target.value) || 0)}
-                    className="w-16 bg-white border border-zinc-200 rounded px-1 text-[10px] text-zinc-805 font-mono text-center"
-                  />
-                </div>
-                <button
-                  type="submit"
-                  className="bg-zinc-950 hover:bg-black text-white font-bold text-xs px-5 py-3 rounded-2xl transition flex items-center gap-1.5 shadow cursor-pointer"
-                >
-                  <Send size={12} className="text-[#ff0090]" />
-                  {language === 'ca' ? "Simular alta de post i sincronització" : "Simular alta de post y sincronización"}
-                </button>
+              <div className="bg-white p-3.5 rounded-2xl border border-zinc-200 space-y-1">
+                <span className="font-bold text-zinc-900 font-mono text-[10px] uppercase flex items-center gap-1">
+                  📢 {language === 'ca' ? "Preservació d'Avisos Manuals" : "Preservación de Avisos Manuales"}
+                </span>
+                <p className="text-[10px] text-zinc-500 leading-relaxed">
+                  {language === 'ca'
+                    ? "Els avisos i comunicats introduïts manualment des de Secretaria o el tauler es mantenen intactes i s'ordenen cronològicament amb els posts reals de les xarxes."
+                    : "Los avisos y comunicados introducidos manualmente desde Secretaría o el panel se mantienen intactos y se ordenan cronológicamente con los posts reales de las redes."}
+                </p>
               </div>
-            </form>
-
-            {socialPublishSuccess && (
-              <div className="bg-emerald-50 border border-emerald-250 text-emerald-800 text-xs p-4 rounded-2xl flex items-center gap-3">
-                <CheckCircle size={20} className="text-emerald-600 shrink-0" />
-                <div>
-                  <p className="font-bold">✓ Reflectit Correctament en Directe!</p>
-                  <p className="text-[10px] text-zinc-500 leading-normal">
-                    {language === 'ca'
-                      ? "Hem sincronitzat les dades de l'API. El post s'ha registrat i ja està llistat en el caneló públic de notícies de l'aplicació en temps real!"
-                      : "Hemos sincronizado los datos de la API. El post se ha registrado y ya está listado en el canal público de noticias de la aplicación en tiempo real!"}
-                  </p>
-                </div>
-              </div>
-            )}
+            </div>
           </div>
 
           {/* List of currently synced posts here */}
@@ -3174,111 +3128,6 @@ export default function AdminDashboard({
             onUserCountChange={(count) => setStaffCount(count)}
             onAddLog={onAddLog}
           />
-        </div>
-      )}
-
-      {/* Social Network Connection Modal */}
-      {showConnectModal && (
-        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl border border-zinc-200 shadow-2xl max-w-sm w-full overflow-hidden p-6 space-y-6 animate-in fade-in zoom-in-95 duration-150 font-sans">
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-3">
-                <span className={`p-3 text-white rounded-2xl ${
-                  showConnectModal === 'instagram' ? 'bg-gradient-to-tr from-yellow-500 via-[#e1306c] to-fuchsia-600' :
-                  showConnectModal === 'facebook' ? 'bg-blue-600' : 'bg-black'
-                }`}>
-                  <Globe size={18} />
-                </span>
-                <div>
-                  <h3 className="font-sans font-black text-sm text-zinc-900 uppercase tracking-tight">
-                    {language === 'ca' ? `Vincular ${showConnectModal.toUpperCase()}` : `Vincular ${showConnectModal.toUpperCase()}`}
-                  </h3>
-                  <p className="text-[9px] text-zinc-500 font-mono font-bold uppercase tracking-wider">
-                    {language === 'ca' ? "Sincronització de canal" : "Sincronización de canal"}
-                  </p>
-                </div>
-              </div>
-              <button 
-                type="button"
-                onClick={() => setShowConnectModal(null)}
-                className="text-zinc-450 hover:text-zinc-600 p-1 cursor-pointer transition-colors"
-              >
-                <XCircle size={18} />
-              </button>
-            </div>
-
-            <div className="bg-zinc-50 border border-zinc-150 p-3.5 rounded-2.5xl text-[10px] text-zinc-650 leading-relaxed">
-              {language === 'ca' ? (
-                <span>
-                  Connecta el compte d'<strong>El Tast Vilanova</strong> amb la plataforma per poder llegir, publicar i auto-llistar contingut de forma centralitzada.
-                </span>
-              ) : (
-                <span>
-                  Conecta la cuenta de <strong>El Tast Vilanova</strong> con la plataforma para poder leer, publicar y auto-listar contenido de forma centralizada.
-                </span>
-              )}
-            </div>
-
-            <form onSubmit={handleConfirmConnectSocial} className="space-y-4">
-              <div className="space-y-1">
-                <label className="block text-[9px] font-bold text-zinc-400 uppercase font-mono">
-                  {language === 'ca' ? "Nom d'Usuari / Handle" : "Nombre de Usuario / Handle"}
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-400 font-mono text-xs">@</span>
-                  <input
-                    type="text"
-                    required
-                    value={connectUsername}
-                    onChange={(e) => setConnectUsername(e.target.value)}
-                    placeholder="eltastvng"
-                    className="w-full bg-zinc-50 text-zinc-900 border border-zinc-200 focus:border-[#ff0090] focus:bg-white rounded-xl pl-8 pr-3.5 py-2.5 text-xs focus:outline-none transition-all font-mono"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <label className="block text-[9px] font-bold text-zinc-400 uppercase font-mono">
-                  {language === 'ca' ? "Contrasenya o Token d'Accés" : "Contraseña o Token de Acceso"}
-                </label>
-                <input
-                  type="password"
-                  required
-                  value={connectPassword}
-                  onChange={(e) => setConnectPassword(e.target.value)}
-                  placeholder="••••••••••••••••"
-                  className="w-full bg-zinc-50 text-zinc-900 border border-zinc-200 focus:border-[#ff0090] focus:bg-white rounded-xl px-3.5 py-2.5 text-xs focus:outline-none transition-all font-mono"
-                />
-              </div>
-
-              <div className="flex gap-2.5 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowConnectModal(null)}
-                  className="flex-1 py-2.5 px-4 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold text-xs rounded-xl transition cursor-pointer"
-                >
-                  {language === 'ca' ? "Cancel·lar" : "Cancelar"}
-                </button>
-                <button
-                  type="submit"
-                  disabled={isConnecting}
-                  className={`flex-1 py-2.5 px-4 font-bold text-xs rounded-xl transition text-white flex items-center justify-center gap-1.5 cursor-pointer ${
-                    showConnectModal === 'instagram' ? 'bg-gradient-to-tr from-yellow-500 via-[#e1306c] to-fuchsia-600 hover:opacity-90' :
-                    showConnectModal === 'facebook' ? 'bg-blue-600 hover:bg-blue-700' : 'bg-black hover:bg-zinc-900'
-                  }`}
-                >
-                  {isConnecting ? (
-                    <>
-                      <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      <span>{language === 'ca' ? "Vinculant..." : "Vinculando..."}</span>
-                    </>
-                  ) : (
-                    <span>{language === 'ca' ? "Vincular" : "Vincular"}</span>
-                  )}
-                </button>
-              </div>
-            </form>
-          </div>
         </div>
       )}
     </div>
