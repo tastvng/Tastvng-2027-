@@ -571,7 +571,7 @@ export default function AdminDashboard({
         return;
       }
 
-      const res = await fetch('/api/social?action=auth-url', {
+      const res = await fetch(`/api/social?action=auth-url&platform=${encodeURIComponent(platform)}`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -579,7 +579,7 @@ export default function AdminDashboard({
 
       const data = await res.json();
       if (!res.ok || !data.authUrl) {
-        throw new Error(data.error || "No s'ha pogut generar l'enllaç d'autorització de Meta. Verifica que META_APP_ID estigui configurat.");
+        throw new Error(data.error || "No s'ha pogut generar l'enllaç d'autorització oficial.");
       }
 
       // Open official Meta OAuth popup
@@ -593,17 +593,20 @@ export default function AdminDashboard({
         if (event.data?.type === 'META_AUTH_SUCCESS') {
           loadSocialStatus();
           window.removeEventListener('message', handleOAuthMessage);
+          const channelName = event.data.platform === 'instagram'
+            ? (event.data.username ? `@${event.data.username}` : 'Instagram')
+            : (event.data.pageName || 'Facebook');
           if (onAddLog) {
             onAddLog(language === 'ca'
-              ? `🔗 Canal Meta (${event.data.pageName || 'El Tast'}) vinculat oficialment!`
-              : `🔗 ¡Canal Meta (${event.data.pageName || 'El Tast'}) vinculado oficialmente!`
+              ? `🔗 Canal oficial (${channelName}) vinculat correctament!`
+              : `🔗 ¡Canal oficial (${channelName}) vinculado correctamente!`
             );
           }
         }
       };
       window.addEventListener('message', handleOAuthMessage);
     } catch (err: any) {
-      alert(err?.message || "Error connectant amb Meta");
+      alert(err?.message || "Error connectant amb el servei oficial");
     } finally {
       setIsConnecting(false);
     }
@@ -611,7 +614,8 @@ export default function AdminDashboard({
 
   // Disconnect social channel via serverless endpoint
   const handleDisconnectSocial = async (platform: string) => {
-    if (!confirm(language === 'ca' ? `Estàs segur de desvincular el compte oficial de Meta (${platform.toUpperCase()})?` : `¿Estás seguro de desvincular la cuenta oficial de Meta (${platform.toUpperCase()})?`)) {
+    const channelLabel = platform === 'instagram' ? 'Instagram' : 'Facebook';
+    if (!confirm(language === 'ca' ? `Estàs segur de desvincular el compte oficial de ${channelLabel}?` : `¿Estás seguro de desvincular la cuenta oficial de ${channelLabel}?`)) {
       return;
     }
     try {
@@ -619,7 +623,7 @@ export default function AdminDashboard({
       const { data: { session } } = await supabase?.auth.getSession() || { data: { session: null } };
       const token = session?.access_token || '';
 
-      const res = await fetch('/api/social?action=disconnect', {
+      const res = await fetch(`/api/social?action=disconnect&platform=${encodeURIComponent(platform)}`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -627,13 +631,13 @@ export default function AdminDashboard({
       });
 
       if (res.ok) {
-        setScInstagramConnected(false);
-        setScFacebookConnected(false);
+        if (platform === 'instagram') setScInstagramConnected(false);
+        if (platform === 'facebook') setScFacebookConnected(false);
         loadSocialStatus();
         if (onAddLog) {
           onAddLog(language === 'ca'
-            ? `🔌 Canal de Meta desvinculat correctament.`
-            : `🔌 Canal de Meta desvinculado correctamente.`
+            ? `🔌 Canal oficial de ${channelLabel} desvinculat.`
+            : `🔌 Canal oficial de ${channelLabel} desvinculado.`
           );
         }
       }

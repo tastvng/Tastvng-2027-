@@ -93,14 +93,33 @@ function getSupabaseAdmin() {
 }
 
 // -------------------------------------------------------------
-// Stored Token Vault Structure
+// Stored Token Vault Structure (Independent FB & IG branches)
 // -------------------------------------------------------------
 interface MetaTokenVault {
-  pageAccessToken: string;
-  pageId: string;
-  pageName: string;
+  // Facebook Branch
+  facebook?: {
+    pageAccessToken: string;
+    pageId: string;
+    pageName: string;
+    userAccessToken?: string;
+    expiresAt?: number;
+    updatedAt: string;
+  };
+  // Instagram Branch
+  instagram?: {
+    accessToken: string;
+    userId: string;
+    username: string;
+    expiresAt?: number;
+    updatedAt: string;
+  };
+  // Backwards compatibility properties
+  pageAccessToken?: string;
+  pageId?: string;
+  pageName?: string;
   igId?: string;
   igUsername?: string;
+  igAccessToken?: string;
   userAccessToken?: string;
   expiresAt?: number;
   updatedAt: string;
@@ -111,7 +130,6 @@ async function getVault(): Promise<MetaTokenVault | null> {
   if (!supabase) return null;
 
   try {
-    // Read from private settings table
     const { data, error } = await supabase
       .from("settings")
       .select("value")
@@ -212,7 +230,7 @@ export default async function socialHandler(req: ExtendedRequest, res: ExtendedR
   };
 
   // ===========================================================
-  // 1. GET AUTH URL (Admin only)
+  // 1. GET AUTH URL (Admin only - Separated FB & IG)
   // ===========================================================
   if (action === "auth-url") {
     const isAdmin = await verifyAdmin(req);
@@ -220,6 +238,43 @@ export default async function socialHandler(req: ExtendedRequest, res: ExtendedR
       return sendJson(403, { error: "Accés no autoritzat. Requerix rol Administrador." });
     }
 
+    const host = req.headers["x-forwarded-host"] || req.headers.host || "tastvng-2027.vercel.app";
+    const proto = req.headers["x-forwarded-proto"] || "https";
+    const defaultRedirect = `${proto}://${host}/api/social?action=callback`;
+    const redirectUri = process.env.META_REDIRECT_URI || defaultRedirect;
+
+    const platform = (urlObj.searchParams.get("platform") || (req.query?.platform as string) || "facebook").toLowerCase();
+
+    // ---------------------------------------------
+    // INSTAGRAM BUSINESS LOGIN
+    // ---------------------------------------------
+    if (platform === "instagram") {
+      const igAppId = process.env.INSTAGRAM_APP_ID || process.env.META_APP_ID;
+      if (!igAppId) {
+        return sendJson(500, {
+          error: "INSTAGRAM_APP_ID (o META_APP_ID) no està configurat a les variables d'entorn.",
+          configured: false
+        });
+      }
+
+      // Secure state prefixed with 'ig:'
+      const state = "ig:" + crypto.randomBytes(16).toString("hex");
+
+      // Official Instagram Business Login dialog
+      const authUrl = `https://www.instagram.com/oauth/authorize?client_id=${encodeURIComponent(igAppId)}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=instagram_business_basic&state=${encodeURIComponent(state)}`;
+
+      return sendJson(200, {
+        ok: true,
+        platform: "instagram",
+        authUrl,
+        redirectUri,
+        state
+      });
+    }
+
+    // ---------------------------------------------
+    // FACEBOOK LOGIN (Page Reading Scopes Only)
+    // ---------------------------------------------
     const appId = process.env.META_APP_ID;
     if (!appId) {
       return sendJson(500, {
@@ -228,26 +283,17 @@ export default async function socialHandler(req: ExtendedRequest, res: ExtendedR
       });
     }
 
-    const host = req.headers["x-forwarded-host"] || req.headers.host || "tastvng-2027.vercel.app";
-    const proto = req.headers["x-forwarded-proto"] || "https";
-    const defaultRedirect = `${proto}://${host}/api/social?action=callback`;
-    const redirectUri = process.env.META_REDIRECT_URI || defaultRedirect;
+    // Secure state prefixed with 'fb:'
+    const state = "fb:" + crypto.randomBytes(16).toString("hex");
 
-    // Secure random state
-    const state = crypto.randomBytes(16).toString("hex");
+    // Strictly Page reading scopes - NO Instagram scopes here to avoid use-case conflicts
+    const fbScopes = "pages_show_list,pages_read_engagement,pages_read_user_content";
 
-    // Scopes strictly necessary for Instagram & Facebook official reading
-    const scopes = [
-      "pages_show_list",
-      "pages_read_engagement",
-      "pages_read_user_content",
-      "instagram_business_basic"
-    ].join(",");
-
-    const authUrl = `https://www.facebook.com/v19.0/dialog/oauth?client_id=${encodeURIComponent(appId)}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${encodeURIComponent(state)}&scope=${encodeURIComponent(scopes)}&response_type=code`;
+    const authUrl = `https://www.facebook.com/v19.0/dialog/oauth?client_id=${encodeURIComponent(appId)}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${encodeURIComponent(state)}&scope=${encodeURIComponent(fbScopes)}&response_type=code`;
 
     return sendJson(200, {
       ok: true,
+      platform: "facebook",
       authUrl,
       redirectUri,
       state
@@ -255,10 +301,13 @@ export default async function socialHandler(req: ExtendedRequest, res: ExtendedR
   }
 
   // ===========================================================
-  // 2. OAUTH CALLBACK (From Meta redirect)
+  // 2. OAUTH CALLBACK (From Meta redirect - FB or IG)
   // ===========================================================
   if (action === "callback") {
-    const code = urlObj.searchParams.get("code");
+    const rawCode = urlObj.searchParams.get("code") || "";
+    // Instagram sometimes appends #_ to the redirect URI
+    const code = rawCode.replace(/#_$/, "");
+    const state = urlObj.searchParams.get("state") || "";
     const errorParam = urlObj.searchParams.get("error");
     const errorDesc = urlObj.searchParams.get("error_description");
 
@@ -268,9 +317,9 @@ export default async function socialHandler(req: ExtendedRequest, res: ExtendedR
       res.end(`
         <!DOCTYPE html>
         <html>
-        <head><title>Error d'autorització Meta</title></head>
+        <head><title>Error d'autorització</title></head>
         <body style="font-family:sans-serif; text-align:center; padding:40px; background:#121212; color:#fff;">
-          <h2 style="color:#ef4444;">Error en l'autorització amb Meta</h2>
+          <h2 style="color:#ef4444;">Error en l'autorització</h2>
           <p style="color:#a1a1aa;">${errorDesc || errorParam || "Codi d'autorització no rebut"}</p>
           <button onclick="window.close()" style="background:#ff0090; color:#fff; border:none; padding:10px 20px; border-radius:8px; cursor:pointer; font-weight:bold;">Tancar finestra</button>
         </body>
@@ -279,139 +328,311 @@ export default async function socialHandler(req: ExtendedRequest, res: ExtendedR
       return;
     }
 
-    const appId = process.env.META_APP_ID;
-    const appSecret = process.env.META_APP_SECRET;
     const host = req.headers["x-forwarded-host"] || req.headers.host || "tastvng-2027.vercel.app";
     const proto = req.headers["x-forwarded-proto"] || "https";
     const defaultRedirect = `${proto}://${host}/api/social?action=callback`;
     const redirectUri = process.env.META_REDIRECT_URI || defaultRedirect;
 
-    if (!appId || !appSecret) {
+    // Secure discrimination by state prefix
+    const isFacebook = state.startsWith("fb:");
+    const isInstagram = state.startsWith("ig:");
+
+    if (!isFacebook && !isInstagram) {
       res.setHeader("Content-Type", "text/html; charset=utf-8");
-      res.writeHead(500);
-      res.end("<h3>Variables META_APP_ID o META_APP_SECRET no configurades</h3>");
-      return;
-    }
-
-    try {
-      // Step A: Exchange code for short-lived user token
-      const tokenUrl = `https://graph.facebook.com/v19.0/oauth/access_token?client_id=${encodeURIComponent(appId)}&client_secret=${encodeURIComponent(appSecret)}&redirect_uri=${encodeURIComponent(redirectUri)}&code=${encodeURIComponent(code)}`;
-      const tokenRes = await fetch(tokenUrl);
-      const tokenData = await tokenRes.json();
-
-      if (tokenData.error) {
-        throw new Error(tokenData.error.message || "Error canviant codi d'accés");
-      }
-
-      const shortLivedToken = tokenData.access_token;
-
-      // Step B: Exchange for long-lived user token (60 days)
-      const longLivedUrl = `https://graph.facebook.com/v19.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${encodeURIComponent(appId)}&client_secret=${encodeURIComponent(appSecret)}&fb_exchange_token=${encodeURIComponent(shortLivedToken)}`;
-      const longRes = await fetch(longLivedUrl);
-      const longData = await longRes.json();
-      const longLivedUserToken = longData.access_token || shortLivedToken;
-
-      // Step C: Discover Facebook Pages and Instagram Business Account
-      const accountsUrl = `https://graph.facebook.com/v19.0/me/accounts?fields=id,name,access_token,instagram_business_account{id,username}&access_token=${encodeURIComponent(longLivedUserToken)}`;
-      const accountsRes = await fetch(accountsUrl);
-      const accountsData = await accountsRes.json();
-
-      if (accountsData.error) {
-        throw new Error(accountsData.error.message || "Error obtenint pàgines de Facebook");
-      }
-
-      const pages = accountsData.data || [];
-      if (pages.length === 0) {
-        throw new Error("No s'ha trobat cap pàgina de Facebook gestionada pel compte.");
-      }
-
-      // Prioritize page named 'El Tast' or select first available
-      const tastPage = pages.find((p: any) => /tast/i.test(p.name)) || pages[0];
-      const pageAccessToken = tastPage.access_token;
-      const pageId = tastPage.id;
-      const pageName = tastPage.name;
-      const igId = tastPage.instagram_business_account?.id;
-      const igUsername = tastPage.instagram_business_account?.username;
-
-      // Save encrypted vault
-      const vault: MetaTokenVault = {
-        pageAccessToken,
-        pageId,
-        pageName,
-        igId,
-        igUsername,
-        userAccessToken: longLivedUserToken,
-        expiresAt: Date.now() + (60 * 24 * 60 * 60 * 1000), // 60 days
-        updatedAt: new Date().toISOString()
-      };
-
-      await saveVault(vault);
-
-      // Perform initial sync immediately
-      try {
-        await executeMetaSync(vault);
-      } catch (syncErr) {
-        console.warn("[api/social] Initial sync warning:", syncErr);
-      }
-
-      // Success HTML page that sends message to opener window
-      res.setHeader("Content-Type", "text/html; charset=utf-8");
-      res.writeHead(200);
+      res.writeHead(400);
       res.end(`
         <!DOCTYPE html>
         <html>
-        <head>
-          <meta charset="utf-8">
-          <title>Connexió Meta Completada</title>
-          <style>
-            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #09090b; color: #f4f4f5; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; text-align: center; }
-            .card { background: #18181b; border: 1px solid #27272a; border-radius: 24px; padding: 32px; max-width: 400px; box-shadow: 0 20px 40px rgba(0,0,0,0.5); }
-            h2 { color: #10b981; margin-top: 0; }
-            p { color: #a1a1aa; font-size: 14px; line-height: 1.5; }
-            .btn { background: #ff0090; color: #fff; border: none; padding: 12px 24px; border-radius: 12px; font-weight: bold; cursor: pointer; text-decoration: none; display: inline-block; margin-top: 16px; }
-          </style>
-        </head>
-        <body>
-          <div class="card">
-            <h2>✓ Connexió amb Meta correcta!</h2>
-            <p>S'ha vinculat la pàgina <strong>${pageName}</strong> ${igUsername ? `i el compte d'Instagram <strong>@${igUsername}</strong>` : ''}.</p>
-            <p>Ja pots tancar aquesta finestra i tornar al panell de control.</p>
-            <button class="btn" onclick="finish()">Finalitzar i Tancar</button>
-          </div>
-          <script>
-            function finish() {
-              if (window.opener) {
-                window.opener.postMessage({ type: 'META_AUTH_SUCCESS', pageName: '${pageName}', igUsername: '${igUsername || ''}' }, '*');
-              }
-              window.close();
-            }
-            setTimeout(finish, 2500);
-          </script>
-        </body>
-        </html>
-      `);
-      return;
-    } catch (err: any) {
-      console.error("[api/social] Callback exception:", err);
-      res.setHeader("Content-Type", "text/html; charset=utf-8");
-      res.writeHead(500);
-      res.end(`
-        <!DOCTYPE html>
-        <html>
-        <head><title>Error en la connexió Meta</title></head>
+        <head><title>Error d'Estat</title></head>
         <body style="font-family:sans-serif; text-align:center; padding:40px; background:#121212; color:#fff;">
-          <h2 style="color:#ef4444;">Error vinculant Meta</h2>
-          <p style="color:#a1a1aa;">${err?.message || "Error desconegut"}</p>
+          <h2 style="color:#ef4444;">Paràmetre d'estat invàlid</h2>
+          <p style="color:#a1a1aa;">No s'ha pogut verificar l'origen de la petició OAuth.</p>
           <button onclick="window.close()" style="background:#ff0090; color:#fff; border:none; padding:10px 20px; border-radius:8px; cursor:pointer; font-weight:bold;">Tancar</button>
         </body>
         </html>
       `);
       return;
     }
+
+    // ---------------------------------------------------------
+    // A. INSTAGRAM CALLBACK FLOW
+    // ---------------------------------------------------------
+    if (isInstagram) {
+      const igAppId = process.env.INSTAGRAM_APP_ID || process.env.META_APP_ID;
+      const igAppSecret = process.env.INSTAGRAM_APP_SECRET || process.env.META_APP_SECRET;
+
+      if (!igAppId || !igAppSecret) {
+        res.setHeader("Content-Type", "text/html; charset=utf-8");
+        res.writeHead(500);
+        res.end("<h3>Variables INSTAGRAM_APP_ID/META_APP_ID o INSTAGRAM_APP_SECRET/META_APP_SECRET no configurades</h3>");
+        return;
+      }
+
+      try {
+        // Step 1: Exchange code for short-lived token via POST
+        const tokenParams = new URLSearchParams();
+        tokenParams.append("client_id", igAppId);
+        tokenParams.append("client_secret", igAppSecret);
+        tokenParams.append("grant_type", "authorization_code");
+        tokenParams.append("redirect_uri", redirectUri);
+        tokenParams.append("code", code);
+
+        const tokenRes = await fetch("https://api.instagram.com/oauth/access_token", {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: tokenParams.toString()
+        });
+        const tokenData = await tokenRes.json();
+
+        if (tokenData.error_message || tokenData.error) {
+          throw new Error(tokenData.error_message || tokenData.error?.message || "Error canviant codi d'Instagram");
+        }
+
+        const shortLivedToken = tokenData.access_token;
+        const userId = String(tokenData.user_id || "");
+
+        // Step 2: Exchange for long-lived Instagram token (60 days)
+        const longLivedUrl = `https://graph.instagram.com/access_token?grant_type=ig_exchange_token&client_secret=${encodeURIComponent(igAppSecret)}&access_token=${encodeURIComponent(shortLivedToken)}`;
+        const longRes = await fetch(longLivedUrl);
+        const longData = await longRes.json();
+        const longLivedToken = longData.access_token || shortLivedToken;
+
+        // Step 3: Fetch Instagram username & details
+        let igUsername = "tastvng";
+        try {
+          const profileRes = await fetch(`https://graph.instagram.com/v19.0/me?fields=id,username,account_type&access_token=${encodeURIComponent(longLivedToken)}`);
+          const profileData = await profileRes.json();
+          if (profileData && profileData.username) {
+            igUsername = profileData.username;
+          }
+        } catch (pErr) {
+          console.warn("[api/social] Error fetching IG username:", pErr);
+        }
+
+        // Step 4: Update Vault preserving existing Facebook credentials
+        const existingVault: MetaTokenVault = (await getVault()) || {
+          updatedAt: new Date().toISOString()
+        };
+
+        existingVault.instagram = {
+          accessToken: longLivedToken,
+          userId: userId || existingVault.igId || "tastvng",
+          username: igUsername,
+          expiresAt: Date.now() + (60 * 24 * 60 * 60 * 1000),
+          updatedAt: new Date().toISOString()
+        };
+
+        // Update legacy flat props for backwards compatibility
+        existingVault.igAccessToken = longLivedToken;
+        existingVault.igId = userId || existingVault.igId;
+        existingVault.igUsername = igUsername;
+        existingVault.updatedAt = new Date().toISOString();
+
+        await saveVault(existingVault);
+
+        // Perform initial sync in background
+        try {
+          await executeMetaSync(existingVault);
+        } catch (syncErr) {
+          console.warn("[api/social] Initial IG sync warning:", syncErr);
+        }
+
+        // Return Success Page
+        res.setHeader("Content-Type", "text/html; charset=utf-8");
+        res.writeHead(200);
+        res.end(`
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="utf-8">
+            <title>Connexió Instagram Completada</title>
+            <style>
+              body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #09090b; color: #f4f4f5; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; text-align: center; }
+              .card { background: #18181b; border: 1px solid #27272a; border-radius: 24px; padding: 32px; max-width: 400px; box-shadow: 0 20px 40px rgba(0,0,0,0.5); }
+              h2 { color: #e1306c; margin-top: 0; }
+              p { color: #a1a1aa; font-size: 14px; line-height: 1.5; }
+              .btn { background: linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888); color: #fff; border: none; padding: 12px 24px; border-radius: 12px; font-weight: bold; cursor: pointer; text-decoration: none; display: inline-block; margin-top: 16px; }
+            </style>
+          </head>
+          <body>
+            <div class="card">
+              <h2>✓ Connexió amb Instagram correcta!</h2>
+              <p>S'ha vinculat oficialment el compte <strong>@${igUsername}</strong> per a la lectura del canal d'avisos.</p>
+              <p>Ja pots tancar aquesta finestra i tornar al panell de control.</p>
+              <button class="btn" onclick="finish()">Finalitzar i Tancar</button>
+            </div>
+            <script>
+              function finish() {
+                if (window.opener) {
+                  window.opener.postMessage({ type: 'META_AUTH_SUCCESS', platform: 'instagram', username: '${igUsername}' }, '*');
+                }
+                window.close();
+              }
+              setTimeout(finish, 2200);
+            </script>
+          </body>
+          </html>
+        `);
+        return;
+      } catch (err: any) {
+        console.error("[api/social] Instagram callback exception:", err);
+        res.setHeader("Content-Type", "text/html; charset=utf-8");
+        res.writeHead(500);
+        res.end(`
+          <!DOCTYPE html>
+          <html>
+          <head><title>Error Instagram</title></head>
+          <body style="font-family:sans-serif; text-align:center; padding:40px; background:#121212; color:#fff;">
+            <h2 style="color:#ef4444;">Error vinculant Instagram</h2>
+            <p style="color:#a1a1aa;">${err?.message || "Error desconegut"}</p>
+            <button onclick="window.close()" style="background:#ff0090; color:#fff; border:none; padding:10px 20px; border-radius:8px; cursor:pointer; font-weight:bold;">Tancar</button>
+          </body>
+          </html>
+        `);
+        return;
+      }
+    }
+
+    // ---------------------------------------------------------
+    // B. FACEBOOK CALLBACK FLOW
+    // ---------------------------------------------------------
+    if (isFacebook) {
+      const appId = process.env.META_APP_ID;
+      const appSecret = process.env.META_APP_SECRET;
+
+      if (!appId || !appSecret) {
+        res.setHeader("Content-Type", "text/html; charset=utf-8");
+        res.writeHead(500);
+        res.end("<h3>Variables META_APP_ID o META_APP_SECRET no configurades</h3>");
+        return;
+      }
+
+      try {
+        // Step 1: Exchange code for short-lived user token
+        const tokenUrl = `https://graph.facebook.com/v19.0/oauth/access_token?client_id=${encodeURIComponent(appId)}&client_secret=${encodeURIComponent(appSecret)}&redirect_uri=${encodeURIComponent(redirectUri)}&code=${encodeURIComponent(code)}`;
+        const tokenRes = await fetch(tokenUrl);
+        const tokenData = await tokenRes.json();
+
+        if (tokenData.error) {
+          throw new Error(tokenData.error.message || "Error canviant codi d'accés de Facebook");
+        }
+
+        const shortLivedToken = tokenData.access_token;
+
+        // Step 2: Exchange for long-lived user token (60 days)
+        const longLivedUrl = `https://graph.facebook.com/v19.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${encodeURIComponent(appId)}&client_secret=${encodeURIComponent(appSecret)}&fb_exchange_token=${encodeURIComponent(shortLivedToken)}`;
+        const longRes = await fetch(longLivedUrl);
+        const longData = await longRes.json();
+        const longLivedUserToken = longData.access_token || shortLivedToken;
+
+        // Step 3: Discover Facebook Pages
+        const accountsUrl = `https://graph.facebook.com/v19.0/me/accounts?fields=id,name,access_token&access_token=${encodeURIComponent(longLivedUserToken)}`;
+        const accountsRes = await fetch(accountsUrl);
+        const accountsData = await accountsRes.json();
+
+        if (accountsData.error) {
+          throw new Error(accountsData.error.message || "Error obtenint pàgines de Facebook");
+        }
+
+        const pages = accountsData.data || [];
+        if (pages.length === 0) {
+          throw new Error("No s'ha trobat cap pàgina de Facebook gestionada pel compte.");
+        }
+
+        // Prioritize page named 'El Tast' or select first available
+        const tastPage = pages.find((p: any) => /tast/i.test(p.name)) || pages[0];
+        const pageAccessToken = tastPage.access_token;
+        const pageId = tastPage.id;
+        const pageName = tastPage.name;
+
+        // Step 4: Update Vault preserving existing Instagram credentials
+        const existingVault: MetaTokenVault = (await getVault()) || {
+          updatedAt: new Date().toISOString()
+        };
+
+        existingVault.facebook = {
+          pageAccessToken,
+          pageId,
+          pageName,
+          userAccessToken: longLivedUserToken,
+          expiresAt: Date.now() + (60 * 24 * 60 * 60 * 1000),
+          updatedAt: new Date().toISOString()
+        };
+
+        // Update legacy flat props for backwards compatibility
+        existingVault.pageAccessToken = pageAccessToken;
+        existingVault.pageId = pageId;
+        existingVault.pageName = pageName;
+        existingVault.updatedAt = new Date().toISOString();
+
+        await saveVault(existingVault);
+
+        // Perform initial sync in background
+        try {
+          await executeMetaSync(existingVault);
+        } catch (syncErr) {
+          console.warn("[api/social] Initial FB sync warning:", syncErr);
+        }
+
+        // Return Success Page
+        res.setHeader("Content-Type", "text/html; charset=utf-8");
+        res.writeHead(200);
+        res.end(`
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="utf-8">
+            <title>Connexió Facebook Completada</title>
+            <style>
+              body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #09090b; color: #f4f4f5; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; text-align: center; }
+              .card { background: #18181b; border: 1px solid #27272a; border-radius: 24px; padding: 32px; max-width: 400px; box-shadow: 0 20px 40px rgba(0,0,0,0.5); }
+              h2 { color: #2563eb; margin-top: 0; }
+              p { color: #a1a1aa; font-size: 14px; line-height: 1.5; }
+              .btn { background: #2563eb; color: #fff; border: none; padding: 12px 24px; border-radius: 12px; font-weight: bold; cursor: pointer; text-decoration: none; display: inline-block; margin-top: 16px; }
+            </style>
+          </head>
+          <body>
+            <div class="card">
+              <h2>✓ Connexió amb Facebook correcta!</h2>
+              <p>S'ha vinculat la pàgina <strong>${pageName}</strong> per a la lectura d'avisos.</p>
+              <p>Ja pots tancar aquesta finestra i tornar al panell de control.</p>
+              <button class="btn" onclick="finish()">Finalitzar i Tancar</button>
+            </div>
+            <script>
+              function finish() {
+                if (window.opener) {
+                  window.opener.postMessage({ type: 'META_AUTH_SUCCESS', platform: 'facebook', pageName: '${pageName}' }, '*');
+                }
+                window.close();
+              }
+              setTimeout(finish, 2200);
+            </script>
+          </body>
+          </html>
+        `);
+        return;
+      } catch (err: any) {
+        console.error("[api/social] Facebook callback exception:", err);
+        res.setHeader("Content-Type", "text/html; charset=utf-8");
+        res.writeHead(500);
+        res.end(`
+          <!DOCTYPE html>
+          <html>
+          <head><title>Error Facebook</title></head>
+          <body style="font-family:sans-serif; text-align:center; padding:40px; background:#121212; color:#fff;">
+            <h2 style="color:#ef4444;">Error vinculant Facebook</h2>
+            <p style="color:#a1a1aa;">${err?.message || "Error desconegut"}</p>
+            <button onclick="window.close()" style="background:#ff0090; color:#fff; border:none; padding:10px 20px; border-radius:8px; cursor:pointer; font-weight:bold;">Tancar</button>
+          </body>
+          </html>
+        `);
+        return;
+      }
+    }
   }
 
   // ===========================================================
-  // 3. STATUS (Admin & Public check)
+  // 3. STATUS (Admin & Public check - Independent flags)
   // ===========================================================
   if (action === "status") {
     const vault = await getVault();
@@ -429,35 +650,27 @@ export default async function socialHandler(req: ExtendedRequest, res: ExtendedR
       }
     }
 
-    if (!vault || !vault.pageAccessToken) {
-      return sendJson(200, {
-        ok: true,
-        configured: !!process.env.META_APP_ID,
-        instagramConnected: false,
-        facebookConnected: false,
-        instagramHandle: "",
-        facebookHandle: "",
-        lastSync
-      });
-    }
+    const hasFbToken = !!(vault?.facebook?.pageAccessToken || vault?.pageAccessToken);
+    const hasIgToken = !!(vault?.instagram?.accessToken || vault?.igAccessToken || (vault?.pageAccessToken && vault?.igId));
 
-    const isExpired = vault.expiresAt ? Date.now() > vault.expiresAt : false;
+    const fbHandle = vault?.facebook?.pageName || vault?.pageName || "Tast vilanoví";
+    const igHandle = vault?.instagram?.username
+      ? `@${vault.instagram.username}`
+      : (vault?.igUsername ? `@${vault.igUsername}` : "@tastvng");
 
     return sendJson(200, {
       ok: true,
-      configured: true,
-      instagramConnected: !isExpired && !!vault.igId,
-      facebookConnected: !isExpired && !!vault.pageId,
-      instagramHandle: vault.igUsername ? `@${vault.igUsername}` : "@eltastvng",
-      facebookHandle: vault.pageName || "El Tast Vilanova",
-      expiresAt: vault.expiresAt,
-      isExpired,
+      configured: !!(process.env.META_APP_ID || process.env.INSTAGRAM_APP_ID),
+      facebookConnected: hasFbToken,
+      instagramConnected: hasIgToken,
+      facebookHandle: fbHandle,
+      instagramHandle: igHandle,
       lastSync
     });
   }
 
   // ===========================================================
-  // 4. DISCONNECT (Admin only)
+  // 4. DISCONNECT (Admin only - Platform specific or all)
   // ===========================================================
   if (action === "disconnect") {
     const isAdmin = await verifyAdmin(req);
@@ -465,11 +678,40 @@ export default async function socialHandler(req: ExtendedRequest, res: ExtendedR
       return sendJson(403, { error: "Accés no autoritzat." });
     }
 
-    await clearVault();
+    const platform = (urlObj.searchParams.get("platform") || (req.query?.platform as string) || "").toLowerCase();
+    const vault = await getVault();
+
+    if (vault) {
+      if (platform === "facebook") {
+        delete vault.facebook;
+        delete vault.pageAccessToken;
+        delete vault.pageId;
+        delete vault.pageName;
+        vault.updatedAt = new Date().toISOString();
+        if (vault.instagram?.accessToken || vault.igAccessToken) {
+          await saveVault(vault);
+        } else {
+          await clearVault();
+        }
+      } else if (platform === "instagram") {
+        delete vault.instagram;
+        delete vault.igAccessToken;
+        delete vault.igId;
+        delete vault.igUsername;
+        vault.updatedAt = new Date().toISOString();
+        if (vault.facebook?.pageAccessToken || vault.pageAccessToken) {
+          await saveVault(vault);
+        } else {
+          await clearVault();
+        }
+      } else {
+        await clearVault();
+      }
+    }
 
     return sendJson(200, {
       ok: true,
-      message: "Connexió amb Meta desvinculada correctament."
+      message: `Compte oficial ${platform ? platform.toUpperCase() : 'de Meta'} desvinculat correctament.`
     });
   }
 
@@ -483,10 +725,13 @@ export default async function socialHandler(req: ExtendedRequest, res: ExtendedR
     }
 
     const vault = await getVault();
-    if (!vault || !vault.pageAccessToken) {
+    const hasFbToken = !!(vault?.facebook?.pageAccessToken || vault?.pageAccessToken);
+    const hasIgToken = !!(vault?.instagram?.accessToken || vault?.igAccessToken || (vault?.pageAccessToken && vault?.igId));
+
+    if (!vault || (!hasFbToken && !hasIgToken)) {
       return sendJson(400, {
         ok: false,
-        error: "No hi ha cap compte de Meta connectat per sincronitzar."
+        error: "No hi ha cap compte de Facebook ni d'Instagram connectat per sincronitzar."
       });
     }
 
@@ -504,7 +749,7 @@ export default async function socialHandler(req: ExtendedRequest, res: ExtendedR
       console.error("[api/social] Sync error:", err);
       return sendJson(500, {
         ok: false,
-        error: err?.message || "Error sincronitzant publicacions de Meta"
+        error: err?.message || "Error sincronitzant publicacions"
       });
     }
   }
@@ -552,7 +797,10 @@ export default async function socialHandler(req: ExtendedRequest, res: ExtendedR
 
       if (isStale) {
         const vault = await getVault();
-        if (vault && vault.pageAccessToken) {
+        const hasFbToken = !!(vault?.facebook?.pageAccessToken || vault?.pageAccessToken);
+        const hasIgToken = !!(vault?.instagram?.accessToken || vault?.igAccessToken || (vault?.pageAccessToken && vault?.igId));
+
+        if (vault && (hasFbToken || hasIgToken)) {
           try {
             const syncResult = await executeMetaSync(vault);
             if (syncResult && Array.isArray(syncResult.noticies)) {
@@ -592,14 +840,18 @@ async function executeMetaSync(vault: MetaTokenVault): Promise<{
   noticies: any[];
 }> {
   const supabase = getSupabaseAdmin();
-  const token = vault.pageAccessToken;
   const newMetaPosts: any[] = [];
 
-  // A. Fetch Instagram Media if Instagram Business Account is linked
+  // ===========================================================
+  // A. FETCH INSTAGRAM MEDIA (Direct Instagram Graph API)
+  // ===========================================================
   let instagramCount = 0;
-  if (vault.igId) {
+  const igToken = vault.instagram?.accessToken || vault.igAccessToken;
+  const igUsername = vault.instagram?.username || vault.igUsername || "tastvng";
+
+  if (igToken) {
     try {
-      const igUrl = `https://graph.facebook.com/v19.0/${encodeURIComponent(vault.igId)}/media?fields=id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,like_count&limit=12&access_token=${encodeURIComponent(token)}`;
+      const igUrl = `https://graph.instagram.com/v19.0/me/media?fields=id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,like_count&limit=12&access_token=${encodeURIComponent(igToken)}`;
       const igRes = await fetch(igUrl);
       const igJson = await igRes.json();
 
@@ -613,8 +865,43 @@ async function executeMetaSync(vault: MetaTokenVault): Promise<{
           newMetaPosts.push({
             id: `meta-ig-${item.id}`,
             xarxa: "instagram",
-            usuari: vault.igUsername ? `@${vault.igUsername}` : "@eltastvng",
-            text: caption || "Publicació a Instagram @eltastvng",
+            usuari: `@${igUsername}`,
+            text: caption || `Publicació a Instagram @${igUsername}`,
+            imatgeUrl: mediaUrl,
+            dataPublicacio: formatRelativeDate(item.timestamp),
+            enllacUrl: item.permalink || `https://instagram.com/p/${item.id}`,
+            likes: typeof item.like_count === "number" ? item.like_count : 18,
+            tipus: isVideo ? "video" : "normal",
+            videoUrl: isVideo ? mediaUrl : undefined,
+            createdAtTimestamp: new Date(item.timestamp).getTime() || Date.now()
+          });
+          instagramCount++;
+        }
+      } else if (igJson?.error) {
+        console.warn("[api/social] Instagram Graph API response error:", igJson.error);
+      }
+    } catch (err) {
+      console.warn("[api/social] Error fetching Instagram posts:", err);
+    }
+  } else if (vault.igId && vault.pageAccessToken) {
+    // Fallback: Legacy page-linked Instagram
+    try {
+      const igUrl = `https://graph.facebook.com/v19.0/${encodeURIComponent(vault.igId)}/media?fields=id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,like_count&limit=12&access_token=${encodeURIComponent(vault.pageAccessToken)}`;
+      const igRes = await fetch(igUrl);
+      const igJson = await igRes.json();
+
+      if (igJson && Array.isArray(igJson.data)) {
+        for (const item of igJson.data) {
+          if (!item.id) continue;
+          const isVideo = item.media_type === "VIDEO";
+          const mediaUrl = item.media_url || item.thumbnail_url || "";
+          const caption = (item.caption || "").trim();
+
+          newMetaPosts.push({
+            id: `meta-ig-${item.id}`,
+            xarxa: "instagram",
+            usuari: vault.igUsername ? `@${vault.igUsername}` : "@tastvng",
+            text: caption || "Publicació a Instagram @tastvng",
             imatgeUrl: mediaUrl,
             dataPublicacio: formatRelativeDate(item.timestamp),
             enllacUrl: item.permalink || `https://instagram.com/p/${item.id}`,
@@ -627,15 +914,21 @@ async function executeMetaSync(vault: MetaTokenVault): Promise<{
         }
       }
     } catch (err) {
-      console.warn("[api/social] Error fetching Instagram posts:", err);
+      console.warn("[api/social] Error fetching legacy Instagram posts:", err);
     }
   }
 
-  // B. Fetch Facebook Page Posts
+  // ===========================================================
+  // B. FETCH FACEBOOK POSTS (Facebook Pages API)
+  // ===========================================================
   let facebookCount = 0;
-  if (vault.pageId) {
+  const fbToken = vault.facebook?.pageAccessToken || vault.pageAccessToken;
+  const fbPageId = vault.facebook?.pageId || vault.pageId;
+  const fbPageName = vault.facebook?.pageName || vault.pageName || "Tast vilanoví";
+
+  if (fbToken && fbPageId) {
     try {
-      const fbUrl = `https://graph.facebook.com/v19.0/${encodeURIComponent(vault.pageId)}/posts?fields=id,message,created_time,permalink_url,full_picture&limit=12&access_token=${encodeURIComponent(token)}`;
+      const fbUrl = `https://graph.facebook.com/v19.0/${encodeURIComponent(fbPageId)}/posts?fields=id,message,created_time,permalink_url,full_picture&limit=12&access_token=${encodeURIComponent(fbToken)}`;
       const fbRes = await fetch(fbUrl);
       const fbJson = await fbRes.json();
 
@@ -647,7 +940,7 @@ async function executeMetaSync(vault: MetaTokenVault): Promise<{
           newMetaPosts.push({
             id: `meta-fb-${item.id}`,
             xarxa: "facebook",
-            usuari: vault.pageName || "Associació Cultural El Tast",
+            usuari: fbPageName,
             text: message,
             imatgeUrl: item.full_picture || "",
             dataPublicacio: formatRelativeDate(item.created_time),
@@ -658,13 +951,17 @@ async function executeMetaSync(vault: MetaTokenVault): Promise<{
           });
           facebookCount++;
         }
+      } else if (fbJson?.error) {
+        console.warn("[api/social] Facebook Graph API response error:", fbJson.error);
       }
     } catch (err) {
       console.warn("[api/social] Error fetching Facebook posts:", err);
     }
   }
 
-  // C. Read current notices to strictly preserve manual notices
+  // ===========================================================
+  // C. READ CURRENT NOTICES & STRICTLY PRESERVE MANUAL NOTICES
+  // ===========================================================
   let existingNotices: any[] = [];
   if (supabase) {
     const { data } = await supabase
@@ -685,7 +982,7 @@ async function executeMetaSync(vault: MetaTokenVault): Promise<{
   // Keep all manual notices created by Secretaria (IDs NOT starting with meta-)
   const manualNotices = existingNotices.filter((n: any) => !n.id || (!n.id.startsWith("meta-ig-") && !n.id.startsWith("meta-fb-")));
 
-  // Combined notices list
+  // Combined notices map for clean deduplication
   const combinedMap = new Map<string, any>();
 
   // Add fresh Meta posts first
