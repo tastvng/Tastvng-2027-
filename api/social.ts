@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "http";
 import { createClient } from "@supabase/supabase-js";
 import crypto from "crypto";
+import { verifySupabaseAdminToken } from "./_supabase-auth.js";
 
 interface ExtendedRequest extends IncomingMessage {
   query?: Record<string, string | string[]>;
@@ -37,7 +38,6 @@ async function verifyAdmin(req: ExtendedRequest): Promise<boolean> {
   if (!token) return false;
 
   try {
-    const { verifySupabaseAdminToken } = await import("./_supabase-auth");
     const result = await verifySupabaseAdminToken(token);
     return !!result.valid;
   } catch (err) {
