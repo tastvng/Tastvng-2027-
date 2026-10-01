@@ -260,17 +260,19 @@ export default async function socialHandler(req: ExtendedRequest, res: ExtendedR
         });
       }
 
+      const igRedirectUri = `${proto}://${host}/api/social`;
+
       // Secure state prefixed with 'ig:'
       const state = "ig:" + crypto.randomBytes(16).toString("hex");
 
       // Official Instagram Business Login dialog
-      const authUrl = `https://www.instagram.com/oauth/authorize?client_id=${encodeURIComponent(igAppId)}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&scope=instagram_business_basic&state=${encodeURIComponent(state)}`;
+      const authUrl = `https://www.instagram.com/oauth/authorize?client_id=${encodeURIComponent(igAppId)}&redirect_uri=${encodeURIComponent(igRedirectUri)}&response_type=code&scope=instagram_business_basic&state=${encodeURIComponent(state)}`;
 
       return sendJson(200, {
         ok: true,
         platform: "instagram",
         authUrl,
-        redirectUri,
+        redirectUri: igRedirectUri,
         state
       });
     }
@@ -371,13 +373,15 @@ export default async function socialHandler(req: ExtendedRequest, res: ExtendedR
         return;
       }
 
+      const igRedirectUri = `${proto}://${host}/api/social`;
+
       try {
         // Step 1: Exchange code for short-lived token via POST
         const tokenParams = new URLSearchParams();
         tokenParams.append("client_id", igAppId);
         tokenParams.append("client_secret", igAppSecret);
         tokenParams.append("grant_type", "authorization_code");
-        tokenParams.append("redirect_uri", redirectUri);
+        tokenParams.append("redirect_uri", igRedirectUri);
         tokenParams.append("code", code);
 
         const tokenRes = await fetch("https://api.instagram.com/oauth/access_token", {
