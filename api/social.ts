@@ -249,10 +249,10 @@ export default async function socialHandler(req: ExtendedRequest, res: ExtendedR
     // INSTAGRAM BUSINESS LOGIN
     // ---------------------------------------------
     if (platform === "instagram") {
-      const igAppId = process.env.INSTAGRAM_APP_ID || process.env.META_APP_ID;
+      const igAppId = process.env.INSTAGRAM_APP_ID;
       if (!igAppId) {
         return sendJson(500, {
-          error: "INSTAGRAM_APP_ID (o META_APP_ID) no està configurat a les variables d'entorn.",
+          error: "INSTAGRAM_APP_ID no està configurat a les variables d'entorn.",
           configured: false
         });
       }
@@ -358,13 +358,13 @@ export default async function socialHandler(req: ExtendedRequest, res: ExtendedR
     // A. INSTAGRAM CALLBACK FLOW
     // ---------------------------------------------------------
     if (isInstagram) {
-      const igAppId = process.env.INSTAGRAM_APP_ID || process.env.META_APP_ID;
-      const igAppSecret = process.env.INSTAGRAM_APP_SECRET || process.env.META_APP_SECRET;
+      const igAppId = process.env.INSTAGRAM_APP_ID;
+      const igAppSecret = process.env.INSTAGRAM_APP_SECRET;
 
       if (!igAppId || !igAppSecret) {
         res.setHeader("Content-Type", "text/html; charset=utf-8");
         res.writeHead(500);
-        res.end("<h3>Variables INSTAGRAM_APP_ID/META_APP_ID o INSTAGRAM_APP_SECRET/META_APP_SECRET no configurades</h3>");
+        res.end("<h3>Variables INSTAGRAM_APP_ID o INSTAGRAM_APP_SECRET no configurades</h3>");
         return;
       }
 
