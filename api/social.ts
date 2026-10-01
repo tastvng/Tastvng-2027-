@@ -221,7 +221,10 @@ export default async function socialHandler(req: ExtendedRequest, res: ExtendedR
 
   // Parse query params safely
   const urlObj = new URL(req.url || "", "http://localhost:3000");
-  const action = (urlObj.searchParams.get("action") || (req.query?.action as string) || "").toLowerCase();
+  const rawAction = (urlObj.searchParams.get("action") || (req.query?.action as string) || "").toLowerCase();
+  const oauthState = urlObj.searchParams.get("state") || "";
+  const hasOAuthReturn = !rawAction && !!urlObj.searchParams.get("code") && /^(ig|fb):/.test(oauthState);
+  const action = rawAction || (hasOAuthReturn ? "callback" : "");
 
   const sendJson = (statusCode: number, payload: any) => {
     res.setHeader("Content-Type", "application/json; charset=utf-8");
