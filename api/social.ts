@@ -313,8 +313,10 @@ export default async function socialHandler(req: ExtendedRequest, res: ExtendedR
     // Instagram sometimes appends #_ to the redirect URI
     const code = rawCode.replace(/#_$/, "");
     const state = urlObj.searchParams.get("state") || "";
-    const errorParam = urlObj.searchParams.get("error");
-    const errorDesc = urlObj.searchParams.get("error_description");
+    const errorCode = urlObj.searchParams.get("error_code") || urlObj.searchParams.get("error") || "";
+    const errorMessage = urlObj.searchParams.get("error_message") || urlObj.searchParams.get("error_description") || "";
+    const errorParam = urlObj.searchParams.get("error") || urlObj.searchParams.get("error_code");
+    const errorDesc = urlObj.searchParams.get("error_description") || urlObj.searchParams.get("error_message");
 
     if (errorParam || !code) {
       const keys = Array.from(urlObj.searchParams.keys());
@@ -328,7 +330,7 @@ export default async function socialHandler(req: ExtendedRequest, res: ExtendedR
         refererHost = "";
       }
 
-      console.warn("[api/social] callback sin code. keys:", keys, "method:", req.method);
+      console.warn("[api/social] callback sin code. keys:", keys, "method:", req.method, "error_code:", errorCode, "error_message:", errorMessage);
 
       const escapeHtml = (str: string) =>
         String(str)
@@ -338,7 +340,8 @@ export default async function socialHandler(req: ExtendedRequest, res: ExtendedR
           .replace(/"/g, "&quot;")
           .replace(/'/g, "&#039;");
 
-      const safeErrorDesc = escapeHtml(errorDesc || errorParam || "Codi d'autorització no rebut");
+      const safeErrorMsg = escapeHtml(errorMessage || errorDesc || errorParam || "Codi d'autorització no rebut");
+      const safeErrorCode = errorCode ? `Codi: ${escapeHtml(errorCode)}` : "";
       const safeKeysList = escapeHtml(keys.length > 0 ? keys.join(", ") : "(cap)");
       const safeMethod = escapeHtml(req.method || "GET");
       const safeReferer = refererHost ? ` | Referer: ${escapeHtml(refererHost)}` : "";
@@ -351,7 +354,8 @@ export default async function socialHandler(req: ExtendedRequest, res: ExtendedR
         <head><title>Error d'autorització</title></head>
         <body style="font-family:sans-serif; text-align:center; padding:40px; background:#121212; color:#fff;">
           <h2 style="color:#ef4444;">Error en l'autorització</h2>
-          <p style="color:#a1a1aa;">${safeErrorDesc}</p>
+          ${safeErrorCode ? `<p style="color:#f87171; font-weight:bold; font-size:14px; margin-bottom:4px;">${safeErrorCode}</p>` : ""}
+          <p style="color:#a1a1aa;">${safeErrorMsg}</p>
           <p style="color:#71717a; font-size:12px; font-family:monospace; margin-top:16px;">Paràmetres rebuts: ${safeKeysList} | Mètode: ${safeMethod}${safeReferer}</p>
           <button onclick="window.close()" style="background:#ff0090; color:#fff; border:none; padding:10px 20px; border-radius:8px; cursor:pointer; font-weight:bold; margin-top:20px;">Tancar finestra</button>
         </body>
