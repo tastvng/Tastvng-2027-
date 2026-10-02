@@ -317,6 +317,32 @@ export default async function socialHandler(req: ExtendedRequest, res: ExtendedR
     const errorDesc = urlObj.searchParams.get("error_description");
 
     if (errorParam || !code) {
+      const keys = Array.from(urlObj.searchParams.keys());
+      let refererHost = "";
+      try {
+        const rawReferer = (req.headers.referer as string) || "";
+        if (rawReferer) {
+          refererHost = new URL(rawReferer).hostname;
+        }
+      } catch {
+        refererHost = "";
+      }
+
+      console.warn("[api/social] callback sin code. keys:", keys, "method:", req.method);
+
+      const escapeHtml = (str: string) =>
+        String(str)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#039;");
+
+      const safeErrorDesc = escapeHtml(errorDesc || errorParam || "Codi d'autorització no rebut");
+      const safeKeysList = escapeHtml(keys.length > 0 ? keys.join(", ") : "(cap)");
+      const safeMethod = escapeHtml(req.method || "GET");
+      const safeReferer = refererHost ? ` | Referer: ${escapeHtml(refererHost)}` : "";
+
       res.setHeader("Content-Type", "text/html; charset=utf-8");
       res.writeHead(400);
       res.end(`
@@ -325,8 +351,9 @@ export default async function socialHandler(req: ExtendedRequest, res: ExtendedR
         <head><title>Error d'autorització</title></head>
         <body style="font-family:sans-serif; text-align:center; padding:40px; background:#121212; color:#fff;">
           <h2 style="color:#ef4444;">Error en l'autorització</h2>
-          <p style="color:#a1a1aa;">${errorDesc || errorParam || "Codi d'autorització no rebut"}</p>
-          <button onclick="window.close()" style="background:#ff0090; color:#fff; border:none; padding:10px 20px; border-radius:8px; cursor:pointer; font-weight:bold;">Tancar finestra</button>
+          <p style="color:#a1a1aa;">${safeErrorDesc}</p>
+          <p style="color:#71717a; font-size:12px; font-family:monospace; margin-top:16px;">Paràmetres rebuts: ${safeKeysList} | Mètode: ${safeMethod}${safeReferer}</p>
+          <button onclick="window.close()" style="background:#ff0090; color:#fff; border:none; padding:10px 20px; border-radius:8px; cursor:pointer; font-weight:bold; margin-top:20px;">Tancar finestra</button>
         </body>
         </html>
       `);
