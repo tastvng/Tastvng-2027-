@@ -223,8 +223,12 @@ export function calculateInscriptionOrderBreakdown(
         const liniaFiancaSubtotal = rentersCount * liniaFianca;
         fiancaTotal += liniaFiancaSubtotal;
 
+        const fiancaId = `${linia.id}-fianca`;
+        processedExtraIds.add(fiancaId);
+        processedExtraIds.add(fiancaId.toLowerCase());
+
         materials.push({
-          id: `${linia.id}-fianca`,
+          id: fiancaId,
           nom: language === 'ca' ? 'Fiança retornable' : 'Fianza reembolsable',
           quantitat: rentersCount,
           modalitat: language === 'ca' ? 'Retornable' : 'Reembolsable',
@@ -257,6 +261,16 @@ export function calculateInscriptionOrderBreakdown(
       
       const extId = String(ext.id || ext.nom || '');
       const extNom = String(ext.nom || '');
+
+      // Ignore any extra whose id ends in "-fianca" (fianza is always recalculated from line config)
+      if (extId.toLowerCase().endsWith('-fianca')) {
+        continue;
+      }
+
+      // Avoid adding an extra whose id has already been processed or already exists in materials
+      if (processedExtraIds.has(extId) || processedExtraIds.has(extId.toLowerCase()) || materials.some(m => m.id === extId || (extId && m.id.toLowerCase() === extId.toLowerCase()))) {
+        continue;
+      }
       
       const isForbidden = /doma|mocador|pañuelo|panuelo/i.test(extId) || /doma|mocador|pañuelo|panuelo/i.test(extNom);
       const isClavells = /clavell/i.test(extId) || /clavell/i.test(extNom);
