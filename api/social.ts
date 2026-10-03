@@ -572,7 +572,77 @@ export default async function socialHandler(req: ExtendedRequest, res: ExtendedR
           throw new Error(accountsData.error.message || "Error obtenint pàgines de Facebook");
         }
 
-        const pages = accountsData.data || [];
+        let pages = accountsData.data || [];
+
+        // Fallback: If /me/accounts is empty, search in Meta Business portfolios (owned_pages & client_pages)
+        let businessDiag = "cap portfolio consultat";
+        const businessErrors: string[] = [];
+
+        if (pages.length === 0) {
+          try {
+            const bizUrl = `https://graph.facebook.com/v19.0/me/businesses?fields=id,name&access_token=${encodeURIComponent(longLivedUserToken)}`;
+            const bizRes = await fetch(bizUrl);
+            const bizData = await bizRes.json();
+
+            if (bizData.error) {
+              businessErrors.push(`me/businesses: ${bizData.error.message || "error desconegut"}`);
+            }
+
+            const businesses = Array.isArray(bizData?.data) ? bizData.data : [];
+            businessDiag = `${businesses.length} portfolio(s): [${businesses.map((b: any) => `${b.name || "(sense nom)"} (ID: ${b.id})`).join(", ") || "cap"}]`;
+
+            const pageMap = new Map<string, any>();
+
+            for (const biz of businesses) {
+              if (!biz.id) continue;
+
+              // a) owned_pages
+              try {
+                const ownedUrl = `https://graph.facebook.com/v19.0/${encodeURIComponent(biz.id)}/owned_pages?fields=id,name,access_token&access_token=${encodeURIComponent(longLivedUserToken)}`;
+                const ownedRes = await fetch(ownedUrl);
+                const ownedData = await ownedRes.json();
+                if (ownedData.error) {
+                  businessErrors.push(`owned_pages (${biz.id}): ${ownedData.error.message || "error"}`);
+                }
+                if (Array.isArray(ownedData?.data)) {
+                  for (const p of ownedData.data) {
+                    if (p.id && p.access_token && !pageMap.has(p.id)) {
+                      pageMap.set(p.id, { id: p.id, name: p.name, access_token: p.access_token });
+                    }
+                  }
+                }
+              } catch (oErr: any) {
+                businessErrors.push(`owned_pages excepció (${biz.id}): ${oErr?.message || "error"}`);
+              }
+
+              // b) client_pages
+              try {
+                const clientUrl = `https://graph.facebook.com/v19.0/${encodeURIComponent(biz.id)}/client_pages?fields=id,name,access_token&access_token=${encodeURIComponent(longLivedUserToken)}`;
+                const clientRes = await fetch(clientUrl);
+                const clientData = await clientRes.json();
+                if (clientData.error) {
+                  businessErrors.push(`client_pages (${biz.id}): ${clientData.error.message || "error"}`);
+                }
+                if (Array.isArray(clientData?.data)) {
+                  for (const p of clientData.data) {
+                    if (p.id && p.access_token && !pageMap.has(p.id)) {
+                      pageMap.set(p.id, { id: p.id, name: p.name, access_token: p.access_token });
+                    }
+                  }
+                }
+              } catch (cErr: any) {
+                businessErrors.push(`client_pages excepció (${biz.id}): ${cErr?.message || "error"}`);
+              }
+            }
+
+            if (pageMap.size > 0) {
+              pages = Array.from(pageMap.values());
+            }
+          } catch (bizErr: any) {
+            businessErrors.push(`fallback businesses excepció: ${bizErr?.message || "error"}`);
+          }
+        }
+
         if (pages.length === 0) {
           // Diagnostic queries (isolated try/catches)
           let meInfo = "desconegut";
@@ -615,14 +685,17 @@ export default async function socialHandler(req: ExtendedRequest, res: ExtendedR
             granularInfo = `error consultant /debug_token: ${e?.message || "desconegut"}`;
           }
 
-          const diagMsg = `No s'ha trobat cap pàgina de Facebook gestionada pel compte.
+          const errorDetails = businessErrors.length > 0 ? `\n- Errors Graph API: ${businessErrors.join(" | ")}` : "";
+
+          const diagMsg = `No s'ha trobat cap pàgina de Facebook gestionada pel compte ni a través de Meta Business portfolios.
 
 Diagnòstic de Meta:
 - Usuari: ${meInfo}
 - Permisos: ${permsInfo}
-- granular_scopes: ${granularInfo}`;
+- granular_scopes: ${granularInfo}
+- Portfolios de negoci: ${businessDiag}${errorDetails}`;
 
-          console.warn("[api/social] /me/accounts buit. Diagnòstic:", diagMsg);
+          console.warn("[api/social] /me/accounts i portfolios buits. Diagnòstic:", diagMsg);
           throw new Error(diagMsg);
         }
 
