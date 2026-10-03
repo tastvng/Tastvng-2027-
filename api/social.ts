@@ -574,7 +574,56 @@ export default async function socialHandler(req: ExtendedRequest, res: ExtendedR
 
         const pages = accountsData.data || [];
         if (pages.length === 0) {
-          throw new Error("No s'ha trobat cap pàgina de Facebook gestionada pel compte.");
+          // Diagnostic queries (isolated try/catches)
+          let meInfo = "desconegut";
+          try {
+            const meRes = await fetch(`https://graph.facebook.com/v19.0/me?fields=id,name&access_token=${encodeURIComponent(longLivedUserToken)}`);
+            const meData = await meRes.json();
+            if (meData?.id || meData?.name) {
+              meInfo = `${meData.name || "(sense nom)"} (ID: ${meData.id || "sense id"})`;
+            }
+          } catch (e: any) {
+            meInfo = `error consultant /me: ${e?.message || "desconegut"}`;
+          }
+
+          let permsInfo = "desconeguts";
+          try {
+            const permRes = await fetch(`https://graph.facebook.com/v19.0/me/permissions?access_token=${encodeURIComponent(longLivedUserToken)}`);
+            const permData = await permRes.json();
+            if (Array.isArray(permData?.data)) {
+              permsInfo = permData.data
+                .map((p: any) => `${p.permission}: ${p.status}`)
+                .join(", ") || "(llista buida)";
+            }
+          } catch (e: any) {
+            permsInfo = `error consultant /me/permissions: ${e?.message || "desconegut"}`;
+          }
+
+          let granularInfo = "sense granular_scopes";
+          try {
+            const appToken = `${appId}|${appSecret}`;
+            const debugRes = await fetch(`https://graph.facebook.com/v19.0/debug_token?input_token=${encodeURIComponent(longLivedUserToken)}&access_token=${encodeURIComponent(appToken)}`);
+            const debugData = await debugRes.json();
+            const scopes = debugData?.data?.granular_scopes;
+            if (Array.isArray(scopes)) {
+              granularInfo = scopes.map((s: any) => {
+                const targets = Array.isArray(s.target_ids) ? s.target_ids : [];
+                return `${s.scope} (total ${targets.length}: [${targets.join(", ")}])`;
+              }).join(" | ") || "(sense granular_scopes)";
+            }
+          } catch (e: any) {
+            granularInfo = `error consultant /debug_token: ${e?.message || "desconegut"}`;
+          }
+
+          const diagMsg = `No s'ha trobat cap pàgina de Facebook gestionada pel compte.
+
+Diagnòstic de Meta:
+- Usuari: ${meInfo}
+- Permisos: ${permsInfo}
+- granular_scopes: ${granularInfo}`;
+
+          console.warn("[api/social] /me/accounts buit. Diagnòstic:", diagMsg);
+          throw new Error(diagMsg);
         }
 
         // Prioritize page named 'El Tast' or select first available
@@ -651,6 +700,17 @@ export default async function socialHandler(req: ExtendedRequest, res: ExtendedR
         return;
       } catch (err: any) {
         console.error("[api/social] Facebook callback exception:", err);
+
+        const escapeHtml = (str: string) =>
+          String(str)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;");
+
+        const safeErrMsg = escapeHtml(err?.message || "Error desconegut");
+
         res.setHeader("Content-Type", "text/html; charset=utf-8");
         res.writeHead(500);
         res.end(`
@@ -659,7 +719,7 @@ export default async function socialHandler(req: ExtendedRequest, res: ExtendedR
           <head><title>Error Facebook</title></head>
           <body style="font-family:sans-serif; text-align:center; padding:40px; background:#121212; color:#fff;">
             <h2 style="color:#ef4444;">Error vinculant Facebook</h2>
-            <p style="color:#a1a1aa;">${err?.message || "Error desconegut"}</p>
+            <div style="color:#a1a1aa; white-space:pre-wrap; text-align:left; max-width:650px; margin:20px auto; background:#18181b; padding:16px; border-radius:12px; font-family:monospace; font-size:12px; line-height:1.6; border:1px solid #27272a;">${safeErrMsg}</div>
             <button onclick="window.close()" style="background:#ff0090; color:#fff; border:none; padding:10px 20px; border-radius:8px; cursor:pointer; font-weight:bold;">Tancar</button>
           </body>
           </html>
