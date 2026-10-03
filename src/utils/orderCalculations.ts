@@ -16,6 +16,7 @@ export interface InscriptionOrderBreakdown {
   materials: SelectedMaterialItem[];
   totalMaterials: number;
   totalCalculat: number;
+  fiancaTotal?: number;
 }
 
 export interface TotalValidationResult {
@@ -70,6 +71,7 @@ export function calculateInscriptionOrderBreakdown(
 
   const materials: SelectedMaterialItem[] = [];
   const processedExtraIds = new Set<string>();
+  let fiancaTotal = 0;
 
   // 2. Uniforms / Vestuari from current configuration (liniisUniforme)
   const liniis = config?.liniisUniforme && config.liniisUniforme.length > 0
@@ -212,6 +214,24 @@ export function calculateInscriptionOrderBreakdown(
         preuUnitari: unitPrice,
         subtotal: finalQty * unitPrice
       });
+
+      // Calculate refundable deposit (fiança) for participants renting this product
+      const rentersCount = (p1Wants && p1IsLloguer ? 1 : 0) + (p2Wants && p2IsLloguer ? 1 : 0);
+      const liniaFianca = typeof linia.fianca === 'number' ? linia.fianca : 0;
+
+      if (rentersCount > 0 && liniaFianca > 0) {
+        const liniaFiancaSubtotal = rentersCount * liniaFianca;
+        fiancaTotal += liniaFiancaSubtotal;
+
+        materials.push({
+          id: `${linia.id}-fianca`,
+          nom: language === 'ca' ? 'Fiança retornable' : 'Fianza reembolsable',
+          quantitat: rentersCount,
+          modalitat: language === 'ca' ? 'Retornable' : 'Reembolsable',
+          preuUnitari: liniaFianca,
+          subtotal: liniaFiancaSubtotal
+        });
+      }
     }
   }
 
@@ -391,7 +411,8 @@ export function calculateInscriptionOrderBreakdown(
     categoriaQuotaBase,
     materials,
     totalMaterials,
-    totalCalculat
+    totalCalculat,
+    fiancaTotal
   };
 }
 

@@ -323,7 +323,13 @@ export const ComparserCard: React.FC<ComparserCardProps> = ({
                     ) : null}
                     {linia.preuLloguer ? (
                       <span className="text-[10px] font-mono text-sky-600 bg-sky-50 rounded px-2 py-0.5 border border-sky-100 font-bold tracking-tight uppercase">
-                        PREU (LLOGUER): {linia.preuLloguer}€
+                        {linia.fianca && linia.fianca > 0
+                          ? (language === 'ca'
+                              ? `PREU (LLOGUER): ${linia.preuLloguer}€ + ${linia.fianca}€ fiança`
+                              : `PRECIO (ALQUILER): ${linia.preuLloguer}€ + ${linia.fianca}€ fianza`)
+                          : (language === 'ca'
+                              ? `PREU (LLOGUER): ${linia.preuLloguer}€`
+                              : `PRECIO (ALQUILER): ${linia.preuLloguer}€`)}
                       </span>
                     ) : null}
                   </div>
@@ -400,11 +406,11 @@ export const ComparserCard: React.FC<ComparserCardProps> = ({
                   </div>
 
                   {/* Venda / Lloguer selectors */}
-                  <div className="text-left pt-2 border-t border-zinc-200/50 flex items-center justify-between gap-3">
-                    <span className="text-[10px] font-bold text-zinc-500 uppercase font-mono tracking-tight">
+                  <div className="text-left pt-2 border-t border-zinc-200/50 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                    <span className="text-[10px] font-bold text-zinc-500 uppercase font-mono tracking-tight shrink-0">
                       {language === 'ca' ? "Tipus d'Adquisició:" : "Tipo de Adquisición:"}
                     </span>
-                    <div className="flex bg-white rounded-lg overflow-hidden border border-zinc-200 p-0.5 shrink-0">
+                    <div className="flex bg-white rounded-lg overflow-hidden border border-zinc-200 p-0.5 shrink-0 max-w-full">
                       <button
                         type="button"
                         onClick={() => {
@@ -435,9 +441,15 @@ export const ComparserCard: React.FC<ComparserCardProps> = ({
                             setUniformeTipusBackwards('lloguer');
                           }
                         }}
-                        className={`text-[10px] px-2.5 py-1 font-bold rounded-md transition-all cursor-pointer ${tipusVal === 'lloguer' ? 'bg-fuchsia-600 text-white shadow-sm' : 'text-zinc-550 hover:text-zinc-855'}`}
+                        className={`text-[10px] px-2.5 py-1 font-bold rounded-md transition-all cursor-pointer text-center leading-tight ${tipusVal === 'lloguer' ? 'bg-fuchsia-600 text-white shadow-sm' : 'text-zinc-550 hover:text-zinc-855'}`}
                       >
-                        {language === 'ca' ? "Lloguer" : "Alquiler"} {linia.preuLloguer ? `(${linia.preuLloguer}€)` : ''}
+                        {linia.fianca && linia.fianca > 0
+                          ? (language === 'ca'
+                              ? `Lloguer (${linia.preuLloguer || 0}€ + ${linia.fianca}€ fiança)`
+                              : `Alquiler (${linia.preuLloguer || 0}€ + ${linia.fianca}€ fianza)`)
+                          : (linia.preuLloguer
+                              ? `${language === 'ca' ? "Lloguer" : "Alquiler"} (${linia.preuLloguer}€)`
+                              : (language === 'ca' ? "Lloguer" : "Alquiler"))}
                       </button>
                     </div>
                   </div>
@@ -447,8 +459,8 @@ export const ComparserCard: React.FC<ComparserCardProps> = ({
                       <Info size={15} className="text-amber-600 shrink-0 mt-0.5" />
                       <span className="font-semibold leading-relaxed">
                         {language === 'ca'
-                          ? `Fiança: ${linia.fianca}€. S'ha d'abonar en recollir l'armilla i et serà retornada en tornar-la.`
-                          : `Fianza: ${linia.fianca}€. Se abona al recoger el chaleco y se te devolverá al devolverlo.`}
+                          ? `Lloguer ${linia.preuLloguer || 0}€ + fiança ${linia.fianca}€ = ${(linia.preuLloguer || 0) + linia.fianca}€ a pagar en la inscripció. La fiança (${linia.fianca}€) et serà retornada en entregar l'armilla.`
+                          : `Alquiler ${linia.preuLloguer || 0}€ + fianza ${linia.fianca}€ = ${(linia.preuLloguer || 0) + linia.fianca}€ a pagar en la inscripción. La fianza (${linia.fianca}€) se te devolverá al entregar el chaleco.`}
                       </span>
                     </div>
                   )}
