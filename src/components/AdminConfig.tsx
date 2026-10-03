@@ -717,7 +717,10 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
       nom: 'Nova línia d\'equipament',
       nomES: 'Nueva línea de equipamiento',
       opcions: ['S', 'M', 'L', 'XL'],
-      requeixQuantitat: false
+      requeixQuantitat: false,
+      preu: 0,
+      preuLloguer: 0,
+      fianca: 0
     };
     setLiniisUniforme([...liniisUniforme, nova]);
   };
@@ -2246,6 +2249,23 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                             value={linia.preuLloguer || 0}
                             onChange={(e) => handleUpdateLiniaUniforme(linia.id, { preuLloguer: parseFloat(e.target.value) || 0 })}
                             className="w-20 bg-white border border-zinc-250 focus:border-sky-500 rounded-lg px-2 py-1 text-xs font-mono font-bold text-right"
+                          />
+                          <span className="absolute right-2 top-1.5 text-[10px] font-bold text-zinc-400">€</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <label className="text-zinc-700 text-xs font-bold select-none whitespace-nowrap">
+                          {language === 'ca' ? "Fiança:" : "Fianza:"}
+                        </label>
+                        <div className="relative">
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={linia.fianca || 0}
+                            onChange={(e) => handleUpdateLiniaUniforme(linia.id, { fianca: parseFloat(e.target.value) || 0 })}
+                            className="w-20 bg-white border border-zinc-250 focus:border-amber-500 rounded-lg px-2 py-1 text-xs font-mono font-bold text-right"
                           />
                           <span className="absolute right-2 top-1.5 text-[10px] font-bold text-zinc-400">€</span>
                         </div>

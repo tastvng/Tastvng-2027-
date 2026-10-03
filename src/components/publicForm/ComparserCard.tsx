@@ -1,5 +1,5 @@
 import React from 'react';
-import { Camera, Upload, Trash2, AlertTriangle, Check, Database } from 'lucide-react';
+import { Camera, Upload, Trash2, AlertTriangle, Check, Database, Info } from 'lucide-react';
 import { SistemaConfig } from '../../types';
 import { useLanguage } from '../../LanguageContext';
 import TranslatedText from '../TranslatedText';
@@ -437,10 +437,21 @@ export const ComparserCard: React.FC<ComparserCardProps> = ({
                         }}
                         className={`text-[10px] px-2.5 py-1 font-bold rounded-md transition-all cursor-pointer ${tipusVal === 'lloguer' ? 'bg-fuchsia-600 text-white shadow-sm' : 'text-zinc-550 hover:text-zinc-855'}`}
                       >
-                        {language === 'ca' ? "Lloguer" : "Alquiler"}
+                        {language === 'ca' ? "Lloguer" : "Alquiler"} {linia.preuLloguer ? `(${linia.preuLloguer}€)` : ''}
                       </button>
                     </div>
                   </div>
+
+                  {tipusVal === 'lloguer' && typeof linia.fianca === 'number' && linia.fianca > 0 && (
+                    <div className="mt-2.5 p-3 bg-amber-50/90 border border-amber-300/80 rounded-xl text-amber-950 text-xs flex items-start gap-2 shadow-2xs">
+                      <Info size={15} className="text-amber-600 shrink-0 mt-0.5" />
+                      <span className="font-semibold leading-relaxed">
+                        {language === 'ca'
+                          ? `Fiança: ${linia.fianca}€. S'ha d'abonar en recollir l'armilla i et serà retornada en tornar-la.`
+                          : `Fianza: ${linia.fianca}€. Se abona al recoger el chaleco y se te devolverá al devolverlo.`}
+                      </span>
+                    </div>
+                  )}
                 </>
               ) : (
                 <p className="text-[11px] text-zinc-400 italic px-1">

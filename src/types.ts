@@ -121,6 +121,7 @@ export interface LiniaUniforme {
   requeixQuantitat?: boolean;
   preu?: number;
   preuLloguer?: number;
+  fianca?: number;
   opcional?: boolean;
   armilla_opcional?: boolean;
   actiu?: boolean;

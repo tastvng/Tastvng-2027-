@@ -632,6 +632,46 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
 
   const totalCalculat = orderBreakdown ? orderBreakdown.totalCalculat : 0;
 
+  // Refundable deposit (fiança) calculation for clothing/merchandising rentals.
+  // Informative only: NOT added to totalCalculat, orderBreakdown, or server price validation.
+  const totalFianca = useMemo(() => {
+    let sum = 0;
+    const lines = (liveConfig.liniisUniforme && liveConfig.liniisUniforme.length > 0)
+      ? liveConfig.liniisUniforme
+      : (liveConfig.opcionsUniforme ? [{
+          id: 'lin-1',
+          nom: liveConfig.nomUniforme || "Talla d'Armilla",
+          nomES: liveConfig.nomUniformeES || "Talla de Chaleco",
+          opcions: liveConfig.opcionsUniforme,
+          requeixQuantitat: false,
+          actiu: true,
+          fianca: 0
+        }] : []);
+
+    for (const linia of lines) {
+      if (linia.actiu === false || !linia.fianca || linia.fianca <= 0) continue;
+      const isOptional = !!(linia.opcional || linia.armilla_opcional || liveConfig.armilla_opcional);
+      const sel = seleccionsUniforme[linia.id];
+
+      // Comparser 1
+      const c1Vol = sel && sel.c1Vol !== undefined ? !!sel.c1Vol : !isOptional;
+      const c1Tipus = sel?.c1Tipus || c1UniformeTipus || 'compra';
+      const c1Qty = linia.requeixQuantitat ? (sel?.c1Quantitat || 1) : 1;
+      if (c1Vol && c1Tipus === 'lloguer') {
+        sum += c1Qty * linia.fianca;
+      }
+
+      // Comparser 2
+      const c2Vol = sel && sel.c2Vol !== undefined ? !!sel.c2Vol : !isOptional;
+      const c2Tipus = sel?.c2Tipus || c2UniformeTipus || 'compra';
+      const c2Qty = linia.requeixQuantitat ? (sel?.c2Quantitat || 1) : 1;
+      if (c2Vol && c2Tipus === 'lloguer') {
+        sum += c2Qty * linia.fianca;
+      }
+    }
+    return sum;
+  }, [liveConfig.liniisUniforme, liveConfig.nomUniforme, liveConfig.nomUniformeES, liveConfig.opcionsUniforme, liveConfig.armilla_opcional, seleccionsUniforme, c1UniformeTipus, c2UniformeTipus]);
+
   // Load questions actively from Supabase ('preguntes' table as primary, config.preguntesFormulari as fallback)
   useEffect(() => {
     let isMounted = true;
@@ -2084,6 +2124,14 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
               </span>
               {!priceLoadError && <span className="text-zinc-400 text-xs font-mono">EUR</span>}
             </div>
+
+            {totalFianca > 0 && (
+              <div className="pt-2 text-xs font-medium text-amber-300 border-t border-zinc-800/80" id="fianca-resum-display">
+                {language === 'ca'
+                  ? `Fiança retornable (a abonar en recollir el material): ${totalFianca.toFixed(2).replace(/\.00$/, '')}€`
+                  : `Fianza reembolsable (a abonar al recoger el material): ${totalFianca.toFixed(2).replace(/\.00$/, '')}€`}
+              </div>
+            )}
           </div>
 
           <div className="flex flex-col items-center md:items-end gap-2 w-full md:w-auto relative z-10">

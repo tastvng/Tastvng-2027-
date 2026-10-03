@@ -115,7 +115,10 @@ export const CONFIG_INICIAL: SistemaConfig = {
       opcions: ["XS", "S", "M", "L", "XL", "XXL", "3XL"],
       requeixQuantitat: false,
       actiu: true,
-      opcional: false
+      opcional: false,
+      preu: 30,
+      preuLloguer: 30,
+      fianca: 0
     }
   ],
   categoriaAdultaNom: "Parella Adulta",
