@@ -291,8 +291,8 @@ export default async function socialHandler(req: ExtendedRequest, res: ExtendedR
     // Secure state prefixed with 'fb:'
     const state = "fb:" + crypto.randomBytes(16).toString("hex");
 
-    // Strictly Page reading scopes - NO Instagram scopes here to avoid use-case conflicts
-    const fbScopes = "pages_show_list,pages_read_engagement,pages_read_user_content";
+    // Strictly Page reading & business portfolio scopes - NO Instagram scopes here to avoid use-case conflicts
+    const fbScopes = "pages_show_list,pages_read_engagement,pages_read_user_content,business_management";
 
     const authUrl = `https://www.facebook.com/v19.0/dialog/oauth?client_id=${encodeURIComponent(appId)}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${encodeURIComponent(state)}&scope=${encodeURIComponent(fbScopes)}&response_type=code`;
 
