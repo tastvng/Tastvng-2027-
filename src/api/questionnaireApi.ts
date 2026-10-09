@@ -13,6 +13,66 @@ export interface CargarPreguntesResult {
   count: number;
 }
 
+function parseCondicio(raw: any): { preguntaId: string; valor: string } | null | undefined {
+  if (!raw) return null;
+  let parsed = raw;
+  if (typeof raw === 'string') {
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
+  if (parsed && typeof parsed === 'object' && typeof parsed.preguntaId === 'string' && typeof parsed.valor === 'string') {
+    return { preguntaId: String(parsed.preguntaId), valor: String(parsed.valor) };
+  }
+  return null;
+}
+
+function parsePreus(raw: any): Record<string, number> | undefined {
+  if (!raw) return undefined;
+  let parsed = raw;
+  if (typeof raw === 'string') {
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return undefined;
+    }
+  }
+  if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+    const clean: Record<string, number> = {};
+    for (const [k, v] of Object.entries(parsed)) {
+      const num = Number(v);
+      if (!isNaN(num) && num >= 0) {
+        clean[k] = num;
+      }
+    }
+    return Object.keys(clean).length > 0 ? clean : undefined;
+  }
+  return undefined;
+}
+
+function mapPreguntaRow(row: any, idx: number): PreguntaDinamica {
+  return {
+    id: String(row.id),
+    titol: String(row.titol || ''),
+    tipus: (row.tipus || 'text') as 'text' | 'select' | 'boolean',
+    opcions: Array.isArray(row.opcions)
+      ? row.opcions
+      : (typeof row.opcions === 'string' ? JSON.parse(row.opcions) : undefined),
+    requerit: !!row.requerit,
+    activa: !!row.activa,
+    ordre: typeof row.ordre === 'number' ? row.ordre : idx,
+    descripcio: row.descripcio ? String(row.descripcio) : undefined,
+    condicio: parseCondicio(row.condicio),
+    ambit: row.ambit === 'comparser' ? 'comparser' : 'parella',
+    presentacio: row.presentacio === 'botons' ? 'botons' : 'desplegable',
+    preus: parsePreus(row.preus),
+    concepte: row.concepte ? String(row.concepte) : undefined,
+    concepteES: (row.concepte_es ?? row.concepteES) ? String(row.concepte_es ?? row.concepteES) : undefined
+  };
+}
+
 /**
  * Cargar preguntas desde Supabase con diagnósticos detallados.
  * Utiliza la tabla 'preguntes' como fuente primaria.
@@ -36,17 +96,7 @@ export async function cargarPreguntesDetallat(onlyActive: boolean = false): Prom
       if (error) {
         console.error('[Cüestionari Diagnòstic] Error exacte de Supabase al carregar de la taula "preguntes":', error);
       } else if (data !== null && Array.isArray(data)) {
-        const mapped: PreguntaDinamica[] = data.map((row: any, idx: number) => ({
-          id: String(row.id),
-          titol: String(row.titol || ''),
-          tipus: (row.tipus || 'text') as 'text' | 'select' | 'boolean',
-          opcions: Array.isArray(row.opcions)
-            ? row.opcions
-            : (typeof row.opcions === 'string' ? JSON.parse(row.opcions) : undefined),
-          requerit: !!row.requerit,
-          activa: !!row.activa,
-          ordre: typeof row.ordre === 'number' ? row.ordre : idx
-        }));
+        const mapped: PreguntaDinamica[] = data.map(mapPreguntaRow);
 
         // Ordenar explícitament pel camp ordre
         mapped.sort((a, b) => (a.ordre ?? 0) - (b.ordre ?? 0));
@@ -70,17 +120,7 @@ export async function cargarPreguntesDetallat(onlyActive: boolean = false): Prom
     if (resp.ok) {
       const json = await resp.json();
       if (json && Array.isArray(json.data)) {
-        const mapped: PreguntaDinamica[] = json.data.map((row: any, idx: number) => ({
-          id: String(row.id),
-          titol: String(row.titol || ''),
-          tipus: (row.tipus || 'text') as 'text' | 'select' | 'boolean',
-          opcions: Array.isArray(row.opcions)
-            ? row.opcions
-            : (typeof row.opcions === 'string' ? JSON.parse(row.opcions) : undefined),
-          requerit: !!row.requerit,
-          activa: !!row.activa,
-          ordre: typeof row.ordre === 'number' ? row.ordre : idx
-        }));
+        const mapped: PreguntaDinamica[] = json.data.map(mapPreguntaRow);
 
         mapped.sort((a, b) => (a.ordre ?? 0) - (b.ordre ?? 0));
 
@@ -166,6 +206,13 @@ export async function guardarPreguntes(preguntes: PreguntaDinamica[]): Promise<{
           requerit: !!p.requerit,
           activa: !!p.activa,
           ordre: typeof p.ordre === 'number' ? p.ordre : index,
+          descripcio: p.descripcio ? String(p.descripcio) : null,
+          condicio: p.condicio && p.condicio.preguntaId ? p.condicio : null,
+          ambit: p.ambit === 'comparser' ? 'comparser' : 'parella',
+          presentacio: p.presentacio === 'botons' ? 'botons' : 'desplegable',
+          preus: p.preus && Object.keys(p.preus).length > 0 ? p.preus : null,
+          concepte: p.concepte ? String(p.concepte) : null,
+          concepte_es: p.concepteES ? String(p.concepteES) : null,
           updated_at: new Date().toISOString()
         }));
 

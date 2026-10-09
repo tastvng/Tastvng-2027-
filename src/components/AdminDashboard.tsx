@@ -43,13 +43,15 @@ import {
   ExternalLink,
   Globe,
   EyeOff,
-  RefreshCw
+  RefreshCw,
+  UtensilsCrossed
 } from 'lucide-react';
 import { Inscripcio, CategoriaParella, EstatPagament, EstatVerificacio, EstatInscripcio, MetodePagament, SistemaConfig, NoticiaXarxes } from '../types';
 import ExcelJS from 'exceljs';
 import AdminPortada from './AdminPortada';
 import AdminPersonalitzacio from './AdminPersonalitzacio';
 import { AdminStaffManagement } from './AdminStaffManagement';
+import { ResumEsmorzarsModal } from './ResumEsmorzarsModal';
 import { calculateDailySummaries } from '../dailySummary';
 import { calculateInscriptionOrderBreakdown, validateInscriptionTotal } from '../utils/orderCalculations';
 import { buildUnifiedEmailHtml } from '../utils/ticketGenerator';
@@ -167,6 +169,7 @@ export default function AdminDashboard({
 
   // Staff management state (Official Supabase Auth + profiles via server API)
   const [showStaffModal, setShowStaffModal] = useState(false);
+  const [showResumEsmorzarsModal, setShowResumEsmorzarsModal] = useState(false);
   const [staffCount, setStaffCount] = useState<number>(3);
   const [inscriptionDeleteConfirmId, setInscriptionDeleteConfirmId] = useState<string | null>(null);
 
@@ -981,14 +984,45 @@ export default function AdminDashboard({
 
     // Helper for dynamic concept values
     const getExtraInfo = (i: Inscripcio, nameRegex: RegExp) => {
+      const isBreakfast = /esmorz|almuerz|desayun/i.test(nameRegex.source);
+      if (isBreakfast) {
+        try {
+          const breakdown = calculateInscriptionOrderBreakdown(i, config, 'ca');
+          const esmItems = (breakdown.materials || []).filter(m => 
+            m.modalitat === 'Esmorzar' || nameRegex.test(m.nom) || nameRegex.test(m.id)
+          );
+          if (esmItems.length > 0) {
+            const sumQty = esmItems.reduce((acc, m) => acc + (m.quantitat || 0), 0);
+            const sumTotal = esmItems.reduce((acc, m) => acc + (m.subtotal || 0), 0);
+            return {
+              qty: sumQty,
+              price: sumQty > 0 ? sumTotal / sumQty : 0,
+              total: sumTotal
+            };
+          }
+        } catch { /* fallback to other checks */ }
+      }
       // 1. Search in extresSeleccionats
-      const foundInSel = (i.extresSeleccionats || []).find(e => nameRegex.test(e.nom));
-      if (foundInSel) {
-        return {
-          qty: foundInSel.quantitat,
-          price: foundInSel.preuUnitari,
-          total: foundInSel.quantitat * foundInSel.preuUnitari
-        };
+      if (isBreakfast) {
+        const matches = (i.extresSeleccionats || []).filter(e => nameRegex.test(e.nom) || nameRegex.test(e.id));
+        if (matches.length > 0) {
+          const sumQty = matches.reduce((acc, m) => acc + (m.quantitat || 0), 0);
+          const sumTotal = matches.reduce((acc, m) => acc + ((m.quantitat || 0) * (m.preuUnitari || 0)), 0);
+          return {
+            qty: sumQty,
+            price: sumQty > 0 ? sumTotal / sumQty : 0,
+            total: sumTotal
+          };
+        }
+      } else {
+        const foundInSel = (i.extresSeleccionats || []).find(e => nameRegex.test(e.nom) || nameRegex.test(e.id));
+        if (foundInSel) {
+          return {
+            qty: foundInSel.quantitat,
+            price: foundInSel.preuUnitari,
+            total: foundInSel.quantitat * foundInSel.preuUnitari
+          };
+        }
       }
       // 2. Search in respostesCuestionari keys
       const qtyKey = Object.keys(i.respostesCuestionari || {}).find(k => {
@@ -1093,7 +1127,7 @@ export default function AdminDashboard({
       const preuCorbati = corbatiInfo ? corbatiInfo.total : "";
 
       // Q (Esmorzar)
-      const esmorzarInfo = getExtraInfo(i, /esmorz|almuerz/i);
+      const esmorzarInfo = getExtraInfo(i, /esmorz|almuerz|desayun/i);
       const esmorzarVal = esmorzarInfo ? "SI" : "NO";
 
       // R (Preu Esmorzar)
@@ -1621,6 +1655,16 @@ export default function AdminDashboard({
                   id="btn-export-excel"
                 >
                   <FileSpreadsheet size={15} /> {language === 'ca' ? "Exportar Excel" : "Exportar Excel"}
+                </button>
+
+                <button 
+                  type="button"
+                  onClick={() => setShowResumEsmorzarsModal(true)}
+                  className="bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs px-4 py-3 rounded-2xl transition-all shadow flex items-center gap-1.5 cursor-pointer"
+                  id="btn-resum-esmorzars"
+                  title={language === 'ca' ? "Resum per fer comanda d'esmorzars, pans i embotits" : "Resumen para hacer pedido de almuerzos, panes y embutidos"}
+                >
+                  <UtensilsCrossed size={15} /> {language === 'ca' ? "Resum Esmorzars" : "Resumen Almuerzos"}
                 </button>
 
                 {onRefreshInscripcions && (
@@ -3134,6 +3178,14 @@ export default function AdminDashboard({
           />
         </div>
       )}
+
+      {/* 3. Modal: Resum d'Esmorzars i Respostes per a Fleca i Xarcuteria */}
+      <ResumEsmorzarsModal
+        isOpen={showResumEsmorzarsModal}
+        onClose={() => setShowResumEsmorzarsModal(false)}
+        inscripcions={inscripcions}
+        config={config}
+      />
     </div>
   );
 }

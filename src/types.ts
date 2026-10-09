@@ -38,6 +38,12 @@ export interface PreguntaDinamica {
   activa: boolean;
   ordre?: number;
   descripcio?: string;
+  condicio?: { preguntaId: string; valor: string } | null;
+  ambit?: 'parella' | 'comparser';
+  presentacio?: 'desplegable' | 'botons';
+  preus?: Record<string, number>;
+  concepte?: string;
+  concepteES?: string;
 }
 
 export interface Inscripcio {

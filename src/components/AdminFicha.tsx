@@ -29,6 +29,7 @@ import TranslatedText from './TranslatedText';
 import { Inscripcio, EstatPagament, EstatVerificacio, EstatInscripcio, MetodePagament, CategoriaParella, SistemaConfig } from '../types';
 import { calculateInscriptionOrderBreakdown, validateInscriptionTotal } from '../utils/orderCalculations';
 import { determineCodeGroup, allocateNextCode } from '../utils/codeAllocator';
+import { parseScopeAndQuestionId, isPreguntaVisible } from '../utils/questionVisibility';
 
 interface AdminFichaProps {
   registration: Inscripcio;
@@ -884,11 +885,22 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
                 'teDomasBalco', 'teMocadorsExtra', 'clavells_qty', 'corbati_qty', 'esmorzar_qty'
               ]);
               const rawAnswers = registration.respostesCuestionari || {};
+              const allQuestions = config?.preguntesFormulari || [];
+
               const validEntries = Object.entries(rawAnswers).filter(([k, v]) => {
                 if (FORBIDDEN_KEYS.has(k) || k.startsWith('extra_qty_') || k.startsWith('_')) return false;
                 if (v === undefined || v === null || v === '') return false;
                 const s = String(v).trim().toLowerCase();
                 if (s === 'fallat' || s === 'sense resposta' || s === 'sin respuesta') return false;
+
+                // Check condition visibility if key corresponds to a dynamic question
+                const { questionId, scope } = parseScopeAndQuestionId(k);
+                const q = allQuestions.find(p => p.id === questionId);
+                if (q) {
+                  const isVisible = isPreguntaVisible(q, rawAnswers, allQuestions, scope);
+                  if (!isVisible) return false;
+                }
+
                 return true;
               });
 
@@ -902,9 +914,19 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
                   <div className="divide-y divide-zinc-200/60 text-xs space-y-3 pt-1">
                     {validEntries.map(([key, value]) => {
                       let label = "";
-                      const configPregunta = config?.preguntesFormulari?.find(p => p.id === key);
+                      let suffix = "";
+                      const { questionId, scope } = parseScopeAndQuestionId(key);
+                      const configPregunta = allQuestions.find(p => p.id === questionId);
+
                       if (configPregunta) {
                         label = configPregunta.titol;
+                        if (scope === 'c1') {
+                          const c1NomFull = registration.c1Nom ? `${registration.c1Nom} ${registration.c1Cognoms}`.trim() : (language === 'ca' ? 'Participant 1' : 'Participante 1');
+                          suffix = ` (Comparser 1 · ${c1NomFull})`;
+                        } else if (scope === 'c2') {
+                          const c2NomFull = registration.c2Nom ? `${registration.c2Nom} ${registration.c2Cognoms}`.trim() : (language === 'ca' ? 'Participant 2' : 'Participante 2');
+                          suffix = ` (Comparser 2 · ${c2NomFull})`;
+                        }
                       } else if (key === 'preg-1' || key === 'q-1') {
                         label = language === 'ca' ? "Primera vegada saltant amb El Tast?" : "¿Primera vez saliendo con El Tast?";
                       } else if (key === 'preg-2' || key === 'q-2') {
@@ -919,6 +941,7 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
                         <div key={key} className="pt-2">
                           <p className="font-bold text-zinc-800 mb-1 leading-relaxed">
                             <TranslatedText text={label} />
+                            {suffix && <span className="text-zinc-500 font-normal">{suffix}</span>}
                           </p>
                           <p className="text-zinc-600 font-mono italic">
                             {value === true ? 'Sí' : value === false ? 'No' : (

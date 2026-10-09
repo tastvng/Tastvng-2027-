@@ -1,4 +1,5 @@
 import { Inscripcio, SistemaConfig, CategoriaParella } from '../types';
+import { answerKey, isPreguntaVisible } from './questionVisibility';
 
 export interface SelectedMaterialItem {
   id: string;
@@ -267,6 +268,12 @@ export function calculateInscriptionOrderBreakdown(
         continue;
       }
 
+      // Ignore dynamic question materials (esm-) if questions config is available,
+      // as they are recalculated freshly from question configuration and answers in step 4
+      if (extId.startsWith('esm-') && config?.preguntesFormulari && config.preguntesFormulari.length > 0) {
+        continue;
+      }
+
       // Avoid adding an extra whose id has already been processed or already exists in materials
       if (processedExtraIds.has(extId) || processedExtraIds.has(extId.toLowerCase()) || materials.some(m => m.id === extId || (extId && m.id.toLowerCase() === extId.toLowerCase()))) {
         continue;
@@ -315,8 +322,73 @@ export function calculateInscriptionOrderBreakdown(
     }
   }
 
-  // 4. Materials from respostesCuestionari (e.g. clavells_qty, corbati_qty, etc.)
+  // 4. Dynamic question materials with configured prices (e.g. Esmorzar / Breakfast)
   const respostes = registration.respostesCuestionari || {};
+  const preguntesConfig = config?.preguntesFormulari || [];
+
+  if (preguntesConfig.length > 0) {
+    for (const q of preguntesConfig) {
+      if (!q.preus || typeof q.preus !== 'object') continue;
+
+      const positivePriceOptions = Object.entries(q.preus).filter(([_, pr]) => typeof pr === 'number' && !isNaN(pr) && pr > 0);
+      if (positivePriceOptions.length === 0) continue;
+      const hasMultiplePricedOptions = positivePriceOptions.length > 1;
+
+      const scopesToEvaluate: ('parella' | 'c1' | 'c2')[] = q.ambit === 'comparser' ? ['c1', 'c2'] : ['parella'];
+      const optionCounts = new Map<string, number>();
+
+      for (const scope of scopesToEvaluate) {
+        if (!isPreguntaVisible(q, respostes, preguntesConfig, scope)) {
+          continue;
+        }
+
+        const k = answerKey(q, scope);
+        const ans = String(respostes[k] ?? '').trim();
+        if (!ans) continue;
+
+        const price = q.preus[ans];
+        if (typeof price === 'number' && !isNaN(price) && price > 0) {
+          optionCounts.set(ans, (optionCounts.get(ans) || 0) + 1);
+        }
+      }
+
+      for (const [opt, count] of optionCounts.entries()) {
+        const unitPrice = q.preus[opt];
+        if (count <= 0 || typeof unitPrice !== 'number' || isNaN(unitPrice) || unitPrice <= 0) continue;
+
+        const slug = opt.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+        const lineId = `esm-${q.id}-${slug}`;
+
+        if (
+          processedExtraIds.has(lineId) ||
+          processedExtraIds.has(lineId.toLowerCase()) ||
+          materials.some(m => m.id === lineId || m.id.toLowerCase() === lineId.toLowerCase())
+        ) {
+          continue;
+        }
+
+        processedExtraIds.add(lineId);
+        processedExtraIds.add(lineId.toLowerCase());
+
+        let baseName = (language === 'es' && q.concepteES ? q.concepteES : q.concepte) || q.titol;
+        if (hasMultiplePricedOptions) {
+          baseName = `${baseName} (${opt})`;
+        }
+
+        const subtotal = Math.round(count * unitPrice * 100) / 100;
+        materials.push({
+          id: lineId,
+          nom: baseName,
+          quantitat: count,
+          modalitat: 'Esmorzar',
+          preuUnitari: unitPrice,
+          subtotal
+        });
+      }
+    }
+  }
+
+  // 5. Materials from respostesCuestionari (e.g. clavells_qty, corbati_qty, etc.)
   const dynamicTariffList = config?.tarifesDinamiques || [];
 
   for (const [key, val] of Object.entries(respostes)) {

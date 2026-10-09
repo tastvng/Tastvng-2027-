@@ -26,12 +26,16 @@ import {
   Palette,
   Type,
   Shirt,
-  ShieldCheck
+  ShieldCheck,
+  Copy,
+  AlertCircle,
+  UtensilsCrossed
 } from 'lucide-react';
 import { SistemaConfig, PreguntaDinamica, NoticiaXarxes, TarifaConcept, LiniaUniforme } from '../types';
 import { cargarPreguntes, cargarPreguntesDetallat, guardarPreguntes, eliminarPregunta } from '../api/questionnaireApi';
 import { fetchSistemaConfig, saveSistemaConfigItem, supabase, isSupabaseConfigured, logSupabaseWriteDiagnostic } from '../supabaseClient';
 import { AdminStaffManagement } from './AdminStaffManagement';
+import { isOrphanCondition, hasConditionCycle, detectAnyConditionCycle } from '../utils/questionVisibility';
 
 interface AdminConfigProps {
   config: SistemaConfig;
@@ -389,8 +393,17 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
   
   // Create novel question states
   const [newTitol, setNewTitol] = useState('');
+  const [newDescripcio, setNewDescripcio] = useState('');
   const [newTipus, setNewTipus] = useState<'text' | 'select' | 'boolean'>('text');
   const [newOpcionsCsv, setNewOpcionsCsv] = useState('');
+  const [newAmbit, setNewAmbit] = useState<'parella' | 'comparser'>('parella');
+  const [newPresentacio, setNewPresentacio] = useState<'desplegable' | 'botons'>('desplegable');
+  const [newCondicioPreguntaId, setNewCondicioPreguntaId] = useState('');
+  const [newCondicioValor, setNewCondicioValor] = useState('');
+  const [newConcepte, setNewConcepte] = useState('');
+  const [newConcepteES, setNewConcepteES] = useState('');
+  const [newPreus, setNewPreus] = useState<Record<string, number>>({});
+  const [avisPlantillaEsmorzar, setAvisPlantillaEsmorzar] = useState(false);
 
   const [textLegalAutoritzacioMenors, setTextLegalAutoritzacioMenors] = useState(config.textLegalAutoritzacioMenors || `AUTORITZACIÓ DE MENORS D'EDAT\n\nEn condició de tutor/a legal del menor inscrit, declaro sota la meva responsabilitat que autoritzo expressament la seva participació a l'esdeveniment i activitats organitzades per l'Associació Cultural El Tast (Vilanova i la Geltrú ${activeYear}).\n\nCertifico que el menor es troba en condicions físiques i de salut aptes per al correcte desenvolupament de l'activitat, i m'en faig responsable de qualsevol incidència que se'n derivi del seu estat previ de salut, així com del cumprimento de la normativa vigent de l'organització.`);
   const [textLegalAutoritzacioMenorsES, setTextLegalAutoritzacioMenorsES] = useState(config.textLegalAutoritzacioMenorsES || `AUTORIZACIÓN DE MENORES DE EDAD\n\nEn condición de tutor/a legal del menor inscrito, declaro bajo mi responsabilidad que autorizo expresamente su participación en el evento y actividades organizadas por la Associació Cultural El Tast (Vilanova i la Geltrú ${activeYear}).\n\nCertifico que el menor se encuentra en condiciones físicas y de salud aptas para el correcto desarrollo de la actividad, y me hago responsable de cualquier incidencia que se derive de su estado previo de salud, así como del cumplimiento de la normativa de la organización.`);
@@ -600,9 +613,184 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
     setPreguntes(prev => prev.map(p => p.id === id ? { ...p, titol: value } : p));
   };
 
+  const updatePreguntaDescripcio = (id: string, value: string) => {
+    setPreguntes(prev => prev.map(p => p.id === id ? { ...p, descripcio: value } : p));
+  };
+
+  const updatePreguntaAmbit = (id: string, value: 'parella' | 'comparser') => {
+    setPreguntes(prev => prev.map(p => p.id === id ? { ...p, ambit: value } : p));
+  };
+
+  const updatePreguntaPresentacio = (id: string, value: 'desplegable' | 'botons') => {
+    setPreguntes(prev => prev.map(p => p.id === id ? { ...p, presentacio: value } : p));
+  };
+
+  const updatePreguntaCondicio = (id: string, condicio: { preguntaId: string; valor: string } | null) => {
+    setPreguntes(prev => prev.map(p => p.id === id ? { ...p, condicio } : p));
+  };
+
+  const updatePreguntaPreu = (id: string, opcio: string, valStr: string) => {
+    setPreguntes(prev => prev.map(p => {
+      if (p.id !== id) return p;
+      const current = { ...(p.preus || {}) };
+      if (valStr === '' || valStr === undefined) {
+        delete current[opcio];
+      } else {
+        const num = parseFloat(valStr);
+        if (!isNaN(num)) {
+          current[opcio] = num;
+        }
+      }
+      return { ...p, preus: Object.keys(current).length > 0 ? current : undefined };
+    }));
+  };
+
+  const updatePreguntaConcepte = (id: string, concepte: string) => {
+    setPreguntes(prev => prev.map(p => p.id === id ? { ...p, concepte } : p));
+  };
+
+  const updatePreguntaConcepteES = (id: string, concepteES: string) => {
+    setPreguntes(prev => prev.map(p => p.id === id ? { ...p, concepteES } : p));
+  };
+
   const updatePreguntaOpcions = (id: string, value: string) => {
-    const arr = value.split(',').map(s => s.trim()).filter(Boolean);
-    setPreguntes(prev => prev.map(p => p.id === id ? { ...p, opcions: arr } : p));
+    const newArr = value.split(',').map(s => s.trim()).filter(Boolean);
+    setPreguntes(prev => {
+      const target = prev.find(p => p.id === id);
+      if (!target) return prev;
+      const oldArr = target.opcions || [];
+
+      // Check if exactly one option was renamed
+      let renamedOld: string | null = null;
+      let renamedNew: string | null = null;
+      if (oldArr.length === newArr.length && oldArr.length > 0) {
+        let diffCount = 0;
+        for (let i = 0; i < oldArr.length; i++) {
+          if (oldArr[i] !== newArr[i]) {
+            diffCount++;
+            renamedOld = oldArr[i];
+            renamedNew = newArr[i];
+          }
+        }
+        if (diffCount !== 1) {
+          renamedOld = null;
+          renamedNew = null;
+        }
+      }
+
+      return prev.map(p => {
+        if (p.id === id) {
+          let newPreus = p.preus ? { ...p.preus } : undefined;
+          if (renamedOld && renamedNew && newPreus && renamedOld in newPreus) {
+            const price = newPreus[renamedOld];
+            delete newPreus[renamedOld];
+            newPreus[renamedNew] = price;
+          }
+          return { ...p, opcions: newArr, preus: newPreus };
+        } else if (renamedOld && renamedNew && p.condicio?.preguntaId === id && p.condicio.valor === renamedOld) {
+          // Automatically update dependent condition to avoid losing it
+          return { ...p, condicio: { ...p.condicio, valor: renamedNew } };
+        }
+        return p;
+      });
+    });
+  };
+
+  const handleDuplicatePregunta = (id: string) => {
+    const orig = preguntes.find(p => p.id === id);
+    if (!orig) return;
+
+    const copia: PreguntaDinamica = {
+      ...orig,
+      id: 'preg-' + Math.random().toString(36).substr(2, 9),
+      titol: `${orig.titol} (${language === 'ca' ? 'Còpia' : 'Copia'})`,
+      activa: false,
+      ordre: preguntes.length
+    };
+
+    setPreguntes([...preguntes, copia]);
+  };
+
+  const handleAfegirPlantillaEsmorzar = () => {
+    const tEsmorzar = "Voleu esmorzar?";
+    const tTomaquet = "Amb tomàquet o sense?";
+    const tGluten = "Amb gluten o sense gluten?";
+    const tEntrepa = "Quin tipus d'entrepà voleu?";
+
+    const existingTitles = preguntes.map(p => p.titol.trim().toLowerCase());
+    const alreadyExists = [tEsmorzar, tTomaquet, tGluten, tEntrepa].some(t => 
+      existingTitles.includes(t.toLowerCase())
+    );
+
+    if (alreadyExists) {
+      const msg = language === 'ca'
+        ? "Ja existeixen preguntes amb enunciats similars a la plantilla d'esmorzar. Voleu afegir-les igualment?"
+        : "Ya existen preguntas con enunciados similares a la plantilla de almuerzo. ¿Desea añadirlas igualmente?";
+      if (!window.confirm(msg)) return;
+    }
+
+    const idEsmorzar = 'preg-esmorzar-' + Math.random().toString(36).substr(2, 7);
+    const idTomaquet = 'preg-tomaquet-' + Math.random().toString(36).substr(2, 7);
+    const idGluten = 'preg-gluten-' + Math.random().toString(36).substr(2, 7);
+    const idEntrepa = 'preg-entrepa-' + Math.random().toString(36).substr(2, 7);
+    const baseOrdre = preguntes.length;
+
+    const q1: PreguntaDinamica = {
+      id: idEsmorzar,
+      titol: tEsmorzar,
+      tipus: 'select',
+      opcions: ['Sí', 'No'],
+      requerit: true,
+      activa: true,
+      ordre: baseOrdre,
+      ambit: 'comparser',
+      presentacio: 'botons',
+      concepte: 'Esmorzar',
+      concepteES: 'Almuerzo',
+      preus: undefined
+    };
+
+    const q2: PreguntaDinamica = {
+      id: idTomaquet,
+      titol: tTomaquet,
+      tipus: 'select',
+      opcions: ['Amb tomàquet', 'Sense tomàquet'],
+      requerit: true,
+      activa: true,
+      ordre: baseOrdre + 1,
+      ambit: 'comparser',
+      presentacio: 'botons',
+      condicio: { preguntaId: idEsmorzar, valor: 'Sí' }
+    };
+
+    const q3: PreguntaDinamica = {
+      id: idGluten,
+      titol: tGluten,
+      tipus: 'select',
+      opcions: ['Amb gluten', 'Sense gluten'],
+      requerit: true,
+      activa: true,
+      ordre: baseOrdre + 2,
+      ambit: 'comparser',
+      presentacio: 'botons',
+      condicio: { preguntaId: idEsmorzar, valor: 'Sí' }
+    };
+
+    const q4: PreguntaDinamica = {
+      id: idEntrepa,
+      titol: tEntrepa,
+      tipus: 'select',
+      opcions: ['Pernil dolç', 'Pernil salat', 'Xoriço', 'Salsitxó', 'Formatge', 'Tonyina'],
+      requerit: true,
+      activa: true,
+      ordre: baseOrdre + 3,
+      ambit: 'comparser',
+      presentacio: 'botons',
+      condicio: { preguntaId: idEsmorzar, valor: 'Sí' }
+    };
+
+    setPreguntes([...preguntes, q1, q2, q3, q4]);
+    setAvisPlantillaEsmorzar(true);
   };
 
   const handleAddPregunta = () => {
@@ -612,19 +800,39 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
       ? newOpcionsCsv.split(',').map(s => s.trim()).filter(Boolean) 
       : undefined;
 
+    let condicioObj: { preguntaId: string; valor: string } | null = null;
+    if (newCondicioPreguntaId && newCondicioValor) {
+      condicioObj = { preguntaId: newCondicioPreguntaId, valor: newCondicioValor };
+    }
+
     const nova: PreguntaDinamica = {
       id: 'preg-' + Math.random().toString(36).substr(2, 9),
-      titol: newTitol,
+      titol: newTitol.trim(),
+      descripcio: newDescripcio.trim() || undefined,
       tipus: newTipus,
       opcions: opcionsArray,
       requerit: false,
       activa: true,
-      ordre: preguntes.length
+      ordre: preguntes.length,
+      ambit: newAmbit,
+      presentacio: newTipus === 'select' ? newPresentacio : undefined,
+      condicio: condicioObj,
+      concepte: newConcepte.trim() || undefined,
+      concepteES: newConcepteES.trim() || undefined,
+      preus: newTipus === 'select' && Object.keys(newPreus).length > 0 ? newPreus : undefined
     };
 
     setPreguntes([...preguntes, nova]);
     setNewTitol('');
+    setNewDescripcio('');
     setNewOpcionsCsv('');
+    setNewAmbit('parella');
+    setNewPresentacio('desplegable');
+    setNewCondicioPreguntaId('');
+    setNewCondicioValor('');
+    setNewConcepte('');
+    setNewConcepteES('');
+    setNewPreus({});
   };
 
   const handleRemovePregunta = async (id: string) => {
@@ -835,6 +1043,47 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
       window.dispatchEvent(new Event('sistemaConfigChanged'));
     } catch (err) {
       console.error("Error saving sistema_config descriptions:", err);
+    }
+
+    // Validation for dynamic questions
+    if (detectAnyConditionCycle(preguntes)) {
+      const msg = language === 'ca'
+        ? "Error: S'ha detectat un cicle de dependències entre preguntes condicionals. Corregiu les condicions abans de desar."
+        : "Error: Se ha detectado un ciclo de dependencias entre preguntas condicionales. Corrija las condiciones antes de guardar.";
+      alert(msg);
+      return;
+    }
+
+    for (const p of preguntes) {
+      if (p.tipus === 'select') {
+        const opts = (p.opcions || []).map(o => o.trim()).filter(Boolean);
+        if (opts.length === 0) {
+          const msg = language === 'ca'
+            ? `Error a la pregunta «${p.titol}»: És de tipus desplegable però no té cap opció definida.`
+            : `Error en la pregunta «${p.titol}»: Es de tipo desplegable pero no tiene ninguna opción definida.`;
+          alert(msg);
+          return;
+        }
+        if (new Set(opts).size !== opts.length) {
+          const msg = language === 'ca'
+            ? `Error a la pregunta «${p.titol}»: Té opcions duplicades o repetides.`
+            : `Error en la pregunta «${p.titol}»: Tiene opciones duplicadas o repetidas.`;
+          alert(msg);
+          return;
+        }
+      }
+
+      if (p.preus) {
+        for (const [opt, pr] of Object.entries(p.preus)) {
+          if (typeof pr !== 'number' || isNaN(pr) || pr < 0) {
+            const msg = language === 'ca'
+              ? `Error a la pregunta «${p.titol}»: El preu per a «${opt}» ha de ser un número vàlid i no pot ser negatiu.`
+              : `Error en la pregunta «${p.titol}»: El precio para «${opt}» debe ser un número válido y no puede ser negativo.`;
+            alert(msg);
+            return;
+          }
+        }
+      }
     }
 
     // Persist questions inside the dedicated 'preguntes' table in Supabase
@@ -1900,7 +2149,37 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
               <h3 className="font-sans font-black text-sm text-zinc-900 uppercase tracking-wider flex items-center gap-2">
                 <LayoutList size={16} className="text-fuchsia-500" /> {titolFormulariDinamic}
               </h3>
+              <button
+                type="button"
+                onClick={handleAfegirPlantillaEsmorzar}
+                className="bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs px-3.5 py-2 rounded-xl transition flex items-center gap-1.5 shadow-sm cursor-pointer self-start sm:self-auto"
+                id="btn-afegir-plantilla-esmorzar"
+              >
+                <UtensilsCrossed size={14} />
+                {language === 'ca' ? "Afegir plantilla Esmorzar" : "Añadir plantilla Almuerzo"}
+              </button>
             </div>
+
+            {/* Breakfast Notice Banner */}
+            {avisPlantillaEsmorzar && (
+              <div className="p-3.5 bg-amber-50 border border-amber-300 rounded-2xl flex items-start justify-between gap-3 text-amber-950 text-xs animate-fade-in shadow-sm">
+                <div className="flex items-center gap-2">
+                  <AlertCircle size={18} className="text-amber-600 shrink-0" />
+                  <span className="font-bold">
+                    {language === 'ca'
+                      ? "Recorda posar el preu de l'esmorzar a la pregunta «Voleu esmorzar?»"
+                      : "Recuerda poner el precio del almuerzo en la pregunta «Voleu esmorzar?»"}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setAvisPlantillaEsmorzar(false)}
+                  className="text-amber-700 hover:text-amber-900 text-xs font-bold px-1 cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
 
             {/* Editable Card Title */}
             <div className="space-y-1">
@@ -1918,111 +2197,325 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
             </div>
 
             {/* List existing fields with actions toggles */}
-            <div className="space-y-3.5">
-              {preguntes.map((preg, index) => (
-                <div key={preg.id} className="p-4 bg-zinc-50 border border-zinc-200 rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4" id={`admin-pregunta-row-${preg.id}`}>
-                  {/* Reordering buttons */}
-                  <div className="flex flex-row sm:flex-col gap-1 items-center self-start sm:self-center">
-                    <button
-                      type="button"
-                      disabled={index === 0}
-                      onClick={() => handleMovePregunta(index, 'up')}
-                      className="p-1 text-zinc-400 hover:text-zinc-800 disabled:opacity-20 disabled:hover:text-zinc-400 rounded transition cursor-pointer"
-                      title={language === 'ca' ? "Pujar ordre" : "Subir orden"}
-                      id={`btn-config-order-up-${preg.id}`}
-                    >
-                      <ArrowUp size={13} />
-                    </button>
-                    <button
-                      type="button"
-                      disabled={index === preguntes.length - 1}
-                      onClick={() => handleMovePregunta(index, 'down')}
-                      className="p-1 text-zinc-400 hover:text-zinc-800 disabled:opacity-20 disabled:hover:text-zinc-400 rounded transition cursor-pointer"
-                      title={language === 'ca' ? "Baixar ordre" : "Bajar orden"}
-                      id={`btn-config-order-down-${preg.id}`}
-                    >
-                      <ArrowDown size={13} />
-                    </button>
-                  </div>
+            <div className="space-y-4">
+              {preguntes.map((preg, index) => {
+                const isOrphan = isOrphanCondition(preg, preguntes);
+                const isEsmorzarRoot = /esmorz|almuerz/i.test(preg.titol) && (!preg.condicio || !preg.condicio.preguntaId);
+                const isMissingPrice = isEsmorzarRoot && (!preg.preus || Object.keys(preg.preus).length === 0 || Object.values(preg.preus).every(v => !v));
 
-                  <div className="space-y-1 flex-1 w-full">
-                    <input 
-                      type="text" 
-                      value={preg.titol} 
-                      onChange={(e) => updatePreguntaTitol(preg.id, e.target.value)}
-                      className="bg-transparent border-b border-transparent hover:border-zinc-300 focus:border-fuchsia-400 focus:bg-white rounded px-1.5 py-1 text-xs font-bold text-zinc-900 focus:outline-none w-full"
-                      placeholder={language === 'ca' ? "Títol de la pregunta / línia..." : "Título de la pregunta / línea..."}
-                      title={language === 'ca' ? "Fes clic per canviar el nom de la pregunta" : "Haz clic para cambiar el nombre de la pregunta"}
-                      id={`input-admin-pregunta-titol-${preg.id}`}
-                    />
-                    <div className="flex flex-wrap gap-2 items-center text-[10px] text-zinc-400 font-mono uppercase pl-1.5">
-                      <span>{language === 'ca' ? "Tipus" : "Tipo"}: {preg.tipus}</span>
-                      <span>• Ordre: {index + 1}</span>
-                    </div>
-                    {preg.tipus === 'select' && (
-                      <div className="flex items-center gap-2 pl-1.5 pt-1">
-                        <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider whitespace-nowrap">
-                          {language === 'ca' ? "Opcions (CSV):" : "Opciones (CSV):"}
-                        </span>
+                // Eligible parents for condition
+                const candidateParents = preguntes.filter(other => 
+                  other.id !== preg.id && !hasConditionCycle(preg.id, other.id, preguntes)
+                );
+                const selectedParent = preguntes.find(p => p.id === preg.condicio?.preguntaId);
+
+                return (
+                  <div key={preg.id} className="p-4 bg-zinc-50 border border-zinc-200 rounded-2xl flex flex-col gap-3.5 transition-all shadow-xs" id={`admin-pregunta-row-${preg.id}`}>
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                      {/* Reordering buttons */}
+                      <div className="flex flex-row sm:flex-col gap-1 items-center self-start sm:self-center">
+                        <button
+                          type="button"
+                          disabled={index === 0}
+                          onClick={() => handleMovePregunta(index, 'up')}
+                          className="p-1 text-zinc-400 hover:text-zinc-800 disabled:opacity-20 disabled:hover:text-zinc-400 rounded transition cursor-pointer"
+                          title={language === 'ca' ? "Pujar ordre" : "Subir orden"}
+                          id={`btn-config-order-up-${preg.id}`}
+                        >
+                          <ArrowUp size={13} />
+                        </button>
+                        <button
+                          type="button"
+                          disabled={index === preguntes.length - 1}
+                          onClick={() => handleMovePregunta(index, 'down')}
+                          className="p-1 text-zinc-400 hover:text-zinc-800 disabled:opacity-20 disabled:hover:text-zinc-400 rounded transition cursor-pointer"
+                          title={language === 'ca' ? "Baixar ordre" : "Bajar orden"}
+                          id={`btn-config-order-down-${preg.id}`}
+                        >
+                          <ArrowDown size={13} />
+                        </button>
+                      </div>
+
+                      <div className="space-y-1.5 flex-1 w-full">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <input 
+                            type="text" 
+                            value={preg.titol} 
+                            onChange={(e) => updatePreguntaTitol(preg.id, e.target.value)}
+                            className="bg-transparent border-b border-transparent hover:border-zinc-300 focus:border-fuchsia-400 focus:bg-white rounded px-1.5 py-1 text-xs font-bold text-zinc-900 focus:outline-none flex-1 min-w-[200px]"
+                            placeholder={language === 'ca' ? "Títol de la pregunta / línia..." : "Título de la pregunta / línea..."}
+                            title={language === 'ca' ? "Fes clic per canviar el nom de la pregunta" : "Haz clic para cambiar el nombre de la pregunta"}
+                            id={`input-admin-pregunta-titol-${preg.id}`}
+                          />
+                          {isMissingPrice && (
+                            <span className="text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 px-2 py-0.5 rounded-full shrink-0">
+                              {language === 'ca' ? "Sense preu" : "Sin precio"}
+                            </span>
+                          )}
+                          {isOrphan && (
+                            <span className="text-[10px] font-bold bg-red-100 text-red-700 border border-red-300 px-2 py-0.5 rounded-full flex items-center gap-1 shrink-0">
+                              <AlertCircle size={11} /> {language === 'ca' ? "Condició orfe: revisa-la" : "Condición huérfana: revísala"}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Optional description input */}
                         <input
                           type="text"
-                          value={(preg.opcions || []).join(', ')}
-                          onChange={(e) => updatePreguntaOpcions(preg.id, e.target.value)}
-                          className="bg-zinc-50 border border-zinc-200 focus:border-fuchsia-400 focus:bg-white rounded px-2 py-0.5 text-[11px] font-medium text-zinc-800 focus:outline-none flex-1 w-full"
-                          placeholder={language === 'ca' ? "Opció 1, Opció 2, Opció 3" : "Opción 1, Opción 2, Opción 3"}
-                          title={language === 'ca' ? "Modifica les opcions separades per comes" : "Modifica las opciones separadas por comas"}
-                          id={`input-admin-pregunta-opcions-${preg.id}`}
+                          value={preg.descripcio || ''}
+                          onChange={(e) => updatePreguntaDescripcio(preg.id, e.target.value)}
+                          placeholder={language === 'ca' ? "Descripció o text d'ajuda (opcional)..." : "Descripción o texto de ayuda (opcional)..."}
+                          className="bg-transparent border-b border-zinc-100 hover:border-zinc-300 focus:border-fuchsia-300 focus:bg-white rounded px-1.5 py-0.5 text-[11px] text-zinc-600 focus:outline-none w-full italic"
+                          id={`input-admin-pregunta-descripcio-${preg.id}`}
                         />
+
+                        <div className="flex flex-wrap gap-2 items-center text-[10px] text-zinc-400 font-mono uppercase pl-1.5 pt-0.5">
+                          <span>{language === 'ca' ? "Tipus" : "Tipo"}: {preg.tipus}</span>
+                          <span>• Ordre: {index + 1}</span>
+                        </div>
+
+                        {preg.tipus === 'select' && (
+                          <div className="flex items-center gap-2 pl-1.5 pt-1">
+                            <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider whitespace-nowrap">
+                              {language === 'ca' ? "Opcions (CSV):" : "Opciones (CSV):"}
+                            </span>
+                            <input
+                              type="text"
+                              value={(preg.opcions || []).join(', ')}
+                              onChange={(e) => updatePreguntaOpcions(preg.id, e.target.value)}
+                              className="bg-zinc-50 border border-zinc-200 focus:border-fuchsia-400 focus:bg-white rounded px-2 py-0.5 text-[11px] font-medium text-zinc-800 focus:outline-none flex-1 w-full"
+                              placeholder={language === 'ca' ? "Opció 1, Opció 2, Opció 3" : "Opción 1, Opción 2, Opción 3"}
+                              title={language === 'ca' ? "Modifica les opcions separades per comes" : "Modifica las opciones separadas por comas"}
+                              id={`input-admin-pregunta-opcions-${preg.id}`}
+                            />
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2 self-end sm:self-auto font-sans text-[11px] font-bold">
+                        {/* Active toggle check */}
+                        <button
+                          type="button"
+                          onClick={() => togglePreguntaActiva(preg.id)}
+                          className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                            preg.activa 
+                              ? 'bg-fuchsia-50 text-fuchsia-600 border border-fuchsia-200' 
+                              : 'bg-zinc-200/60 text-zinc-400 border border-transparent'
+                          }`}
+                          id={`btn-config-toggle-active-${preg.id}`}
+                        >
+                          {preg.activa 
+                            ? (language === 'ca' ? "Activa" : "Activa") 
+                            : (language === 'ca' ? "Inactiva" : "Inactiva")}
+                        </button>
+
+                        {/* Requerida toggle check */}
+                        <button
+                          type="button"
+                          onClick={() => togglePreguntaRequerida(preg.id)}
+                          className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                            preg.requerit 
+                              ? 'bg-red-50 text-red-600 border border-red-200' 
+                              : 'bg-zinc-200/60 text-zinc-400 border border-transparent'
+                          }`}
+                          id={`btn-config-toggle-req-${preg.id}`}
+                        >
+                          {preg.requerit 
+                            ? (language === 'ca' ? "Requerida" : "Requerida") 
+                            : (language === 'ca' ? "Opcional" : "Opcional")}
+                        </button>
+
+                        {/* Duplicate question button */}
+                        <button
+                          type="button"
+                          onClick={() => handleDuplicatePregunta(preg.id)}
+                          className="p-1.5 bg-zinc-150 hover:bg-zinc-200 text-zinc-600 rounded-lg transition cursor-pointer"
+                          title={language === 'ca' ? "Duplicar pregunta" : "Duplicar pregunta"}
+                          id={`btn-config-duplicate-${preg.id}`}
+                        >
+                          <Copy size={13} className="text-zinc-500" />
+                        </button>
+
+                        {/* Delete question */}
+                        <button
+                          type="button"
+                          onClick={() => handleRemovePregunta(preg.id)}
+                          className="p-1.5 bg-zinc-150 hover:bg-zinc-200 text-zinc-600 rounded-lg transition cursor-pointer"
+                          title={language === 'ca' ? "Eliminar pregunta" : "Eliminar pregunta"}
+                          id={`btn-config-delete-${preg.id}`}
+                        >
+                          <Trash2 size={13} className="text-zinc-500" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Secondary row: Àmbit, Presentació, and Conditional Rule */}
+                    <div className="pt-2 border-t border-zinc-200/60 grid grid-cols-1 md:grid-cols-3 gap-3 text-xs bg-white/60 p-3 rounded-xl border">
+                      {/* Àmbit selector */}
+                      <div>
+                        <label className="block text-[10px] font-mono uppercase font-bold text-zinc-500 mb-1">
+                          {language === 'ca' ? "Àmbit de resposta" : "Ámbito de respuesta"}
+                        </label>
+                        <select
+                          value={preg.ambit || 'parella'}
+                          onChange={(e) => updatePreguntaAmbit(preg.id, e.target.value as any)}
+                          className="w-full bg-zinc-50 border border-zinc-200 rounded-lg px-2.5 py-1.5 text-xs text-zinc-800 font-semibold focus:outline-none focus:border-fuchsia-400 cursor-pointer"
+                          id={`select-admin-pregunta-ambit-${preg.id}`}
+                        >
+                          <option value="parella">{language === 'ca' ? "Una per parella" : "Una por pareja"}</option>
+                          <option value="comparser">{language === 'ca' ? "Una per cada comparser" : "Una por cada comparser"}</option>
+                        </select>
+                      </div>
+
+                      {/* Presentació selector (select only) */}
+                      <div>
+                        <label className="block text-[10px] font-mono uppercase font-bold text-zinc-500 mb-1">
+                          {language === 'ca' ? "Presentació" : "Presentación"}
+                        </label>
+                        {preg.tipus === 'select' ? (
+                          <select
+                            value={preg.presentacio || 'desplegable'}
+                            onChange={(e) => updatePreguntaPresentacio(preg.id, e.target.value as any)}
+                            className="w-full bg-zinc-50 border border-zinc-200 rounded-lg px-2.5 py-1.5 text-xs text-zinc-800 font-semibold focus:outline-none focus:border-fuchsia-400 cursor-pointer"
+                            id={`select-admin-pregunta-presentacio-${preg.id}`}
+                          >
+                            <option value="desplegable">{language === 'ca' ? "Desplegable" : "Desplegable"}</option>
+                            <option value="botons">{language === 'ca' ? "Botons" : "Botones"}</option>
+                          </select>
+                        ) : (
+                          <span className="text-[11px] text-zinc-400 italic block py-1.5">
+                            {language === 'ca' ? "Estàndard" : "Estándar"}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Mostrar només si... (Condicional) */}
+                      <div>
+                        <label className="block text-[10px] font-mono uppercase font-bold text-zinc-500 mb-1">
+                          {language === 'ca' ? "Mostrar només si…" : "Mostrar solo si…"}
+                        </label>
+                        <div className="flex gap-1.5">
+                          <select
+                            value={preg.condicio?.preguntaId || ''}
+                            onChange={(e) => {
+                              const parentId = e.target.value;
+                              if (!parentId) {
+                                updatePreguntaCondicio(preg.id, null);
+                              } else {
+                                const parent = preguntes.find(p => p.id === parentId);
+                                const defaultVal = parent?.tipus === 'boolean'
+                                  ? 'Sí'
+                                  : (parent?.opcions?.[0] || '');
+                                updatePreguntaCondicio(preg.id, { preguntaId: parentId, valor: defaultVal });
+                              }
+                            }}
+                            className="w-1/2 bg-zinc-50 border border-zinc-200 rounded-lg px-2 py-1.5 text-[11px] text-zinc-800 font-semibold focus:outline-none focus:border-fuchsia-400 cursor-pointer"
+                            id={`select-admin-pregunta-parent-${preg.id}`}
+                          >
+                            <option value="">{language === 'ca' ? "Sempre visible" : "Siempre visible"}</option>
+                            {candidateParents.map(other => (
+                              <option key={other.id} value={other.id}>
+                                {other.titol.length > 25 ? other.titol.slice(0, 25) + '…' : other.titol}
+                              </option>
+                            ))}
+                          </select>
+
+                          {preg.condicio?.preguntaId && selectedParent && (
+                            <select
+                              value={preg.condicio?.valor || ''}
+                              onChange={(e) => {
+                                updatePreguntaCondicio(preg.id, {
+                                  preguntaId: preg.condicio!.preguntaId,
+                                  valor: e.target.value
+                                });
+                              }}
+                              className="w-1/2 bg-zinc-50 border border-zinc-200 rounded-lg px-2 py-1.5 text-[11px] text-zinc-800 font-semibold focus:outline-none focus:border-fuchsia-400 cursor-pointer"
+                              id={`select-admin-pregunta-parent-val-${preg.id}`}
+                            >
+                              {selectedParent.tipus === 'boolean' ? (
+                                <>
+                                  <option value="Sí">Sí</option>
+                                  <option value="No">No</option>
+                                </>
+                              ) : (
+                                (selectedParent.opcions || []).map(opt => (
+                                  <option key={opt} value={opt}>{opt}</option>
+                                ))
+                              )}
+                            </select>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Preus & Concept Names (Only for select questions) */}
+                    {preg.tipus === 'select' && (preg.opcions || []).length > 0 && (
+                      <div className="pt-2 border-t border-zinc-200/60 bg-amber-50/40 p-3 rounded-xl border border-amber-200/60 space-y-2.5">
+                        <span className="block text-[10px] font-mono uppercase font-bold text-amber-900 tracking-wider">
+                          {language === 'ca' ? "Tarifes i Preus per opció (€) — Opcional" : "Tarifas y Precios por opción (€) — Opcional"}
+                        </span>
+                        
+                        {/* Price per option grid */}
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                          {(preg.opcions || []).map(opt => {
+                            const val = preg.preus?.[opt];
+                            return (
+                              <div key={opt} className="bg-white border border-zinc-200 rounded-lg p-2 space-y-1">
+                                <span className="block text-[11px] font-bold text-zinc-700 truncate" title={opt}>
+                                  {opt}
+                                </span>
+                                <div className="flex items-center gap-1">
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    value={val !== undefined ? val : ''}
+                                    onChange={(e) => updatePreguntaPreu(preg.id, opt, e.target.value)}
+                                    placeholder="0"
+                                    className="w-full bg-zinc-50 border border-zinc-200 focus:border-amber-500 rounded px-2 py-0.5 text-xs font-mono font-bold text-zinc-800 focus:outline-none"
+                                    id={`input-admin-preu-${preg.id}-${opt}`}
+                                  />
+                                  <span className="text-xs text-zinc-500 font-bold">€</span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {/* Concept labels in CA and ES */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                          <div>
+                            <label className="block text-[9px] font-mono uppercase font-bold text-zinc-500 mb-0.5">
+                              {language === 'ca' ? "Nom del concepte (CA)" : "Nombre del concepto (CA)"}
+                            </label>
+                            <input
+                              type="text"
+                              value={preg.concepte || ''}
+                              onChange={(e) => updatePreguntaConcepte(preg.id, e.target.value)}
+                              placeholder={language === 'ca' ? "Ex: Esmorzar" : "Ej: Almuerzo"}
+                              className="w-full bg-white border border-zinc-200 focus:border-amber-500 rounded-lg px-2.5 py-1 text-xs font-bold text-zinc-800 focus:outline-none"
+                              id={`input-admin-concepte-ca-${preg.id}`}
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[9px] font-mono uppercase font-bold text-zinc-500 mb-0.5">
+                              {language === 'ca' ? "Nom del concepte (ES)" : "Nombre del concepto (ES)"}
+                            </label>
+                            <input
+                              type="text"
+                              value={preg.concepteES || ''}
+                              onChange={(e) => updatePreguntaConcepteES(preg.id, e.target.value)}
+                              placeholder={language === 'ca' ? "Ex: Almuerzo" : "Ej: Almuerzo"}
+                              className="w-full bg-white border border-zinc-200 focus:border-amber-500 rounded-lg px-2.5 py-1 text-xs font-bold text-zinc-800 focus:outline-none"
+                              id={`input-admin-concepte-es-${preg.id}`}
+                            />
+                          </div>
+                        </div>
                       </div>
                     )}
                   </div>
-
-                  <div className="flex items-center gap-2 self-end sm:self-auto font-sans text-[11px] font-bold">
-                    {/* Active toggle check */}
-                    <button
-                      type="button"
-                      onClick={() => togglePreguntaActiva(preg.id)}
-                      className={`px-3 py-1.5 rounded-lg transition-all ${
-                        preg.activa 
-                          ? 'bg-fuchsia-50 text-fuchsia-600 border border-fuchsia-200' 
-                          : 'bg-zinc-200/60 text-zinc-400 border border-transparent'
-                      }`}
-                      id={`btn-config-toggle-active-${preg.id}`}
-                    >
-                      {preg.activa 
-                        ? (language === 'ca' ? "Activa" : "Activa") 
-                        : (language === 'ca' ? "Inactiva" : "Inactiva")}
-                    </button>
-
-                    {/* Requerida toggle check */}
-                    <button
-                      type="button"
-                      onClick={() => togglePreguntaRequerida(preg.id)}
-                      className={`px-3 py-1.5 rounded-lg transition-all ${
-                        preg.requerit 
-                          ? 'bg-red-50 text-red-600 border border-red-200' 
-                          : 'bg-zinc-200/60 text-zinc-400 border border-transparent'
-                      }`}
-                      id={`btn-config-toggle-req-${preg.id}`}
-                    >
-                      {preg.requerit 
-                        ? (language === 'ca' ? "Requerida" : "Requerida") 
-                        : (language === 'ca' ? "Opcional" : "Opcional")}
-                    </button>
-
-                    {/* Delete question */}
-                    <button
-                      type="button"
-                      onClick={() => handleRemovePregunta(preg.id)}
-                      className="p-1.5 bg-zinc-150 hover:bg-zinc-200 text-zinc-600 rounded-lg transition"
-                      title={language === 'ca' ? "Eliminar pregunta" : "Eliminar pregunta"}
-                      id={`btn-config-delete-${preg.id}`}
-                    >
-                      <Trash2 size={13} className="text-zinc-500" />
-                    </button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             {/* Build new custom question drawer item */}
@@ -2046,6 +2539,20 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                   />
                 </div>
 
+                <div className="md:col-span-2">
+                  <label className="block text-[10px] text-zinc-400 uppercase font-mono mb-1">
+                    {language === 'ca' ? "Descripció o ajuda (opcional)" : "Descripción o ayuda (opcional)"}
+                  </label>
+                  <input 
+                    type="text"
+                    value={newDescripcio}
+                    onChange={(e) => setNewDescripcio(e.target.value)}
+                    placeholder={language === 'ca' ? "Informació addicional per a qui respongui..." : "Información adicional para quien responda..."}
+                    className="w-full bg-zinc-950 border border-zinc-850 rounded-xl px-4 py-2 text-xs focus:outline-none focus:border-fuchsia-500 text-white placeholder-zinc-600 italic"
+                    id="input-config-new-question-descripcio"
+                  />
+                </div>
+
                 <div>
                   <label className="block text-[10px] text-zinc-400 uppercase font-mono mb-1">
                     {language === 'ca' ? "Tipus de resposta *" : "Tipo de respuesta *"}
@@ -2058,9 +2565,41 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                   >
                     <option value="text">{language === 'ca' ? "Camp de Text sencer" : "Campo de Texto completo"}</option>
                     <option value="boolean">{language === 'ca' ? "Binaris (Sí / No)" : "Binarios (Sí / No)"}</option>
-                    <option value="select">{language === 'ca' ? "Opcions Múltiples (Dropdown)" : "Opciones Múltiples (Dropdown)"}</option>
+                    <option value="select">{language === 'ca' ? "Opcions Múltiples (Dropdown / Botons)" : "Opciones Múltiples (Dropdown / Botones)"}</option>
                   </select>
                 </div>
+
+                <div>
+                  <label className="block text-[10px] text-zinc-400 uppercase font-mono mb-1">
+                    {language === 'ca' ? "Àmbit de resposta *" : "Ámbito de respuesta *"}
+                  </label>
+                  <select
+                    value={newAmbit}
+                    onChange={(e) => setNewAmbit(e.target.value as any)}
+                    className="w-full bg-zinc-950 border border-zinc-850 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none cursor-pointer"
+                    id="select-config-new-question-ambit"
+                  >
+                    <option value="parella">{language === 'ca' ? "Una per parella" : "Una por pareja"}</option>
+                    <option value="comparser">{language === 'ca' ? "Una per cada comparser" : "Una por cada comparser"}</option>
+                  </select>
+                </div>
+
+                {newTipus === 'select' && (
+                  <div>
+                    <label className="block text-[10px] text-zinc-400 uppercase font-mono mb-1">
+                      {language === 'ca' ? "Presentació" : "Presentación"}
+                    </label>
+                    <select
+                      value={newPresentacio}
+                      onChange={(e) => setNewPresentacio(e.target.value as any)}
+                      className="w-full bg-zinc-950 border border-zinc-850 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none cursor-pointer"
+                      id="select-config-new-question-presentacio"
+                    >
+                      <option value="desplegable">{language === 'ca' ? "Desplegable" : "Desplegable"}</option>
+                      <option value="botons">{language === 'ca' ? "Botons" : "Botones"}</option>
+                    </select>
+                  </div>
+                )}
 
                 {newTipus === 'select' && (
                   <div>
@@ -2077,13 +2616,71 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                     />
                   </div>
                 )}
+
+                {/* Condition setup */}
+                <div className="md:col-span-2">
+                  <label className="block text-[10px] text-zinc-400 uppercase font-mono mb-1">
+                    {language === 'ca' ? "Mostrar només si… (Opcional)" : "Mostrar solo si… (Opcional)"}
+                  </label>
+                  <div className="flex gap-2">
+                    <select
+                      value={newCondicioPreguntaId}
+                      onChange={(e) => {
+                        const parentId = e.target.value;
+                        setNewCondicioPreguntaId(parentId);
+                        if (!parentId) {
+                          setNewCondicioValor('');
+                        } else {
+                          const parent = preguntes.find(p => p.id === parentId);
+                          const defaultVal = parent?.tipus === 'boolean'
+                            ? 'Sí'
+                            : (parent?.opcions?.[0] || '');
+                          setNewCondicioValor(defaultVal);
+                        }
+                      }}
+                      className="w-1/2 bg-zinc-950 border border-zinc-850 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none cursor-pointer"
+                      id="select-config-new-question-parent"
+                    >
+                      <option value="">{language === 'ca' ? "Sempre visible" : "Siempre visible"}</option>
+                      {preguntes.map(p => (
+                        <option key={p.id} value={p.id}>
+                          {p.titol.length > 30 ? p.titol.slice(0, 30) + '…' : p.titol}
+                        </option>
+                      ))}
+                    </select>
+
+                    {newCondicioPreguntaId && (
+                      <select
+                        value={newCondicioValor}
+                        onChange={(e) => setNewCondicioValor(e.target.value)}
+                        className="w-1/2 bg-zinc-950 border border-zinc-850 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none cursor-pointer"
+                        id="select-config-new-question-parent-val"
+                      >
+                        {(() => {
+                          const parent = preguntes.find(p => p.id === newCondicioPreguntaId);
+                          if (parent?.tipus === 'boolean') {
+                            return (
+                              <>
+                                <option value="Sí">Sí</option>
+                                <option value="No">No</option>
+                              </>
+                            );
+                          }
+                          return (parent?.opcions || []).map(opt => (
+                            <option key={opt} value={opt}>{opt}</option>
+                          ));
+                        })()}
+                      </select>
+                    )}
+                  </div>
+                </div>
               </div>
 
               <div className="text-right">
                 <button
                   type="button"
                   onClick={handleAddPregunta}
-                  className="bg-fuchsia-600 hover:bg-fuchsia-500 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition"
+                  className="bg-fuchsia-600 hover:bg-fuchsia-500 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition cursor-pointer"
                   id="btn-config-add-question-submit"
                 >
                   {language === 'ca' ? "Afegir Pregunta" : "Añadir Pregunta"}

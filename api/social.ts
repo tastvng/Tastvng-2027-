@@ -49,8 +49,20 @@ async function verifyAdmin(req: ExtendedRequest): Promise<boolean> {
 // -------------------------------------------------------------
 // Encryption Helpers (AES-256-GCM)
 // -------------------------------------------------------------
+function getCandidateSecrets(): string[] {
+  const secrets = [
+    process.env.META_ENCRYPTION_KEY,
+    process.env.SUPABASE_SERVICE_ROLE_KEY,
+    process.env.VITE_SUPABASE_ANON_KEY,
+    process.env.SUPABASE_ANON_KEY,
+    "tastvng_meta_default_secure_vault_key_2027"
+  ];
+  return Array.from(new Set(secrets.filter((s): s is string => typeof s === "string" && s.trim().length > 0)));
+}
+
 function getEncryptionKey(): Buffer {
-  const secret = process.env.META_ENCRYPTION_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || "tastvng_meta_default_secure_vault_key_2027";
+  const secrets = getCandidateSecrets();
+  const secret = secrets[0] || "tastvng_meta_default_secure_vault_key_2027";
   return crypto.createHash("sha256").update(secret).digest();
 }
 
@@ -66,18 +78,38 @@ function encryptData(text: string): string {
 
 function decryptData(encryptedStr: string): string | null {
   try {
+    // If it's already a plain JSON object or string, try parsing directly
+    if (encryptedStr.trim().startsWith("{") && encryptedStr.trim().endsWith("}")) {
+      try {
+        JSON.parse(encryptedStr);
+        return encryptedStr;
+      } catch { /* proceed to decrypt */ }
+    }
+
     const parts = encryptedStr.split(":");
     if (parts.length !== 3) return null;
     const [ivHex, authTagHex, encryptedText] = parts;
-    const key = getEncryptionKey();
     const iv = Buffer.from(ivHex, "hex");
-    const decipher = crypto.createDecipheriv("aes-256-gcm", key, iv);
-    decipher.setAuthTag(Buffer.from(authTagHex, "hex"));
-    let decrypted = decipher.update(encryptedText, "hex", "utf8");
-    decrypted += decipher.final("utf8");
-    return decrypted;
+    const authTag = Buffer.from(authTagHex, "hex");
+
+    const secrets = getCandidateSecrets();
+    for (const secret of secrets) {
+      try {
+        const key = crypto.createHash("sha256").update(secret).digest();
+        const decipher = crypto.createDecipheriv("aes-256-gcm", key, iv);
+        decipher.setAuthTag(authTag);
+        let decrypted = decipher.update(encryptedText, "hex", "utf8");
+        decrypted += decipher.final("utf8");
+        return decrypted;
+      } catch {
+        // Try next candidate secret
+      }
+    }
+
+    console.warn("[api/social] Warning: token vault could not be decrypted with configured keys.");
+    return null;
   } catch (err) {
-    console.error("[api/social] Error decrypting token vault:", err);
+    console.warn("[api/social] Warning decrypting token vault:", err);
     return null;
   }
 }
@@ -137,11 +169,25 @@ async function getVault(): Promise<MetaTokenVault | null> {
       .maybeSingle();
 
     if (error || !data || !data.value) return null;
-    const decrypted = decryptData(typeof data.value === "string" ? data.value : JSON.stringify(data.value));
+
+    let rawToDecrypt = "";
+    if (typeof data.value === "string") {
+      rawToDecrypt = data.value;
+    } else if (data.value && typeof data.value === "object") {
+      if (typeof data.value.payload === "string") {
+        rawToDecrypt = data.value.payload;
+      } else if (data.value.facebook || data.value.instagram) {
+        return data.value as MetaTokenVault;
+      } else {
+        rawToDecrypt = JSON.stringify(data.value);
+      }
+    }
+
+    const decrypted = decryptData(rawToDecrypt);
     if (!decrypted) return null;
     return JSON.parse(decrypted) as MetaTokenVault;
   } catch (e) {
-    console.error("[api/social] Exception reading vault:", e);
+    console.warn("[api/social] Exception reading vault:", e);
     return null;
   }
 }

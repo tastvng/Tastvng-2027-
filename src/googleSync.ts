@@ -193,7 +193,7 @@ export async function syncToGoogleSheet(
             const corbatiQty = corbatiRows.reduce((sum, m) => sum + m.quantitat, 0);
             const preuCorbati = corbatiRows.reduce((sum, m) => sum + m.subtotal, 0);
 
-            const esmorzarRows = breakdown.materials.filter(m => /esmorz|desayun/i.test(m.nom) || /esmorz|desayun/i.test(m.id));
+            const esmorzarRows = breakdown.materials.filter(m => m.modalitat === 'Esmorzar' || /esmorz|almuerz|desayun/i.test(m.nom) || /esmorz|almuerz|desayun/i.test(m.id));
             const esmorzarQty = esmorzarRows.reduce((sum, m) => sum + m.quantitat, 0);
             const preuEsmorzar = esmorzarRows.reduce((sum, m) => sum + m.subtotal, 0);
 

@@ -145,6 +145,13 @@ async function startServer() {
           requerit: !!p.requerit,
           activa: !!p.activa,
           ordre: typeof p.ordre === 'number' ? p.ordre : index,
+          descripcio: p.descripcio ? String(p.descripcio) : null,
+          condicio: p.condicio && p.condicio.preguntaId ? p.condicio : null,
+          ambit: p.ambit === 'comparser' ? 'comparser' : 'parella',
+          presentacio: p.presentacio === 'botons' ? 'botons' : 'desplegable',
+          preus: p.preus && Object.keys(p.preus).length > 0 ? p.preus : null,
+          concepte: p.concepte ? String(p.concepte) : null,
+          concepte_es: (p.concepte_es ?? p.concepteES) ? String(p.concepte_es ?? p.concepteES) : null,
           updated_at: new Date().toISOString()
         }));
 
