@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { 
   ArrowLeft, 
   ShieldCheck, 
@@ -22,14 +22,21 @@ import {
   QrCode,
   Download,
   ExternalLink,
-  RefreshCw
+  RefreshCw,
+  Coins,
+  Plus,
+  Trash2,
+  Calendar,
+  CreditCard
 } from 'lucide-react';
 import { useLanguage } from '../LanguageContext';
 import TranslatedText from './TranslatedText';
-import { Inscripcio, EstatPagament, EstatVerificacio, EstatInscripcio, MetodePagament, CategoriaParella, SistemaConfig } from '../types';
+import { Inscripcio, EstatPagament, EstatVerificacio, EstatInscripcio, MetodePagament, CategoriaParella, SistemaConfig, PagamentRegistrat } from '../types';
 import { calculateInscriptionOrderBreakdown, validateInscriptionTotal } from '../utils/orderCalculations';
 import { determineCodeGroup, allocateNextCode } from '../utils/codeAllocator';
 import { parseScopeAndQuestionId, isPreguntaVisible } from '../utils/questionVisibility';
+import { getPaymentSummary, derivedEstatPagament, derivedMetodePagament, parseImport, formatEuro } from '../utils/paymentCalculations';
+import { supabase } from '../supabaseClient';
 
 interface AdminFichaProps {
   registration: Inscripcio;
@@ -37,9 +44,10 @@ interface AdminFichaProps {
   config?: SistemaConfig;
   onBack: () => void;
   onSave: (updatedRecord: Inscripcio) => void;
+  onRefresh?: () => Promise<any> | void;
 }
 
-export default function AdminFicha({ registration, allInscripcions = [], config, onBack, onSave }: AdminFichaProps) {
+export default function AdminFicha({ registration, allInscripcions = [], config, onBack, onSave, onRefresh }: AdminFichaProps) {
   const { language, t } = useLanguage();
   const [codiSeguiment, setCodiSeguiment] = useState<string>(registration.codiSeguiment || '');
   const [categoria, setCategoria] = useState<CategoriaParella>(registration.categoria);
@@ -47,6 +55,30 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
   // Single Source of Truth Order Breakdown and Validation
   const breakdown = calculateInscriptionOrderBreakdown(registration, config, language);
   const validation = validateInscriptionTotal(registration, config, language);
+
+  // Registered Payments state
+  const [pagaments, setPagaments] = useState<PagamentRegistrat[]>(() => {
+    if (Array.isArray(registration.pagaments) && registration.pagaments.length > 0) {
+      return registration.pagaments;
+    }
+    return getPaymentSummary(registration, breakdown.totalCalculat).pagaments;
+  });
+
+  const initialPagamentsJson = useRef(JSON.stringify(registration.pagaments || []));
+
+  // Form state for adding a payment
+  const [nouImport, setNouImport] = useState<string>('');
+  const [nouMetode, setNouMetode] = useState<MetodePagament>(MetodePagament.EFECTIU);
+  const [novaData, setNovaData] = useState<string>(() => new Date().toISOString().slice(0, 10));
+  const [novaNota, setNovaNota] = useState<string>('');
+
+  const paymentSummary = useMemo(() => {
+    return getPaymentSummary({ ...registration, pagaments }, breakdown.totalCalculat);
+  }, [registration, pagaments, breakdown.totalCalculat]);
+
+  const hasUnsavedPayments = useMemo(() => {
+    return JSON.stringify(pagaments) !== initialPagamentsJson.current;
+  }, [pagaments]);
 
   // State variables replicating the sheet parameters
   const [estatPagament, setEstatPagament] = useState<EstatPagament>(registration.estatPagament);
@@ -347,17 +379,59 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
     setRotacio2((prev) => (prev + 90) % 360);
   };
 
-  const handleGuardaCanvis = () => {
-    // Validate rules: No payment method allowed if payment is pending
-    if (estatPagament === EstatPagament.PAGAT && !metodePagament) {
-      setValidationError(
+  const handleAddPagament = () => {
+    const imp = parseImport(nouImport);
+    if (imp === null) {
+      alert(
         language === 'ca'
-          ? "Heu d'especificar obligatòriament el mètode de cobrament (Efectiu o Bizum)."
-          : "Debe especificar obligatoriamente el método de cobro (Efectivo o Bizum)."
+          ? "L'import ha de ser un número vàlid major que 0 amb màxim 2 decimals."
+          : "El importe debe ser un número válido mayor que 0 con máximo 2 decimales."
       );
       return;
     }
 
+    if (!nouMetode) {
+      alert(
+        language === 'ca'
+          ? "Cal triar un mètode de pagament (Efectiu o Bizum)."
+          : "Debe elegir un método de pago (Efectivo o Bizum)."
+      );
+      return;
+    }
+
+    if (imp > paymentSummary.pendent) {
+      const excess = (imp - paymentSummary.pendent).toFixed(2).replace('.', ',');
+      const confirmMsg = language === 'ca'
+        ? `Aquest import supera el pendent en ${excess} €. Vols registrar-lo igualment?`
+        : `Este importe supera el pendiente en ${excess} €. ¿Deseas registrarlo igualmente?`;
+      if (!window.confirm(confirmMsg)) {
+        return;
+      }
+    }
+
+    const newPayment: PagamentRegistrat = {
+      id: 'pag-' + Math.random().toString(36).substr(2, 9),
+      data: novaData ? new Date(novaData).toISOString() : new Date().toISOString(),
+      import: imp,
+      metode: nouMetode,
+      nota: novaNota.trim() || undefined
+    };
+
+    setPagaments([...pagaments, newPayment]);
+    setNouImport('');
+    setNovaNota('');
+  };
+
+  const handleRemovePagament = (id: string) => {
+    const confirmMsg = language === 'ca'
+      ? "Segur que voleu eliminar aquest pagament registrat?"
+      : "¿Seguro que desea eliminar este pago registrado?";
+    if (!window.confirm(confirmMsg)) return;
+
+    setPagaments(pagaments.filter(p => p.id !== id));
+  };
+
+  const handleGuardaCanvis = async () => {
     if (!c1Nom.trim() || !c2Nom.trim()) {
       setValidationError(
         language === 'ca'
@@ -368,6 +442,37 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
     }
 
     setValidationError(null);
+
+    // Concurrency check: verify if another admin updated pagaments in the database
+    if (supabase && registration.id) {
+      try {
+        const { data: dbRow } = await supabase
+          .from('inscripciones')
+          .select('pagaments')
+          .eq('id', registration.id)
+          .maybeSingle();
+
+        if (dbRow) {
+          const currentDbPagamentsJson = JSON.stringify(dbRow.pagaments || []);
+          if (currentDbPagamentsJson !== initialPagamentsJson.current && currentDbPagamentsJson !== JSON.stringify(pagaments)) {
+            const conflictMsg = language === 'ca'
+              ? "Un altre administrador ha modificat els pagaments d'aquesta parella mentre tenies la fitxa oberta. Es recarregaran les dades per evitar sobreescriure-les."
+              : "Otro administrador ha modificado los pagos de esta pareja mientras tenías la ficha abierta. Se recargarán los datos para evitar sobrescribirlos.";
+            alert(conflictMsg);
+            if (onRefresh) {
+              await onRefresh();
+            }
+            onBack();
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn("Concurrency check warning:", err);
+      }
+    }
+
+    const derivedEstat = derivedEstatPagament(paymentSummary);
+    const derivedMetode = derivedMetodePagament(pagaments);
 
     const updatedInscripcio: Inscripcio = {
       ...registration,
@@ -396,8 +501,9 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
       c2TutorDni: c2TutorDni.trim(),
       c2TutorTelefon: c2TutorTelefon.trim(),
       preuCalculat: breakdown.totalCalculat,
-      estatPagament,
-      metodePagament: estatPagament === EstatPagament.PAGAT ? metodePagament : null,
+      pagaments,
+      estatPagament: derivedEstat,
+      metodePagament: derivedMetode,
       estatDni,
       entregaMaterial,
       entregaC1Uniforme,
@@ -1317,87 +1423,254 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
               </div>
             </div>
 
-            {/* Segment 2: Payment state and selection */}
-            <div className="space-y-3.5 border-t border-zinc-900 pt-4">
-              <div className="flex justify-between items-center">
-                <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider font-mono">
-                  {language === 'ca' ? "Estat del Pagament" : "Estado del Pago"}
-                </label>
-                <div className="text-right">
-                  <span className="font-mono text-xs text-zinc-300 font-bold block">
-                    {language === 'ca' ? "Import Total" : "Importe Total"}: <strong className="text-fuchsia-400">{breakdown.totalCalculat}€</strong>
-                  </span>
-                  {registration.preuCalculat !== breakdown.totalCalculat && (
-                    <span className="text-[10px] font-mono text-amber-400 block">
-                      ⚠️ Registrat: {registration.preuCalculat}€
+            {/* Segment 2: Gestió de Pagaments Parcials i Pagament Total */}
+            <div className="space-y-4 border-t border-zinc-900 pt-4" id="segment-pagaments">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Coins size={16} className="text-amber-400" />
+                  <label className="text-[11px] font-black text-zinc-300 uppercase tracking-wider font-mono">
+                    {language === 'ca' ? "Gestió de Pagaments" : "Gestión de Pagos"}
+                  </label>
+                  {hasUnsavedPayments && (
+                    <span className="bg-amber-500/20 text-amber-400 border border-amber-500/40 px-2 py-0.5 rounded-full text-[10px] font-bold animate-pulse">
+                      ⚠️ {language === 'ca' ? "Pagaments sense desar" : "Pagos sin guardar"}
+                    </span>
+                  )}
+                </div>
+
+                {/* Badge of derived status */}
+                <div>
+                  {paymentSummary.estat === 'PAGAT' && (
+                    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-black bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">
+                      <Check size={12} /> {language === 'ca' ? "PAGAT" : "PAGADO"}
+                    </span>
+                  )}
+                  {paymentSummary.estat === 'PARCIAL' && (
+                    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-black bg-blue-500/20 text-blue-400 border border-blue-500/40">
+                      {language === 'ca' ? "PAGAMENT PARCIAL" : "PAGO PARCIAL"}
+                    </span>
+                  )}
+                  {paymentSummary.estat === 'PENDENT' && (
+                    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-black bg-amber-500/20 text-amber-400 border border-amber-500/40">
+                      {language === 'ca' ? "PENDENT DE PAGAR" : "PENDIENTE DE PAGO"}
+                    </span>
+                  )}
+                  {paymentSummary.estat === 'SOBREPAGAT' && (
+                    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-black bg-rose-500/20 text-rose-400 border border-rose-500/40">
+                      <AlertTriangle size={12} /> {language === 'ca' ? "SOBREPAGAT" : "SOBREPAGADO"}
                     </span>
                   )}
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEstatPagament(EstatPagament.PENDENT);
-                    setMetodePagament(null);
-                  }}
-                  className={`py-2.5 rounded-xl text-center text-xs font-bold transition-all ${
-                    estatPagament === EstatPagament.PENDENT 
-                      ? 'bg-amber-500 text-white shadow' 
-                      : 'bg-zinc-900 text-zinc-400 hover:bg-zinc-850'
-                  }`}
-                >
-                  {language === 'ca' ? "PENDENT DE PAGAR" : "PENDIENTE DE PAGO"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEstatPagament(EstatPagament.PAGAT);
-                    if (!metodePagament) setMetodePagament(MetodePagament.BIZUM);
-                  }}
-                  className={`py-2.5 rounded-xl text-center text-xs font-bold transition-all ${
-                    estatPagament === EstatPagament.PAGAT 
-                      ? 'bg-green-600 text-white shadow' 
-                      : 'bg-zinc-900 text-zinc-400 hover:bg-zinc-850'
-                  }`}
-                >
-                  {language === 'ca' ? "PAGAT A CAIXA" : "PAGADO EN CAJA"}
-                </button>
+              {/* Three figures header */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 bg-zinc-950/70 p-3.5 rounded-2xl border border-zinc-900">
+                <div className="bg-zinc-900/60 p-2.5 rounded-xl border border-zinc-850">
+                  <span className="text-[10px] font-mono font-bold text-zinc-400 uppercase tracking-wider block">
+                    {language === 'ca' ? "Import Total" : "Importe Total"}
+                  </span>
+                  <p className="text-base font-mono font-black text-white mt-0.5">
+                    {formatEuro(paymentSummary.total)}
+                  </p>
+                  {registration.preuCalculat !== breakdown.totalCalculat && (
+                    <span className="text-[9px] font-mono text-amber-400 block mt-0.5" title="Diferència amb la base de dades">
+                      ⚠️ DB: {formatEuro(registration.preuCalculat)}
+                    </span>
+                  )}
+                </div>
+
+                <div className="bg-zinc-900/60 p-2.5 rounded-xl border border-zinc-850">
+                  <span className="text-[10px] font-mono font-bold text-zinc-400 uppercase tracking-wider block">
+                    {language === 'ca' ? "Pagat" : "Pagado"}
+                  </span>
+                  <p className="text-base font-mono font-black text-emerald-400 mt-0.5">
+                    {formatEuro(paymentSummary.pagat)}
+                  </p>
+                  <span className="text-[9px] font-mono text-zinc-500 block mt-0.5">
+                    {paymentSummary.pagaments.length} {paymentSummary.pagaments.length === 1 ? (language === 'ca' ? 'ingrés' : 'ingreso') : (language === 'ca' ? 'ingressos' : 'ingresos')}
+                  </span>
+                </div>
+
+                <div className={`p-2.5 rounded-xl border ${
+                  paymentSummary.sobrepagat > 0
+                    ? 'bg-rose-950/30 border-rose-800/50 text-rose-300'
+                    : paymentSummary.pendent > 0
+                      ? 'bg-amber-950/30 border-amber-800/50 text-amber-300'
+                      : 'bg-emerald-950/30 border-emerald-800/50 text-emerald-300'
+                }`}>
+                  <span className="text-[10px] font-mono font-bold uppercase tracking-wider block opacity-80">
+                    {paymentSummary.sobrepagat > 0 
+                      ? (language === 'ca' ? "Sobrepagat" : "Sobrepagado") 
+                      : (language === 'ca' ? "Resta per Pagar" : "Resta por Pagar")}
+                  </span>
+                  <p className="text-base font-mono font-black mt-0.5">
+                    {paymentSummary.sobrepagat > 0
+                      ? `+${formatEuro(paymentSummary.sobrepagat)}`
+                      : formatEuro(paymentSummary.pendent)}
+                  </p>
+                  <span className="text-[9px] font-mono block mt-0.5 opacity-80">
+                    {paymentSummary.sobrepagat > 0 
+                      ? (language === 'ca' ? "Excedent a retornar" : "Excedente a devolver")
+                      : paymentSummary.pendent === 0 
+                        ? (language === 'ca' ? "Completat al 100%" : "Completado al 100%")
+                        : (language === 'ca' ? "Pendent de liquidar" : "Pendiente de liquidar")}
+                  </span>
+                </div>
               </div>
 
-              {/* Choose payment method (Cash vs Bizum) */}
-              {estatPagament === EstatPagament.PAGAT && (
-                <div className="bg-zinc-900/40 p-3 rounded-2xl border border-zinc-800 space-y-2 animate-fadeIn">
-                  <span className="block text-[10px] font-bold text-fuchsia-400 uppercase tracking-wider font-mono">
-                    {language === 'ca' ? "Mètode utilitzat:" : "Método utilizado:"}
+              {/* Form "Afegir pagament" */}
+              <div className="bg-zinc-900/50 p-4 rounded-2xl border border-zinc-800 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                  <span className="text-xs font-bold text-zinc-200 tracking-tight flex items-center gap-1.5">
+                    <Plus size={14} className="text-amber-400" />
+                    {language === 'ca' ? "Registrar un nou pagament" : "Registrar un nuevo pago"}
                   </span>
-                  <div className="grid grid-cols-2 gap-1.5">
+                  {paymentSummary.pendent > 0 && (
                     <button
                       type="button"
-                      onClick={() => setMetodePagament(MetodePagament.EFECTIU)}
-                      className={`py-2 rounded-xl text-xs font-bold transition-all ${
-                        metodePagament === MetodePagament.EFECTIU 
-                          ? 'bg-fuchsia-600 text-white shadow' 
-                          : 'bg-zinc-950 text-zinc-500 hover:bg-zinc-900'
-                      }`}
+                      onClick={() => setNouImport(paymentSummary.pendent.toFixed(2).replace('.', ','))}
+                      className="text-[11px] font-mono font-bold text-amber-400 hover:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 px-2.5 py-1 rounded-lg transition-all cursor-pointer self-start sm:self-auto"
+                      id="btn-cobrar-pendent"
                     >
-                      {language === 'ca' ? "Efectiu (Metàl·lic)" : "Efectivo (Metálico)"}
+                      {language === 'ca' ? `Cobrar el que resta (${formatEuro(paymentSummary.pendent)})` : `Cobrar lo que resta (${formatEuro(paymentSummary.pendent)})`}
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => setMetodePagament(MetodePagament.BIZUM)}
-                      className={`py-2 rounded-xl text-xs font-bold transition-all ${
-                        metodePagament === MetodePagament.BIZUM 
-                          ? 'bg-fuchsia-600 text-white shadow' 
-                          : 'bg-zinc-950 text-zinc-500 hover:bg-zinc-900'
-                      }`}
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5">
+                  {/* Amount input */}
+                  <div>
+                    <label className="block text-[10px] font-mono font-bold text-zinc-400 uppercase tracking-wider mb-1">
+                      {language === 'ca' ? "Import (€) *" : "Importe (€) *"}
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={nouImport}
+                        onChange={(e) => setNouImport(e.target.value)}
+                        placeholder="0,00"
+                        className="w-full bg-zinc-950 border border-zinc-750 focus:border-amber-400 focus:bg-black rounded-xl px-3 py-2 text-xs font-mono font-bold text-white focus:outline-none"
+                        id="input-nou-import"
+                      />
+                      <span className="absolute right-3 top-2 text-xs font-bold text-zinc-500">€</span>
+                    </div>
+                  </div>
+
+                  {/* Method select */}
+                  <div>
+                    <label className="block text-[10px] font-mono font-bold text-zinc-400 uppercase tracking-wider mb-1">
+                      {language === 'ca' ? "Mètode *" : "Método *"}
+                    </label>
+                    <select
+                      value={nouMetode}
+                      onChange={(e) => setNouMetode(e.target.value as MetodePagament)}
+                      className="w-full bg-zinc-950 border border-zinc-750 focus:border-amber-400 focus:bg-black rounded-xl px-2.5 py-2 text-xs font-bold text-white focus:outline-none cursor-pointer"
+                      id="select-nou-metode"
                     >
-                      Bizum Colla
-                    </button>
+                      <option value={MetodePagament.EFECTIU}>{language === 'ca' ? "Efectiu" : "Efectivo"}</option>
+                      <option value={MetodePagament.BIZUM}>Bizum Colla</option>
+                    </select>
+                  </div>
+
+                  {/* Date input */}
+                  <div>
+                    <label className="block text-[10px] font-mono font-bold text-zinc-400 uppercase tracking-wider mb-1">
+                      {language === 'ca' ? "Data *" : "Fecha *"}
+                    </label>
+                    <input
+                      type="date"
+                      value={novaData}
+                      onChange={(e) => setNovaData(e.target.value)}
+                      className="w-full bg-zinc-950 border border-zinc-750 focus:border-amber-400 focus:bg-black rounded-xl px-2.5 py-2 text-xs font-bold text-white focus:outline-none"
+                      id="input-nova-data"
+                    />
+                  </div>
+
+                  {/* Optional Note */}
+                  <div>
+                    <label className="block text-[10px] font-mono font-bold text-zinc-400 uppercase tracking-wider mb-1">
+                      {language === 'ca' ? "Nota (opcional)" : "Nota (opcional)"}
+                    </label>
+                    <input
+                      type="text"
+                      value={novaNota}
+                      onChange={(e) => setNovaNota(e.target.value)}
+                      placeholder={language === 'ca' ? "Ex: Bestreta, sobre..." : "Ej: Anticipo, sobre..."}
+                      className="w-full bg-zinc-950 border border-zinc-750 focus:border-amber-400 focus:bg-black rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
+                      id="input-nova-nota"
+                    />
                   </div>
                 </div>
-              )}
+
+                <div className="flex justify-end pt-1">
+                  <button
+                    type="button"
+                    onClick={handleAddPagament}
+                    className="bg-amber-500 hover:bg-amber-600 text-zinc-950 font-black text-xs px-4 py-2 rounded-xl transition-all shadow flex items-center gap-1.5 cursor-pointer"
+                    id="btn-afegir-pagament"
+                  >
+                    <Plus size={14} />
+                    {language === 'ca' ? "Afegir pagament" : "Añadir pago"}
+                  </button>
+                </div>
+              </div>
+
+              {/* Historial de pagaments */}
+              <div className="space-y-2">
+                <span className="block text-[10px] font-mono font-bold text-zinc-400 uppercase tracking-wider">
+                  {language === 'ca' ? "Historial de pagaments registrats:" : "Historial de pagos registrados:"}
+                </span>
+
+                {pagaments.length === 0 ? (
+                  <div className="p-3 bg-zinc-950/40 rounded-xl border border-zinc-900 text-center text-xs text-zinc-500 italic">
+                    {language === 'ca' ? "Cap pagament registrat encara." : "Ningún pago registrado todavía."}
+                  </div>
+                ) : (
+                  <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+                    {pagaments.map((p, pIdx) => {
+                      const dStr = p.data ? new Date(p.data).toLocaleDateString() : '—';
+                      return (
+                        <div
+                          key={p.id || pIdx}
+                          className="flex items-center justify-between p-2.5 bg-zinc-950/70 border border-zinc-850 rounded-xl gap-2 hover:border-zinc-750 transition-all text-xs"
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <span className={`px-2 py-0.5 rounded-md font-mono text-[10px] font-black uppercase shrink-0 ${
+                              p.metode === MetodePagament.BIZUM
+                                ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/40'
+                                : 'bg-fuchsia-500/20 text-fuchsia-400 border border-fuchsia-500/40'
+                            }`}>
+                              {p.metode}
+                            </span>
+                            <span className="font-mono font-black text-white text-sm shrink-0">
+                              {formatEuro(p.import)}
+                            </span>
+                            <span className="text-[11px] text-zinc-400 font-mono shrink-0">
+                              {dStr}
+                            </span>
+                            {p.nota && (
+                              <span className="text-[11px] text-zinc-400 truncate italic" title={p.nota}>
+                                • {p.nota}
+                              </span>
+                            )}
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => handleRemovePagament(p.id)}
+                            className="p-1.5 text-zinc-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer shrink-0"
+                            title={language === 'ca' ? "Eliminar aquest pagament" : "Eliminar este pago"}
+                            id={`btn-remove-pagament-${p.id}`}
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Segment 3: Material Delivery (Derived strictly from selected materials) */}

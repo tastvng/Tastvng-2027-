@@ -1378,6 +1378,7 @@ export default function App() {
                   setView(previousAdminView || 'admin-dashboard');
                 }}
                 onSave={updateRegistration}
+                onRefresh={handleRefreshInscripcions}
               />
             )}
 

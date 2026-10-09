@@ -29,6 +29,14 @@ export enum MetodePagament {
   BIZUM = 'BIZUM'
 }
 
+export interface PagamentRegistrat {
+  id: string;            // únic (p. ej. 'pag-' + aleatori)
+  data: string;          // ISO
+  import: number;        // euros, > 0
+  metode: MetodePagament;
+  nota?: string;
+}
+
 export interface PreguntaDinamica {
   id: string;
   titol: string;
@@ -93,6 +101,7 @@ export interface Inscripcio {
   videoWatched?: boolean;
   
   // Estats de gestió
+  pagaments?: PagamentRegistrat[];
   estatPagament: EstatPagament;
   metodePagament: MetodePagament | null;
   estatDni: EstatVerificacio;

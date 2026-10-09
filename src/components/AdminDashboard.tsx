@@ -54,6 +54,7 @@ import { AdminStaffManagement } from './AdminStaffManagement';
 import { ResumEsmorzarsModal } from './ResumEsmorzarsModal';
 import { calculateDailySummaries } from '../dailySummary';
 import { calculateInscriptionOrderBreakdown, validateInscriptionTotal } from '../utils/orderCalculations';
+import { getPaymentSummary, metodesTexto, formatEuro } from '../utils/paymentCalculations';
 import { buildUnifiedEmailHtml } from '../utils/ticketGenerator';
 import { getEntityConfigSync, fetchLiveEntityConfig } from '../utils/entityConfig';
 import { getDniSignedUrl } from '../supabaseClient';
@@ -737,6 +738,13 @@ export default function AdminDashboard({
       preuCalculat: calculatedPreu,
       teDomasBalco: newDomas,
       teMocadorsExtra: newMocadors,
+      pagaments: newEstatPagament === EstatPagament.PAGAT ? [{
+        id: 'pag-' + Math.random().toString(36).substr(2, 9),
+        data: new Date().toISOString(),
+        import: calculatedPreu,
+        metode: newMetodePagament,
+        nota: 'Alta manual a caixa'
+      }] : [],
       estatPagament: newEstatPagament,
       metodePagament: newEstatPagament === EstatPagament.PAGAT ? newMetodePagament : null,
       estatDni: EstatVerificacio.VALIDAT,
@@ -768,14 +776,34 @@ export default function AdminDashboard({
   const juvenilCount = inscripcions.filter(i => i.categoria === CategoriaParella.JUVENIL).length;
   const esperaCount = inscripcions.filter(i => i.llistaEspera).length;
   
-  const totalPagadesInscripcions = inscripcions.filter(i => i.estatPagament === EstatPagament.PAGAT);
-  const totalRecaudat = totalPagadesInscripcions.reduce((acc, i) => acc + i.preuCalculat, 0);
-  
-  const pagamentsEfectiu = totalPagadesInscripcions.filter(i => i.metodePagament === MetodePagament.EFECTIU);
-  const totalEfectiuVal = pagamentsEfectiu.reduce((acc, i) => acc + i.preuCalculat, 0);
-  
-  const pagamentsBizum = totalPagadesInscripcions.filter(i => i.metodePagament === MetodePagament.BIZUM);
-  const totalBizumVal = pagamentsBizum.reduce((acc, i) => acc + i.preuCalculat, 0);
+  // Real collected amount, cash/bizum split, pending and partial counts
+  let totalRecaudatCents = 0;
+  let totalEfectiuCents = 0;
+  let totalBizumCents = 0;
+  let totalPendentCents = 0;
+  let parellesParcialCount = 0;
+
+  for (const item of inscripcions) {
+    const s = getPaymentSummary(item);
+    totalRecaudatCents += Math.round(s.pagat * 100);
+    totalPendentCents += Math.round(s.pendent * 100);
+    if (s.estat === 'PARCIAL') {
+      parellesParcialCount++;
+    }
+    for (const p of s.pagaments) {
+      const pCents = Math.round(p.import * 100);
+      if (p.metode === MetodePagament.BIZUM) {
+        totalBizumCents += pCents;
+      } else {
+        totalEfectiuCents += pCents;
+      }
+    }
+  }
+
+  const totalRecaudat = totalRecaudatCents / 100;
+  const totalEfectiuVal = totalEfectiuCents / 100;
+  const totalBizumVal = totalBizumCents / 100;
+  const totalPendentVal = totalPendentCents / 100;
 
   const materialsEntregats = inscripcions.filter(i => i.entregaMaterial === EstatInscripcio.ENTREGAT).length;
   const percentatgeEntrega = totalInscrites > 0 ? Math.round((materialsEntregats / totalInscrites) * 100) : 0;
@@ -821,9 +849,12 @@ export default function AdminDashboard({
     const matchesCategoria = filterCategoria === 'ALL' || 
       String(item.categoria || '').toUpperCase() === String(filterCategoria).toUpperCase();
 
-    // Pagament filter
-    const matchesPagament = filterPagament === 'ALL' || 
-      String(item.estatPagament || '').toUpperCase() === String(filterPagament).toUpperCase();
+    // Pagament filter using derived state
+    const pSummary = getPaymentSummary(item);
+    const matchesPagament = filterPagament === 'ALL' ||
+      (filterPagament === 'PAGAT' && (pSummary.estat === 'PAGAT' || pSummary.estat === 'SOBREPAGAT')) ||
+      (filterPagament === 'PARCIAL' && pSummary.estat === 'PARCIAL') ||
+      (filterPagament === 'PENDENT' && pSummary.estat === 'PENDENT');
 
     // DNI filter
     const matchesDni = filterDni === 'ALL' || 

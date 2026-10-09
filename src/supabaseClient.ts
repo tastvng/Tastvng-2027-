@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
-import { Inscripcio, CategoriaParella } from './types';
+import { Inscripcio, CategoriaParella, PagamentRegistrat, EstatPagament, MetodePagament } from './types';
+import { isValidPagament, getPaymentSummary, derivedEstatPagament, derivedMetodePagament } from './utils/paymentCalculations';
 
 const metaEnv = (import.meta as any).env || {};
 const envUrl = metaEnv.VITE_SUPABASE_URL || '';
@@ -466,6 +467,24 @@ function parseInscripcionesRows(rows: any[]): Inscripcio[] {
       teDomasBalco: r.teDomasBalco !== undefined ? !!r.teDomasBalco : !!(r.te_domas_balco || r.tedomasbalco),
       teMocadorsExtra: Number(r.teMocadorsExtra !== undefined ? r.teMocadorsExtra : (r.te_mocadors_extra || r.temocadorsextra || 0)),
 
+      pagaments: (() => {
+        const rawP = r.pagaments !== undefined ? r.pagaments : (r.pagaments_registrats !== undefined ? r.pagaments_registrats : undefined);
+        if (Array.isArray(rawP)) {
+          return rawP.filter(isValidPagament);
+        }
+        if (typeof rawP === 'string' && rawP.trim()) {
+          try {
+            const parsed = JSON.parse(rawP);
+            if (Array.isArray(parsed)) {
+              return parsed.filter(isValidPagament);
+            }
+          } catch {
+            return undefined;
+          }
+        }
+        return undefined;
+      })(),
+
       estatPagament: estatPagament as any,
       metodePagament: r.metodePagament || r.metode_pagament || r.metodepagament || null,
       estatDni: estatDni as any,
@@ -480,7 +499,7 @@ function parseInscripcionesRows(rows: any[]): Inscripcio[] {
   });
 }
 
-const CAMEL_COLUMNS = "id, codiSeguiment, categoria, c1Nom, c1Cognoms, c1Email, c1Telefon, c1Talla, c1DniUrl, c1EsMenor, c1TutorNom, c1TutorCognoms, c1TutorDni, c1TutorTelefon, c1UniformeTipus, c2Nom, c2Cognoms, c2Email, c2Telefon, c2Talla, c2DniUrl, c2EsMenor, c2TutorNom, c2TutorCognoms, c2TutorDni, c2TutorTelefon, c2UniformeTipus, respostesCuestionari, seleccionsUniforme, preuCalculat, teDomasBalco, teMocadorsExtra, estatPagament, metodePagament, estatDni, entregaMaterial, estat_inscripcio, posicio_global, bandera, creadoEn, actualizadoEn";
+const CAMEL_COLUMNS = "id, codiSeguiment, categoria, c1Nom, c1Cognoms, c1Email, c1Telefon, c1Talla, c1DniUrl, c1EsMenor, c1TutorNom, c1TutorCognoms, c1TutorDni, c1TutorTelefon, c1UniformeTipus, c2Nom, c2Cognoms, c2Email, c2Telefon, c2Talla, c2DniUrl, c2EsMenor, c2TutorNom, c2TutorCognoms, c2TutorDni, c2TutorTelefon, c2UniformeTipus, respostesCuestionari, seleccionsUniforme, preuCalculat, teDomasBalco, teMocadorsExtra, pagaments, estatPagament, metodePagament, estatDni, entregaMaterial, estat_inscripcio, posicio_global, bandera, creadoEn, actualizadoEn";
 
 const SNAKE_COLUMNS = "id, codi_seguiment, categoria, c1_nom, c1_cognoms, c1_email, c1_telefon, c1_talla, c1_dni_url, c1_es_menor, c1_tutor_nom, c1_tutor_cognoms, c1_tutor_dni, c1_tutor_telefon, c1_uniforme_tipus, c2_nom, c2_cognoms, c2_email, c2_telefon, c2_talla, c2_dni_url, c2_es_menor, c2_tutor_nom, c2_tutor_cognoms, c2_tutor_dni, c2_tutor_telefon, c2_uniforme_tipus, respostes_cuestionari, seleccions_uniforme, preu_calculat, te_domas_balco, te_mocadors_extra, estat_pagament, metode_pagament, estat_dni, entrega_material, estat_inscripcio, posicio_global, bandera, creado_en, actualizado_en";
 
@@ -910,6 +929,11 @@ export async function saveSupabaseInscripcion(ins: Inscripcio): Promise<SaveInsc
  * Updates an existing inscription in public.inscripciones.
  */
 export async function updateSupabaseInscripcion(ins: Inscripcio): Promise<{ ok: boolean; error?: string }> {
+  const summary = getPaymentSummary(ins);
+  const derivedEstat = derivedEstatPagament(summary);
+  const derivedMetode = derivedMetodePagament(ins.pagaments);
+  const pagamentsPayload = ins.pagaments || [];
+
   try {
     const apiRes = await fetch(`/api/inscriptions?action=update&id=${encodeURIComponent(ins.id)}`, {
       method: 'POST',
@@ -940,8 +964,9 @@ export async function updateSupabaseInscripcion(ins: Inscripcio): Promise<{ ok: 
           c2TutorDni: ins.c2TutorDni,
           c2TutorTelefon: ins.c2TutorTelefon,
           preuCalculat: ins.preuCalculat,
-          estatPagament: ins.estatPagament,
-          metodePagament: ins.metodePagament,
+          pagaments: pagamentsPayload,
+          estatPagament: derivedEstat,
+          metodePagament: derivedMetode,
           estatDni: ins.estatDni,
           entregaMaterial: ins.entregaMaterial,
           estat_inscripcio: ins.estatInscripcio,
@@ -973,8 +998,9 @@ export async function updateSupabaseInscripcion(ins: Inscripcio): Promise<{ ok: 
       c2Talla: ins.c2Talla,
       c2UniformeTipus: ins.c2UniformeTipus,
       preuCalculat: ins.preuCalculat,
-      estatPagament: ins.estatPagament,
-      metodePagament: ins.metodePagament,
+      pagaments: pagamentsPayload,
+      estatPagament: derivedEstat,
+      metodePagament: derivedMetode,
       estatDni: ins.estatDni,
       entregaMaterial: ins.entregaMaterial,
       estat_inscripcio: ins.estatInscripcio,
