@@ -934,45 +934,99 @@ export async function updateSupabaseInscripcion(ins: Inscripcio): Promise<{ ok: 
   const derivedMetode = derivedMetodePagament(ins.pagaments);
   const pagamentsPayload = ins.pagaments || [];
 
+  // Helper to determine if extresSeleccionats changed compared to DB and get merged respostesCuestionari
+  const getMergedRespostesIfNeeded = (dbRawRespostes: any): Record<string, any> | undefined => {
+    const parsedDbRespostes = typeof dbRawRespostes === "object" && dbRawRespostes !== null
+      ? { ...dbRawRespostes }
+      : (typeof dbRawRespostes === "string" ? parseJSON(dbRawRespostes) : {});
+    const dbExtres = Array.isArray(parsedDbRespostes.extresSeleccionats)
+      ? parsedDbRespostes.extresSeleccionats
+      : [];
+    const targetExtres = Array.isArray(ins.extresSeleccionats)
+      ? ins.extresSeleccionats
+      : [];
+
+    const isDifferent = JSON.stringify(dbExtres) !== JSON.stringify(targetExtres);
+    if (!isDifferent) {
+      return undefined;
+    }
+
+    // Merge ONLY extresSeleccionats
+    if (targetExtres.length === 0) {
+      if (dbExtres.length > 0) {
+        return {
+          ...parsedDbRespostes,
+          extresSeleccionats: []
+        };
+      }
+      return undefined;
+    }
+
+    return {
+      ...parsedDbRespostes,
+      extresSeleccionats: targetExtres
+    };
+  };
+
   try {
+    // 1. Fetch current respostesCuestionari to inspect extresSeleccionats
+    let mergedRespostesForApi: Record<string, any> | undefined = undefined;
+    try {
+      const getRes = await fetch(`/api/inscriptions?action=get&id=${encodeURIComponent(ins.id)}`);
+      if (getRes.ok) {
+        const getJson = await getRes.json();
+        if (getJson.ok && getJson.data) {
+          mergedRespostesForApi = getMergedRespostesIfNeeded(getJson.data.respostesCuestionari);
+        }
+      }
+    } catch (fetchErr) {
+      console.warn("Could not fetch current respostesCuestionari before update via API:", fetchErr);
+    }
+
+    const updatesPayload: Record<string, any> = {
+      codiSeguiment: ins.codiSeguiment,
+      categoria: ins.categoria,
+      c1Nom: ins.c1Nom,
+      c1Cognoms: ins.c1Cognoms,
+      c1Email: ins.emailContactoPareja || ins.c1Email,
+      c1Telefon: ins.telefonContactoPareja || ins.c1Telefon,
+      c1Talla: ins.c1Talla,
+      c1UniformeTipus: ins.c1UniformeTipus,
+      c1TutorNom: ins.c1TutorNom,
+      c1TutorCognoms: ins.c1TutorCognoms,
+      c1TutorDni: ins.c1TutorDni,
+      c1TutorTelefon: ins.c1TutorTelefon,
+      c2Nom: ins.c2Nom,
+      c2Cognoms: ins.c2Cognoms,
+      c2Email: ins.emailContactoPareja || ins.c2Email,
+      c2Telefon: ins.telefonContactoPareja || ins.c2Telefon,
+      c2Talla: ins.c2Talla,
+      c2UniformeTipus: ins.c2UniformeTipus,
+      c2TutorNom: ins.c2TutorNom,
+      c2TutorCognoms: ins.c2TutorCognoms,
+      c2TutorDni: ins.c2TutorDni,
+      c2TutorTelefon: ins.c2TutorTelefon,
+      preuCalculat: ins.preuCalculat,
+      pagaments: pagamentsPayload,
+      estatPagament: derivedEstat,
+      metodePagament: derivedMetode,
+      estatDni: ins.estatDni,
+      entregaMaterial: ins.entregaMaterial,
+      estat_inscripcio: ins.estatInscripcio,
+      bandera: ins.bandera,
+      actualizadoEn: new Date().toISOString()
+    };
+
+    if (mergedRespostesForApi !== undefined) {
+      updatesPayload.respostesCuestionari = mergedRespostesForApi;
+    }
+
     const apiRes = await fetch(`/api/inscriptions?action=update&id=${encodeURIComponent(ins.id)}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         id: ins.id,
-        updates: {
-          codiSeguiment: ins.codiSeguiment,
-          categoria: ins.categoria,
-          c1Nom: ins.c1Nom,
-          c1Cognoms: ins.c1Cognoms,
-          c1Email: ins.emailContactoPareja || ins.c1Email,
-          c1Telefon: ins.telefonContactoPareja || ins.c1Telefon,
-          c1Talla: ins.c1Talla,
-          c1UniformeTipus: ins.c1UniformeTipus,
-          c1TutorNom: ins.c1TutorNom,
-          c1TutorCognoms: ins.c1TutorCognoms,
-          c1TutorDni: ins.c1TutorDni,
-          c1TutorTelefon: ins.c1TutorTelefon,
-          c2Nom: ins.c2Nom,
-          c2Cognoms: ins.c2Cognoms,
-          c2Email: ins.emailContactoPareja || ins.c2Email,
-          c2Telefon: ins.telefonContactoPareja || ins.c2Telefon,
-          c2Talla: ins.c2Talla,
-          c2UniformeTipus: ins.c2UniformeTipus,
-          c2TutorNom: ins.c2TutorNom,
-          c2TutorCognoms: ins.c2TutorCognoms,
-          c2TutorDni: ins.c2TutorDni,
-          c2TutorTelefon: ins.c2TutorTelefon,
-          preuCalculat: ins.preuCalculat,
-          pagaments: pagamentsPayload,
-          estatPagament: derivedEstat,
-          metodePagament: derivedMetode,
-          estatDni: ins.estatDni,
-          entregaMaterial: ins.entregaMaterial,
-          estat_inscripcio: ins.estatInscripcio,
-          bandera: ins.bandera,
-          actualizadoEn: new Date().toISOString()
-        }
+        updates: updatesPayload
       })
     });
     if (apiRes.ok) {
@@ -984,30 +1038,51 @@ export async function updateSupabaseInscripcion(ins: Inscripcio): Promise<{ ok: 
   }
 
   if (!supabase) return { ok: false, error: "Supabase no disponible" };
+
+  let mergedRespostesForClient: Record<string, any> | undefined = undefined;
+  try {
+    const { data: currentDbRow } = await supabase
+      .from("inscripciones")
+      .select("respostesCuestionari")
+      .eq("id", ins.id)
+      .maybeSingle();
+    if (currentDbRow) {
+      mergedRespostesForClient = getMergedRespostesIfNeeded(currentDbRow.respostesCuestionari);
+    }
+  } catch (dbReadErr) {
+    console.warn("Could not read current respostesCuestionari directly from Supabase:", dbReadErr);
+  }
+
+  const directUpdates: Record<string, any> = {
+    codiSeguiment: ins.codiSeguiment,
+    categoria: ins.categoria,
+    c1Nom: ins.c1Nom,
+    c1Cognoms: ins.c1Cognoms,
+    c1Talla: ins.c1Talla,
+    c1UniformeTipus: ins.c1UniformeTipus,
+    c2Nom: ins.c2Nom,
+    c2Cognoms: ins.c2Cognoms,
+    c2Talla: ins.c2Talla,
+    c2UniformeTipus: ins.c2UniformeTipus,
+    preuCalculat: ins.preuCalculat,
+    pagaments: pagamentsPayload,
+    estatPagament: derivedEstat,
+    metodePagament: derivedMetode,
+    estatDni: ins.estatDni,
+    entregaMaterial: ins.entregaMaterial,
+    estat_inscripcio: ins.estatInscripcio,
+    bandera: ins.bandera,
+    actualizadoEn: new Date().toISOString()
+  };
+
+  if (mergedRespostesForClient !== undefined) {
+    directUpdates.respostesCuestionari = mergedRespostesForClient;
+  }
+
   const { error } = await supabase
-    .from('inscripciones')
-    .update({
-      codiSeguiment: ins.codiSeguiment,
-      categoria: ins.categoria,
-      c1Nom: ins.c1Nom,
-      c1Cognoms: ins.c1Cognoms,
-      c1Talla: ins.c1Talla,
-      c1UniformeTipus: ins.c1UniformeTipus,
-      c2Nom: ins.c2Nom,
-      c2Cognoms: ins.c2Cognoms,
-      c2Talla: ins.c2Talla,
-      c2UniformeTipus: ins.c2UniformeTipus,
-      preuCalculat: ins.preuCalculat,
-      pagaments: pagamentsPayload,
-      estatPagament: derivedEstat,
-      metodePagament: derivedMetode,
-      estatDni: ins.estatDni,
-      entregaMaterial: ins.entregaMaterial,
-      estat_inscripcio: ins.estatInscripcio,
-      bandera: ins.bandera,
-      actualizadoEn: new Date().toISOString()
-    })
-    .eq('id', ins.id);
+    .from("inscripciones")
+    .update(directUpdates)
+    .eq("id", ins.id);
 
   if (error) {
     return { ok: false, error: error.message };
@@ -1015,9 +1090,6 @@ export async function updateSupabaseInscripcion(ins: Inscripcio): Promise<{ ok: 
   return { ok: true };
 }
 
-/**
- * Removes an inscription by its ID.
- */
 export async function deleteSupabaseInscripcion(id: string): Promise<boolean> {
   try {
     const res = await fetch('/api/inscriptions?action=delete', {
