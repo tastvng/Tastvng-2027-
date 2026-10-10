@@ -535,7 +535,13 @@ export async function getSupabaseInscripcionesResult(): Promise<InscripcionesQue
 
   // 1. Authoritative API route reading directly from public.inscripciones with Service Role
   try {
+    const adminToken = await getAdminAccessToken();
+    const headers: Record<string, string> = {};
+    if (adminToken) {
+      headers['Authorization'] = `Bearer ${adminToken}`;
+    }
     const apiRes = await fetch('/api/inscriptions?action=list', {
+      headers,
       cache: 'no-store'
     });
     if (apiRes.ok) {
@@ -648,7 +654,14 @@ export async function getSupabaseInscripciones(): Promise<Inscripcio[]> {
 export async function getSupabaseInscripcionById(id: string): Promise<Inscripcio | null> {
   // Strategy 1: Server endpoint using Service Role (bypasses RLS issues for admin ficha)
   try {
-    const res = await fetch(`/api/inscriptions?action=get&id=${encodeURIComponent(id)}`);
+    const adminToken = await getAdminAccessToken();
+    const headers: Record<string, string> = {};
+    if (adminToken) {
+      headers['Authorization'] = `Bearer ${adminToken}`;
+    }
+    const res = await fetch(`/api/inscriptions?action=get&id=${encodeURIComponent(id)}`, {
+      headers
+    });
     if (res.ok) {
       const json = await res.json();
       if (json.ok && json.data) {
@@ -774,11 +787,14 @@ export async function saveSupabaseInscripcion(ins: Inscripcio): Promise<SaveInsc
 
   // 1. Authoritative primary route via backend server (uses Service Role to bypass RLS)
   try {
+    const adminToken = await getAdminAccessToken();
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...(adminToken ? { 'Authorization': `Bearer ${adminToken}` } : {})
+    };
     const apiRes = await fetch('/api/inscriptions?action=create', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers,
       body: JSON.stringify({ registration: ins })
     });
 
@@ -971,8 +987,12 @@ export async function updateSupabaseInscripcion(ins: Inscripcio): Promise<{ ok: 
   try {
     // 1. Fetch current respostesCuestionari to inspect extresSeleccionats
     let mergedRespostesForApi: Record<string, any> | undefined = undefined;
+    const adminToken = await getAdminAccessToken();
+    const authHeaders: Record<string, string> = adminToken ? { 'Authorization': `Bearer ${adminToken}` } : {};
     try {
-      const getRes = await fetch(`/api/inscriptions?action=get&id=${encodeURIComponent(ins.id)}`);
+      const getRes = await fetch(`/api/inscriptions?action=get&id=${encodeURIComponent(ins.id)}`, {
+        headers: authHeaders
+      });
       if (getRes.ok) {
         const getJson = await getRes.json();
         if (getJson.ok && getJson.data) {
@@ -1021,9 +1041,13 @@ export async function updateSupabaseInscripcion(ins: Inscripcio): Promise<{ ok: 
       updatesPayload.respostesCuestionari = mergedRespostesForApi;
     }
 
+    const postHeaders: Record<string, string> = {
+      "Content-Type": "application/json",
+      ...authHeaders
+    };
     const apiRes = await fetch(`/api/inscriptions?action=update&id=${encodeURIComponent(ins.id)}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: postHeaders,
       body: JSON.stringify({
         id: ins.id,
         updates: updatesPayload
@@ -1092,9 +1116,14 @@ export async function updateSupabaseInscripcion(ins: Inscripcio): Promise<{ ok: 
 
 export async function deleteSupabaseInscripcion(id: string): Promise<boolean> {
   try {
+    const adminToken = await getAdminAccessToken();
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...(adminToken ? { 'Authorization': `Bearer ${adminToken}` } : {})
+    };
     const res = await fetch('/api/inscriptions?action=delete', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({ id })
     });
     if (res.ok) {
@@ -1244,9 +1273,14 @@ export async function getDniSignedUrl(pathOrUrl: string): Promise<string> {
 
   // 1. Try server endpoint first (uses service role, generates secure 1-hour signed URL)
   try {
+    const adminToken = await getAdminAccessToken();
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...(adminToken ? { 'Authorization': `Bearer ${adminToken}` } : {})
+    };
     const res = await fetch('/api/inscriptions?action=signed-dni-url', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({ path: trimmed })
     });
     if (res.ok) {

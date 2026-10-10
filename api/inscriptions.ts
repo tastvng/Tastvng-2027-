@@ -1,3 +1,4 @@
+import { verifySupabaseAdminToken } from "./_supabase-auth.js";
 import { createClient } from "@supabase/supabase-js";
 import crypto from "crypto";
 // ==========================================
@@ -328,6 +329,23 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-
  * - action=upload-dni (POST): Secure DNI document upload with magic byte inspection & rate limiting.
  * - action=validate (POST): Authoritative server-side price calculation and pre-registration validation.
  */
+
+async function verifyAdmin(req: any): Promise<boolean> {
+  const authHeader = req?.headers?.authorization || req?.headers?.Authorization;
+  if (!authHeader || typeof authHeader !== "string" || !authHeader.startsWith("Bearer ")) {
+    return false;
+  }
+  const token = authHeader.substring(7).trim();
+  if (!token) return false;
+  try {
+    const result = await verifySupabaseAdminToken(token);
+    return !!result.valid;
+  } catch (err) {
+    console.error("[api/inscriptions] Error verifying admin token:", err);
+    return false;
+  }
+}
+
 export default async function inscriptionsHandler(req: any, res: any) {
   try {
     // Always ensure application/json Content-Type
@@ -362,6 +380,7 @@ export default async function inscriptionsHandler(req: any, res: any) {
     // ROUTE 0: CREATE INSCRIPTION (action=create or action=save or body.registration exists)
     // ==========================================
     if (action === 'create' || action === 'save' || (req.method === 'POST' && (body.registration || (body.codiSeguiment && body.c1Nom)))) {
+      const isAdminCaller = await verifyAdmin(req);
       const reg = body.registration || body;
 
       // Rate limit inscription submissions (15 per 5 minutes per IP)
@@ -497,8 +516,9 @@ export default async function inscriptionsHandler(req: any, res: any) {
         preuCalculat: typeof reg.preuCalculat === 'number' ? reg.preuCalculat : 70,
         teDomasBalco: Boolean(reg.teDomasBalco),
         teMocadorsExtra: typeof reg.teMocadorsExtra === 'number' ? reg.teMocadorsExtra : 0,
-        estatPagament: reg.estatPagament || 'PENDENT',
-        metodePagament: reg.metodePagament || null,
+        estatPagament: isAdminCaller ? (reg.estatPagament || 'PENDENT') : 'PENDENT',
+        metodePagament: isAdminCaller ? (reg.metodePagament || null) : null,
+        pagaments: isAdminCaller ? (Array.isArray(reg.pagaments) ? reg.pagaments : []) : [],
         estatDni: reg.estatDni || 'PENDENT',
         entregaMaterial: reg.entregaMaterial || 'PENDENT',
         estat_inscripcio: reg.estatInscripcio || reg.estat_inscripcio || 'obertes',
@@ -655,6 +675,21 @@ export default async function inscriptionsHandler(req: any, res: any) {
     // ROUTE: GET SINGLE INSCRIPTION (action=get or action=get-by-id)
     // ==========================================
     if (action === 'get' || action === 'get-by-id') {
+      const targetId = String(query.id || body.id || '').trim();
+      const targetCodi = String(query.codi || body.codi || '').trim();
+      const isAdminCaller = await verifyAdmin(req);
+
+      // If queried by code without admin auth, return ONLY non-personal fields for public confirmation
+      const isPublicCodeQuery = !isAdminCaller && Boolean(targetCodi);
+
+      if (!isAdminCaller && !isPublicCodeQuery) {
+        return res.status(401).json({
+          ok: false,
+          error: "No autoritzat: Es requereix token d'administrador vàlid.",
+          code: "UNAUTHORIZED"
+        });
+      }
+
       const serverSupabase = getServerSupabase();
       if (!serverSupabase) {
         return res.status(500).json({
@@ -663,9 +698,6 @@ export default async function inscriptionsHandler(req: any, res: any) {
           code: "CONFIG_MISSING"
         });
       }
-
-      const targetId = String(query.id || body.id || '').trim();
-      const targetCodi = String(query.codi || body.codi || '').trim();
 
       if (!targetId && !targetCodi) {
         return res.status(400).json({ ok: false, error: "ID o Codi de seguiment requerit." });
@@ -680,6 +712,13 @@ export default async function inscriptionsHandler(req: any, res: any) {
 
       const { data, error } = await q.maybeSingle();
 
+      const filterPublicFields = (row: any) => ({
+        codiSeguiment: row.codiSeguiment || row.codi_seguiment || targetCodi,
+        categoria: row.categoria,
+        estatPagament: row.estatPagament || row.estat_pagament || 'PENDENT',
+        preuCalculat: typeof row.preuCalculat === 'number' ? row.preuCalculat : (typeof row.preu_calculat === 'number' ? row.preu_calculat : 0)
+      });
+
       if (error || !data) {
         let qFallback = serverSupabase.from('inscripcions').select('*');
         if (targetId) qFallback = qFallback.eq('id', targetId);
@@ -687,18 +726,31 @@ export default async function inscriptionsHandler(req: any, res: any) {
 
         const { data: fbData } = await qFallback.maybeSingle();
         if (fbData) {
-          return res.status(200).json({ ok: true, data: fbData });
+          return res.status(200).json({
+            ok: true,
+            data: isPublicCodeQuery ? filterPublicFields(fbData) : fbData
+          });
         }
         return res.status(404).json({ ok: false, error: "Inscripció no trobada" });
       }
 
-      return res.status(200).json({ ok: true, data });
+      return res.status(200).json({
+        ok: true,
+        data: isPublicCodeQuery ? filterPublicFields(data) : data
+      });
     }
 
     // ==========================================
     // ROUTE 1: LIST INSCRIPTIONS FOR SECRETARÍA (action=list or GET with no specific action)
     // ==========================================
     if (action === 'list' || (!action && req.method === 'GET')) {
+      if (!await verifyAdmin(req)) {
+        return res.status(401).json({
+          ok: false,
+          error: "No autoritzat: Es requereix token d'administrador vàlid.",
+          code: "UNAUTHORIZED"
+        });
+      }
       const serverSupabase = getServerSupabase();
       if (!serverSupabase) {
         return res.status(500).json({
@@ -883,6 +935,13 @@ export default async function inscriptionsHandler(req: any, res: any) {
     // ROUTE: GENERATE SIGNED DNI URL (action=signed-dni-url or action=get-dni-url)
     // ==========================================
     if (action === 'signed-dni-url' || action === 'get-dni-url') {
+      if (!await verifyAdmin(req)) {
+        return res.status(401).json({
+          ok: false,
+          error: "No autoritzat: Es requereix token d'administrador vàlid.",
+          code: "UNAUTHORIZED"
+        });
+      }
       try {
         const rawPath = String(body.path || query.path || '').trim();
         if (!rawPath) {
@@ -1059,6 +1118,13 @@ export default async function inscriptionsHandler(req: any, res: any) {
     // ROUTE 4: Update Inscription (action=update)
     // ==========================================
     if (action === 'update' || req.method === 'PATCH' || req.method === 'PUT') {
+      if (!await verifyAdmin(req)) {
+        return res.status(401).json({
+          ok: false,
+          error: "No autoritzat: Es requereix token d'administrador vàlid.",
+          code: "UNAUTHORIZED"
+        });
+      }
       const serverSupabase = getServerSupabase();
       if (!serverSupabase) {
         return res.status(500).json({
@@ -1113,6 +1179,13 @@ export default async function inscriptionsHandler(req: any, res: any) {
     // ROUTE 5: Delete Inscription (action=delete)
     // ==========================================
     if (action === 'delete' || req.method === 'DELETE') {
+      if (!await verifyAdmin(req)) {
+        return res.status(401).json({
+          ok: false,
+          error: "No autoritzat: Es requereix token d'administrador vàlid.",
+          code: "UNAUTHORIZED"
+        });
+      }
       const serverSupabase = getServerSupabase();
       if (!serverSupabase) {
         return res.status(500).json({
