@@ -1168,9 +1168,10 @@ export default function AdminDashboard({
       // =SI(I2="",0,I2)+SI(K2="",0,K2)+SI(P2="",0,P2)+SI(R2="",0,R2)
       const totalFormula = { formula: `IF(I${rowNum}="",0,I${rowNum})+IF(K${rowNum}="",0,K${rowNum})+IF(P${rowNum}="",0,P${rowNum})+IF(R${rowNum}="",0,R${rowNum})` };
 
+      const summary = getPaymentSummary(i);
+
       // T (Pagat)
-      const isPaid = i.estatPagament === EstatPagament.PAGAT || String(i.estatPagament).toUpperCase() === 'PAGAT';
-      const pagatAmount = isPaid ? i.preuCalculat : 0;
+      const pagatAmount = summary.pagat;
 
       // U (Pdte. Pag) - Formula exactly matching requested:
       // =SI(S2="","",S2-T2)
@@ -1178,13 +1179,16 @@ export default function AdminDashboard({
 
       // V (Forma Pagament)
       let formaPag = "";
-      if (i.metodePagament) {
-        const mStr = String(i.metodePagament).toUpperCase();
-        if (mStr === 'EFECTIU' || mStr === 'METALIC' || mStr === 'EFECTIVO' || mStr === 'METALICO') {
-          formaPag = "METALICO";
+      if (summary.metodes && summary.metodes.length > 0) {
+        if (summary.metodes.length === 1) {
+          const m = summary.metodes[0];
+          formaPag = m === MetodePagament.EFECTIU ? "METALICO" : "BIZUM";
         } else {
-          formaPag = mStr;
+          formaPag = metodesTexto(summary);
         }
+      } else if (i.metodePagament) {
+        const mStr = String(i.metodePagament).toUpperCase();
+        formaPag = (mStr === 'EFECTIU' || mStr === 'METALIC' || mStr === 'EFECTIVO' || mStr === 'METALICO') ? "METALICO" : mStr;
       }
 
       // W (M)
@@ -1353,7 +1357,7 @@ export default function AdminDashboard({
 
         // 2. PDTE. PAG (Col 21): > 0 -> light red, = 0 -> light green
         if (colNum === 21) {
-          const pdteVal = (i.preuCalculat || 90) - pagatAmount;
+          const pdteVal = summary.pendent;
           if (pdteVal > 0) {
             cell.fill = {
               type: 'pattern',
@@ -1491,7 +1495,7 @@ export default function AdminDashboard({
       </div>
 
       {/* KPI metrics row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
         {/* Total Recaudat card */}
         <div className="bg-white rounded-3xl p-6 border border-zinc-200 shadow-sm flex items-center gap-4 relative overflow-hidden">
           <div className="p-3 bg-fuchsia-50 text-fuchsia-600 rounded-2xl">
@@ -1499,12 +1503,32 @@ export default function AdminDashboard({
           </div>
           <div>
             <p className="text-zinc-400 text-[10px] font-mono font-bold uppercase tracking-wider">{t('total_recaptat')}</p>
-            <h3 className="font-sans font-black text-2xl text-zinc-900 mt-0.5">{totalRecaudat.toFixed(2)}€</h3>
+            <h3 className="font-sans font-black text-2xl text-zinc-900 mt-0.5">{formatEuro(totalRecaudat)}</h3>
             <p className="text-[10px] text-zinc-500 mt-1">
-              {t('efectiu_label')}: <span className="font-bold">{totalEfectiuVal}€</span> • Bizum: <span className="font-bold">{totalBizumVal}€</span>
+              {t('efectiu_label')}: <span className="font-bold">{formatEuro(totalEfectiuVal)}</span> • Bizum: <span className="font-bold">{formatEuro(totalBizumVal)}</span>
             </p>
           </div>
           <div className="absolute top-0 right-0 h-full w-2 bg-fuchsia-500" />
+        </div>
+
+        {/* Pendent de cobrar card */}
+        <div className="bg-white rounded-3xl p-6 border border-zinc-200 shadow-sm flex items-center gap-4 relative overflow-hidden">
+          <div className="p-3 bg-amber-50 text-amber-600 rounded-2xl">
+            <Clock size={28} />
+          </div>
+          <div>
+            <p className="text-zinc-400 text-[10px] font-mono font-bold uppercase tracking-wider">
+              {language === 'ca' ? "Pendent de cobrar" : "Pendiente de cobrar"}
+            </p>
+            <h3 className="font-sans font-black text-2xl text-zinc-900 mt-0.5">{formatEuro(totalPendentVal)}</h3>
+            <p className="text-[10px] text-zinc-500 mt-1">
+              {language === 'ca'
+                ? `${parellesParcialCount} ${parellesParcialCount === 1 ? 'parella amb pagament parcial' : 'parelles amb pagament parcial'}`
+                : `${parellesParcialCount} ${parellesParcialCount === 1 ? 'pareja con pago parcial' : 'parejas con pago parcial'}`
+              }
+            </p>
+          </div>
+          <div className="absolute top-0 right-0 h-full w-2 bg-amber-500" />
         </div>
 
         {/* Dynamic Registered Couples */}
@@ -1760,7 +1784,7 @@ export default function AdminDashboard({
 
               {/* Payment dropdown filter */}
               <div className="flex items-center bg-white border border-zinc-200 px-3 py-2 rounded-xl">
-                <span className="text-zinc-500 mr-2 font-mono">{language === 'ca' ? "Pagat" : "Pagado"}</span>
+                <span className="text-zinc-500 mr-2 font-mono">{language === 'ca' ? "Pagament" : "Pago"}</span>
                 <select 
                   value={filterPagament} 
                   onChange={(e) => setFilterPagament(e.target.value)}
@@ -1768,8 +1792,9 @@ export default function AdminDashboard({
                   id="filter-payment"
                 >
                   <option value="ALL">{language === 'ca' ? "Tots" : "Todos"}</option>
-                  <option value={EstatPagament.PAGAT}>{language === 'ca' ? "Sí" : "Sí"}</option>
-                  <option value={EstatPagament.PENDENT}>{language === 'ca' ? "Pendent" : "Pendiente"}</option>
+                  <option value="PAGAT">{language === 'ca' ? "Pagat" : "Pagado"}</option>
+                  <option value="PARCIAL">{language === 'ca' ? "Parcial" : "Parcial"}</option>
+                  <option value="PENDENT">{language === 'ca' ? "Pendent" : "Pendiente"}</option>
                 </select>
               </div>
 
@@ -2051,18 +2076,39 @@ export default function AdminDashboard({
 
                       {/* Payment status badge */}
                       <td className="px-2 md:px-3 py-3 text-center whitespace-nowrap">
-                        {item.estatPagament === EstatPagament.PAGAT ? (
-                          <div className="inline-flex flex-col items-center">
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-green-100 text-green-800">
-                              <CheckCircle size={10} /> <strong>{item.preuCalculat}€</strong>
+                        {(() => {
+                          const summary = getPaymentSummary(item);
+                          if (summary.estat === 'PAGAT' || summary.estat === 'SOBREPAGAT') {
+                            const metText = metodesTexto(summary);
+                            return (
+                              <div className="inline-flex flex-col items-center">
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-green-100 text-green-800">
+                                  <CheckCircle size={10} /> <strong>{formatEuro(summary.pagat)}</strong>
+                                </span>
+                                {metText && (
+                                  <span className="text-[9px] text-zinc-400 font-mono mt-0.5">{metText}</span>
+                                )}
+                              </div>
+                            );
+                          }
+                          if (summary.estat === 'PARCIAL') {
+                            return (
+                              <div className="inline-flex flex-col items-center">
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-200">
+                                  <Clock size={10} /> <strong>{formatEuro(summary.pagat)} / {formatEuro(summary.total)}</strong>
+                                </span>
+                                <span className="text-[9px] text-amber-700 font-medium font-mono mt-0.5">
+                                  {language === 'ca' ? "Resta " : "Resta "}{formatEuro(summary.pendent)}
+                                </span>
+                              </div>
+                            );
+                          }
+                          return (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">
+                              <Clock size={10} /> <strong>{formatEuro(summary.total)} {language === 'ca' ? "Pendent" : "Pendiente"}</strong>
                             </span>
-                            <span className="text-[9px] text-zinc-400 font-mono mt-0.5">{item.metodePagament}</span>
-                          </div>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">
-                            <Clock size={10} /> <strong>{item.preuCalculat}€ {language === 'ca' ? "Pendent" : "Pendiente"}</strong>
-                          </span>
-                        )}
+                          );
+                        })()}
                       </td>
 
                       {/* DNI status badge */}

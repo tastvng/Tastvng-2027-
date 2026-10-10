@@ -171,6 +171,13 @@ export const INSCRIPCIONS_INICIALS: Inscripcio[] = [
     preuCalculat: 90.00,
     teDomasBalco: false,
     teMocadorsExtra: 0,
+    pagaments: [{
+      id: 'pag-mock-1',
+      data: '2026-05-18T18:45:00Z',
+      import: 90.00,
+      metode: MetodePagament.BIZUM,
+      nota: 'Pagament complet Bizum'
+    }],
     estatPagament: EstatPagament.PAGAT,
     metodePagament: MetodePagament.BIZUM,
     estatDni: EstatVerificacio.VALIDAT,
@@ -204,6 +211,7 @@ export const INSCRIPCIONS_INICIALS: Inscripcio[] = [
     preuCalculat: 90.00,
     teDomasBalco: false,
     teMocadorsExtra: 0,
+    pagaments: [],
     estatPagament: EstatPagament.PENDENT,
     metodePagament: null,
     estatDni: EstatVerificacio.PENDENT,
@@ -237,6 +245,13 @@ export const INSCRIPCIONS_INICIALS: Inscripcio[] = [
     preuCalculat: 60.00,
     teDomasBalco: false,
     teMocadorsExtra: 0,
+    pagaments: [{
+      id: 'pag-mock-3',
+      data: '2026-06-05T19:10:00Z',
+      import: 60.00,
+      metode: MetodePagament.EFECTIU,
+      nota: 'Pagament efectiu'
+    }],
     estatPagament: EstatPagament.PAGAT,
     metodePagament: MetodePagament.EFECTIU,
     estatDni: EstatVerificacio.VALIDAT,
@@ -270,6 +285,7 @@ export const INSCRIPCIONS_INICIALS: Inscripcio[] = [
     preuCalculat: 90.00,
     teDomasBalco: false,
     teMocadorsExtra: 0,
+    pagaments: [],
     estatPagament: EstatPagament.PENDENT,
     metodePagament: null,
     estatDni: EstatVerificacio.REBUTJAT,
@@ -303,6 +319,13 @@ export const INSCRIPCIONS_INICIALS: Inscripcio[] = [
     preuCalculat: 60.00,
     teDomasBalco: false,
     teMocadorsExtra: 0,
+    pagaments: [{
+      id: 'pag-mock-5',
+      data: '2026-06-06T17:00:00Z',
+      import: 60.00,
+      metode: MetodePagament.BIZUM,
+      nota: 'Pagament Bizum'
+    }],
     estatPagament: EstatPagament.PAGAT,
     metodePagament: MetodePagament.BIZUM,
     estatDni: EstatVerificacio.VALIDAT,

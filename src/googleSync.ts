@@ -1,6 +1,7 @@
 import { Inscripcio, SistemaConfig } from './types';
 import { calculateDailySummaries } from './dailySummary';
 import { calculateInscriptionOrderBreakdown } from './utils/orderCalculations';
+import { getPaymentSummary, derivedEstatPagament, metodesTexto } from './utils/paymentCalculations';
 
 // Module-level state variables to enable debouncing and hash comparison across imports
 let syncTimeout: any = null;
@@ -102,6 +103,7 @@ export async function syncToGoogleSheet(
         const formattedData = inscripcions.map((i) => {
           const emailContacto = i.emailContactoPareja || i.c1Email || i.c2Email || '';
           const telefonContacto = i.telefonContactoPareja || i.c1Telefon || i.c2Telefon || '';
+          const pSummary = getPaymentSummary(i);
           return {
             anyEdicio: activeYear,
             codiSeguiment: i.codiSeguiment,
@@ -136,8 +138,10 @@ export async function syncToGoogleSheet(
             clavells: (i.extresSeleccionats || []).find(e => /clavell/i.test(e.nom))?.quantitat || (i.respostesCuestionari?.clavells_qty ? Number(i.respostesCuestionari.clavells_qty) : 0),
             corbati: (i.extresSeleccionats || []).find(e => /corbat/i.test(e.nom))?.quantitat || (i.respostesCuestionari?.corbati_qty ? Number(i.respostesCuestionari.corbati_qty) : 0),
             extresMaterial: (i.extresSeleccionats || []).map(e => `${e.quantitat}x ${e.nom}`).join(', ') || '',
-            estatPagament: i.estatPagament,
-            metodePagament: i.metodePagament || 'CAP',
+            estatPagament: derivedEstatPagament(pSummary),
+            importPagat: pSummary.pagat,
+            pendent: pSummary.pendent,
+            metodePagament: metodesTexto(pSummary) || i.metodePagament || 'CAP',
             validacioDni: i.estatDni,
             entregaMaterial: i.entregaMaterial,
             llistaEspera: i.llistaEspera ? 'SÍ' : 'NO',

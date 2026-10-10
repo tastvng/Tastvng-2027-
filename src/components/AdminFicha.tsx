@@ -52,9 +52,24 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
   const [codiSeguiment, setCodiSeguiment] = useState<string>(registration.codiSeguiment || '');
   const [categoria, setCategoria] = useState<CategoriaParella>(registration.categoria);
 
+  // Local extras state (supports frozen breakfast lines and recalculation)
+  const [extresSeleccionats, setExtresSeleccionats] = useState<any[]>(() => registration.extresSeleccionats || []);
+
+  const currentRecord = useMemo<Inscripcio>(() => ({
+    ...registration,
+    codiSeguiment,
+    categoria,
+    extresSeleccionats
+  }), [registration, codiSeguiment, categoria, extresSeleccionats]);
+
   // Single Source of Truth Order Breakdown and Validation
-  const breakdown = calculateInscriptionOrderBreakdown(registration, config, language);
-  const validation = validateInscriptionTotal(registration, config, language);
+  const breakdown = useMemo(() => {
+    return calculateInscriptionOrderBreakdown(currentRecord, config, language);
+  }, [currentRecord, config, language]);
+
+  const validation = useMemo(() => {
+    return validateInscriptionTotal(currentRecord, config, language);
+  }, [currentRecord, config, language]);
 
   // Registered Payments state
   const [pagaments, setPagaments] = useState<PagamentRegistrat[]>(() => {
@@ -73,12 +88,67 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
   const [novaNota, setNovaNota] = useState<string>('');
 
   const paymentSummary = useMemo(() => {
-    return getPaymentSummary({ ...registration, pagaments }, breakdown.totalCalculat);
-  }, [registration, pagaments, breakdown.totalCalculat]);
+    return getPaymentSummary({ ...currentRecord, pagaments }, breakdown.totalCalculat);
+  }, [currentRecord, pagaments, breakdown.totalCalculat]);
 
   const hasUnsavedPayments = useMemo(() => {
     return JSON.stringify(pagaments) !== initialPagamentsJson.current;
   }, [pagaments]);
+
+  const hasUnsavedExtres = useMemo(() => {
+    return JSON.stringify(extresSeleccionats) !== JSON.stringify(registration.extresSeleccionats || []);
+  }, [extresSeleccionats, registration.extresSeleccionats]);
+
+  // Check if breakfast recalculation can be performed
+  const hasPricedBreakfastQuestion = useMemo(() => {
+    return (config?.preguntesFormulari || []).some(q => 
+      q.preus && typeof q.preus === 'object' && Object.values(q.preus).some(p => typeof p === 'number' && !isNaN(p) && p > 0)
+    );
+  }, [config?.preguntesFormulari]);
+
+  const hasSavedEsmorzarLines = useMemo(() => {
+    return (extresSeleccionats || []).some(e => String(e.id || '').startsWith('esm-'));
+  }, [extresSeleccionats]);
+
+  const canRecalcularEsmorzar = hasPricedBreakfastQuestion || hasSavedEsmorzarLines;
+
+  const handleRecalcularEsmorzar = () => {
+    if (!canRecalcularEsmorzar) return;
+
+    const recalculatedBreakdown = calculateInscriptionOrderBreakdown(
+      currentRecord,
+      config,
+      language,
+      { recalcularEsmorzar: true }
+    );
+
+    const oldTotal = breakdown.totalCalculat;
+    const newTotal = recalculatedBreakdown.totalCalculat;
+    const diff = Math.round((newTotal - oldTotal) * 100) / 100;
+    const diffFormatted = diff >= 0 ? `+${formatEuro(diff)}` : `-${formatEuro(Math.abs(diff))}`;
+
+    const confirmMsg = language === 'ca'
+      ? `Passarà de ${formatEuro(oldTotal)} a ${formatEuro(newTotal)} (${diffFormatted}). Això canvia el pendent de pagament. Continuar?`
+      : `Pasará de ${formatEuro(oldTotal)} a ${formatEuro(newTotal)} (${diffFormatted}). Esto cambia el pendiente de pago. ¿Continuar?`;
+
+    if (!window.confirm(confirmMsg)) {
+      return;
+    }
+
+    const nonEsmorzar = (extresSeleccionats || []).filter(e => !String(e.id || '').startsWith('esm-'));
+    const newEsmorzar = recalculatedBreakdown.materials
+      .filter(m => m.modalitat === 'Esmorzar' || m.id.startsWith('esm-'))
+      .map(m => ({
+        id: m.id,
+        nom: m.nom,
+        quantitat: m.quantitat,
+        preuUnitari: m.preuUnitari,
+        modalitat: m.modalitat
+      }));
+
+    const updatedExtres = [...nonEsmorzar, ...newEsmorzar];
+    setExtresSeleccionats(updatedExtres);
+  };
 
   // State variables replicating the sheet parameters
   const [estatPagament, setEstatPagament] = useState<EstatPagament>(registration.estatPagament);
@@ -500,6 +570,7 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
       c2TutorCognoms: c2TutorCognoms.trim(),
       c2TutorDni: c2TutorDni.trim(),
       c2TutorTelefon: c2TutorTelefon.trim(),
+      extresSeleccionats,
       preuCalculat: breakdown.totalCalculat,
       pagaments,
       estatPagament: derivedEstat,
@@ -910,13 +981,29 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
 
             {/* Official Itemized Breakdown Table (Single Source of Truth) */}
             <div className="space-y-3 border-t border-zinc-100 pt-5">
-              <div className="flex justify-between items-center">
+              <div className="flex flex-wrap justify-between items-center gap-2">
                 <span className="font-sans font-bold text-zinc-800 text-sm block">
                   {language === 'ca' ? "Desglossament Oficial de Materials i Quota" : "Desglose Oficial de Materiales y Cuota"}
                 </span>
-                <span className="text-xs font-mono font-bold text-fuchsia-600 bg-fuchsia-50 px-2.5 py-1 rounded-lg border border-fuchsia-200">
-                  {breakdown.totalCalculat}€ Total
-                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleRecalcularEsmorzar}
+                    disabled={!canRecalcularEsmorzar}
+                    title={!canRecalcularEsmorzar ? (language === 'ca' ? "Cap esmorzar amb preu" : "Ningún almuerzo con precio") : undefined}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold rounded-xl transition border ${
+                      canRecalcularEsmorzar
+                        ? 'bg-zinc-100 hover:bg-zinc-200 text-zinc-800 border-zinc-300 shadow-xs cursor-pointer'
+                        : 'bg-zinc-100/50 text-zinc-400 border-zinc-200 cursor-not-allowed opacity-60'
+                    }`}
+                  >
+                    <RefreshCw size={12} className={canRecalcularEsmorzar ? "text-fuchsia-600" : ""} />
+                    {language === 'ca' ? "Recalcular esmorzar amb els preus actuals" : "Recalcular almuerzo con los precios actuales"}
+                  </button>
+                  <span className="text-xs font-mono font-bold text-fuchsia-600 bg-fuchsia-50 px-2.5 py-1 rounded-lg border border-fuchsia-200">
+                    {formatEuro(breakdown.totalCalculat)} Total
+                  </span>
+                </div>
               </div>
 
               {!validation.valid && (
@@ -1431,9 +1518,11 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
                   <label className="text-[11px] font-black text-zinc-300 uppercase tracking-wider font-mono">
                     {language === 'ca' ? "Gestió de Pagaments" : "Gestión de Pagos"}
                   </label>
-                  {hasUnsavedPayments && (
+                  {(hasUnsavedPayments || hasUnsavedExtres) && (
                     <span className="bg-amber-500/20 text-amber-400 border border-amber-500/40 px-2 py-0.5 rounded-full text-[10px] font-bold animate-pulse">
-                      ⚠️ {language === 'ca' ? "Pagaments sense desar" : "Pagos sin guardar"}
+                      ⚠️ {hasUnsavedExtres 
+                        ? (language === 'ca' ? "Canvis en esmorzar sense desar" : "Cambios en almuerzo sin guardar")
+                        : (language === 'ca' ? "Pagaments sense desar" : "Pagos sin guardar")}
                     </span>
                   )}
                 </div>
@@ -1466,9 +1555,25 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
               {/* Three figures header */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 bg-zinc-950/70 p-3.5 rounded-2xl border border-zinc-900">
                 <div className="bg-zinc-900/60 p-2.5 rounded-xl border border-zinc-850">
-                  <span className="text-[10px] font-mono font-bold text-zinc-400 uppercase tracking-wider block">
-                    {language === 'ca' ? "Import Total" : "Importe Total"}
-                  </span>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-mono font-bold text-zinc-400 uppercase tracking-wider block">
+                      {language === 'ca' ? "Import Total" : "Importe Total"}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleRecalcularEsmorzar}
+                      disabled={!canRecalcularEsmorzar}
+                      title={!canRecalcularEsmorzar ? (language === 'ca' ? "Cap esmorzar amb preu" : "Ningún almuerzo con precio") : (language === 'ca' ? "Recalcular esmorzar amb els preus actuals" : "Recalcular almuerzo con los precios actuales")}
+                      className={`inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-md border transition ${
+                        canRecalcularEsmorzar
+                          ? 'bg-zinc-800 hover:bg-zinc-700 text-fuchsia-300 border-zinc-700 cursor-pointer'
+                          : 'bg-zinc-900 text-zinc-600 border-zinc-850 cursor-not-allowed opacity-50'
+                      }`}
+                    >
+                      <RefreshCw size={9} />
+                      {language === 'ca' ? "Recalcular" : "Recalcular"}
+                    </button>
+                  </div>
                   <p className="text-base font-mono font-black text-white mt-0.5">
                     {formatEuro(paymentSummary.total)}
                   </p>

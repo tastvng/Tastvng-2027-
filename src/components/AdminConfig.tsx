@@ -163,7 +163,7 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
     ];
     ${isDomasActiveInConfig ? `headers.push(${JSON.stringify(domasNameInConfig)});` : ''}
     ${isMocadorActiveInConfig ? `headers.push(${JSON.stringify(mocadorNameInConfig)});` : ''}
-    headers.push("Estat Pagament", "Mètode Pagament", "Validació DNI", "Entrega Material", "Llista Espera", "Data Creació");
+    headers.push("Import Pagat (€)", "Pendent (€)", "Estat Pagament", "Mètode Pagament", "Validació DNI", "Entrega Material", "Llista Espera", "Data Creació");
 
     sheetInsc.appendRow(headers);
     sheetInsc.getRange(1, 1, 1, headers.length).setFontWeight("bold").setBackground("#f4f4f5");
@@ -179,7 +179,7 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
         ];
         ${isDomasActiveInConfig ? `row.push(r.domasBalco);` : ''}
         ${isMocadorActiveInConfig ? `row.push(r.mocadorsExtra);` : ''}
-        row.push(r.estatPagament, r.metodePagament, r.validacioDni, r.entregaMaterial, r.llistaEspera, r.dataCreacio);
+        row.push(r.importPagat, r.pendent, r.estatPagament, r.metodePagament, r.validacioDni, r.entregaMaterial, r.llistaEspera, r.dataCreacio);
         rowsToWrite.push(row);
       }
       sheetInsc.getRange(2, 1, rowsToWrite.length, headers.length).setValues(rowsToWrite);

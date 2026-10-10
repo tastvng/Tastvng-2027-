@@ -51,6 +51,7 @@ import {
 import QRCode from 'qrcode';
 import jsQR from 'jsqr';
 import AdminFicha from './AdminFicha';
+import { getPaymentSummary, formatEuro } from '../utils/paymentCalculations';
 
 interface AdminScannerProps {
   inscripcions: Inscripcio[];
@@ -1252,20 +1253,57 @@ export default function AdminScanner({
                     <Euro size={13} className="text-emerald-400" />
                     {language === 'ca' ? "Estat del Pagament" : "Estado del Pago"}
                   </h4>
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-bold text-lg text-emerald-400 font-sans">
-                      {standbyRecord.preuCalculat || 0}€
-                    </span>
-                    <span className={`px-2.5 py-1 rounded-lg font-bold uppercase text-[10px] ${
-                      standbyRecord.estatPagament === EstatPagament.PAGAT
-                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                        : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                    }`}>
-                      {standbyRecord.estatPagament === EstatPagament.PAGAT
-                        ? (language === 'ca' ? "PAGAT" : "PAGADO")
-                        : (language === 'ca' ? "PENDENT DE PAGAMENT" : "PENDIENTE DE PAGO")}
-                    </span>
-                  </div>
+                  {(() => {
+                    const paySummary = getPaymentSummary(standbyRecord);
+                    const isPaid = paySummary.estat === 'PAGAT';
+                    const isParcial = paySummary.estat === 'PARCIAL';
+                    const isSobrepagat = paySummary.estat === 'SOBREPAGAT';
+
+                    let badgeClass = 'bg-amber-500/20 text-amber-300 border border-amber-500/30';
+                    let badgeLabel = language === 'ca' ? "PENDENT DE PAGAMENT" : "PENDIENTE DE PAGO";
+                    if (isPaid) {
+                      badgeClass = 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30';
+                      badgeLabel = language === 'ca' ? "PAGAT" : "PAGADO";
+                    } else if (isParcial) {
+                      badgeClass = 'bg-sky-500/20 text-sky-300 border border-sky-500/30';
+                      badgeLabel = language === 'ca' ? "PAGAMENT PARCIAL" : "PAGO PARCIAL";
+                    } else if (isSobrepagat) {
+                      badgeClass = 'bg-purple-500/20 text-purple-300 border border-purple-500/30';
+                      badgeLabel = language === 'ca' ? "SOBREPAGAT" : "SOBREPAGADO";
+                    }
+
+                    return (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between text-xs">
+                          <div className="flex items-baseline gap-2">
+                            <span className="font-bold text-lg text-emerald-400 font-sans">
+                              {formatEuro(paySummary.total)}
+                            </span>
+                            <span className="text-[10px] text-zinc-400">Total</span>
+                          </div>
+                          <span className={`px-2.5 py-1 rounded-lg font-bold uppercase text-[10px] ${badgeClass}`}>
+                            {badgeLabel}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 pt-1 border-t border-zinc-800 text-[11px]">
+                          <div>
+                            <span className="text-zinc-500 text-[10px] block font-mono">
+                              {language === 'ca' ? "PAGAT" : "PAGADO"}
+                            </span>
+                            <strong className="text-emerald-400">{formatEuro(paySummary.pagat)}</strong>
+                          </div>
+                          <div>
+                            <span className="text-zinc-500 text-[10px] block font-mono">
+                              {language === 'ca' ? "RESTA" : "RESTA"}
+                            </span>
+                            <strong className={paySummary.pendent > 0 ? "text-amber-400" : "text-zinc-400"}>
+                              {formatEuro(paySummary.pendent)}
+                            </strong>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {/* Material Details */}

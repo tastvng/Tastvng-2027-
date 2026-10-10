@@ -28,6 +28,10 @@ export interface TotalValidationResult {
   errorMessage?: string;
 }
 
+export interface OrderBreakdownOptions {
+  recalcularEsmorzar?: boolean;
+}
+
 /**
  * Single source of truth calculation for an inscription order breakdown.
  * - Reads active tariffs and uniform lines from the current config.
@@ -39,8 +43,13 @@ export interface TotalValidationResult {
 export function calculateInscriptionOrderBreakdown(
   registration: Inscripcio,
   config?: SistemaConfig | null,
-  language: 'ca' | 'es' = 'ca'
+  languageOrOptions: 'ca' | 'es' | OrderBreakdownOptions = 'ca',
+  options?: OrderBreakdownOptions
 ): InscriptionOrderBreakdown {
+  const language: 'ca' | 'es' = typeof languageOrOptions === 'string' ? languageOrOptions : 'ca';
+  const opts: OrderBreakdownOptions | undefined = typeof languageOrOptions === 'object' && languageOrOptions !== null
+    ? languageOrOptions
+    : options;
   // 1. Calculate Category Base Fee
   const isAdult = String(registration.categoria || '').toUpperCase().includes('ADULT') || 
                   registration.categoria === CategoriaParella.ADULT;
@@ -268,9 +277,8 @@ export function calculateInscriptionOrderBreakdown(
         continue;
       }
 
-      // Ignore dynamic question materials (esm-) if questions config is available,
-      // as they are recalculated freshly from question configuration and answers in step 4
-      if (extId.startsWith('esm-') && config?.preguntesFormulari && config.preguntesFormulari.length > 0) {
+      // When recalculating breakfast explicitly, ignore saved esm- lines so they are re-evaluated in step 4
+      if (extId.startsWith('esm-') && opts?.recalcularEsmorzar) {
         continue;
       }
 
@@ -315,7 +323,7 @@ export function calculateInscriptionOrderBreakdown(
         id: isClavells ? 'clavells' : (isCorbati ? 'corbati' : (ext.id || `ext-${materials.length}`)),
         nom: cleanNom,
         quantitat: ext.quantitat,
-        modalitat: (ext as any).modalitat || (language === 'ca' ? 'Complements' : 'Complementos'),
+        modalitat: (ext as any).modalitat || (extId.startsWith('esm-') ? 'Esmorzar' : (language === 'ca' ? 'Complements' : 'Complementos')),
         preuUnitari: ext.preuUnitari,
         subtotal: ext.quantitat * ext.preuUnitari
       });
@@ -325,8 +333,12 @@ export function calculateInscriptionOrderBreakdown(
   // 4. Dynamic question materials with configured prices (e.g. Esmorzar / Breakfast)
   const respostes = registration.respostesCuestionari || {};
   const preguntesConfig = config?.preguntesFormulari || [];
+  const isSavedRegistration = Boolean(
+    (registration.codiSeguiment && String(registration.codiSeguiment).trim() !== '') ||
+    (registration.creadoEn && String(registration.creadoEn).trim() !== '')
+  );
 
-  if (preguntesConfig.length > 0) {
+  if (preguntesConfig.length > 0 && (!isSavedRegistration || opts?.recalcularEsmorzar)) {
     for (const q of preguntesConfig) {
       if (!q.preus || typeof q.preus !== 'object') continue;
 

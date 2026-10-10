@@ -49,20 +49,11 @@ async function verifyAdmin(req: ExtendedRequest): Promise<boolean> {
 // -------------------------------------------------------------
 // Encryption Helpers (AES-256-GCM)
 // -------------------------------------------------------------
-function getCandidateSecrets(): string[] {
-  const secrets = [
-    process.env.META_ENCRYPTION_KEY,
-    process.env.SUPABASE_SERVICE_ROLE_KEY,
-    process.env.VITE_SUPABASE_ANON_KEY,
-    process.env.SUPABASE_ANON_KEY,
-    "tastvng_meta_default_secure_vault_key_2027"
-  ];
-  return Array.from(new Set(secrets.filter((s): s is string => typeof s === "string" && s.trim().length > 0)));
-}
-
 function getEncryptionKey(): Buffer {
-  const secrets = getCandidateSecrets();
-  const secret = secrets[0] || "tastvng_meta_default_secure_vault_key_2027";
+  const secret = process.env.META_ENCRYPTION_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!secret) {
+    throw new Error("Missing META_ENCRYPTION_KEY or SUPABASE_SERVICE_ROLE_KEY for token vault");
+  }
   return crypto.createHash("sha256").update(secret).digest();
 }
 
@@ -78,38 +69,19 @@ function encryptData(text: string): string {
 
 function decryptData(encryptedStr: string): string | null {
   try {
-    // If it's already a plain JSON object or string, try parsing directly
-    if (encryptedStr.trim().startsWith("{") && encryptedStr.trim().endsWith("}")) {
-      try {
-        JSON.parse(encryptedStr);
-        return encryptedStr;
-      } catch { /* proceed to decrypt */ }
-    }
-
     const parts = encryptedStr.split(":");
     if (parts.length !== 3) return null;
     const [ivHex, authTagHex, encryptedText] = parts;
+    const key = getEncryptionKey();
     const iv = Buffer.from(ivHex, "hex");
     const authTag = Buffer.from(authTagHex, "hex");
-
-    const secrets = getCandidateSecrets();
-    for (const secret of secrets) {
-      try {
-        const key = crypto.createHash("sha256").update(secret).digest();
-        const decipher = crypto.createDecipheriv("aes-256-gcm", key, iv);
-        decipher.setAuthTag(authTag);
-        let decrypted = decipher.update(encryptedText, "hex", "utf8");
-        decrypted += decipher.final("utf8");
-        return decrypted;
-      } catch {
-        // Try next candidate secret
-      }
-    }
-
-    console.warn("[api/social] Warning: token vault could not be decrypted with configured keys.");
-    return null;
+    const decipher = crypto.createDecipheriv("aes-256-gcm", key, iv);
+    decipher.setAuthTag(authTag);
+    let decrypted = decipher.update(encryptedText, "hex", "utf8");
+    decrypted += decipher.final("utf8");
+    return decrypted;
   } catch (err) {
-    console.warn("[api/social] Warning decrypting token vault:", err);
+    console.error("[api/social] Error decrypting token vault:", err);
     return null;
   }
 }
@@ -119,7 +91,7 @@ function decryptData(encryptedStr: string): string | null {
 // -------------------------------------------------------------
 function getSupabaseAdmin() {
   const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!supabaseUrl || !serviceKey) return null;
   return createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
 }
