@@ -100,9 +100,6 @@ export const ComparserCard: React.FC<ComparserCardProps> = ({
           <div className="w-2.5 h-2.5 bg-fuchsia-500 rounded-full" />
           {language === 'ca' ? `Comparser/a ${num}` : `Comparsero/a ${num}`}
         </h3>
-        <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 border border-emerald-150 px-2 py-0.5 rounded-full font-mono uppercase tracking-tight flex items-center gap-1 shadow-sm shrink-0" title={language === 'ca' ? "Sincronitzat amb la base de dades" : "Sincronizado con la base de datos"}>
-          <Database size={9} /> {language === 'ca' ? 'Enllaç BBDD' : 'Enlace BBDD'}
-        </span>
       </div>
 
       {hasDuplicateError && (
@@ -112,8 +109,8 @@ export const ComparserCard: React.FC<ComparserCardProps> = ({
             <p className="font-bold">{language === 'ca' ? "Avís de dades coincidents" : "Aviso de datos coincidentes"}</p>
             <p className="text-[11px] text-amber-700 leading-normal mt-0.5">
               {language === 'ca'
-                ? "S'ha detectat que part d'aquestes dades ja estan registrades a la base de dades d'inscripcions!"
-                : "¡Se ha detectado que parte de estos datos ya están registrados en la base de datos de inscripciones!"}
+                ? "S'ha detectat que part d'aquestes dades ja estan registrades en una inscripció prèvia."
+                : "¡Se ha detectado que parte de estos datos ya están registrados en una inscripción previa!"}
             </p>
           </div>
         </div>
@@ -122,12 +119,9 @@ export const ComparserCard: React.FC<ComparserCardProps> = ({
       <div className="space-y-4">
         <div>
           <div className="flex items-center justify-between mb-1">
-            <label className="block text-xs font-bold text-zinc-700 tracking-tight">
+            <label htmlFor={`input-${prefix}-nom`} className="block text-xs font-bold text-zinc-700 tracking-tight cursor-pointer">
               {language === 'ca' ? 'Nom *' : 'Nombre *'}
             </label>
-            <span className="text-[8px] font-bold text-emerald-600 bg-emerald-50 px-1 py-0.5 rounded font-mono uppercase tracking-tight flex items-center gap-0.5" title={language === 'ca' ? "Es desa a la base de dades" : "Se guarda en la base de datos"}>
-              <Database size={8} /> BBDD
-            </span>
           </div>
           <input 
             type="text" 
@@ -139,19 +133,16 @@ export const ComparserCard: React.FC<ComparserCardProps> = ({
           />
           {isNameDuplicate && (
             <p className="text-[9px] text-amber-600 font-bold mt-1 flex items-center gap-1 animate-pulse">
-              <AlertTriangle size={10} /> {language === 'ca' ? "Ja existeix un participant amb aquest nom a la BBDD" : "Ya existe un participante con este nombre en la BBDD"}
+              <AlertTriangle size={10} /> {language === 'ca' ? "Aquest participant ja consta en una altra inscripció" : "Este participante ya consta en otra inscripción"}
             </p>
           )}
         </div>
 
         <div>
           <div className="flex items-center justify-between mb-1">
-            <label className="block text-xs font-bold text-zinc-700 tracking-tight">
+            <label htmlFor={`input-${prefix}-cognoms`} className="block text-xs font-bold text-zinc-700 tracking-tight cursor-pointer">
               {language === 'ca' ? 'Cognoms *' : 'Apellidos *'}
             </label>
-            <span className="text-[8px] font-bold text-emerald-600 bg-emerald-50 px-1 py-0.5 rounded font-mono uppercase tracking-tight flex items-center gap-0.5" title={language === 'ca' ? "Es desa a la base de dades" : "Se guarda en la base de datos"}>
-              <Database size={8} /> BBDD
-            </span>
           </div>
           <input 
             type="text" 
@@ -166,10 +157,12 @@ export const ComparserCard: React.FC<ComparserCardProps> = ({
         {/* Minor status and Tutor details */}
         <div className="bg-zinc-50 border border-zinc-200 rounded-2xl p-4 space-y-3">
           <div className="flex justify-between items-center">
-            <label className="block text-xs font-bold text-zinc-700 tracking-tight">
-              {language === 'ca' ? "El primer comparser és menor d'edat? *" : "¿El primer comparsero es menor de edad? *"}
-            </label>
-            <div className="flex rounded-lg overflow-hidden border border-zinc-200 bg-white p-0.5">
+            <span id={`label-${prefix}-esmenor`} className="block text-xs font-bold text-zinc-700 tracking-tight">
+              {language === 'ca' 
+                ? (num === 1 ? "El primer comparser és menor d'edat? *" : "El segon comparser és menor d'edat? *")
+                : (num === 1 ? "¿El primer comparsero es menor de edad? *" : "¿El segundo comparsero es menor de edad? *")}
+            </span>
+            <div className="flex rounded-lg overflow-hidden border border-zinc-200 bg-white p-0.5" role="group" aria-labelledby={`label-${prefix}-esmenor`}>
               <button
                 type="button"
                 onClick={() => setEsMenor(false)}
@@ -191,16 +184,17 @@ export const ComparserCard: React.FC<ComparserCardProps> = ({
             <div className="pt-2 border-t border-zinc-200/60 space-y-3 animate-fadeIn">
               <div className="text-[10px] bg-amber-50 text-amber-800 border border-amber-200 rounded-lg p-2 font-semibold">
                 {language === 'ca' 
-                  ? "En ser menor d'edat, cal incloure obligatòriament les dades de contacte del tutor legal."
-                  : "Al ser menor de edad, es obligatorio incluir los datos de contacto de su tutor legal."}
+                  ? "En ser menor d'edat, cal incloure obligatòriament les dades de contacte del tutor legal i l'autorització expressa."
+                  : "Al ser menor de edad, es obligatorio incluir los datos de contacto del tutor legal y la autorización expresa."}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[10px] font-bold text-zinc-500 uppercase font-mono mb-1">
+                  <label htmlFor={`input-${prefix}-tutor-nom`} className="block text-[10px] font-bold text-zinc-500 uppercase font-mono mb-1 cursor-pointer">
                     {language === 'ca' ? "Nom del Tutor *" : "Nombre del Tutor *"}
                   </label>
                   <input 
+                    id={`input-${prefix}-tutor-nom`}
                     type="text"
                     value={tutorNom}
                     onChange={(e) => setTutorNom(e.target.value)}
@@ -209,10 +203,11 @@ export const ComparserCard: React.FC<ComparserCardProps> = ({
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-bold text-zinc-500 uppercase font-mono mb-1">
+                  <label htmlFor={`input-${prefix}-tutor-cognoms`} className="block text-[10px] font-bold text-zinc-500 uppercase font-mono mb-1 cursor-pointer">
                     {language === 'ca' ? "Cognoms del Tutor *" : "Apellidos del Tutor *"}
                   </label>
                   <input 
+                    id={`input-${prefix}-tutor-cognoms`}
                     type="text"
                     value={tutorCognoms}
                     onChange={(e) => setTutorCognoms(e.target.value)}
@@ -224,10 +219,11 @@ export const ComparserCard: React.FC<ComparserCardProps> = ({
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[10px] font-bold text-zinc-500 uppercase font-mono mb-1">
+                  <label htmlFor={`input-${prefix}-tutor-dni`} className="block text-[10px] font-bold text-zinc-500 uppercase font-mono mb-1 cursor-pointer">
                     {language === 'ca' ? "DNI / NIE del Tutor *" : "DNI / NIE del Tutor *"}
                   </label>
                   <input 
+                    id={`input-${prefix}-tutor-dni`}
                     type="text"
                     value={tutorDni}
                     onChange={(e) => setTutorDni(e.target.value)}
@@ -236,10 +232,11 @@ export const ComparserCard: React.FC<ComparserCardProps> = ({
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-bold text-zinc-500 uppercase font-mono mb-1">
+                  <label htmlFor={`input-${prefix}-tutor-tel`} className="block text-[10px] font-bold text-zinc-500 uppercase font-mono mb-1 cursor-pointer">
                     {language === 'ca' ? "Telèfon del Tutor *" : "Teléfono del Tutor *"}
                   </label>
                   <input 
+                    id={`input-${prefix}-tutor-tel`}
                     type="tel"
                     value={tutorTelefon}
                     onChange={(e) => setTutorTelefon(e.target.value)}
@@ -249,15 +246,15 @@ export const ComparserCard: React.FC<ComparserCardProps> = ({
                 </div>
               </div>
 
-              {/* Legal Authorization Text for Minors */}
+              {/* Legal Authorization Text for Minors (Balanced, compliant with legal review guidelines) */}
               <div className="pt-3 border-t border-zinc-200/80 space-y-2">
-                <label className="block text-[10px] font-bold text-zinc-500 uppercase font-mono">
-                  {language === 'ca' ? "Autorització de deures i responsabilitats de menors *" : "Autorización de deberes y responsabilidades de menores *"}
-                </label>
+                <span className="block text-[10px] font-bold text-zinc-500 uppercase font-mono">
+                  {language === 'ca' ? "Autorització de participació de menors d'edat *" : "Autorización de participación de menores de edad *"}
+                </span>
                 <div className="bg-white border border-zinc-200 rounded-xl p-3 max-h-32 overflow-y-auto text-[11px] text-zinc-600 leading-relaxed font-sans whitespace-pre-line shadow-inner">
                   {language === 'ca' 
-                    ? (config.textLegalAutoritzacioMenors || "AUTORITZACIÓ DE MENORS D'EDAT\n\nEn condició de tutor/a legal del menor inscrit, declaro sota la meva responsabilitat que autoritzo expressament la seva participació a l'esdeveniment i activitats organitzades per l'Associació Cultural El Tast (Vilanova i la Geltrú 2027).\n\nCertifico que el menor es troba en condicions físiques i de salut aptes per al correcte desenvolupament de l'activitat, i m'en faig responsable de qualsevol incidència que se'n derivi del seu estat previ de salut, així com del compliment de la normativa vigent de l'organització.").replace(/2026/g, '2027')
-                    : (config.textLegalAutoritzacioMenorsES || "AUTORIZACIÓN DE MENORES DE EDAD\n\nEn condición de tutor/a legal del menor inscrito, declaro bajo mi responsabilidad que autorizo expresamente su participación en el evento y actividades organizadas por la Associació Cultural El Tast (Vilanova i la Geltrú 2027).\n\nCertifico que el menor se encuentra en condiciones físicas y de salud aptas para el correcto desarrollo de la actividad, y me hago responsable de cualquier incidencia que se derive de su estado previo de salud, así como del cumplimiento de la normativa de la organización.").replace(/2026/g, '2027')
+                    ? (config.textLegalAutoritzacioMenors || "AUTORITZACIÓ DE PARTICIPACIÓ DE MENORS D'EDAT\n\nCom a pare/mare o tutor/a legal del menor d'edat inscrit, autoritzo expressament la seva participació a l'activitat de Comparses organitzada per l'Associació Cultural El Tast per a l'edició 2027.\n\nDeclaro que he estat informat/da de les característiques i normativa de la comparsa, que les dades de contacte facilitades són veraces per a qualsevol comunicació necessària durant l'activitat, i que aportaré el document acreditatiu si és requerit per l'organització.")
+                    : (config.textLegalAutoritzacioMenorsES || "AUTORIZACIÓN DE PARTICIPACIÓN DE MENORES DE EDAD\n\nComo padre/madre o tutor/a legal del menor de edad inscrito, autorizo expresamente su participación en la actividad de Comparsas organizada por la Associació Cultural El Tast para la edición 2027.\n\nDeclaro haber sido informado/a de las características y normativa de la comparsa, que los datos de contacto facilitados son veraces para cualquier comunicación necesaria durante la actividad, y que aportaré el documento acreditativo si es requerido por la organización.")
                   }
                 </div>
 
@@ -270,8 +267,8 @@ export const ComparserCard: React.FC<ComparserCardProps> = ({
                   />
                   <span className="text-xs font-semibold leading-tight select-none">
                     {language === 'ca'
-                      ? "Com a tutor legal, autoritzo i accepto de forma expressa les condicions i responsabilitats indicades."
-                      : "Como tutor legal, autorizo y acepto de forma expresa las condiciones y responsabilidades indicadas."
+                      ? "Com a tutor legal, autoritzo expressament la participació del menor i confirmo les dades facilitades."
+                      : "Como tutor legal, autorizo expresamente la participación del menor y confirmo los datos facilitados."
                     }
                   </span>
                 </label>
