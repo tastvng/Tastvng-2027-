@@ -135,6 +135,19 @@ export const BlocPreguntaCard: React.FC<BlocPreguntaCardProps> = ({
     const updated = [...rootOptions];
     updated[idx] = newVal;
     onUpdateRootOptions(updated);
+
+    // Preserve price if oldVal had a price defined
+    if (root.preus && root.preus[oldVal] !== undefined) {
+      const priceVal = root.preus[oldVal];
+      onUpdateRootPrice(newVal, String(priceVal));
+      onUpdateRootPrice(oldVal, '');
+    }
+
+    // If oldVal was the trigger option, update trigger option to newVal
+    if (oldVal === currentTriggerOption) {
+      onUpdateRootTriggerOption(newVal);
+    }
+
     setEditingRootOptIdx(null);
   };
 
@@ -175,7 +188,17 @@ export const BlocPreguntaCard: React.FC<BlocPreguntaCardProps> = ({
     }
     const updated = [...opts];
     updated[idx] = newVal;
-    onUpdateChildOptions(child.id, updated);
+    
+    // Preserve price if oldVal had a price defined
+    const currentPreus = { ...(child.preus || {}) };
+    if (currentPreus[oldVal] !== undefined) {
+      currentPreus[newVal] = currentPreus[oldVal];
+      delete currentPreus[oldVal];
+      onUpdateChild(child.id, { opcions: updated, preus: currentPreus });
+    } else {
+      onUpdateChildOptions(child.id, updated);
+    }
+
     setEditingChildOpt(null);
   };
 
@@ -254,7 +277,7 @@ export const BlocPreguntaCard: React.FC<BlocPreguntaCardProps> = ({
               type="text"
               value={root.titol}
               onChange={(e) => onUpdateRootTitol(e.target.value)}
-              className="bg-transparent border-b border-transparent hover:border-amber-300 focus:border-amber-500 focus:bg-white rounded px-1.5 py-1 text-sm sm:text-base font-extrabold text-zinc-900 focus:outline-none w-full"
+              className="bg-transparent border-b border-transparent hover:border-amber-300 focus:border-amber-500 focus:bg-zinc-900 rounded px-1.5 py-1 text-sm sm:text-base font-extrabold text-zinc-100 focus:outline-none w-full"
               placeholder={language === 'ca' ? "Títol de la pregunta principal..." : "Título de la pregunta principal..."}
               title={language === 'ca' ? "Fes clic per editar el títol de la pregunta principal" : "Haz clic para editar el título de la pregunta principal"}
               id={`input-admin-bloc-titol-${root.id}`}
@@ -322,13 +345,13 @@ export const BlocPreguntaCard: React.FC<BlocPreguntaCardProps> = ({
       {/* 2. Ajustes del bloque (una sola vez) */}
       <div className="bg-white/80 border border-amber-200/80 rounded-2xl p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <label className="block text-[10px] font-mono uppercase font-bold text-zinc-600 mb-1.5">
+          <label className="block text-[10px] font-mono uppercase font-bold text-zinc-400 mb-1.5">
             {language === 'ca' ? "Àmbit del bloc (aplicat a totes les preguntes)" : "Ámbito del bloque (aplicado a todas las preguntas)"}
           </label>
           <select
             value={root.ambit || 'comparser'}
             onChange={(e) => onUpdateBlockAmbit(e.target.value as any)}
-            className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2 text-xs text-zinc-800 font-bold focus:outline-none focus:border-amber-500 cursor-pointer"
+            className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2 text-xs text-zinc-200 font-bold focus:outline-none focus:border-amber-500 cursor-pointer"
             id={`select-admin-bloc-ambit-${root.id}`}
           >
             <option value="comparser">{language === 'ca' ? "Una per cada comparser" : "Una por cada comparser"}</option>
@@ -337,13 +360,13 @@ export const BlocPreguntaCard: React.FC<BlocPreguntaCardProps> = ({
         </div>
 
         <div>
-          <label className="block text-[10px] font-mono uppercase font-bold text-zinc-600 mb-1.5">
+          <label className="block text-[10px] font-mono uppercase font-bold text-zinc-400 mb-1.5">
             {language === 'ca' ? "Presentació (aplicada a totes les preguntes)" : "Presentación (aplicada a todas las preguntas)"}
           </label>
           <select
             value={root.presentacio || 'botons'}
             onChange={(e) => onUpdateBlockPresentacio(e.target.value as any)}
-            className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2 text-xs text-zinc-800 font-bold focus:outline-none focus:border-amber-500 cursor-pointer"
+            className="w-full bg-zinc-50 border border-zinc-200 rounded-xl px-3 py-2 text-xs text-zinc-200 font-bold focus:outline-none focus:border-amber-500 cursor-pointer"
             id={`select-admin-bloc-presentacio-${root.id}`}
           >
             <option value="botons">{language === 'ca' ? "Botons" : "Botones"}</option>
@@ -355,18 +378,18 @@ export const BlocPreguntaCard: React.FC<BlocPreguntaCardProps> = ({
       {/* 3. Pregunta Principal (R) */}
       <div className="bg-white border border-amber-200 rounded-2xl p-4 sm:p-5 space-y-4 shadow-xs">
         <div className="flex items-center justify-between flex-wrap gap-2">
-          <span className="text-xs font-mono font-bold uppercase tracking-wider text-amber-900 flex items-center gap-1.5">
+          <span className="text-xs font-mono font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-amber-500"></span>
             {language === 'ca' ? "Pregunta principal (arrel del bloc)" : "Pregunta principal (raíz del bloque)"}
           </span>
           <span className="text-[11px] font-mono text-zinc-400">
-            ID: <code className="text-zinc-600">{root.id}</code>
+            ID: <code className="text-zinc-400">{root.id}</code>
           </span>
         </div>
 
         {/* Options chips */}
         <div className="space-y-2">
-          <label className="block text-[10px] font-mono uppercase font-bold text-zinc-500">
+          <label className="block text-[10px] font-mono uppercase font-bold text-zinc-400">
             {language === 'ca' ? "Opcions de resposta" : "Opciones de respuesta"}
           </label>
           <div className="flex flex-wrap items-center gap-2">
@@ -378,8 +401,8 @@ export const BlocPreguntaCard: React.FC<BlocPreguntaCardProps> = ({
                   key={`${opt}-${idx}`}
                   className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all shadow-2xs ${
                     isTrigger
-                      ? 'bg-amber-100/80 border-amber-400 text-amber-950'
-                      : 'bg-zinc-50 border-zinc-200 text-zinc-800'
+                      ? 'bg-amber-100/80 border-amber-400 text-amber-200'
+                      : 'bg-zinc-50 border-zinc-200 text-zinc-200'
                   }`}
                 >
                   {isEditing ? (
@@ -393,12 +416,12 @@ export const BlocPreguntaCard: React.FC<BlocPreguntaCardProps> = ({
                           if (e.key === 'Escape') setEditingRootOptIdx(null);
                         }}
                         autoFocus
-                        className="bg-white border border-amber-400 rounded px-1.5 py-0.5 text-xs text-zinc-900 font-bold focus:outline-none w-24"
+                        className="bg-zinc-900 border border-amber-400 rounded px-1.5 py-0.5 text-xs text-zinc-100 font-bold focus:outline-none w-24"
                       />
                       <button
                         type="button"
                         onClick={() => handleSaveRenameRootOption(idx)}
-                        className="text-emerald-600 hover:text-emerald-700 cursor-pointer"
+                        className="text-emerald-500 hover:text-emerald-400 cursor-pointer"
                         title={language === 'ca' ? "Desar nom" : "Guardar nombre"}
                       >
                         <Check size={13} />
@@ -406,7 +429,7 @@ export const BlocPreguntaCard: React.FC<BlocPreguntaCardProps> = ({
                       <button
                         type="button"
                         onClick={() => setEditingRootOptIdx(null)}
-                        className="text-zinc-400 hover:text-zinc-600 cursor-pointer"
+                        className="text-zinc-400 hover:text-zinc-300 cursor-pointer"
                         title={language === 'ca' ? "Cancel·lar" : "Cancelar"}
                       >
                         <X size={13} />
@@ -432,7 +455,7 @@ export const BlocPreguntaCard: React.FC<BlocPreguntaCardProps> = ({
                       <button
                         type="button"
                         onClick={() => handleRemoveRootOption(opt)}
-                        className="text-zinc-400 hover:text-red-500 ml-1 transition cursor-pointer"
+                        className="text-zinc-400 hover:text-red-400 ml-1 transition cursor-pointer"
                         title={language === 'ca' ? "Eliminar opció" : "Eliminar opción"}
                       >
                         <X size={13} />
@@ -456,7 +479,7 @@ export const BlocPreguntaCard: React.FC<BlocPreguntaCardProps> = ({
                   }
                 }}
                 placeholder={language === 'ca' ? "+ Nova opció..." : "+ Nueva opción..."}
-                className="bg-zinc-50 border border-zinc-200 focus:border-amber-400 focus:bg-white rounded-xl px-2.5 py-1 text-xs text-zinc-800 font-medium focus:outline-none w-32"
+                className="bg-zinc-50 border border-zinc-200 focus:border-amber-400 focus:bg-zinc-900 rounded-xl px-2.5 py-1 text-xs text-zinc-100 font-medium focus:outline-none w-32"
               />
               <button
                 type="button"
@@ -472,13 +495,13 @@ export const BlocPreguntaCard: React.FC<BlocPreguntaCardProps> = ({
 
         {/* Selector de la opción que activa las preguntas de la comanda */}
         <div className="pt-2 border-t border-zinc-100 flex flex-col sm:flex-row items-start sm:items-center gap-3">
-          <label className="text-[11px] font-mono uppercase font-bold text-amber-900 shrink-0">
+          <label className="text-[11px] font-mono uppercase font-bold text-amber-400 shrink-0">
             {language === 'ca' ? "Opció que activa les preguntes següents:" : "Opción que activa las preguntas siguientes:"}
           </label>
           <select
             value={currentTriggerOption}
             onChange={(e) => onUpdateRootTriggerOption(e.target.value)}
-            className="bg-amber-50 border border-amber-300 rounded-xl px-3 py-1.5 text-xs font-bold text-amber-950 focus:outline-none focus:border-amber-500 cursor-pointer"
+            className="bg-amber-50 border border-amber-300 rounded-xl px-3 py-1.5 text-xs font-bold text-amber-200 focus:outline-none focus:border-amber-500 cursor-pointer"
             id={`select-admin-bloc-trigger-opt-${root.id}`}
           >
             {rootOptions.map(opt => (
@@ -487,7 +510,7 @@ export const BlocPreguntaCard: React.FC<BlocPreguntaCardProps> = ({
               </option>
             ))}
           </select>
-          <span className="text-[11px] text-zinc-500 italic">
+          <span className="text-[11px] text-zinc-400 italic">
             {language === 'ca'
               ? "(Actualitza automàticament la condició de totes les preguntes de la comanda)"
               : "(Actualiza automáticamente la condición de todas las preguntas del pedido)"}
@@ -496,7 +519,7 @@ export const BlocPreguntaCard: React.FC<BlocPreguntaCardProps> = ({
 
         {/* Precios por opción (€) */}
         <div className="pt-2 border-t border-zinc-100 space-y-2">
-          <span className="block text-[10px] font-mono uppercase font-bold text-amber-900 tracking-wider">
+          <span className="block text-[10px] font-mono uppercase font-bold text-amber-400 tracking-wider">
             {language === 'ca' ? "Preu per opció (€) de la pregunta principal" : "Precio por opción (€) de la pregunta principal"}
           </span>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
@@ -504,7 +527,7 @@ export const BlocPreguntaCard: React.FC<BlocPreguntaCardProps> = ({
               const val = root.preus?.[opt];
               return (
                 <div key={opt} className="bg-zinc-50 border border-zinc-200 rounded-xl p-2.5 space-y-1">
-                  <span className="block text-[11px] font-bold text-zinc-800 truncate" title={opt}>
+                  <span className="block text-[11px] font-bold text-zinc-200 truncate" title={opt}>
                     {opt}
                   </span>
                   <div className="flex items-center gap-1">
@@ -515,10 +538,10 @@ export const BlocPreguntaCard: React.FC<BlocPreguntaCardProps> = ({
                       value={val !== undefined ? val : ''}
                       onChange={(e) => onUpdateRootPrice(opt, e.target.value)}
                       placeholder="0"
-                      className="w-full bg-white border border-zinc-200 focus:border-amber-500 rounded px-2 py-0.5 text-xs font-mono font-bold text-zinc-800 focus:outline-none"
+                      className="w-full bg-zinc-900 border border-zinc-200 focus:border-amber-500 rounded px-2 py-0.5 text-xs font-mono font-bold text-zinc-100 focus:outline-none"
                       id={`input-admin-bloc-preu-${root.id}-${opt}`}
                     />
-                    <span className="text-xs text-zinc-500 font-bold">€</span>
+                    <span className="text-xs text-zinc-400 font-bold">€</span>
                   </div>
                 </div>
               );
@@ -529,7 +552,7 @@ export const BlocPreguntaCard: React.FC<BlocPreguntaCardProps> = ({
         {/* Concept labels CA / ES */}
         <div className="pt-2 border-t border-zinc-100 grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label className="block text-[9px] font-mono uppercase font-bold text-zinc-500 mb-0.5">
+            <label className="block text-[9px] font-mono uppercase font-bold text-zinc-400 mb-0.5">
               {language === 'ca' ? "Nom del concepte (CA)" : "Nombre del concepto (CA)"}
             </label>
             <input
@@ -537,12 +560,12 @@ export const BlocPreguntaCard: React.FC<BlocPreguntaCardProps> = ({
               value={root.concepte || ''}
               onChange={(e) => onUpdateRootConcepte(e.target.value)}
               placeholder={language === 'ca' ? "Ex: Esmorzar" : "Ej: Almuerzo"}
-              className="w-full bg-zinc-50 border border-zinc-200 focus:border-amber-500 focus:bg-white rounded-lg px-2.5 py-1 text-xs font-bold text-zinc-800 focus:outline-none"
+              className="w-full bg-zinc-50 border border-zinc-200 focus:border-amber-500 focus:bg-zinc-900 rounded-lg px-2.5 py-1 text-xs font-bold text-zinc-100 focus:outline-none"
               id={`input-admin-bloc-concepte-ca-${root.id}`}
             />
           </div>
           <div>
-            <label className="block text-[9px] font-mono uppercase font-bold text-zinc-500 mb-0.5">
+            <label className="block text-[9px] font-mono uppercase font-bold text-zinc-400 mb-0.5">
               {language === 'ca' ? "Nom del concepte (ES)" : "Nombre del concepto (ES)"}
             </label>
             <input
@@ -550,7 +573,7 @@ export const BlocPreguntaCard: React.FC<BlocPreguntaCardProps> = ({
               value={root.concepteES || ''}
               onChange={(e) => onUpdateRootConcepteES(e.target.value)}
               placeholder={language === 'ca' ? "Ex: Almuerzo" : "Ej: Almuerzo"}
-              className="w-full bg-zinc-50 border border-zinc-200 focus:border-amber-500 focus:bg-white rounded-lg px-2.5 py-1 text-xs font-bold text-zinc-800 focus:outline-none"
+              className="w-full bg-zinc-50 border border-zinc-200 focus:border-amber-500 focus:bg-zinc-900 rounded-lg px-2.5 py-1 text-xs font-bold text-zinc-100 focus:outline-none"
               id={`input-admin-bloc-concepte-es-${root.id}`}
             />
           </div>
@@ -702,7 +725,7 @@ export const BlocPreguntaCard: React.FC<BlocPreguntaCardProps> = ({
                           type="text"
                           value={child.titol}
                           onChange={(e) => onUpdateChild(child.id, { titol: e.target.value })}
-                          className="bg-transparent border-b border-transparent hover:border-zinc-300 focus:border-amber-400 focus:bg-white rounded px-1.5 py-0.5 text-xs font-bold text-zinc-900 focus:outline-none w-full"
+                          className="bg-transparent border-b border-transparent hover:border-zinc-300 focus:border-amber-400 focus:bg-zinc-900 rounded px-1.5 py-0.5 text-xs font-bold text-zinc-100 focus:outline-none w-full"
                           placeholder={language === 'ca' ? "Títol de la pregunta..." : "Título de la pregunta..."}
                           id={`input-admin-bloc-child-titol-${child.id}`}
                         />
@@ -716,7 +739,7 @@ export const BlocPreguntaCard: React.FC<BlocPreguntaCardProps> = ({
                         onClick={() => onUpdateChild(child.id, { activa: !child.activa })}
                         className={`px-2.5 py-1 rounded-lg transition-all cursor-pointer font-bold text-[11px] ${
                           isChildActive
-                            ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                            ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
                             : 'bg-zinc-200 text-zinc-400 border border-transparent'
                         }`}
                         id={`btn-admin-bloc-child-active-${child.id}`}
@@ -740,7 +763,7 @@ export const BlocPreguntaCard: React.FC<BlocPreguntaCardProps> = ({
                       <button
                         type="button"
                         onClick={() => onDeleteChild(child.id)}
-                        className="p-1.5 text-zinc-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition cursor-pointer"
+                        className="p-1.5 text-zinc-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition cursor-pointer"
                         title={language === 'ca' ? "Eliminar pregunta de la comanda" : "Eliminar pregunta del pedido"}
                         id={`btn-admin-bloc-child-delete-${child.id}`}
                       >
@@ -751,7 +774,7 @@ export const BlocPreguntaCard: React.FC<BlocPreguntaCardProps> = ({
 
                   {/* Child Options chips with rename (preserving price) and add/remove */}
                   <div className="space-y-1.5 pt-1">
-                    <span className="block text-[10px] font-mono uppercase font-bold text-zinc-500">
+                    <span className="block text-[10px] font-mono uppercase font-bold text-zinc-400">
                       {language === 'ca' ? "Opcions:" : "Opciones:"}
                     </span>
                     <div className="flex flex-wrap items-center gap-1.5">
@@ -760,7 +783,7 @@ export const BlocPreguntaCard: React.FC<BlocPreguntaCardProps> = ({
                         return (
                           <div
                             key={`${opt}-${oIdx}`}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-zinc-200 bg-zinc-50 text-[11px] font-bold text-zinc-800 shadow-2xs"
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-zinc-200 bg-zinc-50 text-[11px] font-bold text-zinc-200 shadow-2xs"
                           >
                             {isEditingThis ? (
                               <div className="flex items-center gap-1">
@@ -773,19 +796,19 @@ export const BlocPreguntaCard: React.FC<BlocPreguntaCardProps> = ({
                                     if (e.key === 'Escape') setEditingChildOpt(null);
                                   }}
                                   autoFocus
-                                  className="bg-white border border-amber-400 rounded px-1 py-0.5 text-xs text-zinc-900 font-bold focus:outline-none w-20"
+                                  className="bg-zinc-900 border border-amber-400 rounded px-1 py-0.5 text-xs text-zinc-100 font-bold focus:outline-none w-20"
                                 />
                                 <button
                                   type="button"
                                   onClick={() => handleSaveRenameChildOption(child, oIdx)}
-                                  className="text-emerald-600 hover:text-emerald-700 cursor-pointer"
+                                  className="text-emerald-500 hover:text-emerald-400 cursor-pointer"
                                 >
                                   <Check size={12} />
                                 </button>
                                 <button
                                   type="button"
                                   onClick={() => setEditingChildOpt(null)}
-                                  className="text-zinc-400 hover:text-zinc-600 cursor-pointer"
+                                  className="text-zinc-400 hover:text-zinc-300 cursor-pointer"
                                 >
                                   <X size={12} />
                                 </button>
@@ -802,7 +825,7 @@ export const BlocPreguntaCard: React.FC<BlocPreguntaCardProps> = ({
                                 <button
                                   type="button"
                                   onClick={() => handleRemoveChildOption(child, opt)}
-                                  className="text-zinc-400 hover:text-red-500 transition cursor-pointer ml-0.5"
+                                  className="text-zinc-400 hover:text-red-400 transition cursor-pointer ml-0.5"
                                   title={language === 'ca' ? "Eliminar opció" : "Eliminar opción"}
                                 >
                                   <X size={12} />
@@ -826,7 +849,7 @@ export const BlocPreguntaCard: React.FC<BlocPreguntaCardProps> = ({
                             }
                           }}
                           placeholder={language === 'ca' ? "+ Opció..." : "+ Opción..."}
-                          className="bg-zinc-50 border border-zinc-200 focus:border-amber-400 focus:bg-white rounded-lg px-2 py-0.5 text-[11px] text-zinc-800 font-medium focus:outline-none w-24"
+                          className="bg-zinc-50 border border-zinc-200 focus:border-amber-400 focus:bg-zinc-900 rounded-lg px-2 py-0.5 text-[11px] text-zinc-100 font-medium focus:outline-none w-24"
                         />
                         <button
                           type="button"
@@ -844,7 +867,7 @@ export const BlocPreguntaCard: React.FC<BlocPreguntaCardProps> = ({
                   {childOptions.length > 0 && (
                     <div className="pt-2 border-t border-zinc-100/80">
                       <details className="text-[11px] group">
-                        <summary className="font-mono uppercase font-bold text-zinc-500 hover:text-amber-800 cursor-pointer list-none flex items-center gap-1">
+                        <summary className="font-mono uppercase font-bold text-zinc-400 hover:text-amber-400 cursor-pointer list-none flex items-center gap-1">
                           <ChevronDown size={12} className="group-open:rotate-180 transition-transform" />
                           {language === 'ca' ? "Preus per opció (€) (Opcional)" : "Precios por opción (€) (Opcional)"}
                         </summary>
@@ -853,7 +876,7 @@ export const BlocPreguntaCard: React.FC<BlocPreguntaCardProps> = ({
                             const val = child.preus?.[opt];
                             return (
                               <div key={opt} className="bg-zinc-50 border border-zinc-200 rounded-lg p-2 space-y-1">
-                                <span className="block text-[10px] font-bold text-zinc-700 truncate" title={opt}>
+                                <span className="block text-[10px] font-bold text-zinc-300 truncate" title={opt}>
                                   {opt}
                                 </span>
                                 <div className="flex items-center gap-1">
@@ -876,7 +899,7 @@ export const BlocPreguntaCard: React.FC<BlocPreguntaCardProps> = ({
                                       });
                                     }}
                                     placeholder="0"
-                                    className="w-full bg-white border border-zinc-200 focus:border-amber-500 rounded px-1.5 py-0.5 text-[11px] font-mono font-bold text-zinc-800 focus:outline-none"
+                                    className="w-full bg-zinc-900 border border-zinc-200 focus:border-amber-500 rounded px-1.5 py-0.5 text-[11px] font-mono font-bold text-zinc-100 focus:outline-none"
                                   />
                                   <span className="text-[10px] text-zinc-500 font-bold">€</span>
                                 </div>

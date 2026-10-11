@@ -261,7 +261,7 @@ export const ComparserCard: React.FC<ComparserCardProps> = ({
                   }
                 </div>
 
-                <label className={`flex items-start gap-2.5 p-3 rounded-xl border transition-all cursor-pointer ${tutorAccepta ? 'bg-fuchsia-50/40 border-fuchsia-200 text-fuchsia-950' : errors[`${prefix}TutorAccepta`] ? 'bg-red-50/40 border-red-200 text-red-950 animate-shake' : 'bg-white border-zinc-200 text-zinc-700 hover:border-zinc-300'}`}>
+                <label className={`flex items-start gap-2.5 p-3 rounded-xl border transition-all cursor-pointer ${tutorAccepta ? 'bg-fuchsia-50 border-fuchsia-500 text-fuchsia-600 font-bold' : errors[`${prefix}TutorAccepta`] ? 'bg-red-50/40 border-red-200 text-red-950 animate-shake' : 'bg-white border-zinc-200 text-zinc-700 hover:border-zinc-300'}`}>
                   <input
                     type="checkbox"
                     checked={tutorAccepta}

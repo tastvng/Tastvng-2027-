@@ -62,14 +62,61 @@ body {
   color: #f4f4f5 !important;
 }
 
+/* Transparent utility overrides */
+#app-root-container .bg-zinc-50\/70,
+#app-root-container .bg-zinc-50\/50,
+#app-root-container .bg-zinc-100\/80,
+#app-root-container .bg-zinc-100\/60,
+#app-root-container .bg-zinc-200\/60 {
+  background-color: #121212 !important;
+}
+
+#app-root-container .bg-white\/80,
+#app-root-container .bg-white\/60 {
+  background-color: #0a0a0a !important;
+}
+
+#app-root-container .bg-fuchsia-50\/40 {
+  background-color: rgba(255, 0, 144, 0.1) !important;
+  color: #ff0090 !important;
+}
+
+#app-root-container .text-fuchsia-950 {
+  color: #ffd6ee !important;
+}
+
 /* Force borders to be transparent/subtle lines instead of strong gray dividers */
 #app-root-container .border-zinc-200,
 #app-root-container .border-zinc-100,
 #app-root-container .border-zinc-150,
+#app-root-container .border-zinc-200\/60,
+#app-root-container .border-zinc-200\/70,
 #app-root-container .border-zinc-200\/80,
+#app-root-container .border-zinc-100\/80,
 #app-root-container .border-zinc-300,
 #app-root-container .divide-zinc-100 > * {
   border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+#app-root-container .text-amber-900,
+#app-root-container .text-amber-950 {
+  color: #fbbf24 !important;
+}
+
+#app-root-container .bg-amber-50,
+#app-root-container .bg-amber-50\/20,
+#app-root-container .bg-amber-50\/40,
+#app-root-container .bg-amber-50\/70,
+#app-root-container .bg-amber-100,
+#app-root-container .bg-amber-100\/80 {
+  background-color: rgba(245, 158, 11, 0.08) !important;
+}
+
+#app-root-container .border-amber-200,
+#app-root-container .border-amber-200\/60,
+#app-root-container .border-amber-200\/80,
+#app-root-container .border-amber-300 {
+  border-color: rgba(245, 158, 11, 0.25) !important;
 }
 
 /* Styling for forms input & choose select wrappers */

@@ -1943,7 +1943,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
                 )}
 
                 {q.tipus === 'boolean' && (
-                  <label className={`flex items-start gap-2.5 p-3 rounded-xl border transition-all cursor-pointer ${currentVal ? 'bg-fuchsia-50/40 border-fuchsia-200 text-fuchsia-950 font-bold' : 'bg-zinc-50 border-zinc-200 text-zinc-700 hover:border-zinc-300'}`}>
+                  <label className={`flex items-start gap-2.5 p-3 rounded-xl border transition-all cursor-pointer ${currentVal ? 'bg-fuchsia-50 border-fuchsia-500 text-fuchsia-600 font-bold' : 'bg-zinc-50 border-zinc-200 text-zinc-700 hover:border-zinc-300'}`}>
                     <input
                       type="checkbox"
                       id={`input-pregunta-${k}`}
@@ -1970,17 +1970,20 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
                           key={opt}
                           type="button"
                           onClick={() => handleDynamicAnswerChange(q.id, opt, scope)}
-                          className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex items-center justify-between gap-2 ${
+                          className={`p-3 min-h-[44px] rounded-2xl border text-left transition-all cursor-pointer flex items-center justify-between gap-2 ${
                             isSelected
-                              ? 'bg-fuchsia-50 border-fuchsia-500 text-fuchsia-950 font-bold ring-2 ring-fuchsia-500/20 shadow-xs'
-                              : 'bg-zinc-50 border-zinc-200 text-zinc-700 hover:border-zinc-300 hover:bg-zinc-100/60'
+                              ? 'bg-fuchsia-50 border-fuchsia-500 text-fuchsia-600 ring-2 ring-fuchsia-500/30 font-bold shadow-xs'
+                              : 'bg-zinc-50 border-zinc-200 text-zinc-700 hover:border-zinc-300 hover:bg-zinc-100'
                           }`}
                         >
-                          <span className="text-xs font-semibold leading-tight">
-                            <TranslatedText text={opt} />
-                          </span>
+                          <div className="flex items-center gap-2 min-w-0">
+                            {isSelected && <Check size={16} className="text-fuchsia-600 shrink-0" />}
+                            <span className="text-xs font-semibold leading-tight">
+                              <TranslatedText text={opt} />
+                            </span>
+                          </div>
                           {hasPrice && (
-                            <span className={`text-[11px] font-mono font-bold shrink-0 ${isSelected ? 'text-fuchsia-700' : 'text-zinc-500'}`}>
+                            <span className={`text-[11px] font-mono font-bold shrink-0 ${isSelected ? 'text-fuchsia-600' : 'text-zinc-400'}`}>
                               {priceStr}
                             </span>
                           )}
@@ -2040,7 +2043,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
               {comparserQuestions.length > 0 && (
                 <div className="space-y-6 pt-2">
                   {/* Comparser 1 block */}
-                  <div className="bg-zinc-50/70 border border-zinc-200 rounded-2xl p-5 space-y-4">
+                  <div className="border border-zinc-200 rounded-2xl p-5 space-y-4">
                     <div className="border-b border-zinc-200/60 pb-2">
                       <h4 className="font-sans font-black text-xs text-zinc-800 uppercase tracking-wider">
                         {language === 'ca' ? 'Comparser 1' : 'Comparser 1'} — {c1Nom.trim() ? `${c1Nom} ${c1Cognoms}`.trim() : (language === 'ca' ? 'Participant 1' : 'Participante 1')}
@@ -2052,7 +2055,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
                   </div>
 
                   {/* Comparser 2 block */}
-                  <div className="bg-zinc-50/70 border border-zinc-200 rounded-2xl p-5 space-y-4">
+                  <div className="border border-zinc-200 rounded-2xl p-5 space-y-4">
                     <div className="border-b border-zinc-200/60 pb-2">
                       <h4 className="font-sans font-black text-xs text-zinc-800 uppercase tracking-wider">
                         {language === 'ca' ? 'Comparser 2' : 'Comparser 2'} — {c2Nom.trim() ? `${c2Nom} ${c2Cognoms}`.trim() : (language === 'ca' ? 'Participant 2' : 'Participante 2')}
@@ -2087,7 +2090,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
                 }
               </div>
 
-              <label className={`flex items-start gap-2.5 p-3.5 rounded-2xl border transition-all cursor-pointer ${acceptaRGPD ? 'bg-fuchsia-50/40 border-fuchsia-200 text-fuchsia-950 font-bold' : errors.rgpd ? 'bg-red-50/40 border-red-200 text-red-950 animate-shake' : 'bg-zinc-50 border-zinc-200 text-zinc-700 hover:border-zinc-350'}`}>
+              <label className={`flex items-start gap-2.5 p-3.5 rounded-2xl border transition-all cursor-pointer ${acceptaRGPD ? 'bg-fuchsia-50 border-fuchsia-500 text-fuchsia-600 font-bold' : errors.rgpd ? 'bg-red-50/40 border-red-200 text-red-950 animate-shake' : 'bg-zinc-50 border-zinc-200 text-zinc-700 hover:border-zinc-350'}`}>
                 <input
                   type="checkbox"
                   checked={acceptaRGPD}
@@ -2109,7 +2112,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
             <div className="space-y-2 pt-2 border-t border-zinc-100">
               <span className="block text-[10px] font-bold text-zinc-500 uppercase font-mono">{language === 'ca' ? 'Condicions d\'Inscripció i Pagament Presencial *' : 'Condiciones de Inscripción y Pago Presencial *'}</span>
               
-              <label className={`flex items-start gap-2.5 p-3.5 rounded-2xl border transition-all cursor-pointer ${acceptaPresencial ? 'bg-fuchsia-50/40 border-fuchsia-200 text-fuchsia-950 font-bold' : errors.presencial ? 'bg-red-50/40 border-red-200 text-red-950 animate-shake' : 'bg-zinc-50 border-zinc-200 text-zinc-700 hover:border-zinc-350'}`}>
+              <label className={`flex items-start gap-2.5 p-3.5 rounded-2xl border transition-all cursor-pointer ${acceptaPresencial ? 'bg-fuchsia-50 border-fuchsia-500 text-fuchsia-600 font-bold' : errors.presencial ? 'bg-red-50/40 border-red-200 text-red-950 animate-shake' : 'bg-zinc-50 border-zinc-200 text-zinc-700 hover:border-zinc-350'}`}>
                 <input
                   type="checkbox"
                   checked={acceptaPresencial}

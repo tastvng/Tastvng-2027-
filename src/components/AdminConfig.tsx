@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useLanguage } from '../LanguageContext';
 import { useActiveYear } from '../hooks/useActiveYear';
 import { 
@@ -35,6 +35,7 @@ import { SistemaConfig, PreguntaDinamica, NoticiaXarxes, TarifaConcept, LiniaUni
 import { cargarPreguntes, cargarPreguntesDetallat, guardarPreguntes, eliminarPregunta } from '../api/questionnaireApi';
 import { fetchSistemaConfig, saveSistemaConfigItem, supabase, isSupabaseConfigured, logSupabaseWriteDiagnostic } from '../supabaseClient';
 import { AdminStaffManagement } from './AdminStaffManagement';
+import { BlocPreguntaCard } from './admin/BlocPreguntaCard';
 import { isOrphanCondition, hasConditionCycle, detectAnyConditionCycle } from '../utils/questionVisibility';
 
 interface AdminConfigProps {
@@ -720,12 +721,12 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
     const existingTitles = preguntes.map(p => p.titol.trim().toLowerCase());
     const alreadyExists = [tEsmorzar, tTomaquet, tGluten, tEntrepa].some(t => 
       existingTitles.includes(t.toLowerCase())
-    );
+    ) || preguntes.some(p => /esmorz|almuerz/i.test(p.titol) || p.concepte === 'Esmorzar');
 
     if (alreadyExists) {
       const msg = language === 'ca'
-        ? "Ja existeixen preguntes amb enunciats similars a la plantilla d'esmorzar. Voleu afegir-les igualment?"
-        : "Ya existen preguntas con enunciados similares a la plantilla de almuerzo. ¿Desea añadirlas igualmente?";
+        ? "Ja existeix un bloc o preguntes d'esmorzar a la configuració. Voleu afegir-les igualment?"
+        : "Ya existe un bloque o preguntas de almuerzo en la configuración. ¿Desea añadirlas igualmente?";
       if (!window.confirm(msg)) return;
     }
 
@@ -879,6 +880,304 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
     const [moved] = newArr.splice(index, 1);
     newArr.splice(targetIndex, 0, moved);
     setPreguntes(newArr);
+  };
+
+  // Memoized block and orphan detection
+  const { displayItems, orphanQuestions } = useMemo(() => {
+    const existingIds = new Set(preguntes.map(p => p.id));
+
+    // Map of parentId -> children[]
+    const blockChildrenMap = new Map<string, PreguntaDinamica[]>();
+    const childIdsInBlock = new Set<string>();
+
+    preguntes.forEach(p => {
+      if (p.condicio?.preguntaId && existingIds.has(p.condicio.preguntaId)) {
+        const parentId = p.condicio.preguntaId;
+        const list = blockChildrenMap.get(parentId) || [];
+        list.push(p);
+        blockChildrenMap.set(parentId, list);
+        childIdsInBlock.add(p.id);
+      }
+    });
+
+    // Root questions of a block: select, no condition, and has at least one child in blockChildrenMap
+    const blockRootIds = new Set<string>();
+    preguntes.forEach(p => {
+      const hasChildren = (blockChildrenMap.get(p.id)?.length || 0) > 0;
+      const isRoot = !p.condicio || !p.condicio.preguntaId;
+      if (isRoot && hasChildren && p.tipus === 'select') {
+        blockRootIds.add(p.id);
+      }
+    });
+
+    // Orphans: condicio?.preguntaId set, but parent doesn't exist
+    const orphans: PreguntaDinamica[] = preguntes.filter(p => 
+      Boolean(p.condicio?.preguntaId) && !existingIds.has(p.condicio!.preguntaId)
+    );
+
+    type DisplayItem = 
+      | { type: 'block'; root: PreguntaDinamica; children: PreguntaDinamica[] }
+      | { type: 'single'; pregunta: PreguntaDinamica };
+
+    const items: DisplayItem[] = [];
+
+    preguntes.forEach(p => {
+      // If it's an orphan, handled separately in orphan card
+      if (p.condicio?.preguntaId && !existingIds.has(p.condicio.preguntaId)) {
+        return;
+      }
+      // If it's a child inside a block, rendered inside BlocPreguntaCard
+      if (childIdsInBlock.has(p.id)) {
+        return;
+      }
+      // If it's a block root:
+      if (blockRootIds.has(p.id)) {
+        const children = blockChildrenMap.get(p.id) || [];
+        items.push({ type: 'block', root: p, children });
+      } else {
+        items.push({ type: 'single', pregunta: p });
+      }
+    });
+
+    return { displayItems: items, orphanQuestions: orphans };
+  }, [preguntes]);
+
+  const handleMoveDisplayItem = (itemIndex: number, direction: 'up' | 'down') => {
+    const targetIndex = direction === 'up' ? itemIndex - 1 : itemIndex + 1;
+    if (targetIndex < 0 || targetIndex >= displayItems.length) return;
+
+    const newItems = [...displayItems];
+    const [moved] = newItems.splice(itemIndex, 1);
+    newItems.splice(targetIndex, 0, moved);
+
+    const flattened: PreguntaDinamica[] = [];
+    newItems.forEach(item => {
+      if (item.type === 'block') {
+        flattened.push(item.root);
+        flattened.push(...item.children);
+      } else {
+        flattened.push(item.pregunta);
+      }
+    });
+
+    if (orphanQuestions.length > 0) {
+      flattened.push(...orphanQuestions);
+    }
+
+    setPreguntes(flattened.map((p, idx) => ({ ...p, ordre: idx })));
+  };
+
+  const handleToggleActiveBlock = (rootId: string) => {
+    const root = preguntes.find(p => p.id === rootId);
+    if (!root) return;
+    const nextActive = !root.activa;
+    setPreguntes(preguntes.map(p => 
+      (p.id === rootId || p.condicio?.preguntaId === rootId) 
+        ? { ...p, activa: nextActive } 
+        : p
+    ));
+  };
+
+  const handleToggleRequeritRoot = (rootId: string) => {
+    setPreguntes(preguntes.map(p => p.id === rootId ? { ...p, requerit: !p.requerit } : p));
+  };
+
+  const handleDuplicateBlock = (rootId: string) => {
+    const root = preguntes.find(p => p.id === rootId);
+    if (!root) return;
+    const children = preguntes.filter(p => p.condicio?.preguntaId === rootId);
+
+    const newRootId = 'preg-' + Math.random().toString(36).substr(2, 9);
+    const rootCopy: PreguntaDinamica = {
+      ...root,
+      id: newRootId,
+      titol: `${root.titol} (${language === 'ca' ? 'Còpia' : 'Copia'})`,
+      activa: false,
+      condicio: undefined
+    };
+
+    const childrenCopies: PreguntaDinamica[] = children.map(child => ({
+      ...child,
+      id: 'preg-' + Math.random().toString(36).substr(2, 9),
+      activa: false,
+      condicio: {
+        preguntaId: newRootId,
+        valor: child.condicio?.valor || rootCopy.opcions?.[0] || 'Sí'
+      }
+    }));
+
+    const lastChildIdx = preguntes.reduce((acc, curr, idx) => curr.condicio?.preguntaId === rootId ? idx : acc, -1);
+    const insertIdx = lastChildIdx !== -1 ? lastChildIdx + 1 : preguntes.findIndex(p => p.id === rootId) + 1;
+
+    const newArr = [...preguntes];
+    newArr.splice(insertIdx, 0, rootCopy, ...childrenCopies);
+    setPreguntes(newArr.map((p, idx) => ({ ...p, ordre: idx })));
+  };
+
+  const handleDeleteBlock = async (rootId: string) => {
+    const root = preguntes.find(p => p.id === rootId);
+    if (!root) return;
+    const children = preguntes.filter(p => p.condicio?.preguntaId === rootId);
+    const totalSub = children.length;
+
+    const confirmMsg = language === 'ca'
+      ? `S'eliminaran la pregunta i les ${totalSub} subpreguntes. Continuar?`
+      : `Se eliminarán la pregunta y las ${totalSub} subpreguntas. ¿Continuar?`;
+    if (!window.confirm(confirmMsg)) return;
+
+    const idsToDelete = [rootId, ...children.map(c => c.id)];
+    const originalPreguntes = [...preguntes];
+    setPreguntes(preguntes.filter(p => !idsToDelete.includes(p.id)));
+
+    try {
+      for (const id of idsToDelete) {
+        const res = await eliminarPregunta(id);
+        if (!res.success) {
+          throw new Error(res.error || `Error deleting question ${id}`);
+        }
+      }
+    } catch (err) {
+      setPreguntes(originalPreguntes);
+      alert(language === 'ca' ? `Error esborrant el bloc: ${err instanceof Error ? err.message : String(err)}` : `Error al borrar el bloque: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
+
+  const handleUpdateBlockAmbit = (rootId: string, val: 'parella' | 'comparser') => {
+    setPreguntes(preguntes.map(p => 
+      (p.id === rootId || p.condicio?.preguntaId === rootId) 
+        ? { ...p, ambit: val } 
+        : p
+    ));
+  };
+
+  const handleUpdateBlockPresentacio = (rootId: string, val: 'desplegable' | 'botons') => {
+    setPreguntes(preguntes.map(p => 
+      (p.id === rootId || p.condicio?.preguntaId === rootId) 
+        ? { ...p, presentacio: val } 
+        : p
+    ));
+  };
+
+  const handleUpdateRootTriggerOption = (rootId: string, newOption: string) => {
+    setPreguntes(preguntes.map(p => {
+      if (p.condicio?.preguntaId === rootId) {
+        return {
+          ...p,
+          condicio: { preguntaId: rootId, valor: newOption }
+        };
+      }
+      return p;
+    }));
+  };
+
+  const handleMoveChildInBlock = (rootId: string, childIndex: number, direction: 'up' | 'down') => {
+    const children = preguntes.filter(p => p.condicio?.preguntaId === rootId);
+    const targetIndex = direction === 'up' ? childIndex - 1 : childIndex + 1;
+    if (targetIndex < 0 || targetIndex >= children.length) return;
+
+    const newChildren = [...children];
+    const [moved] = newChildren.splice(childIndex, 1);
+    newChildren.splice(targetIndex, 0, moved);
+
+    const childIds = new Set(newChildren.map(c => c.id));
+    let ptr = 0;
+    const newArr = preguntes.map(p => {
+      if (childIds.has(p.id)) {
+        const repl = newChildren[ptr];
+        ptr++;
+        return repl;
+      }
+      return p;
+    });
+    setPreguntes(newArr.map((p, idx) => ({ ...p, ordre: idx })));
+  };
+
+  const handleAddChildToBlock = (rootId: string, titol: string, opcions: string[]) => {
+    const root = preguntes.find(p => p.id === rootId);
+    if (!root) return;
+    const children = preguntes.filter(p => p.condicio?.preguntaId === rootId);
+    const currentTriggerOption = children[0]?.condicio?.valor || root.opcions?.[0] || 'Sí';
+
+    const newChild: PreguntaDinamica = {
+      id: 'preg-' + Math.random().toString(36).substr(2, 9),
+      titol,
+      tipus: 'select',
+      opcions,
+      requerit: true,
+      activa: true,
+      ordre: preguntes.length,
+      ambit: root.ambit || 'comparser',
+      presentacio: root.presentacio || 'botons',
+      condicio: { preguntaId: root.id, valor: currentTriggerOption }
+    };
+
+    const lastChildIdx = preguntes.reduce((acc, curr, idx) => curr.condicio?.preguntaId === rootId ? idx : acc, -1);
+    const insertIdx = lastChildIdx !== -1 ? lastChildIdx + 1 : preguntes.findIndex(p => p.id === rootId) + 1;
+
+    const newArr = [...preguntes];
+    newArr.splice(insertIdx, 0, newChild);
+    setPreguntes(newArr.map((p, idx) => ({ ...p, ordre: idx })));
+  };
+
+  const handleRepararOrfenes = () => {
+    const newRootId = 'preg-esmorzar-' + Math.random().toString(36).substr(2, 7);
+    const newRoot: PreguntaDinamica = {
+      id: newRootId,
+      titol: 'Voleu esmorzar?',
+      tipus: 'select',
+      opcions: ['Sí', 'No'],
+      requerit: true,
+      activa: true,
+      ambit: 'comparser',
+      presentacio: 'botons',
+      concepte: 'Esmorzar',
+      concepteES: 'Almuerzo',
+      preus: undefined,
+      ordre: 0
+    };
+
+    const orphanIds = new Set(orphanQuestions.map(o => o.id));
+    const updated = preguntes.map(p => {
+      if (orphanIds.has(p.id)) {
+        return {
+          ...p,
+          condicio: { preguntaId: newRootId, valor: 'Sí' },
+          ambit: 'comparser' as const,
+          presentacio: 'botons' as const
+        };
+      }
+      return p;
+    });
+
+    const firstOrphanIdx = updated.findIndex(p => orphanIds.has(p.id));
+    if (firstOrphanIdx >= 0) {
+      updated.splice(firstOrphanIdx, 0, newRoot);
+    } else {
+      updated.unshift(newRoot);
+    }
+
+    setPreguntes(updated.map((p, idx) => ({ ...p, ordre: idx })));
+  };
+
+  const handleEliminarOrfenes = async () => {
+    const confirmMsg = language === 'ca'
+      ? `S'eliminaran les ${orphanQuestions.length} preguntes òrfenes. Voleu continuar?`
+      : `Se eliminarán las ${orphanQuestions.length} preguntas huérfanas. ¿Desea continuar?`;
+    if (!window.confirm(confirmMsg)) return;
+
+    const orphanIds = orphanQuestions.map(o => o.id);
+    const originalPreguntes = [...preguntes];
+    setPreguntes(preguntes.filter(p => !orphanIds.includes(p.id)));
+
+    try {
+      for (const id of orphanIds) {
+        const res = await eliminarPregunta(id);
+        if (!res.success) throw new Error(res.error || `Error deleting ${id}`);
+      }
+    } catch (err) {
+      setPreguntes(originalPreguntes);
+      alert(language === 'ca' ? `Error esborrant les òrfenes: ${err}` : `Error al borrar las huérfanas: ${err}`);
+    }
   };
 
   const handleAddNewsPost = () => {
@@ -1082,6 +1381,17 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
             alert(msg);
             return;
           }
+        }
+      }
+
+      if (p.condicio?.preguntaId) {
+        const parent = preguntes.find(other => other.id === p.condicio!.preguntaId);
+        if (parent && parent.tipus === 'select' && parent.opcions && !parent.opcions.includes(p.condicio.valor)) {
+          const msg = language === 'ca'
+            ? `Error a la pregunta «${p.titol}»: La condició depèn de l'opció «${p.condicio.valor}», que no existeix a la pregunta principal «${parent.titol}». Corregiu-la abans de desar.`
+            : `Error en la pregunta «${p.titol}»: La condición depende de la opción «${p.condicio.valor}», que no existe en la pregunta principal «${parent.titol}». Corríjala antes de guardar.`;
+          alert(msg);
+          return;
         }
       }
     }
@@ -2196,9 +2506,107 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
               />
             </div>
 
-            {/* List existing fields with actions toggles */}
+            {/* Targeta de Preguntes Òrfenes si n'hi ha */}
+            {orphanQuestions.length > 0 && (
+              <div className="bg-red-500/10 border-2 border-red-500/30 rounded-3xl p-5 space-y-4 shadow-sm" id="admin-orfenes-card">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-red-500/20">
+                  <div className="flex items-center gap-2.5">
+                    <AlertCircle size={20} className="text-red-400 shrink-0" />
+                    <div>
+                      <h4 className="text-sm font-bold text-red-300">
+                        {language === 'ca' ? "Preguntes òrfenes (la pregunta principal no existeix)" : "Preguntas huérfanas (la pregunta principal no existe)"}
+                      </h4>
+                      <p className="text-[11px] text-zinc-400 mt-0.5">
+                        {language === 'ca'
+                          ? `${orphanQuestions.length} preguntes tenen una condició que apunta a una pregunta inexistent.`
+                          : `${orphanQuestions.length} preguntas tienen una condición que apunta a una pregunta inexistente.`}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={handleRepararOrfenes}
+                      className="px-3.5 py-2 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-zinc-950 shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
+                      id="btn-reparar-orfenes"
+                    >
+                      <Sparkles size={14} />
+                      {language === 'ca' ? "Crear la pregunta principal i reenllaçar" : "Crear la pregunta principal y reenlazar"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleEliminarOrfenes}
+                      className="px-3 py-2 rounded-xl text-xs font-bold bg-red-600 hover:bg-red-700 text-white shadow-xs transition-all cursor-pointer flex items-center gap-1.5"
+                      id="btn-eliminar-orfenes"
+                    >
+                      <Trash2 size={14} />
+                      {language === 'ca' ? "Eliminar les òrfenes" : "Eliminar las huérfanas"}
+                    </button>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  {orphanQuestions.map(oq => (
+                    <div key={oq.id} className="bg-zinc-900/80 border border-zinc-800 rounded-xl p-3 flex items-center justify-between gap-3 text-xs">
+                      <div className="min-w-0">
+                        <span className="font-bold text-zinc-200 block truncate">{oq.titol}</span>
+                        <span className="text-[10px] font-mono text-zinc-400">
+                          ID: <code className="text-zinc-300">{oq.id}</code> • {language === 'ca' ? "Condició perduda" : "Condición perdida"}: <code>{oq.condicio?.preguntaId}</code> = «{oq.condicio?.valor}»
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleRemovePregunta(oq.id)}
+                        className="p-1.5 text-zinc-400 hover:text-red-400 rounded-lg transition cursor-pointer shrink-0"
+                        title={language === 'ca' ? "Eliminar" : "Eliminar"}
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* List existing items: Blocks or Single questions */}
             <div className="space-y-4">
-              {preguntes.map((preg, index) => {
+              {displayItems.map((item, itemIndex) => {
+                if (item.type === 'block') {
+                  return (
+                    <BlocPreguntaCard
+                      key={item.root.id}
+                      root={item.root}
+                      children={item.children}
+                      language={language}
+                      canMoveUp={itemIndex > 0}
+                      canMoveDown={itemIndex < displayItems.length - 1}
+                      onMoveBlock={(dir) => handleMoveDisplayItem(itemIndex, dir)}
+                      onToggleActiveBlock={() => handleToggleActiveBlock(item.root.id)}
+                      onToggleRequeritRoot={() => handleToggleRequeritRoot(item.root.id)}
+                      onDuplicateBlock={() => handleDuplicateBlock(item.root.id)}
+                      onDeleteBlock={() => handleDeleteBlock(item.root.id)}
+                      onUpdateRootTitol={(val) => updatePreguntaTitol(item.root.id, val)}
+                      onUpdateBlockAmbit={(val) => handleUpdateBlockAmbit(item.root.id, val)}
+                      onUpdateBlockPresentacio={(val) => handleUpdateBlockPresentacio(item.root.id, val)}
+                      onUpdateRootOptions={(opts) => updatePreguntaOpcions(item.root.id, opts.join(', '))}
+                      onUpdateRootTriggerOption={(opt) => handleUpdateRootTriggerOption(item.root.id, opt)}
+                      onUpdateRootPrice={(opt, valStr) => updatePreguntaPreu(item.root.id, opt, valStr)}
+                      onUpdateRootConcepte={(val) => updatePreguntaConcepte(item.root.id, val)}
+                      onUpdateRootConcepteES={(val) => updatePreguntaConcepteES(item.root.id, val)}
+                      onUpdateChild={(childId, updates) => {
+                        setPreguntes(preguntes.map(p => p.id === childId ? { ...p, ...updates } : p));
+                      }}
+                      onUpdateChildOptions={(childId, opts) => {
+                        updatePreguntaOpcions(childId, opts.join(', '));
+                      }}
+                      onMoveChild={(childIdx, dir) => handleMoveChildInBlock(item.root.id, childIdx, dir)}
+                      onDeleteChild={(childId) => handleRemovePregunta(childId)}
+                      onAddChild={(titol, opcions) => handleAddChildToBlock(item.root.id, titol, opcions)}
+                    />
+                  );
+                }
+
+                // Standalone question
+                const preg = item.pregunta;
                 const isOrphan = isOrphanCondition(preg, preguntes);
                 const isEsmorzarRoot = /esmorz|almuerz/i.test(preg.titol) && (!preg.condicio || !preg.condicio.preguntaId);
                 const isMissingPrice = isEsmorzarRoot && (!preg.preus || Object.keys(preg.preus).length === 0 || Object.values(preg.preus).every(v => !v));
@@ -2216,8 +2624,8 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                       <div className="flex flex-row sm:flex-col gap-1 items-center self-start sm:self-center">
                         <button
                           type="button"
-                          disabled={index === 0}
-                          onClick={() => handleMovePregunta(index, 'up')}
+                          disabled={itemIndex === 0}
+                          onClick={() => handleMoveDisplayItem(itemIndex, 'up')}
                           className="p-1 text-zinc-400 hover:text-zinc-800 disabled:opacity-20 disabled:hover:text-zinc-400 rounded transition cursor-pointer"
                           title={language === 'ca' ? "Pujar ordre" : "Subir orden"}
                           id={`btn-config-order-up-${preg.id}`}
@@ -2226,8 +2634,8 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                         </button>
                         <button
                           type="button"
-                          disabled={index === preguntes.length - 1}
-                          onClick={() => handleMovePregunta(index, 'down')}
+                          disabled={itemIndex === displayItems.length - 1}
+                          onClick={() => handleMoveDisplayItem(itemIndex, 'down')}
                           className="p-1 text-zinc-400 hover:text-zinc-800 disabled:opacity-20 disabled:hover:text-zinc-400 rounded transition cursor-pointer"
                           title={language === 'ca' ? "Baixar ordre" : "Bajar orden"}
                           id={`btn-config-order-down-${preg.id}`}
@@ -2242,18 +2650,18 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                             type="text" 
                             value={preg.titol} 
                             onChange={(e) => updatePreguntaTitol(preg.id, e.target.value)}
-                            className="bg-transparent border-b border-transparent hover:border-zinc-300 focus:border-fuchsia-400 focus:bg-white rounded px-1.5 py-1 text-xs font-bold text-zinc-900 focus:outline-none flex-1 min-w-[200px]"
+                            className="bg-transparent border-b border-transparent hover:border-zinc-300 focus:border-fuchsia-400 focus:bg-zinc-900 rounded px-1.5 py-1 text-xs font-bold text-zinc-100 focus:outline-none flex-1 min-w-[200px]"
                             placeholder={language === 'ca' ? "Títol de la pregunta / línia..." : "Título de la pregunta / línea..."}
                             title={language === 'ca' ? "Fes clic per canviar el nom de la pregunta" : "Haz clic para cambiar el nombre de la pregunta"}
                             id={`input-admin-pregunta-titol-${preg.id}`}
                           />
                           {isMissingPrice && (
-                            <span className="text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 px-2 py-0.5 rounded-full shrink-0">
+                            <span className="text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded-full shrink-0">
                               {language === 'ca' ? "Sense preu" : "Sin precio"}
                             </span>
                           )}
                           {isOrphan && (
-                            <span className="text-[10px] font-bold bg-red-100 text-red-700 border border-red-300 px-2 py-0.5 rounded-full flex items-center gap-1 shrink-0">
+                            <span className="text-[10px] font-bold bg-red-500/20 text-red-300 border border-red-500/40 px-2 py-0.5 rounded-full flex items-center gap-1 shrink-0">
                               <AlertCircle size={11} /> {language === 'ca' ? "Condició orfe: revisa-la" : "Condición huérfana: revísala"}
                             </span>
                           )}
@@ -2265,25 +2673,25 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                           value={preg.descripcio || ''}
                           onChange={(e) => updatePreguntaDescripcio(preg.id, e.target.value)}
                           placeholder={language === 'ca' ? "Descripció o text d'ajuda (opcional)..." : "Descripción o texto de ayuda (opcional)..."}
-                          className="bg-transparent border-b border-zinc-100 hover:border-zinc-300 focus:border-fuchsia-300 focus:bg-white rounded px-1.5 py-0.5 text-[11px] text-zinc-600 focus:outline-none w-full italic"
+                          className="bg-transparent border-b border-zinc-800 hover:border-zinc-700 focus:border-fuchsia-400 focus:bg-zinc-900 rounded px-1.5 py-0.5 text-[11px] text-zinc-300 focus:outline-none w-full italic"
                           id={`input-admin-pregunta-descripcio-${preg.id}`}
                         />
 
                         <div className="flex flex-wrap gap-2 items-center text-[10px] text-zinc-400 font-mono uppercase pl-1.5 pt-0.5">
                           <span>{language === 'ca' ? "Tipus" : "Tipo"}: {preg.tipus}</span>
-                          <span>• Ordre: {index + 1}</span>
+                          <span>• Ordre: {itemIndex + 1}</span>
                         </div>
 
                         {preg.tipus === 'select' && (
                           <div className="flex items-center gap-2 pl-1.5 pt-1">
-                            <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-wider whitespace-nowrap">
+                            <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider whitespace-nowrap">
                               {language === 'ca' ? "Opcions (CSV):" : "Opciones (CSV):"}
                             </span>
                             <input
                               type="text"
                               value={(preg.opcions || []).join(', ')}
                               onChange={(e) => updatePreguntaOpcions(preg.id, e.target.value)}
-                              className="bg-zinc-50 border border-zinc-200 focus:border-fuchsia-400 focus:bg-white rounded px-2 py-0.5 text-[11px] font-medium text-zinc-800 focus:outline-none flex-1 w-full"
+                              className="bg-zinc-50 border border-zinc-200 focus:border-fuchsia-400 focus:bg-zinc-900 rounded px-2 py-0.5 text-[11px] font-medium text-zinc-100 focus:outline-none flex-1 w-full"
                               placeholder={language === 'ca' ? "Opció 1, Opció 2, Opció 3" : "Opción 1, Opción 2, Opción 3"}
                               title={language === 'ca' ? "Modifica les opcions separades per comes" : "Modifica las opciones separadas por comas"}
                               id={`input-admin-pregunta-opcions-${preg.id}`}
@@ -2353,13 +2761,13 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                     <div className="pt-2 border-t border-zinc-200/60 grid grid-cols-1 md:grid-cols-3 gap-3 text-xs bg-white/60 p-3 rounded-xl border">
                       {/* Àmbit selector */}
                       <div>
-                        <label className="block text-[10px] font-mono uppercase font-bold text-zinc-500 mb-1">
+                        <label className="block text-[10px] font-mono uppercase font-bold text-zinc-400 mb-1">
                           {language === 'ca' ? "Àmbit de resposta" : "Ámbito de respuesta"}
                         </label>
                         <select
                           value={preg.ambit || 'parella'}
                           onChange={(e) => updatePreguntaAmbit(preg.id, e.target.value as any)}
-                          className="w-full bg-zinc-50 border border-zinc-200 rounded-lg px-2.5 py-1.5 text-xs text-zinc-800 font-semibold focus:outline-none focus:border-fuchsia-400 cursor-pointer"
+                          className="w-full bg-zinc-50 border border-zinc-200 rounded-lg px-2.5 py-1.5 text-xs text-zinc-200 font-semibold focus:outline-none focus:border-fuchsia-400 cursor-pointer"
                           id={`select-admin-pregunta-ambit-${preg.id}`}
                         >
                           <option value="parella">{language === 'ca' ? "Una per parella" : "Una por pareja"}</option>
@@ -2369,14 +2777,14 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
 
                       {/* Presentació selector (select only) */}
                       <div>
-                        <label className="block text-[10px] font-mono uppercase font-bold text-zinc-500 mb-1">
+                        <label className="block text-[10px] font-mono uppercase font-bold text-zinc-400 mb-1">
                           {language === 'ca' ? "Presentació" : "Presentación"}
                         </label>
                         {preg.tipus === 'select' ? (
                           <select
                             value={preg.presentacio || 'desplegable'}
                             onChange={(e) => updatePreguntaPresentacio(preg.id, e.target.value as any)}
-                            className="w-full bg-zinc-50 border border-zinc-200 rounded-lg px-2.5 py-1.5 text-xs text-zinc-800 font-semibold focus:outline-none focus:border-fuchsia-400 cursor-pointer"
+                            className="w-full bg-zinc-50 border border-zinc-200 rounded-lg px-2.5 py-1.5 text-xs text-zinc-200 font-semibold focus:outline-none focus:border-fuchsia-400 cursor-pointer"
                             id={`select-admin-pregunta-presentacio-${preg.id}`}
                           >
                             <option value="desplegable">{language === 'ca' ? "Desplegable" : "Desplegable"}</option>
@@ -2389,9 +2797,9 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                         )}
                       </div>
 
-                      {/* Mostrar només si... (Condicional) */}
+                      {/* Mostrar només si... (Condicional) - only on standalone questions! */}
                       <div>
-                        <label className="block text-[10px] font-mono uppercase font-bold text-zinc-500 mb-1">
+                        <label className="block text-[10px] font-mono uppercase font-bold text-zinc-400 mb-1">
                           {language === 'ca' ? "Mostrar només si…" : "Mostrar solo si…"}
                         </label>
                         <div className="flex gap-1.5">
@@ -2409,7 +2817,7 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                                 updatePreguntaCondicio(preg.id, { preguntaId: parentId, valor: defaultVal });
                               }
                             }}
-                            className="w-1/2 bg-zinc-50 border border-zinc-200 rounded-lg px-2 py-1.5 text-[11px] text-zinc-800 font-semibold focus:outline-none focus:border-fuchsia-400 cursor-pointer"
+                            className="w-1/2 bg-zinc-50 border border-zinc-200 rounded-lg px-2 py-1.5 text-[11px] text-zinc-200 font-semibold focus:outline-none focus:border-fuchsia-400 cursor-pointer"
                             id={`select-admin-pregunta-parent-${preg.id}`}
                           >
                             <option value="">{language === 'ca' ? "Sempre visible" : "Siempre visible"}</option>
@@ -2429,7 +2837,7 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                                   valor: e.target.value
                                 });
                               }}
-                              className="w-1/2 bg-zinc-50 border border-zinc-200 rounded-lg px-2 py-1.5 text-[11px] text-zinc-800 font-semibold focus:outline-none focus:border-fuchsia-400 cursor-pointer"
+                              className="w-1/2 bg-zinc-50 border border-zinc-200 rounded-lg px-2 py-1.5 text-[11px] text-zinc-200 font-semibold focus:outline-none focus:border-fuchsia-400 cursor-pointer"
                               id={`select-admin-pregunta-parent-val-${preg.id}`}
                             >
                               {selectedParent.tipus === 'boolean' ? (
@@ -2451,7 +2859,7 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                     {/* Preus & Concept Names (Only for select questions) */}
                     {preg.tipus === 'select' && (preg.opcions || []).length > 0 && (
                       <div className="pt-2 border-t border-zinc-200/60 bg-amber-50/40 p-3 rounded-xl border border-amber-200/60 space-y-2.5">
-                        <span className="block text-[10px] font-mono uppercase font-bold text-amber-900 tracking-wider">
+                        <span className="block text-[10px] font-mono uppercase font-bold text-amber-400 tracking-wider">
                           {language === 'ca' ? "Tarifes i Preus per opció (€) — Opcional" : "Tarifas y Precios por opción (€) — Opcional"}
                         </span>
                         
@@ -2460,8 +2868,8 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                           {(preg.opcions || []).map(opt => {
                             const val = preg.preus?.[opt];
                             return (
-                              <div key={opt} className="bg-white border border-zinc-200 rounded-lg p-2 space-y-1">
-                                <span className="block text-[11px] font-bold text-zinc-700 truncate" title={opt}>
+                              <div key={opt} className="bg-zinc-900 border border-zinc-200 rounded-lg p-2 space-y-1">
+                                <span className="block text-[11px] font-bold text-zinc-200 truncate" title={opt}>
                                   {opt}
                                 </span>
                                 <div className="flex items-center gap-1">
@@ -2472,10 +2880,10 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                                     value={val !== undefined ? val : ''}
                                     onChange={(e) => updatePreguntaPreu(preg.id, opt, e.target.value)}
                                     placeholder="0"
-                                    className="w-full bg-zinc-50 border border-zinc-200 focus:border-amber-500 rounded px-2 py-0.5 text-xs font-mono font-bold text-zinc-800 focus:outline-none"
+                                    className="w-full bg-zinc-950 border border-zinc-200 focus:border-amber-500 rounded px-2 py-0.5 text-xs font-mono font-bold text-zinc-100 focus:outline-none"
                                     id={`input-admin-preu-${preg.id}-${opt}`}
                                   />
-                                  <span className="text-xs text-zinc-500 font-bold">€</span>
+                                  <span className="text-xs text-zinc-400 font-bold">€</span>
                                 </div>
                               </div>
                             );
@@ -2485,7 +2893,7 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                         {/* Concept labels in CA and ES */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                           <div>
-                            <label className="block text-[9px] font-mono uppercase font-bold text-zinc-500 mb-0.5">
+                            <label className="block text-[9px] font-mono uppercase font-bold text-zinc-400 mb-0.5">
                               {language === 'ca' ? "Nom del concepte (CA)" : "Nombre del concepto (CA)"}
                             </label>
                             <input
@@ -2493,12 +2901,12 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                               value={preg.concepte || ''}
                               onChange={(e) => updatePreguntaConcepte(preg.id, e.target.value)}
                               placeholder={language === 'ca' ? "Ex: Esmorzar" : "Ej: Almuerzo"}
-                              className="w-full bg-white border border-zinc-200 focus:border-amber-500 rounded-lg px-2.5 py-1 text-xs font-bold text-zinc-800 focus:outline-none"
+                              className="w-full bg-zinc-900 border border-zinc-200 focus:border-amber-500 rounded-lg px-2.5 py-1 text-xs font-bold text-zinc-100 focus:outline-none"
                               id={`input-admin-concepte-ca-${preg.id}`}
                             />
                           </div>
                           <div>
-                            <label className="block text-[9px] font-mono uppercase font-bold text-zinc-500 mb-0.5">
+                            <label className="block text-[9px] font-mono uppercase font-bold text-zinc-400 mb-0.5">
                               {language === 'ca' ? "Nom del concepte (ES)" : "Nombre del concepto (ES)"}
                             </label>
                             <input
@@ -2506,7 +2914,7 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                               value={preg.concepteES || ''}
                               onChange={(e) => updatePreguntaConcepteES(preg.id, e.target.value)}
                               placeholder={language === 'ca' ? "Ex: Almuerzo" : "Ej: Almuerzo"}
-                              className="w-full bg-white border border-zinc-200 focus:border-amber-500 rounded-lg px-2.5 py-1 text-xs font-bold text-zinc-800 focus:outline-none"
+                              className="w-full bg-zinc-900 border border-zinc-200 focus:border-amber-500 rounded-lg px-2.5 py-1 text-xs font-bold text-zinc-100 focus:outline-none"
                               id={`input-admin-concepte-es-${preg.id}`}
                             />
                           </div>

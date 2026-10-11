@@ -67,19 +67,50 @@ function encryptData(text: string): string {
   return `${iv.toString("hex")}:${authTag}:${encrypted}`;
 }
 
+function getCandidateDecryptionKeys(): Buffer[] {
+  const keys: Buffer[] = [];
+  const metaKey = process.env.META_ENCRYPTION_KEY;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const anonKey = process.env.VITE_SUPABASE_ANON_KEY;
+
+  if (metaKey) {
+    keys.push(crypto.createHash("sha256").update(metaKey).digest());
+    if (/^[0-9a-fA-F]{64}$/.test(metaKey.trim())) {
+      keys.push(Buffer.from(metaKey.trim(), "hex"));
+    }
+  }
+  if (serviceKey) {
+    keys.push(crypto.createHash("sha256").update(serviceKey).digest());
+  }
+  if (anonKey) {
+    keys.push(crypto.createHash("sha256").update(anonKey).digest());
+  }
+  return keys;
+}
+
 function decryptData(encryptedStr: string): string | null {
   try {
     const parts = encryptedStr.split(":");
     if (parts.length !== 3) return null;
     const [ivHex, authTagHex, encryptedText] = parts;
-    const key = getEncryptionKey();
     const iv = Buffer.from(ivHex, "hex");
     const authTag = Buffer.from(authTagHex, "hex");
-    const decipher = crypto.createDecipheriv("aes-256-gcm", key, iv);
-    decipher.setAuthTag(authTag);
-    let decrypted = decipher.update(encryptedText, "hex", "utf8");
-    decrypted += decipher.final("utf8");
-    return decrypted;
+
+    const candidateKeys = getCandidateDecryptionKeys();
+    for (const key of candidateKeys) {
+      try {
+        const decipher = crypto.createDecipheriv("aes-256-gcm", key, iv);
+        decipher.setAuthTag(authTag);
+        let decrypted = decipher.update(encryptedText, "hex", "utf8");
+        decrypted += decipher.final("utf8");
+        return decrypted;
+      } catch (_) {
+        // Continue trying remaining candidate keys
+      }
+    }
+
+    console.error("[api/social] Unable to decrypt token vault with any candidate key.");
+    return null;
   } catch (err) {
     console.error("[api/social] Error decrypting token vault:", err);
     return null;
