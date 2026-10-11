@@ -234,6 +234,172 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
       .setMimeType(ContentService.MimeType.JSON);
   }
 }`;
+
+  const appsScriptDesayunosCode = `// ===== EL TAST · Pestanya DESAYUNOS (enganxa-ho al final del teu Apps Script, sense esborrar res) =====
+// Crida'l des del teu doPost, un cop tinguis "ss" i "payload":   var avisEsm = syncEsmorzars_(ss, payload);
+//
+// ABREVIATURES: si un any canvies els ingredients, afegeix o edita una línia aquí.
+// "re" s'aplica sobre el text sense accents ni majúscules (p. ex. "Pernil dolç" -> "pernil dolc").
+var ABREVIATURES_ = [
+  { abr: 'P.DOLÇ',  re: /dolc|dulce|york/ },
+  { abr: 'P.SALAT', re: /salat|salado|serrano/ },
+  { abr: 'LLONG',   re: /llong|salchich|salsich|fuet/ },
+  { abr: 'XORIÇO',  re: /xori|chori/ },
+  { abr: 'FORM.',   re: /form|queso|queixo/ },
+  { abr: 'ATUN',    re: /ton[yi]|atun|tun/ }
+];
+
+function esmNorm_(s) {
+  return String(s == null ? '' : s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+function esmAbr_(text) {
+  var n = esmNorm_(text);
+  for (var i = 0; i < ABREVIATURES_.length; i++) {
+    if (ABREVIATURES_[i].re.test(n)) return ABREVIATURES_[i].abr;
+  }
+  return String(text || '').toUpperCase().trim();
+}
+// Text que es guarda a "Bocadillo 1/2". Ex.: "P.DOLÇ AMB TOMAQUET", "LLONG SENSE TOMAQUET S/GLUTEN"
+function esmTextBocata_(b) {
+  if (!b || !b.tipus) return '';
+  var t = esmAbr_(b.tipus);
+  if (b.tomaquet === 'amb') t += ' AMB TOMAQUET';
+  else if (b.tomaquet === 'sense') t += ' SENSE TOMAQUET';
+  if (b.gluten === 'sense') t += ' S/GLUTEN';
+  return t;
+}
+function esmColLletra_(n) { // 1 -> A
+  var s = '';
+  while (n > 0) { var m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); }
+  return s;
+}
+
+function syncEsmorzars_(ss, payload) {
+  var e = payload && payload.esmorzars;
+  if (!e) return '';
+  var avisos = [];
+
+  // 1) Troba la pestanya (NO la crea)
+  var sh = null, sheets = ss.getSheets();
+  for (var i = 0; i < sheets.length; i++) {
+    if (/desayun|esmorz|almuerz/.test(esmNorm_(sheets[i].getName()))) { sh = sheets[i]; break; }
+  }
+  if (!sh) return 'No trobo la pestanya DESAYUNOS';
+
+  // 2) Columnes per capçalera (fila 2). La capçalera NO es toca.
+  var HDR = 2, FIRST = 3;
+  var lastCol = Math.max(sh.getLastColumn(), 1);
+  var hdr = sh.getRange(HDR, 1, 1, lastCol).getValues()[0].map(function (x) { return esmNorm_(x).replace(/[^a-z0-9]/g, ''); });
+  function col(re) { for (var k = 0; k < hdr.length; k++) if (re.test(hdr[k])) return k + 1; return 0; }
+  var cC1 = col(/^comparsero$/), cC2 = col(/^comparsera$/), cDes = col(/^desayunos$/),
+      cB1 = col(/^bocadillo1$/), cB2 = col(/^bocadillo2$/);
+  if (!cC1 || !cC2 || !cDes || !cB1 || !cB2) return 'Falten capçaleres a la fila 2 (Comparsero, Comparsera, Desayunos, Bocadillo 1, Bocadillo 2)';
+  var cCodi = cC1 - 1;
+  if (cCodi < 1) return 'No trobo la columna Nº';
+  var cFirst = cCodi, cLast = Math.max(cB1, cB2);
+
+  // 3) Llegeix el bloc A..Bocadillo 2
+  var N = Math.min(Math.max(sh.getMaxRows() - HDR, 1), 2000);
+  var width = cLast - cFirst + 1;
+  var rng = sh.getRange(FIRST, cFirst, N, width);
+  var vals = rng.getValues();
+  var idx = function (c) { return c - cFirst; };
+  var rowOfCodi = {};
+  for (var r = 0; r < N; r++) {
+    var cd = String(vals[r][0]).trim();
+    if (cd) rowOfCodi[cd] = r;
+  }
+
+  var parelles = e.parelles || [];
+  var codisConeguts = {};
+  (e.codisConeguts || []).forEach(function (c) { codisConeguts[String(c).trim()] = true; });
+  var escrits = {};
+  var lastRowUsed = -1;
+  for (var q = 0; q < N; q++) { if (String(vals[q][0]).trim() || String(vals[q][idx(cB1)]).trim()) lastRowUsed = q; }
+  var nextFree = function () {
+    for (var z = 0; z < N; z++) {
+      var empty = true;
+      for (var c = 0; c < width; c++) if (String(vals[z][c]).trim() !== '') { empty = false; break; }
+      if (empty && !escrits[z]) return z;
+    }
+    return -1;
+  };
+
+  // 4) Escriu / actualitza (la clau és el Nº = codi d'inscripció; el Comentari no es toca)
+  parelles.forEach(function (p) {
+    var codi = String(p.codi || '').trim();
+    if (!codi) return;
+    var r = rowOfCodi.hasOwnProperty(codi) ? rowOfCodi[codi] : nextFree();
+    if (r < 0) { avisos.push('Sense files lliures a la taula per al Nº ' + codi + ' (amplia la taula)'); return; }
+    vals[r][0] = codi;
+    vals[r][idx(cC1)] = p.c1NomCognoms || '';
+    vals[r][idx(cC2)] = p.c2NomCognoms || '';
+    vals[r][idx(cDes)] = p.desayunos || '';
+    vals[r][idx(cB1)] = esmTextBocata_(p.bocata1);
+    vals[r][idx(cB2)] = esmTextBocata_(p.bocata2);
+    escrits[r] = true; rowOfCodi[codi] = r;
+  });
+
+  // 5) Parelles que ja no tenen esmorzar (o han passat a llista d'espera): buida la fila (menys el Comentari)
+  for (var r2 = 0; r2 < N; r2++) {
+    var cd2 = String(vals[r2][0]).trim();
+    if (cd2 && !escrits[r2] && codisConeguts[cd2]) {
+      for (var c2 = 0; c2 < width; c2++) vals[r2][c2] = '';
+    }
+  }
+  rng.setValues(vals);
+
+  // 6) Desplegables de Bocadillo 1 i 2 amb les combinacions actuals (permet escriure a mà igualment)
+  var combos = [];
+  (e.tipusOpcions || []).forEach(function (t) {
+    var tomOpts = e.teTomaquet ? ['amb', 'sense'] : [''];
+    tomOpts.forEach(function (tm) {
+      combos.push(esmTextBocata_({ tipus: t, tomaquet: tm }));
+      if (e.teGluten) combos.push(esmTextBocata_({ tipus: t, tomaquet: tm, gluten: 'sense' }));
+    });
+  });
+  if (combos.length > 0) {
+    var rule = SpreadsheetApp.newDataValidation().requireValueInList(combos, true).setAllowInvalid(true).build();
+    [cB1, cB2].forEach(function (c) { sh.getRange(FIRST, c, N, 1).setDataValidation(rule); });
+  }
+
+  // 7) Taula de recompte de la dreta (llegeix les capçaleres de les files 1 i 2)
+  var gridStart = cLast + 1; // la columna Comentario i les buides s'ignoren: només compten les capçaleres reconegudes
+  var gridCols = Math.max(sh.getLastColumn() - gridStart + 1, 0);
+  if (gridCols > 0) {
+    var h1 = sh.getRange(1, gridStart, 1, gridCols).getValues()[0];
+    var h2 = sh.getRange(HDR, gridStart, 1, gridCols).getValues()[0];
+    var rngBoc = '$' + esmColLletra_(cB1) + '$' + FIRST + ':$' + esmColLletra_(cB2) + '$' + (FIRST + N - 1);
+    var grup = '';
+    var lastGridCol = 0, firstGridCol = 0;
+    for (var g = 0; g < gridCols; g++) {
+      if (String(h1[g]).trim() !== '') grup = esmNorm_(h1[g]);
+      var t2 = esmNorm_(h2[g]);
+      if (!t2.trim()) continue;
+      var abr = null;
+      for (var a = 0; a < ABREVIATURES_.length; a++) if (ABREVIATURES_[a].re.test(t2)) { abr = ABREVIATURES_[a].abr; break; }
+      if (!abr) continue; // p. ex. BANDERA
+      var crit;
+      if (/gluten/.test(t2)) crit = abr + '*S/GLUTEN';
+      else if (/sense|sin/.test(grup)) crit = abr + ' SENSE TOMAQUET';
+      else if (/amb|con/.test(grup)) crit = abr + ' AMB TOMAQUET';
+      else continue;
+      var f = '=LET(n,COUNTIF(' + rngBoc + ',"' + crit + '"),IF(n=0,"-",n))';
+      sh.getRange(FIRST, gridStart + g).setFormula(f);
+      lastGridCol = gridStart + g;
+      if (!firstGridCol) firstGridCol = gridStart + g;
+    }
+    // Control: bocates que no s'han pogut classificar a cap columna (hauria de ser 0)
+    if (lastGridCol > 0) {
+      var cc = lastGridCol + 1;
+      if (String(sh.getRange(FIRST, cc).getValue()).trim() === '' || String(sh.getRange(HDR, cc).getValue()) === 'CONTROL') {
+        sh.getRange(HDR, cc).setValue('CONTROL');
+        sh.getRange(FIRST, cc).setFormula('=COUNTA(' + rngBoc + ')-SUM(' + esmColLletra_(firstGridCol) + FIRST + ':' + esmColLletra_(lastGridCol) + FIRST + ')');
+      }
+    }
+  }
+  return avisos.join(' | ');
+}`;
   const [newTarifaNom, setNewTarifaNom] = useState('');
   const [newTarifaValor, setNewTarifaValor] = useState<number>(0);
 
@@ -1816,6 +1982,80 @@ export default function AdminConfig({ config, onBack, onSave, onResetConfig, not
                           : "Pega la URL copiada arriba y activa la Sincronización."}
                       </li>
                     </ol>
+
+                    {/* Bloc Script pestanya DESAYUNOS */}
+                    <div className="pt-4 border-t border-zinc-200/80 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="font-sans font-bold text-xs text-zinc-800 uppercase tracking-wider flex items-center gap-1.5">
+                          <UtensilsCrossed size={14} className="text-amber-500" />
+                          {language === 'ca' ? "Script de la pestanya DESAYUNOS" : "Script de la pestaña DESAYUNOS"}
+                        </span>
+                      </div>
+
+                      <p className="text-[11px] text-zinc-600 leading-relaxed font-sans">
+                        {language === 'ca'
+                          ? "Perquè els esmorzars s'actualitzin automàticament a la pestanya DESAYUNOS de la mateixa fulla de càlcul:"
+                          : "Para que los desayunos se actualicen automáticamente en la pestaña DESAYUNOS de la misma hoja de cálculo:"}
+                      </p>
+
+                      <ol className="list-decimal list-inside space-y-1.5 pl-1 text-[11px] text-zinc-700 font-sans">
+                        <li>
+                          {language === 'ca'
+                            ? "Obre el teu Apps Script (Extensions → Apps Script)."
+                            : "Abre tu Apps Script (Extensiones → Apps Script)."}
+                        </li>
+                        <li>
+                          {language === 'ca'
+                            ? "Enganxa aquest codi al final del fitxer, sense esborrar res."
+                            : "Pega este código al final del archivo, sin borrar nada."}
+                        </li>
+                        <li>
+                          {language === 'ca'
+                            ? <>Dins del teu <code className="font-mono text-zinc-900 bg-zinc-100 px-1 py-0.5 rounded">doPost</code>, just després d'haver llegit payload i tenir ss, afegeix: <code className="font-mono text-fuchsia-600 bg-fuchsia-50 px-1 py-0.5 rounded">var avisEsm = syncEsmorzars_(ss, payload);</code></>
+                            : <>Dentro de tu <code className="font-mono text-zinc-900 bg-zinc-100 px-1 py-0.5 rounded">doPost</code>, justo después de haber leído payload y tener ss, añade: <code className="font-mono text-fuchsia-600 bg-fuchsia-50 px-1 py-0.5 rounded">var avisEsm = syncEsmorzars_(ss, payload);</code></>}
+                        </li>
+                        <li>
+                          {language === 'ca'
+                            ? "Desplega una nova versió (Implementar → Gestionar desplegaments → Editar → Nova versió → Implementar). Sense això la fulla no rep res nou."
+                            : "Despliega una nueva versión (Implementar → Gestionar implementaciones → Editar → Nueva versión → Implementar). Sin esto la hoja no recibe nada nuevo."}
+                        </li>
+                      </ol>
+
+                      {/* Code copy block DESAYUNOS */}
+                      <div className="relative">
+                        <pre className="p-3 bg-zinc-950 text-amber-300 rounded-xl overflow-x-auto text-[9px] font-mono leading-normal max-h-56 shadow-inner select-all">
+{appsScriptDesayunosCode}
+                        </pre>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (navigator.clipboard && navigator.clipboard.writeText) {
+                              navigator.clipboard.writeText(appsScriptDesayunosCode).then(() => {
+                                alert(language === 'ca' ? "Codi d'Apps Script de DESAYUNOS copiat!" : "¡Código de Apps Script de DESAYUNOS copiado!");
+                              }).catch(() => {
+                                alert(language === 'ca' ? "Seleccioneu i copieu el text manualment." : "Seleccione y copie el texto manualmente.");
+                              });
+                            } else {
+                              alert(language === 'ca' ? "Seleccioneu i copieu el text manualment." : "Seleccione y copie el texto manualmente.");
+                            }
+                          }}
+                          className="absolute right-2.5 top-2.5 bg-white/15 hover:bg-white/20 active:scale-95 text-white py-1 px-2 rounded-lg text-[9px] uppercase font-sans font-black transition cursor-pointer select-none"
+                          id="btn-copiar-apps-script-desayunos"
+                        >
+                          {language === 'ca' ? "Copiar" : "Copiar"}
+                        </button>
+                      </div>
+
+                      {/* Nota d'ajuda */}
+                      <div className="p-3 bg-zinc-50 border border-zinc-200 rounded-xl text-[10px] text-zinc-600 leading-relaxed font-sans">
+                        <strong className="font-bold text-zinc-800 block mb-1">
+                          {language === 'ca' ? "Informació important:" : "Información importante:"}
+                        </strong>
+                        {language === 'ca'
+                          ? "Només es toquen les columnes Nº, Comparsero, Comparsera, Desayunos, Bocadillo 1 i 2 i la taula de recompte de la dreta. El Comentari no es toca. Si un any canvies d'ingredients, edita la llista ABREVIATURES_ del principi del codi."
+                          : "Solo se tocan las columnas Nº, Comparsero, Comparsera, Desayunos, Bocadillo 1 y 2 y la tabla de recuento de la derecha. El Comentario no se toca. Si un año cambias de ingredientes, edita la lista ABREVIATURES_ del principio del código."}
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>

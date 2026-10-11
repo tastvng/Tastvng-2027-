@@ -1,7 +1,9 @@
-import { Inscripcio, SistemaConfig } from './types';
+import { Inscripcio, SistemaConfig, PreguntaDinamica } from './types';
 import { calculateDailySummaries } from './dailySummary';
 import { calculateInscriptionOrderBreakdown } from './utils/orderCalculations';
 import { getPaymentSummary, derivedEstatPagament, metodesTexto } from './utils/paymentCalculations';
+import { buildDesayunosExport } from './utils/desayunosExport';
+import { cargarPreguntes } from './api/questionnaireApi';
 
 // Module-level state variables to enable debouncing and hash comparison across imports
 let syncTimeout: any = null;
@@ -230,8 +232,23 @@ export async function syncToGoogleSheet(
           return baseRow;
         });
 
-        // 3. Compute payload signature to filter out duplicate/redundant sync requests
-        const currentSignature = JSON.stringify(formattedData) + JSON.stringify(summaries) + JSON.stringify(rows) + ':completo:true:' + activeYear;
+        // 3. Questions and Breakfasts (DESAYUNOS) Export
+        let preguntesFormulari: PreguntaDinamica[] = config?.preguntesFormulari || [];
+        if (!preguntesFormulari || preguntesFormulari.length === 0) {
+          try {
+            const fetched = await cargarPreguntes(false);
+            if (fetched && fetched.length > 0) {
+              preguntesFormulari = fetched;
+            }
+          } catch (err) {
+            console.warn("[googleSync] Could not fetch questions for breakfasts sync:", err);
+          }
+        }
+
+        const esmorzars = buildDesayunosExport(inscripcions, preguntesFormulari);
+
+        // 4. Compute payload signature to filter out duplicate/redundant sync requests
+        const currentSignature = JSON.stringify(formattedData) + JSON.stringify(summaries) + JSON.stringify(rows) + JSON.stringify(esmorzars) + ':completo:true:' + activeYear;
         if (currentSignature === lastSyncedDataSignature) {
           console.log("Google Sheets sync skipped: Data signature matches historical state.");
           resolve(true);
@@ -247,6 +264,7 @@ export async function syncToGoogleSheet(
           data: formattedData,
           summaries: summaries,
           rows: rows,
+          esmorzars: esmorzars,
         };
 
         const jsonBody = JSON.stringify(payload);
