@@ -12,7 +12,7 @@ export interface ToastMessage {
 interface ToastContextType {
   toasts: ToastMessage[];
   showToast: (
-    message: string,
+    message: string | any,
     type?: 'success' | 'error' | 'warning' | 'info',
     duration?: number,
     position?: 'top-right' | 'bottom-right' | 'both'
@@ -30,13 +30,37 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, []);
 
   const showToast = useCallback((
-    message: string,
+    message: string | any,
     type: 'success' | 'error' | 'warning' | 'info' = 'success',
     duration = 3000,
     position: 'top-right' | 'bottom-right' | 'both' = 'top-right'
   ) => {
+    let finalMessage = '';
+    let finalType = type;
+
+    if (typeof message === 'string') {
+      finalMessage = message;
+    } else if (message && typeof message === 'object') {
+      if ('type' in message && ['success', 'error', 'warning', 'info'].includes(message.type)) {
+        finalType = message.type;
+      }
+      if ('title' in message && 'description' in message && message.title && message.description) {
+        finalMessage = `${message.title}: ${message.description}`;
+      } else if ('title' in message && message.title) {
+        finalMessage = String(message.title);
+      } else if ('description' in message && message.description) {
+        finalMessage = String(message.description);
+      } else if ('message' in message && message.message) {
+        finalMessage = typeof message.message === 'string' ? message.message : String(message.message);
+      } else {
+        finalMessage = String(message);
+      }
+    } else {
+      finalMessage = String(message ?? '');
+    }
+
     const id = Math.random().toString(36).substring(2, 9) + '-' + Date.now();
-    const newToast: ToastMessage = { id, message, type, duration, position };
+    const newToast: ToastMessage = { id, message: finalMessage, type: finalType, duration, position };
     setToasts((prev) => [...prev, newToast]);
   }, []);
 

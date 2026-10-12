@@ -72,6 +72,70 @@ import {
 } from './supabaseClient';
 import { allocateNextCode, determineCodeGroup } from './utils/codeAllocator';
 
+interface SecretariaErrorBoundaryProps {
+  children: React.ReactNode;
+  fallbackMessage?: string;
+  reloadText?: string;
+}
+
+interface SecretariaErrorBoundaryState {
+  hasError: boolean;
+  error?: Error;
+}
+
+class SecretariaErrorBoundary extends React.Component<
+  SecretariaErrorBoundaryProps,
+  SecretariaErrorBoundaryState
+> {
+  constructor(props: SecretariaErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(error: Error): SecretariaErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('[Secretaría ErrorBoundary caught error]:', error, errorInfo);
+  }
+
+  handleReload = () => {
+    this.setState({ hasError: false, error: undefined });
+    window.location.reload();
+  };
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="max-w-2xl mx-auto my-12 p-8 bg-zinc-900 border border-zinc-800 rounded-2xl text-center shadow-2xl">
+          <div className="w-16 h-16 mx-auto rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center mb-5 text-red-400">
+            <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <h2 className="text-xl md:text-2xl font-bold text-white mb-2">
+            {this.props.fallbackMessage || "Hi ha hagut un error, torna a carregar"}
+          </h2>
+          <p className="text-zinc-400 text-sm mb-6 max-w-md mx-auto">
+            {this.state.error?.message || "S'ha produït un error inesperat en el panell de secretaria."}
+          </p>
+          <button
+            onClick={this.handleReload}
+            className="px-6 py-3 bg-amber-500 hover:bg-amber-400 text-black font-bold rounded-xl transition-all shadow-lg hover:shadow-amber-500/20 active:scale-95 inline-flex items-center gap-2 cursor-pointer"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            {this.props.reloadText || "Torna a carregar"}
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export default function App() {
   const { language, setLanguage, t } = useLanguage();
   const activeYear = useActiveYear();
@@ -1340,31 +1404,36 @@ export default function App() {
 
             {/* 4. Protected Workspace Manager: Metrics and general listings */}
             {view === 'admin-dashboard' && (
-              <AdminDashboard 
-                inscripcions={inscripcions}
-                config={config}
-                isLoadingInscripcions={isLoadingInscripcions}
-                inscripcionsError={inscripcionsError}
-                onSelectInscripcio={(id) => {
-                  setEditId(id);
-                  setPreviousAdminView('admin-dashboard');
-                  setView('admin-ficha');
-                }}
-                onGoToScanner={(openPairing) => {
-                  setOpenPairingModalOnScanner(!!openPairing);
-                  setPreviousAdminView('admin-dashboard');
-                  setView('admin-scanner');
-                }}
-                onGoToConfig={() => setView('admin-config')}
-                onLogout={handleAdminLogout}
-                onAddLog={addLog}
-                onDeleteInscripcio={deleteRegistration}
-                onDeleteMultipleInscripcions={deleteMultipleRegistrations}
-                onClearAllInscripcions={clearAllRegistrations}
-                onAddInscripcioManual={addRegistrationManual}
-                onSaveInscripcio={updateRegistration}
-                onRefreshInscripcions={handleRefreshInscripcions}
-              />
+              <SecretariaErrorBoundary
+                fallbackMessage={language === 'ca' ? "Hi ha hagut un error, torna a carregar" : "Ha habido un error, vuelve a cargar"}
+                reloadText={language === 'ca' ? "Torna a carregar" : "Volver a cargar"}
+              >
+                <AdminDashboard 
+                  inscripcions={inscripcions}
+                  config={config}
+                  isLoadingInscripcions={isLoadingInscripcions}
+                  inscripcionsError={inscripcionsError}
+                  onSelectInscripcio={(id) => {
+                    setEditId(id);
+                    setPreviousAdminView('admin-dashboard');
+                    setView('admin-ficha');
+                  }}
+                  onGoToScanner={(openPairing) => {
+                    setOpenPairingModalOnScanner(!!openPairing);
+                    setPreviousAdminView('admin-dashboard');
+                    setView('admin-scanner');
+                  }}
+                  onGoToConfig={() => setView('admin-config')}
+                  onLogout={handleAdminLogout}
+                  onAddLog={addLog}
+                  onDeleteInscripcio={deleteRegistration}
+                  onDeleteMultipleInscripcions={deleteMultipleRegistrations}
+                  onClearAllInscripcions={clearAllRegistrations}
+                  onAddInscripcioManual={addRegistrationManual}
+                  onSaveInscripcio={updateRegistration}
+                  onRefreshInscripcions={handleRefreshInscripcions}
+                />
+              </SecretariaErrorBoundary>
             )}
 
             {/* 5. Detail Auditor sheet views */}

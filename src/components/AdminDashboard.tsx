@@ -110,17 +110,17 @@ export default function AdminDashboard({
     setIsRefreshing(true);
     try {
       const count = await onRefreshInscripcions();
-      showToast({
-        title: language === 'ca' ? "Dades actualitzades" : "Datos actualizados",
-        description: language === 'ca' ? `S'han recarregat ${count ?? inscripcions.length} inscripcions de Supabase.` : `Se han recargado ${count ?? inscripcions.length} inscripciones de Supabase.`,
-        type: 'success'
-      });
+      showToast(
+        language === 'ca'
+          ? `Dades actualitzades: ${count ?? inscripcions.length} inscripcions`
+          : `Datos actualizados: ${count ?? inscripcions.length} inscripciones`,
+        'success'
+      );
     } catch (err: any) {
-      showToast({
-        title: language === 'ca' ? "Error d'actualització" : "Error de actualización",
-        description: err?.message || "No s'ha pogut refrescar.",
-        type: 'error'
-      });
+      showToast(
+        (language === 'ca' ? "Error d'actualització: " : "Error de actualización: ") + (err?.message || ''),
+        'error'
+      );
     } finally {
       setIsRefreshing(false);
     }
