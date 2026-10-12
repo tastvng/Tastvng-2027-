@@ -222,15 +222,15 @@ export const AdminManualRegistrationModal: React.FC<AdminManualRegistrationModal
   // Tariff prices for clavells & corbatí
   const clavellsTariff = useMemo(() => {
     return (config.tarifesDinamiques || []).find(t => 
-      t.actiu && (/clavell/i.test(t.nom) || /clavell/i.test(t.id) || /clavel/i.test(t.nomES || ''))
+      t.actiu !== false && (/clavell/i.test(t.id) || /clavell/i.test(t.nom))
     );
   }, [config.tarifesDinamiques]);
-  const clavellsPrice = clavellsTariff ? clavellsTariff.valor : 4;
+  const clavellsPrice = clavellsTariff ? clavellsTariff.valor : 8;
   const clavellsNom = language === 'ca' ? 'Clavells' : 'Claveles';
 
   const corbatiTariff = useMemo(() => {
     return (config.tarifesDinamiques || []).find(t => 
-      t.actiu && (/corbat|pajarit/i.test(t.nom) || /corbat|pajarit/i.test(t.id) || /pajarit/i.test(t.nomES || ''))
+      t.actiu !== false && (/corbat|pajarit/i.test(t.id) || /corbat|pajarit/i.test(t.nom))
     );
   }, [config.tarifesDinamiques]);
   const corbatiPrice = corbatiTariff ? corbatiTariff.valor : 10;
@@ -260,6 +260,12 @@ export const AdminManualRegistrationModal: React.FC<AdminManualRegistrationModal
       });
     }
 
+    const currentRespostes: Record<string, string | boolean> = {
+      ...respostesCuestionari
+    };
+    if (clavellsQty > 0) currentRespostes['clavells_qty'] = String(clavellsQty);
+    if (corbatiQty > 0) currentRespostes['corbati_qty'] = String(corbatiQty);
+
     return {
       categoria,
       c1Nom,
@@ -272,7 +278,9 @@ export const AdminManualRegistrationModal: React.FC<AdminManualRegistrationModal
       c2UniformeTipus,
       seleccionsUniforme,
       extresSeleccionats: extres,
-      respostesCuestionari
+      respostesCuestionari: currentRespostes,
+      teDomasBalco: false,
+      teMocadorsExtra: 0
     } as Inscripcio;
   }, [
     categoria,
@@ -512,15 +520,35 @@ export const AdminManualRegistrationModal: React.FC<AdminManualRegistrationModal
 
     // Prepare material list
     const extresGuardats: { id: string; nom: string; quantitat: number; preuUnitari: number; modalitat?: string }[] = [];
+    if (clavellsQty > 0) {
+      extresGuardats.push({
+        id: 'clavells',
+        nom: clavellsNom,
+        quantitat: clavellsQty,
+        preuUnitari: clavellsPrice,
+        modalitat: language === 'ca' ? 'Complements' : 'Complementos'
+      });
+    }
+    if (corbatiQty > 0) {
+      extresGuardats.push({
+        id: 'corbati',
+        nom: corbatiNom,
+        quantitat: corbatiQty,
+        preuUnitari: corbatiPrice,
+        modalitat: language === 'ca' ? 'Complements' : 'Complementos'
+      });
+    }
     if (orderBreakdown && orderBreakdown.materials) {
       orderBreakdown.materials.forEach(m => {
-        extresGuardats.push({
-          id: m.id,
-          nom: m.nom,
-          quantitat: m.quantitat,
-          preuUnitari: m.preuUnitari,
-          modalitat: m.modalitat
-        });
+        if (m.id !== 'clavells' && m.id !== 'corbati') {
+          extresGuardats.push({
+            id: m.id,
+            nom: m.nom,
+            quantitat: m.quantitat,
+            preuUnitari: m.preuUnitari,
+            modalitat: m.modalitat
+          });
+        }
       });
     }
 
@@ -610,6 +638,11 @@ export const AdminManualRegistrationModal: React.FC<AdminManualRegistrationModal
     onClose();
   };
 
+  const handleClose = () => {
+    resetForm();
+    onClose();
+  };
+
   if (!isOpen) return null;
 
   // Partial payment calculations for live preview
@@ -617,7 +650,7 @@ export const AdminManualRegistrationModal: React.FC<AdminManualRegistrationModal
   const partialPendent = Math.max(0, Math.round((totalCalculat - partialParsed) * 100) / 100);
 
   return (
-    <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-3 sm:p-5 backdrop-blur-sm font-sans" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-3 sm:p-5 backdrop-blur-sm font-sans" onClick={handleClose}>
       <div 
         className="bg-white rounded-3xl border border-zinc-200 shadow-2xl max-w-4xl w-full max-h-[92vh] overflow-y-auto p-5 sm:p-7 space-y-6 text-zinc-900 relative animate-in fade-in zoom-in-95 duration-200" 
         onClick={(e) => e.stopPropagation()}
@@ -635,7 +668,7 @@ export const AdminManualRegistrationModal: React.FC<AdminManualRegistrationModal
           </div>
           <button 
             type="button" 
-            onClick={onClose}
+            onClick={handleClose}
             className="p-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 rounded-xl text-xs font-bold transition cursor-pointer"
             aria-label="Tancar"
           >
@@ -836,39 +869,104 @@ export const AdminManualRegistrationModal: React.FC<AdminManualRegistrationModal
             cuestionariActiu={config.cuestionariActiu}
           />
 
-          {/* Optional Complementary Extras (Clavells and Corbatí) */}
-          <div className="bg-zinc-900 text-white rounded-3xl p-5 border border-zinc-800 space-y-4">
-            <div className="border-b border-zinc-800 pb-2">
-              <h4 className="font-sans font-bold text-xs uppercase tracking-wider text-[#ff0090]">
-                {language === 'ca' ? "Complements de Comparsa" : "Complementos de Comparsa"}
-              </h4>
-              <p className="text-[11px] text-zinc-400 mt-0.5">
-                {language === 'ca' ? "Opcional: afegiu clavells o corbatí segons desitgi la parella." : "Opcional: añada claveles o pajarita según desee la pareja."}
-              </p>
+          {/* Material i Complements de la Parella: Clavells / Claveles i Corbatí / Pajarita */}
+          <div className="bg-zinc-50 rounded-2xl p-4 sm:p-5 border border-zinc-200 space-y-4" id="seccio-material-parella-modal">
+            <div className="border-b border-zinc-200/80 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-fuchsia-100 text-fuchsia-600 flex items-center justify-center font-bold">
+                  ✓
+                </div>
+                <div>
+                  <h4 className="font-sans font-bold text-xs uppercase tracking-wider text-zinc-900">
+                    {language === 'ca' ? 'Material i Complements de la Parella' : 'Material y Complementos de la Pareja'}
+                  </h4>
+                  <p className="text-[11px] text-zinc-500 mt-0.5">
+                    {language === 'ca'
+                      ? 'Complements opcionals per a la comparsa (preus oficials sincronitzats des de Secretaria).'
+                      : 'Complementos opcionales para la comparsa (precios oficiales sincronizados desde Secretaría).'}
+                  </p>
+                </div>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {/* Clavells */}
-              <div className={`p-3.5 rounded-2xl border transition-all ${clavellsQty > 0 ? 'bg-[#ff0090]/15 border-[#ff0090]' : 'bg-zinc-950 border-zinc-800'}`}>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="font-bold text-sm text-white">{clavellsNom}</span>
-                  <span className="text-xs font-mono font-bold text-[#ff0090]">{clavellsPrice.toFixed(2)}€/u.</span>
+              {/* Clavells / Claveles */}
+              <div 
+                className={`relative rounded-2xl p-4 border transition-all duration-200 flex flex-col justify-between gap-3 cursor-pointer ${
+                  clavellsQty > 0 
+                    ? 'border-fuchsia-500 bg-fuchsia-50/70 shadow-xs ring-1 ring-fuchsia-500/30' 
+                    : 'border-zinc-200 bg-white hover:border-zinc-300'
+                }`}
+                onClick={() => {
+                  if (clavellsQty === 0) setClavellsQty(1);
+                }}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 select-none">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-extrabold text-zinc-900 tracking-tight block">
+                        {clavellsNom}
+                      </span>
+                      {clavellsQty > 0 && (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold font-mono bg-fuchsia-600 text-white">
+                          {clavellsQty}x
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-xs font-mono font-bold text-fuchsia-600">
+                        {clavellsPrice.toFixed(2)}€ <span className="text-[10px] text-zinc-500 font-normal">/ {language === 'ca' ? 'unitat' : 'unidad'}</span>
+                      </span>
+                      {clavellsQty > 0 && (
+                        <span className="text-xs font-mono font-black text-zinc-900 bg-zinc-100 px-2 py-0.5 rounded-md border border-fuchsia-200">
+                          Total: {(clavellsQty * clavellsPrice).toFixed(2)}€
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setClavellsQty(clavellsQty > 0 ? 0 : 1);
+                    }}
+                    className={`w-7 h-7 rounded-xl border flex items-center justify-center transition-all cursor-pointer shrink-0 ${
+                      clavellsQty > 0 
+                        ? 'bg-fuchsia-600 border-fuchsia-600 text-white shadow-xs' 
+                        : 'bg-zinc-100 border-zinc-300 text-transparent hover:border-fuchsia-400'
+                    }`}
+                    title={clavellsQty > 0 ? (language === 'ca' ? 'Treure selecció' : 'Quitar selección') : (language === 'ca' ? 'Seleccionar 1 unitat' : 'Seleccionar 1 unidad')}
+                  >
+                    <Check size={14} className={clavellsQty > 0 ? 'block' : 'opacity-0'} />
+                  </button>
                 </div>
-                <div className="flex items-center justify-between pt-2 border-t border-zinc-800">
-                  <span className="text-[11px] text-zinc-400 font-bold">{language === 'ca' ? "Quantitat:" : "Cantidad:"}</span>
-                  <div className="flex items-center gap-1.5 bg-zinc-900 border border-zinc-700 rounded-xl p-0.5">
+
+                <div 
+                  className="flex items-center justify-between pt-2 border-t border-zinc-200"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <span className="text-[11px] font-bold text-zinc-600 uppercase tracking-wide">
+                    {language === 'ca' ? 'Quantitat:' : 'Cantidad:'}
+                  </span>
+                  <div className="flex items-center gap-1 bg-white border border-zinc-300 rounded-xl p-0.5 shadow-2xs">
                     <button
                       type="button"
                       onClick={() => setClavellsQty(Math.max(0, clavellsQty - 1))}
-                      className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-300 hover:bg-zinc-800 transition cursor-pointer"
+                      disabled={clavellsQty <= 0}
+                      className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-600 hover:bg-zinc-100 disabled:opacity-30 disabled:hover:bg-transparent transition cursor-pointer"
+                      aria-label="Disminuir quantitat"
                     >
                       <Minus size={13} />
                     </button>
-                    <span className="w-8 text-center font-mono font-bold text-xs text-white">{clavellsQty}</span>
+                    <span className="w-8 text-center font-mono font-black text-xs text-zinc-900 select-none">
+                      {clavellsQty}
+                    </span>
                     <button
                       type="button"
                       onClick={() => setClavellsQty(clavellsQty + 1)}
-                      className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-300 hover:bg-zinc-800 transition cursor-pointer"
+                      className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-600 hover:bg-zinc-100 transition cursor-pointer"
+                      aria-label="Augmentar quantitat"
                     >
                       <Plus size={13} />
                     </button>
@@ -876,27 +974,83 @@ export const AdminManualRegistrationModal: React.FC<AdminManualRegistrationModal
                 </div>
               </div>
 
-              {/* Corbatí */}
-              <div className={`p-3.5 rounded-2xl border transition-all ${corbatiQty > 0 ? 'bg-[#ff0090]/15 border-[#ff0090]' : 'bg-zinc-950 border-zinc-800'}`}>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="font-bold text-sm text-white">{corbatiNom}</span>
-                  <span className="text-xs font-mono font-bold text-[#ff0090]">{corbatiPrice.toFixed(2)}€/u.</span>
+              {/* Corbatí / Pajarita */}
+              <div 
+                className={`relative rounded-2xl p-4 border transition-all duration-200 flex flex-col justify-between gap-3 cursor-pointer ${
+                  corbatiQty > 0 
+                    ? 'border-fuchsia-500 bg-fuchsia-50/70 shadow-xs ring-1 ring-fuchsia-500/30' 
+                    : 'border-zinc-200 bg-white hover:border-zinc-300'
+                }`}
+                onClick={() => {
+                  if (corbatiQty === 0) setCorbatiQty(1);
+                }}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1 select-none">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-extrabold text-zinc-900 tracking-tight block">
+                        {corbatiNom}
+                      </span>
+                      {corbatiQty > 0 && (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold font-mono bg-fuchsia-600 text-white">
+                          {corbatiQty}x
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-xs font-mono font-bold text-fuchsia-600">
+                        {corbatiPrice.toFixed(2)}€ <span className="text-[10px] text-zinc-500 font-normal">/ {language === 'ca' ? 'unitat' : 'unidad'}</span>
+                      </span>
+                      {corbatiQty > 0 && (
+                        <span className="text-xs font-mono font-black text-zinc-900 bg-zinc-100 px-2 py-0.5 rounded-md border border-fuchsia-200">
+                          Total: {(corbatiQty * corbatiPrice).toFixed(2)}€
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setCorbatiQty(corbatiQty > 0 ? 0 : 1);
+                    }}
+                    className={`w-7 h-7 rounded-xl border flex items-center justify-center transition-all cursor-pointer shrink-0 ${
+                      corbatiQty > 0 
+                        ? 'bg-fuchsia-600 border-fuchsia-600 text-white shadow-xs' 
+                        : 'bg-zinc-100 border-zinc-300 text-transparent hover:border-fuchsia-400'
+                    }`}
+                    title={corbatiQty > 0 ? (language === 'ca' ? 'Treure selecció' : 'Quitar selección') : (language === 'ca' ? 'Seleccionar 1 unitat' : 'Seleccionar 1 unidad')}
+                  >
+                    <Check size={14} className={corbatiQty > 0 ? 'block' : 'opacity-0'} />
+                  </button>
                 </div>
-                <div className="flex items-center justify-between pt-2 border-t border-zinc-800">
-                  <span className="text-[11px] text-zinc-400 font-bold">{language === 'ca' ? "Quantitat:" : "Cantidad:"}</span>
-                  <div className="flex items-center gap-1.5 bg-zinc-900 border border-zinc-700 rounded-xl p-0.5">
+
+                <div 
+                  className="flex items-center justify-between pt-2 border-t border-zinc-200"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <span className="text-[11px] font-bold text-zinc-600 uppercase tracking-wide">
+                    {language === 'ca' ? 'Quantitat:' : 'Cantidad:'}
+                  </span>
+                  <div className="flex items-center gap-1 bg-white border border-zinc-300 rounded-xl p-0.5 shadow-2xs">
                     <button
                       type="button"
                       onClick={() => setCorbatiQty(Math.max(0, corbatiQty - 1))}
-                      className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-300 hover:bg-zinc-800 transition cursor-pointer"
+                      disabled={corbatiQty <= 0}
+                      className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-600 hover:bg-zinc-100 disabled:opacity-30 disabled:hover:bg-transparent transition cursor-pointer"
+                      aria-label="Disminuir quantitat"
                     >
                       <Minus size={13} />
                     </button>
-                    <span className="w-8 text-center font-mono font-bold text-xs text-white">{corbatiQty}</span>
+                    <span className="w-8 text-center font-mono font-black text-xs text-zinc-900 select-none">
+                      {corbatiQty}
+                    </span>
                     <button
                       type="button"
                       onClick={() => setCorbatiQty(corbatiQty + 1)}
-                      className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-300 hover:bg-zinc-800 transition cursor-pointer"
+                      className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-600 hover:bg-zinc-100 transition cursor-pointer"
+                      aria-label="Augmentar quantitat"
                     >
                       <Plus size={13} />
                     </button>
@@ -1081,7 +1235,7 @@ export const AdminManualRegistrationModal: React.FC<AdminManualRegistrationModal
               <div className="flex gap-2 w-full sm:w-auto">
                 <button
                   type="button"
-                  onClick={onClose}
+                  onClick={handleClose}
                   className="flex-1 sm:flex-initial px-4 py-2.5 bg-zinc-800 hover:bg-zinc-700 font-bold border border-zinc-700 text-zinc-300 rounded-xl transition cursor-pointer text-xs"
                 >
                   {language === 'ca' ? "Cancel·lar" : "Cancelar"}
