@@ -35,6 +35,8 @@ interface ComparserCardProps {
 
   // Duplicate checks
   isNameDuplicate: boolean;
+  isEmailDuplicate?: boolean;
+  isPhoneDuplicate?: boolean;
 
   // Errors and Config
   errors: Record<string, string>;
