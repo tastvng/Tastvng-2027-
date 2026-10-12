@@ -232,6 +232,37 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    document.documentElement.lang = language;
+    
+    const isCa = language === 'ca';
+    const title = isCa 
+      ? `Inscripcions El Tast ${activeYear} — Secretariat Digital` 
+      : `Inscripciones El Tast ${activeYear} — Secretaría Digital`;
+    const desc = isCa
+      ? `Registre i gestió d'inscripcions oficials de la parella saltadora per al Tast i les Comparses de Vilanova i la Geltrú ${activeYear}.`
+      : `Registro y gestión de inscripciones oficiales de la pareja saltadora para El Tast y las Comparses de Vilanova i la Geltrú ${activeYear}.`;
+    
+    document.title = title;
+
+    const setMeta = (attr: string, val: string, content: string) => {
+      let el = document.querySelector(`meta[${attr}="${val}"]`);
+      if (!el) {
+        el = document.createElement('meta');
+        el.setAttribute(attr, val);
+        document.head.appendChild(el);
+      }
+      el.setAttribute('content', content);
+    };
+
+    setMeta('name', 'description', desc);
+    setMeta('property', 'og:title', title);
+    setMeta('property', 'og:description', desc);
+    setMeta('name', 'twitter:title', title);
+    setMeta('name', 'twitter:description', desc);
+  }, [language, activeYear]);
+
   const t = (key: string, replacements?: Record<string, string | number>): string => {
     let text = translations[language]?.[key] || translations['ca']?.[key] || key;
     

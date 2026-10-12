@@ -138,6 +138,7 @@ export default function PortadaPage({
 
   const [hoverFooter1, setHoverFooter1] = React.useState(false);
   const [hoverFooter2, setHoverFooter2] = React.useState(false);
+  const [spotlightVideoRequested, setSpotlightVideoRequested] = React.useState(false);
 
   // Keep liveConfig synchronized when config prop changes
   React.useEffect(() => {
@@ -691,7 +692,24 @@ export default function PortadaPage({
 
               {liveConfig.contingutTipus === 'video' && liveConfig.contingutVideoUrl && (
                 <div className="aspect-[4/3] rounded-2xl overflow-hidden bg-zinc-900 border border-white/5 relative">
-                  {isContentYoutubeState ? (
+                  {!spotlightVideoRequested ? (
+                    <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center bg-zinc-950/80">
+                      <div className="w-14 h-14 rounded-full bg-white/10 border border-white/20 flex items-center justify-center mb-3 text-white shadow-lg">
+                        <Play size={22} className="fill-white translate-x-0.5" />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setSpotlightVideoRequested(true)}
+                        className="px-5 py-2.5 rounded-xl text-xs font-bold text-white shadow-xl transition-all cursor-pointer hover:scale-105 active:scale-95"
+                        style={{ backgroundColor: accentColor }}
+                      >
+                        {language === 'ca' ? "Reproduir vídeo" : "Reproducir video"}
+                      </button>
+                      <span className="text-[10px] text-zinc-400 mt-2 font-mono">
+                        {language === 'ca' ? "Càrrega sota demanda" : "Carga bajo demanda"}
+                      </span>
+                    </div>
+                  ) : isContentYoutubeState ? (
                     <iframe
                       src={getYoutubeEmbedUrl(liveConfig.contingutVideoUrl)}
                       title="Youtube Spotlight Video"
@@ -704,6 +722,7 @@ export default function PortadaPage({
                     <video
                       src={liveConfig.contingutVideoUrl}
                       controls
+                      autoPlay
                       playsInline
                       className="w-full h-full object-cover"
                     />

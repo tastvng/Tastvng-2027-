@@ -40,21 +40,24 @@ export function getEntityConfigSync(language: 'ca' | 'es' = 'ca', fallbackConfig
   const med = storedPersonalizacion?.medios || {};
 
   const nom = (ev.nombre || safeGetItem('tast_nom_esdeveniment') || fallbackConfig?.titolSeccioTarifes?.replace(/Tarifes\s*/i, '') || "Associació Cultural El Tast").trim();
-  const direccio = (ev.direccio || safeGetItem('tast_direccio_esdeveniment') || "").trim();
+  const rawDireccio = (ev.direccio || safeGetItem('tast_direccio_esdeveniment') || "").trim();
+  const direccio = rawDireccio || (language === 'ca' ? "[Adreça de la seu: pendent de confirmació per la Junta]" : "[Dirección de la sede: pendiente de confirmación por la Junta]");
   const email = "tastvng@gmail.com";
   const telefon = "";
   const anyEdicio = (ev.any_edicio || safeGetItem('tast_any_edicio') || "2027").trim();
   const nomEsdeveniment = ev.nombre ? `${ev.nombre} ${anyEdicio}` : `El Tast ${anyEdicio}`;
 
-  const horari = (language === 'ca'
+  const rawHorari = (language === 'ca'
     ? (sec.hours_ca || safeGetItem('tast_secretaria_hours_ca') || "")
     : (sec.hours_es || safeGetItem('tast_secretaria_hours_es') || "")
   ).trim();
+  const horari = rawHorari || (language === 'ca' ? "[Horari d'atenció: pendent de confirmació per la Junta]" : "[Horario de atención: pendiente de confirmación por la Junta]");
 
-  const diesEntrega = (language === 'ca'
+  const rawDiesEntrega = (language === 'ca'
     ? (sec.dies_entrega_ca || safeGetItem('tast_dies_entrega_ca') || "")
     : (sec.dies_entrega_es || safeGetItem('tast_dies_entrega_es') || "")
   ).trim();
+  const diesEntrega = rawDiesEntrega || (language === 'ca' ? "[Termini de recollida de materials: pendent de confirmació]" : "[Plazo de recogida de materiales: pendiente de confirmación]");
 
   const logoUrl = med.logo || safeGetItem('tast_email_logo') || undefined;
 

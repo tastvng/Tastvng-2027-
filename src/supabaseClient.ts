@@ -1339,19 +1339,19 @@ export async function fetchSistemaConfig(): Promise<SistemaConfigItem[]> {
   const defaults: SistemaConfigItem[] = [
     { 
       clau: 'descripcio_parella_adulta_ca', 
-      valor: { text: sanitizeCategoryText('descripcio_parella_adulta_ca', "Especial per a majors de 18 anys (o 16-17 amb autorització).") } 
+      valor: { text: sanitizeCategoryText('descripcio_parella_adulta_ca', "Per a majors de 18 anys [Criteri 16-17 anys pendent de confirmació per la Junta].") } 
     },
     { 
       clau: 'descripcio_parella_adulta_es', 
-      valor: { text: sanitizeCategoryText('descripcio_parella_adulta_es', "Especial para mayores de 18 años (o 16-17 con autorización).") } 
+      valor: { text: sanitizeCategoryText('descripcio_parella_adulta_es', "Para mayores de 18 años [Criterio 16-17 años pendiente de confirmación por la Junta].") } 
     },
     { 
       clau: 'descripcio_parella_juvenil_ca', 
-      valor: { text: sanitizeCategoryText('descripcio_parella_juvenil_ca', "Especial per a parelles de 14 a 17 anys amb autorització de pares/tutors.") } 
+      valor: { text: sanitizeCategoryText('descripcio_parella_juvenil_ca', "Per a parelles de 14 a 17 anys amb autorització del tutor/a legal.") } 
     },
     { 
       clau: 'descripcio_parella_juvenil_es', 
-      valor: { text: sanitizeCategoryText('descripcio_parella_juvenil_es', "Especial para parejas de 14 a 17 años con autorización de padres/tutores.") } 
+      valor: { text: sanitizeCategoryText('descripcio_parella_juvenil_es', "Para parejas de 14 a 17 años con autorización del tutor/a legal.") } 
     },
     { 
       clau: 'armilla_opcional', 

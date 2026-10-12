@@ -361,7 +361,7 @@ export const Chatbot: React.FC<ChatbotProps> = ({
   };
 
   return (
-    <div className={`fixed bottom-6 right-6 z-50 ${className}`}>
+    <div className={`fixed bottom-24 right-4 sm:bottom-6 sm:right-6 z-50 ${className}`}>
       {/* Floating Trigger Button */}
       {!isOpen && (
         <button
@@ -623,10 +623,10 @@ export const Chatbot: React.FC<ChatbotProps> = ({
               </form>
             )}
 
-            {/* Session usage counter & subtle disclaimer */}
+            {/* Assistance information & contact */}
             <div className="flex items-center justify-between text-[10px] text-stone-500 mt-2 px-1">
               <span>
-                {userMessagesCount}/{MAX_SESSION_MESSAGES} {isCa ? 'consultes' : 'consultas'}
+                {isCa ? "Informació d'El Tast" : "Información de El Tast"}
               </span>
               <span className="truncate max-w-[200px]">
                 {entityInfo.email && !entityInfo.email.includes('secretaria@') ? entityInfo.email : 'tastvng@gmail.com'}

@@ -234,10 +234,10 @@ export default function App() {
   const [editId, setEditId] = useState<string | null>(null);
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean>(false);
 
-  // Practical guidance card hours state
+  // Practical guidance card hours state (marked pending until confirmed by Junta)
   const [hoursConfig, setHoursConfig] = useState({
-    ca: "Dimecres i divendres, de 18:00h a 21:30h directament a la seu social de l'Associació Cultural El Tast.",
-    es: "Miércoles y viernes, de 18:00h a 21:30h directamente en la sede social de la Asociación Cultural El Tast."
+    ca: "[Horari d'atenció i dates de recollida de materials: pendents de confirmació oficial per la Junta]",
+    es: "[Horario de atención y fechas de recogida de materiales: pendientes de confirmación oficial por la Junta]"
   });
 
   const [emailLogo, setEmailLogo] = useState(() => localStorage.getItem('tast_email_logo') || "");
@@ -247,8 +247,8 @@ export default function App() {
       const savedCa = localStorage.getItem('tast_secretaria_hours_ca');
       const savedEs = localStorage.getItem('tast_secretaria_hours_es');
       setHoursConfig({
-        ca: savedCa || "Dimecres i divendres, de 18:00h a 21:30h directament a la seu social de l'Associació Cultural El Tast.",
-        es: savedEs || "Miércoles y viernes, de 18:00h a 21:30h directamente en la sede social de la Asociación Cultural El Tast."
+        ca: savedCa || "[Horari d'atenció i dates de recollida de materials: pendents de confirmació oficial per la Junta]",
+        es: savedEs || "[Horario de atención y fechas de recogida de materiales: pendientes de confirmación oficial por la Junta]"
       });
       setEmailLogo(localStorage.getItem('tast_email_logo') || "");
     };

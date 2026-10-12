@@ -1,5 +1,5 @@
-import React from 'react';
-import { Camera, Upload, Trash2, AlertTriangle, Check, Database, Info } from 'lucide-react';
+import React, { useState } from 'react';
+import { Camera, Upload, Trash2, AlertTriangle, Check, Database, Info, Shield, ShieldCheck, ChevronDown, ChevronUp, Lock } from 'lucide-react';
 import { SistemaConfig } from '../../types';
 import { useLanguage } from '../../LanguageContext';
 import TranslatedText from '../TranslatedText';
@@ -81,6 +81,7 @@ export const ComparserCard: React.FC<ComparserCardProps> = ({
 }) => {
   const { language, t } = useLanguage();
   const prefix = `c${num}`;
+  const [showPrivacyPolicy, setShowPrivacyPolicy] = useState(false);
 
   // Keys for uniform line selection based on participant number
   const keyTalla = num === 1 ? 'c1Talla' : 'c2Talla';
@@ -159,13 +160,14 @@ export const ComparserCard: React.FC<ComparserCardProps> = ({
           <div className="flex justify-between items-center">
             <span id={`label-${prefix}-esmenor`} className="block text-xs font-bold text-zinc-700 tracking-tight">
               {language === 'ca' 
-                ? (num === 1 ? "El primer comparser és menor d'edat? *" : "El segon comparser és menor d'edat? *")
-                : (num === 1 ? "¿El primer comparsero es menor de edad? *" : "¿El segundo comparsero es menor de edad? *")}
+                ? (num === 1 ? "El primer comparser és menor d'edat? *" : "El segon comparser o comparsera és menor d'edat? *")
+                : (num === 1 ? "¿El primer comparsero es menor de edad? *" : "¿El segundo participante (comparsero/a) es menor de edad? *")}
             </span>
             <div className="flex rounded-lg overflow-hidden border border-zinc-200 bg-white p-0.5" role="group" aria-labelledby={`label-${prefix}-esmenor`}>
               <button
                 type="button"
                 onClick={() => setEsMenor(false)}
+                aria-pressed={!esMenor}
                 className={`text-xs px-3 py-1 font-bold rounded-md transition-all cursor-pointer ${!esMenor ? 'bg-fuchsia-100 text-fuchsia-700 shadow-sm' : 'text-zinc-500 hover:text-zinc-800'}`}
               >
                 No
@@ -173,6 +175,7 @@ export const ComparserCard: React.FC<ComparserCardProps> = ({
               <button
                 type="button"
                 onClick={() => setEsMenor(true)}
+                aria-pressed={esMenor}
                 className={`text-xs px-3 py-1 font-bold rounded-md transition-all cursor-pointer ${esMenor ? 'bg-fuchsia-600 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-800'}`}
               >
                 Sí
@@ -470,6 +473,74 @@ export const ComparserCard: React.FC<ComparserCardProps> = ({
             </div>
           );
         })}
+
+        {/* Privacy & RGPD Information prior to requesting DNI */}
+        <div className="bg-sky-50/70 border border-sky-200/80 rounded-2xl p-3.5 space-y-2">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex items-start gap-2">
+              <ShieldCheck className="text-sky-600 shrink-0 mt-0.5" size={17} />
+              <div>
+                <h4 className="text-xs font-bold text-sky-950">
+                  {language === 'ca' ? "Privacitat i tractament del DNI/NIE" : "Privacidad y tratamiento del DNI/NIE"}
+                </h4>
+                <p className="text-[11px] text-sky-800 leading-snug mt-0.5">
+                  {language === 'ca'
+                    ? "Les dades i imatges del document s'utilitzen únicament per comprovar l'edat i categoria. Podeu tapar el número de suport o dades personals no necessàries, deixant visibles només el nom, cognoms i data de naixement."
+                    : "Los datos e imágenes del documento se utilizan únicamente para comprobar la edad y categoría. Puede tapar el número de soporte o datos personales no necesarios, dejando visibles solo el nombre, apellidos y fecha de nacimiento."}
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowPrivacyPolicy(!showPrivacyPolicy)}
+              className="text-[11px] font-bold text-sky-700 hover:text-sky-900 bg-sky-100 hover:bg-sky-200 px-2 py-1 rounded-lg transition-colors flex items-center gap-1 shrink-0 cursor-pointer"
+              aria-expanded={showPrivacyPolicy}
+              aria-controls={`privacy-policy-box-${prefix}`}
+            >
+              <span>{language === 'ca' ? "Veure política" : "Ver política"}</span>
+              {showPrivacyPolicy ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+            </button>
+          </div>
+
+          {showPrivacyPolicy && (
+            <div 
+              id={`privacy-policy-box-${prefix}`} 
+              className="pt-3 border-t border-sky-200/60 text-[10px] text-zinc-700 space-y-2 font-sans bg-white/80 p-3 rounded-xl border border-sky-100 animate-fadeIn"
+            >
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px]">
+                <p>
+                  <strong className="text-zinc-900">{language === 'ca' ? "Responsable:" : "Responsable:"}</strong>{" "}
+                  [Pendent de completar: Associació Cultural El Tast — CIF i seu oficial pendents de confirmació]
+                </p>
+                <p>
+                  <strong className="text-zinc-900">{language === 'ca' ? "Finalitat:" : "Finalidad:"}</strong>{" "}
+                  {language === 'ca' ? "Comprovació d'edat i tramitació de la inscripció a les Comparses 2027." : "Comprobación de edad y tramitación de la inscripción a las Comparsas 2027."}
+                </p>
+                <p>
+                  <strong className="text-zinc-900">{language === 'ca' ? "Base legal:" : "Base legal:"}</strong>{" "}
+                  {language === 'ca' ? "Execució del conveni de participació i consentiment exprés (art. 6.1.a i 6.1.b RGPD)." : "Ejecución del convenio de participación y consentimiento expreso (art. 6.1.a y 6.1.b RGPD)."}
+                </p>
+                <p>
+                  <strong className="text-zinc-900">{language === 'ca' ? "Conservació:" : "Conservación:"}</strong>{" "}
+                  {language === 'ca' ? "Durant la gestió de l'edició 2027. Les imatges s'esborren un cop validada l'edat." : "Durante la gestión de la edición 2027. Las imágenes se eliminan tras validar la edad."}
+                </p>
+                <p>
+                  <strong className="text-zinc-900">{language === 'ca' ? "Drets i contacte:" : "Derechos y contacto:"}</strong>{" "}
+                  {language === 'ca' ? "Accés, rectificació o supressió via correu a tastvng@gmail.com." : "Acceso, rectificación o supresión vía correo a tastvng@gmail.com."}
+                </p>
+                <p>
+                  <strong className="text-zinc-900">{language === 'ca' ? "Proveïdors i seguretat:" : "Proveedores y seguridad:"}</strong>{" "}
+                  {language === 'ca' ? "Allotjament en servidors segurs a la UE (Supabase/Google Cloud) amb xifratge TLS i accés restringit." : "Alojamiento en servidores seguros en la UE (Supabase/Google Cloud) con cifrado TLS y acceso restringido."}
+                </p>
+              </div>
+              <p className="text-[9.5px] text-zinc-500 italic pt-1 border-t border-sky-100">
+                {language === 'ca'
+                  ? "Alternativa presencial: Si preferiu no pujar la fotografia del DNI, podeu acreditar la vostra identitat i edat directament a la secretaria en recollir els materials."
+                  : "Alternativa presencial: Si prefiere no subir la fotografía del DNI, puede acreditar su identidad y edad directamente en la secretaría al recoger los materiales."}
+              </p>
+            </div>
+          )}
+        </div>
 
         {/* DNI upload zona */}
         <div className="pt-2">

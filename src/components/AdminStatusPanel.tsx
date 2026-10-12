@@ -134,7 +134,7 @@ export const AdminStatusPanel: React.FC<AdminStatusPanelProps> = ({
                   {language === 'ca' ? 'Panel de Sincronització' : 'Panel de Sincronización'}
                 </h3>
                 <p className="text-[10px] text-zinc-500">
-                  {language === 'ca' ? 'Font: public.inscripciones' : 'Fuente: public.inscripciones'}
+                  {language === 'ca' ? "Registre oficial d'inscripcions" : "Registro oficial de inscripciones"}
                 </p>
               </div>
             </div>
@@ -143,7 +143,7 @@ export const AdminStatusPanel: React.FC<AdminStatusPanelProps> = ({
                 <button
                   onClick={handleManualRefresh}
                   disabled={isRefreshing || isLoading}
-                  title={language === 'ca' ? "Actualitzar dades de Supabase" : "Actualizar datos de Supabase"}
+                  title={language === 'ca' ? "Actualitzar dades del registre" : "Actualizar datos del registro"}
                   className="text-zinc-400 hover:text-purple-400 p-1.5 rounded-lg hover:bg-zinc-800/50 transition-colors disabled:opacity-50"
                 >
                   <RefreshCw className={`w-3.5 h-3.5 ${(isRefreshing || isLoading) ? 'animate-spin text-purple-400' : ''}`} />
@@ -164,7 +164,7 @@ export const AdminStatusPanel: React.FC<AdminStatusPanelProps> = ({
               <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400" />
               <div className="flex-1 min-w-0">
                 <p className="font-semibold text-[11px] leading-tight truncate">
-                  {language === 'ca' ? 'Error consultant Supabase' : 'Error consultando Supabase'}
+                  {language === 'ca' ? "Error de sincronització de dades" : "Error de sincronización de datos"}
                 </p>
                 <p className="text-[9px] text-rose-400/80 font-mono truncate">{error}</p>
               </div>
@@ -244,7 +244,7 @@ export const AdminStatusPanel: React.FC<AdminStatusPanelProps> = ({
                   {language === 'ca' ? 'No hi ha cap acció registrada' : 'No hay acciones registradas'}
                 </p>
                 <p className="text-[10px] text-zinc-600 mt-1">
-                  {language === 'ca' ? 'Es mostraran els guardats fets a la base de dades' : 'Se mostrarán los guardados hechos en la base de datos'}
+                  {language === 'ca' ? 'Es mostraran les sincronitzacions i accions del registre' : 'Se mostrarán las sincronizaciones y acciones del registro'}
                 </p>
               </div>
             ) : (

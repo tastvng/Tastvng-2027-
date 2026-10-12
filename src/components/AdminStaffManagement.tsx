@@ -519,15 +519,15 @@ export const AdminStaffManagement: React.FC<AdminStaffManagementProps> = ({
               <div>
                 <h4 className="font-sans font-extrabold text-xs text-zinc-900 uppercase tracking-wider flex items-center gap-2">
                   <UserCheck size={16} className="text-[#ff0090]" />
-                  {language === 'ca' ? "Llistat de Personal i Administradors Reals" : "Listado de Personal y Administradores Reales"}
+                  {language === 'ca' ? "Equip de Secretaria i Administració" : "Equipo de Secretaría y Administración"}
                   <span className="text-[10px] font-mono font-bold bg-zinc-100 text-zinc-700 px-2 py-0.5 rounded-full border border-zinc-200">
-                    {users.length}
+                    {users.length} {language === 'ca' ? (users.length === 1 ? 'membre' : 'membres') : (users.length === 1 ? 'miembro' : 'miembros')}
                   </span>
                 </h4>
                 <p className="text-[11px] text-zinc-500 mt-0.5">
                   {language === 'ca'
-                    ? "Sincronitzat en temps real des de Supabase Auth i public.profiles."
-                    : "Sincronizado en tiempo real desde Supabase Auth y public.profiles."}
+                    ? "Usuaris autoritzats per a la gestió oficial d'inscripcions."
+                    : "Usuarios autorizados para la gestión oficial de inscripciones."}
                 </p>
               </div>
 
@@ -545,13 +545,13 @@ export const AdminStaffManagement: React.FC<AdminStaffManagementProps> = ({
             {isLoading ? (
               <div className="py-12 text-center text-zinc-400 font-sans text-xs flex flex-col items-center justify-center gap-2">
                 <RefreshCw size={20} className="animate-spin text-[#ff0090]" />
-                <span>{language === 'ca' ? "Carregant administradors des de Supabase Auth..." : "Cargando administradores desde Supabase Auth..."}</span>
+                <span>{language === 'ca' ? "Carregant equip autoritzat..." : "Cargando equipo autorizado..."}</span>
               </div>
             ) : fetchError ? (
               <div className="py-6 p-4 bg-red-50 border border-red-200 rounded-2xl text-red-900 text-xs text-left space-y-3">
                 <div className="flex items-center gap-2 text-red-700 font-bold">
                   <AlertCircle size={18} className="shrink-0" />
-                  <span>{language === 'ca' ? "Error en consultar el servei de personal (/api/admin?action=list):" : "Error al consultar el servicio de personal (/api/admin?action=list):"}</span>
+                  <span>{language === 'ca' ? "Error en consultar l'equip de secretaria:" : "Error al consultar el equipo de secretaría:"}</span>
                 </div>
                 <div className="p-3 bg-white/80 border border-red-200 rounded-xl font-mono text-[11px] text-red-800 break-words leading-relaxed whitespace-pre-wrap">
                   {fetchError}

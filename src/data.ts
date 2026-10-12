@@ -27,7 +27,7 @@ export const COMPARTIDES_XARXES: NoticiaXarxes[] = [
     usuari: '@eltastvng',
     text: '🔥 CALENTANT MOTORS PER LES COMPARSES 2027! 🔥 Ja tenim data per a la recollida d\'armilles, clavells i corbatins oficials. Recordeu fer la vostra inscripció digital per tenir el vostre QR a mà i evitar cues! Ens trobem a la seu. 🎀💃 #comparses #eltast #vilanova #vilanovaigeltrú',
     imatgeUrl: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?q=80&w=800&auto=format&fit=crop',
-    dataPublicacio: 'Fa 2 hores',
+    dataPublicacio: 'Octubre 2026',
     enllacUrl: 'https://instagram.com',
     likes: 245
   },
@@ -36,7 +36,7 @@ export const COMPARTIDES_XARXES: NoticiaXarxes[] = [
     xarxa: 'facebook',
     usuari: 'Associació Cultural El Tast',
     text: '📢 ATENCIÓ COMPARSERES I COMPARSERS! Enguany facilitem el sistema d\'inscripció. Podeu carregar el DNI directament des de la web i rebreu el codi QR de confirmació al vostre correu. En el moment de la recollida del material a la seu, només ens heu d\'ensenyar el QR, farem el pagament (Bizum o efectiu) i us endureu els materials oficials en segons! 🍬🍬🍬 El Tast, cada any millor!',
-    dataPublicacio: 'Ahir',
+    dataPublicacio: 'Setembre 2026',
     enllacUrl: 'https://facebook.com',
     likes: 128
   },
@@ -46,17 +46,43 @@ export const COMPARTIDES_XARXES: NoticiaXarxes[] = [
     usuari: '@eltastvng',
     text: '🍬 Llestos per tirar tones de caramels a la Plaça de la Vila? 🍬 La categoria juvenil de les comparses d\'El Tast ja compta amb més de 40 parelles preinscrites! Queden poques places disponibles. Omple el formulari avui mateix!',
     imatgeUrl: 'https://images.unsplash.com/photo-1533227268428-f9ed0900fb3b?q=80&w=800&auto=format&fit=crop',
-    dataPublicacio: 'Fa 3 dies',
+    dataPublicacio: 'Setembre 2026',
     enllacUrl: 'https://instagram.com',
     likes: 194
   }
 ];
 
+/**
+ * Configuració oficial d'edats de categories.
+ * NOTA DE JUNTA: Es delimiten les categories per evitar solapaments.
+ * Si la Junta confirma excepcionalment menors a Adulta (p. ex. 16-17 amb acompanyant adult),
+ * es reflectirà aquí. Actualment queda pendent de confirmació definitiva per l'entitat.
+ */
+export const CONFIG_EDATS_CATEGORIES = {
+  reglaDefinida: false,
+  pendentConfirmacioJunta: true,
+  notaJuntaCA: "[Pendent de confirmació definitiva per la Junta: determinar si la Categoria Adulta requereix estrictament majors de 18 anys o admet 16-17 anys acompanyats d'adult]",
+  notaJuntaES: "[Pendiente de confirmación definitiva por la Junta: determinar si la Categoría Adulta requiere estrictamente mayores de 18 años o admite 16-17 años acompañados de adulto]",
+  categoriaAdulta: {
+    edatMinimaDefecte: 18,
+    admetMenorsAcompanyats: false, // pendent de confirmació
+    descripcioCA: "Per a persones majors de 18 anys [Criteri per a 16-17 anys pendent de confirmació per la Junta]",
+    descripcioES: "Para personas mayores de 18 años [Criterio para 16-17 años pendiente de confirmación por la Junta]"
+  },
+  categoriaJuvenil: {
+    edatMinima: 14,
+    edatMaxima: 17,
+    requereixTutorLegal: true,
+    descripcioCA: "Per a parelles d'entre 14 i 17 anys amb autorització signada de pare/mare o tutor/a legal.",
+    descripcioES: "Para parejas de entre 14 y 17 años con autorización firmada de padre/madre o tutor/a legal."
+  }
+};
+
 export const DEFAULT_CATEGORIA_DESCRIPTIONS = {
-  categoria_adulta_desc_ca: "Especial per a majors de 18 anys (o 16-17 amb autorització).",
-  categoria_adulta_desc_es: "Especial para mayores de 18 años (o 16-17 con autorización).",
-  categoria_juvenil_desc_ca: "Especial per a parelles de 14 a 17 anys amb autorització de pares/tutors.",
-  categoria_juvenil_desc_es: "Especial para parejas de 14 a 17 años con autorización de padres/tutores."
+  categoria_adulta_desc_ca: "Per a majors de 18 anys [Criteri 16-17 anys pendent de confirmació per la Junta].",
+  categoria_adulta_desc_es: "Para mayores de 18 años [Criterio 16-17 años pendiente de confirmación por la Junta].",
+  categoria_juvenil_desc_ca: "Per a parelles de 14 a 17 anys amb autorització del tutor/a legal.",
+  categoria_juvenil_desc_es: "Para parejas de 14 a 17 años con autorización del tutor/a legal."
 };
 
 export const CONFIG_INICIAL: SistemaConfig = {
@@ -125,23 +151,23 @@ export const CONFIG_INICIAL: SistemaConfig = {
   categoriaAdultaNomES: "Pareja Adulta",
   categoriaJuvenilNom: "Parella Juvenil",
   categoriaJuvenilNomES: "Pareja Juvenil",
-  categoriaAdultaDescCA: "Especial per a majors de 18 anys (o 16-17 amb autorització).",
-  categoriaAdultaDescES: "Especial para mayores de 18 años (o 16-17 con autorización).",
-  categoriaJuvenilDescCA: "Especial per a parelles de 14 a 17 anys amb autorització de pares/tutors.",
-  categoriaJuvenilDescES: "Especial para parejas de 14 a 17 años con autorización de padres/tutores.",
+  categoriaAdultaDescCA: "Per a majors de 18 anys [Criteri 16-17 anys pendent de confirmació per la Junta].",
+  categoriaAdultaDescES: "Para mayores de 18 años [Criterio 16-17 años pendiente de confirmación por la Junta].",
+  categoriaJuvenilDescCA: "Per a parelles de 14 a 17 anys amb autorització del tutor/a legal.",
+  categoriaJuvenilDescES: "Para parejas de 14 a 17 años con autorización del tutor/a legal.",
   categoriaAdultaActiva: true,
   categoriaJuvenilActiva: true,
   requerirDni: true,
-  instruccionsDniCA: "Pugeu una imatge clara del DNI frontal de cadascun dels participants.",
-  instruccionsDniES: "Suba una imagen clara del DNI frontal de cada uno de los participantes.",
-  textLegalRgpd: "En compliment del Reglament General de Protecció de Dades (RGPD), us informem que les vostres dades personals i la imatge del DNI frontal seran tractades exclusivament per l'Associació Cultural El Tast per gestionar la inscripció al Carnaval i verificar l'edat dels participants. No se cediran dades a tercers excepte obligació legal i seran totalment destruïdes una vegada finalitzat el Carnaval.",
-  textLegalRgpdES: "En cumplimiento del Reglamento General de Protección de Datos (RGPD), le informamos que sus datos personales y la imagen del DNI frontal serán tratados exclusivamente por la Associació Cultural El Tast para gestionar la inscripción al Carnaval y verificar la edad de los participantes. No se cederán datos a terceros salvo obligación legal y serán totalmente destruidos una vez finalizado el Carnaval.",
+  instruccionsDniCA: "Pugeu una imatge o foto del DNI/NIE (només cal que siguin visibles el nom i data de naixement).",
+  instruccionsDniES: "Suba una imagen o foto del DNI/NIE (solo es necesario que sean visibles el nombre y la fecha de nacimiento).",
+  textLegalRgpd: "En compliment del Reglament General de Protecció de Dades (RGPD), us informem que les dades facilitades seran tractades exclusivament per l'Associació Cultural El Tast per gestionar la inscripció i verificar l'edat dels participants a les Comparses de Vilanova 2027. Les dades no se cediran a tercers excepte obligació legal i les imatges aportades seran esborrades un cop verificada l'edat.",
+  textLegalRgpdES: "En cumplimiento del Reglamento General de Protección de Datos (RGPD), le informamos que los datos facilitados serán tratados exclusivamente por la Associació Cultural El Tast para gestionar la inscripción y verificar la edad de los participantes en las Comparses de Vilanova 2027. Los datos no se cederán a terceros salvo obligación legal y las imágenes aportadas serán eliminadas una vez verificada la edad.",
   titolConfirmacioCA: "Inscripció Confirmada!",
   titolConfirmacioES: "¡Inscripción Confirmada!",
   missatgeConfirmacioCA: "Hem registrat la vostra parella per a l'esdeveniment de l'entitat El Tast.",
   missatgeConfirmacioES: "Hemos registrado a vuestra pareja para el evento de la entidad El Tast.",
-  textLegalAutoritzacioMenors: "AUTORITZACIÓ DE MENORS D'EDAT\n\nEn condició de tutor/a legal del menor inscrit, declaro sota la meva responsabilitat que autoritzo expressament la seva participació a l'esdeveniment i activitats organitzades per l'Associació Cultural El Tast (Vilanova i la Geltrú 2027).\n\nCertifico que el menor es troba en condicions físiques i de salut aptes per al correcte desenvolupament de l'activitat, i m'en faig responsable de qualsevol incidència que se'n derivi del seu estat previ de salut, així com del compliment de la normativa vigent de l'organització.",
-  textLegalAutoritzacioMenorsES: "AUTORIZACIÓN DE MENORES DE EDAD\n\nEn condición de tutor/a legal del menor inscrito, declaro bajo mi responsabilidad que autorizo expresamente su participación en el evento y actividades organizadas por la Associació Cultural El Tast (Vilanova i la Geltrú 2027).\n\nCertifico que el menor se encuentra en condiciones físicas y de salud aptas para el correcto desarrollo de la actividad, y me hago responsable de cualquier incidencia que se derive de su estado previo de salud, así como del cumplimiento de la normativa de la organización."
+  textLegalAutoritzacioMenors: "AUTORITZACIÓ DE PARTICIPACIÓ DE MENORS D'EDAT\n\nCom a pare/mare o tutor/a legal del menor d'edat inscrit, autoritzo expressament la seva participació a l'activitat de Comparses organitzada per l'Associació Cultural El Tast per a l'edició 2027.\n\nDeclaro que he estat informat/da de les condicions i normativa de participació, que les dades de contacte facilitades són veraces per a qualsevol comunicació organitzativa o d'urgència durant l'activitat, i que aportaré la documentació identificativa acreditativa requerida per l'organització.",
+  textLegalAutoritzacioMenorsES: "AUTORIZACIÓN DE PARTICIPACIÓN DE MENORES DE EDAD\n\nComo padre/madre o tutor/a legal del menor de edad inscrito, autorizo expresamente su participación en la actividad de Comparsas organizada por la Associació Cultural El Tast para la edición 2027.\n\nDeclaro haber sido informado/a de las condiciones y normativa de participación, que los datos de contacto facilitados son veraces para cualquier comunicación organizativa o de urgencia durante la actividad, y que aportaré la documentación identificativa acreditativa requerida por la organización."
 };
 
 export const INSCRIPCIONS_INICIALS: Inscripcio[] = [

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import { COMPARTIDES_XARXES } from '../data';
 import { 
   Instagram, 
@@ -13,6 +13,7 @@ import {
   ExternalLink,
   Megaphone,
   Video,
+  Play,
   AlertTriangle,
   FileText,
   Sparkles,
@@ -40,6 +41,7 @@ function getYoutubeEmbedUrl(url: string = '') {
 
 export default function NotificationFeed({ onAddLog, noticies = COMPARTIDES_XARXES }: NotificationFeedProps) {
   const { language, t } = useLanguage();
+  const [loadedVideos, setLoadedVideos] = useState<Record<string, boolean>>({});
   return (
     <div className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 shadow-xl text-white font-sans">
       <div className="flex items-center justify-between mb-6 pb-4 border-b border-zinc-800">
@@ -119,7 +121,7 @@ export default function NotificationFeed({ onAddLog, noticies = COMPARTIDES_XARX
                     </span>
                     <span className="text-[9px] text-zinc-500 font-mono -mt-0.5">
                       {post.dataPublicacio === "Just ara"
-                        ? (language === 'ca' ? "Just ara" : "Justo ahora")
+                        ? (language === 'ca' ? "Octubre 2026" : "Octubre 2026")
                         : post.dataPublicacio}
                     </span>
                   </div>
@@ -153,10 +155,27 @@ export default function NotificationFeed({ onAddLog, noticies = COMPARTIDES_XARX
                 className={`text-xs leading-relaxed mb-3 font-sans ${isImportant ? 'text-zinc-200 font-medium' : 'text-zinc-350'}`} 
               />
 
-              {/* Custom Video Block Embed */}
+              {/* Custom Video Block Embed (Loaded strictly on user request) */}
               {post.tipus === 'video' && post.videoUrl && (
                 <div className="rounded-xl overflow-hidden mb-3 relative aspect-[16/9] bg-zinc-950 border border-zinc-800">
-                  {youtubeEmbed ? (
+                  {!loadedVideos[post.id] ? (
+                    <div className="w-full h-full flex flex-col items-center justify-center p-4 text-center bg-zinc-950/90 gap-2">
+                      <div className="w-10 h-10 rounded-full bg-fuchsia-500/20 flex items-center justify-center text-fuchsia-400">
+                        <Video size={18} />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setLoadedVideos(prev => ({ ...prev, [post.id]: true }))}
+                        className="flex items-center gap-2 px-3.5 py-1.5 bg-[#ff0090] hover:bg-[#d9007b] text-white rounded-xl text-xs font-bold transition-all shadow-md active:scale-95 cursor-pointer"
+                      >
+                        <Play size={12} className="fill-white" />
+                        <span>{language === 'ca' ? "Carregar vídeo" : "Cargar video"}</span>
+                      </button>
+                      <span className="text-[10px] text-zinc-500 font-mono">
+                        {language === 'ca' ? "Prem per reproduir el contingut" : "Pulsa para reproducir el contenido"}
+                      </span>
+                    </div>
+                  ) : youtubeEmbed ? (
                     <iframe 
                       src={youtubeEmbed}
                       title={post.titol || "Video de l'entitat"}
@@ -169,6 +188,7 @@ export default function NotificationFeed({ onAddLog, noticies = COMPARTIDES_XARX
                     <video 
                       src={post.videoUrl} 
                       controls 
+                      autoPlay
                       className="w-full h-full object-cover"
                       preload="metadata"
                     />

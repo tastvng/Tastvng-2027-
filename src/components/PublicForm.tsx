@@ -899,11 +899,11 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
     }
 
     if (c2EsMenor) {
-      if (!c2TutorNom.trim()) tempErrors.c2TutorNom = language === 'ca' ? "El nom del tutor 2 és obligatori" : "El nombre del tutor 2 es obligatorio";
-      if (!c2TutorCognoms.trim()) tempErrors.c2TutorCognoms = language === 'ca' ? "Els cognoms del tutor 2 són obligatoris" : "Los apellidos del tutor 2 son obligatorios";
-      if (!c2TutorDni.trim()) tempErrors.c2TutorDni = language === 'ca' ? "El DNI del tutor 2 és obligatori" : "El DNI del tutor 2 es obligatorio";
-      if (!c2TutorTelefon.trim()) tempErrors.c2TutorTelefon = language === 'ca' ? "El telèfon del tutor 2 és obligatori" : "El teléfono del tutor 2 es obligatorio";
-      if (!c2TutorAccepta) tempErrors.c2TutorAccepta = language === 'ca' ? "Heu d'acceptar l'autorització de menors 2" : "Debe aceptar la autorización de menores 2";
+      if (!c2TutorNom.trim()) tempErrors.c2TutorNom = language === 'ca' ? "El nom del tutor del segon participant és obligatori" : "El nombre del tutor del segundo participante es obligatorio";
+      if (!c2TutorCognoms.trim()) tempErrors.c2TutorCognoms = language === 'ca' ? "Els cognoms del tutor del segon participant són obligatoris" : "Los apellidos del tutor del segundo participante son obligatorios";
+      if (!c2TutorDni.trim()) tempErrors.c2TutorDni = language === 'ca' ? "El DNI del tutor del segon participant és obligatori" : "El DNI del tutor del segundo participante es obligatorio";
+      if (!c2TutorTelefon.trim()) tempErrors.c2TutorTelefon = language === 'ca' ? "El telèfon del tutor del segon participant és obligatori" : "El teléfono del tutor del segundo participante es obligatorio";
+      if (!c2TutorAccepta) tempErrors.c2TutorAccepta = language === 'ca' ? "Heu d'acceptar l'autorització del menor (Comparser/a 2)" : "Debe aceptar la autorización del menor (Comparsero/a 2)";
     }
 
     if (config.cuestionariActiu !== false && preguntesList && preguntesList.length > 0) {
@@ -992,8 +992,8 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
 
         if (c1AlreadyRegistered) {
           tempErrors.c1Nom = language === 'ca'
-            ? "⚠️ El primer participant ja està registrat en la base de dades! Reviseu o contacteu amb secretaria."
-            : "⚠️ ¡El primer participante ya está registrado en la base de datos! Revisad o contactad con secretaría.";
+            ? "⚠️ El primer participant ja està inscrit al registre oficial! Reviseu o contacteu amb secretaria."
+            : "⚠️ ¡El primer participante ya está inscrito en el registro oficial! Revisad o contactad con secretaría.";
           tempErrors.c1Duplicat = language === 'ca'
             ? "El primer participant ja es troba inscrit prèviament."
             : "El primer participante ya se encuentra inscrito previamente.";
@@ -1001,8 +1001,8 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
 
         if (c2AlreadyRegistered) {
           tempErrors.c2Nom = language === 'ca'
-            ? "⚠️ El segon participant ja està registrat en la base de dades! Reviseu o contacteu amb secretaria."
-            : "⚠️ ¡El segundo participante ya está registrado en la base de datos! Revisad o contactad con secretaría.";
+            ? "⚠️ El segon participant ja està inscrit al registre oficial! Reviseu o contacteu amb secretaria."
+            : "⚠️ ¡El segundo participante ya está inscrito en el registro oficial! Revisad o contactad con secretaría.";
           tempErrors.c2Duplicat = language === 'ca'
             ? "El segon participant ja es troba inscrit prèviament."
             : "El segundo participante ya se encuentra inscrito previamente.";
@@ -1010,13 +1010,12 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
 
         if (c1AlreadyRegistered || c2AlreadyRegistered) {
           tempErrors.duplicateGlobal = language === 'ca'
-            ? "No s'ha pogut enviar: Un o ambdós participants ja estan registrats a la base de dades de l'esdeveniment."
-            : "No se ha podido enviar: Uno o ambos participantes ya están registrados en la base de datos del evento.";
+            ? "No s'ha pogut enviar: Un o ambdós participants ja consten inscrits a les Comparses."
+            : "No se ha podido enviar: Uno o ambos participantes ya constan inscritos en las Comparsas.";
           
-          // Also show a browser alert as requested "que les salga un aviso de que ya están inscritos."
           alert(language === 'ca'
-            ? "⚠️ Avís: Ja esteu inscrits a la base de dades! Rebreu el comprovant o contacteu amb secretaria si teniu qualsevol dubte."
-            : "⚠️ Aviso: ¡Ya estáis inscritos en la base de datos! Recibiréis vuestro comprobante o contactad con secretaría ante cualquier duda."
+            ? "⚠️ Avís: Ja consteu inscrits al registre oficial! Rebreu el comprovant o contacteu amb secretaria si teniu qualsevol dubte."
+            : "⚠️ Aviso: ¡Ya constáis inscritos en el registro oficial! Recibiréis vuestro comprobante o contactad con secretaría ante cualquier duda."
           );
         }
       }
@@ -1445,7 +1444,11 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
               : "El precio relativo cambia automáticamente según la configuración vigente de la entidad."}
           </p>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div 
+            className="grid grid-cols-1 sm:grid-cols-2 gap-4"
+            role="radiogroup"
+            aria-label={language === 'ca' ? "Categoria de la parella" : "Categoría de la pareja"}
+          >
             {(() => {
               const adultTarif = (liveConfig.tarifesDinamiques || []).find(t => t.actiu !== false && (t.tipus === 'categoria_adult' || t.id === 'adults'));
               const adultValor = adultTarif ? adultTarif.valor : (liveConfig.preuAdult ?? 0);
@@ -1454,6 +1457,16 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
               return (
                 <div 
                   onClick={() => !isAdultDisabled && setCategoria(CategoriaParella.ADULT)}
+                  onKeyDown={(e) => {
+                    if ((e.key === 'Enter' || e.key === ' ') && !isAdultDisabled) {
+                      e.preventDefault();
+                      setCategoria(CategoriaParella.ADULT);
+                    }
+                  }}
+                  role="radio"
+                  aria-checked={categoria === CategoriaParella.ADULT}
+                  aria-disabled={isAdultDisabled}
+                  tabIndex={isAdultDisabled ? -1 : 0}
                   className={`p-5 rounded-2xl border-2 transition-all ${
                     isAdultDisabled 
                       ? 'bg-zinc-950/20 border-zinc-900 opacity-40 cursor-not-allowed'
@@ -1495,6 +1508,16 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
               return (
                 <div 
                   onClick={() => !isJuvenilDisabled && setCategoria(CategoriaParella.JUVENIL)}
+                  onKeyDown={(e) => {
+                    if ((e.key === 'Enter' || e.key === ' ') && !isJuvenilDisabled) {
+                      e.preventDefault();
+                      setCategoria(CategoriaParella.JUVENIL);
+                    }
+                  }}
+                  role="radio"
+                  aria-checked={categoria === CategoriaParella.JUVENIL}
+                  aria-disabled={isJuvenilDisabled}
+                  tabIndex={isJuvenilDisabled ? -1 : 0}
                   className={`p-5 rounded-2xl border-2 transition-all ${
                     isJuvenilDisabled 
                       ? 'bg-zinc-950/20 border-zinc-900 opacity-40 cursor-not-allowed'
@@ -1574,12 +1597,9 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
             {/* Telèfon de contacte */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-xs font-bold text-zinc-700 tracking-tight">
+                <label htmlFor="input-couple-phone" className="block text-xs font-bold text-zinc-700 tracking-tight cursor-pointer">
                   {language === 'ca' ? 'Telèfon de contacte *' : 'Teléfono de contacto *'}
                 </label>
-                <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded font-mono uppercase tracking-tight flex items-center gap-1" title={language === 'ca' ? "Es desa a la base de dades" : "Se guarda en la base de datos"}>
-                  <Database size={9} /> BBDD
-                </span>
               </div>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-zinc-400">
@@ -1599,7 +1619,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
               )}
               {isCouplePhoneDuplicate && (
                 <p className="text-[10px] text-amber-600 font-bold mt-1 flex items-center gap-1">
-                  <AlertTriangle size={11} /> {language === 'ca' ? "Aquest telèfon ja consta a la BBDD" : "Este teléfono ya consta en la BBDD"}
+                  <AlertTriangle size={11} /> {language === 'ca' ? "Aquest telèfon ja consta registrat" : "Este teléfono ya consta registrado"}
                 </p>
               )}
             </div>
@@ -1607,12 +1627,9 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
             {/* Correu electrònic */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-xs font-bold text-zinc-700 tracking-tight">
+                <label htmlFor="input-couple-email" className="block text-xs font-bold text-zinc-700 tracking-tight cursor-pointer">
                   {language === 'ca' ? 'Correu electrònic *' : 'Correo electrónico *'}
                 </label>
-                <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded font-mono uppercase tracking-tight flex items-center gap-1" title={language === 'ca' ? "Es desa a la base de dades" : "Se guarda en la base de datos"}>
-                  <Database size={9} /> BBDD
-                </span>
               </div>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-zinc-400">
@@ -1632,7 +1649,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
               )}
               {isCoupleEmailDuplicate && (
                 <p className="text-[10px] text-amber-600 font-bold mt-1 flex items-center gap-1">
-                  <AlertTriangle size={11} /> {language === 'ca' ? "Aquest correu ja consta a la BBDD" : "Este correo ya consta en la BBDD"}
+                  <AlertTriangle size={11} /> {language === 'ca' ? "Aquest correu ja consta registrat" : "Este correo ya consta registrado"}
                 </p>
               )}
             </div>
@@ -2201,7 +2218,12 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
 
             <div className="flex items-baseline gap-1.5 justify-center md:justify-start pt-1 border-t border-zinc-850">
               <span className="text-xs uppercase font-mono font-bold text-zinc-400">Total:</span>
-              <span className="font-sans font-black text-white text-3xl md:text-4xl tracking-tight leading-none" id="total-calculat-display">
+              <span 
+                className="font-sans font-black text-white text-3xl md:text-4xl tracking-tight leading-none" 
+                id="total-calculat-display"
+                aria-live="polite"
+                aria-atomic="true"
+              >
                 {priceLoadError ? '--' : `${totalCalculat.toFixed(2)}€`}
               </span>
               {!priceLoadError && <span className="text-zinc-400 text-xs font-mono">EUR</span>}
