@@ -101,6 +101,44 @@ export const CONFIG_INICIAL: SistemaConfig = {
   cuestionariActiu: true,
   preguntesFormulari: [
     {
+      id: 'preg-esmorzar-9zzpekm',
+      titol: 'Voleu esmorzar?',
+      concepte: 'Esmorzar',
+      ambit: 'comparser',
+      tipus: 'select',
+      opcions: ['Sí', 'No'],
+      preus: { 'Sí': 5 },
+      activa: true,
+      requerit: true
+    },
+    {
+      id: 'preg-entrepa-0tlbtv3',
+      titol: "Quin tipus d'entrepà voleu?",
+      ambit: 'comparser',
+      tipus: 'select',
+      opcions: ['Pernil salat', 'Pernil dolç', 'Formatge', 'Tonyina', 'Vegetal'],
+      activa: true,
+      requerit: false
+    },
+    {
+      id: 'preg-gluten-607nm9j',
+      titol: 'Amb gluten o sense gluten?',
+      ambit: 'comparser',
+      tipus: 'select',
+      opcions: ['Amb gluten', 'Sense gluten'],
+      activa: true,
+      requerit: false
+    },
+    {
+      id: 'preg-tomaquet-fxgdkya',
+      titol: 'Amb tomàquet o sense?',
+      ambit: 'comparser',
+      tipus: 'select',
+      opcions: ['Amb tomàquet', 'Sense tomàquet'],
+      activa: true,
+      requerit: false
+    },
+    {
       id: 'preg-1',
       titol: 'És la vostra primera vegada participant amb El Tast?',
       tipus: 'boolean',

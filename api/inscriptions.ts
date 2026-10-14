@@ -489,7 +489,7 @@ export default async function inscriptionsHandler(req: any, res: any) {
         c1Cognoms,
         c1Email: contactEmail,
         c1Telefon: contactTelefon,
-        c1Talla: String(reg.c1Talla || 'M').toUpperCase(),
+        c1Talla: reg.c1Talla ? String(reg.c1Talla).toUpperCase().trim() : '',
         c1DniUrl: reg.c1DniUrl ? String(reg.c1DniUrl) : null,
         c1EsMenor: Boolean(reg.c1EsMenor),
         c1TutorNom: reg.c1TutorNom ? String(reg.c1TutorNom).trim() : null,
@@ -502,7 +502,7 @@ export default async function inscriptionsHandler(req: any, res: any) {
         c2Cognoms,
         c2Email: contactEmail,
         c2Telefon: contactTelefon,
-        c2Talla: String(reg.c2Talla || 'L').toUpperCase(),
+        c2Talla: reg.c2Talla ? String(reg.c2Talla).toUpperCase().trim() : '',
         c2DniUrl: reg.c2DniUrl ? String(reg.c2DniUrl) : null,
         c2EsMenor: Boolean(reg.c2EsMenor),
         c2TutorNom: reg.c2TutorNom ? String(reg.c2TutorNom).trim() : null,
@@ -522,7 +522,7 @@ export default async function inscriptionsHandler(req: any, res: any) {
         estatDni: reg.estatDni || 'PENDENT',
         entregaMaterial: reg.entregaMaterial || 'PENDENT',
         estat_inscripcio: reg.estatInscripcio || reg.estat_inscripcio || 'obertes',
-        posicio_global: typeof reg.posicioGlobal === 'number' ? reg.posicioGlobal : (typeof reg.posicio_global === 'number' ? reg.posicio_global : null),
+        posicio_global: typeof reg.posicioGlobal === 'number' && reg.posicioGlobal > 1 ? reg.posicioGlobal : null,
         bandera: typeof reg.bandera === 'number' ? reg.bandera : 0,
         creadoEn: reg.creadoEn || nowIso,
         actualizadoEn: nowIso
@@ -550,10 +550,10 @@ export default async function inscriptionsHandler(req: any, res: any) {
             try {
               lockAcquired = await acquireDistributedLock(serverSupabase, lockToken, 7000);
 
-              // Query all currently registered tracking codes
+              // Query all currently registered tracking codes and calculate next correlative position
               const { data: existingRows, error: fetchErr } = await serverSupabase
                 .from('inscripciones')
-                .select('codiSeguiment');
+                .select('codiSeguiment, posicio_global');
 
               if (fetchErr) {
                 throw fetchErr;
@@ -566,6 +566,13 @@ export default async function inscriptionsHandler(req: any, res: any) {
                 confirmedCode = allocateNextCode(existingCodes, codeGroup);
               }
               insertRow.codiSeguiment = confirmedCode;
+
+              // Correlative unique posicio_global
+              const maxPos = (existingRows || []).reduce((max: number, r: any) => {
+                const p = Number(r.posicio_global || 0);
+                return p > max ? p : max;
+              }, 0);
+              insertRow.posicio_global = maxPos + 1;
 
               // Insert row into database
               const { error: insertError } = await serverSupabase

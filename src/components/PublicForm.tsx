@@ -173,7 +173,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
   // Comparser 1 state
   const [c1Nom, setC1Nom] = useState('');
   const [c1Cognoms, setC1Cognoms] = useState('');
-  const [c1Talla, setC1Talla] = useState('M');
+  const [c1Talla, setC1Talla] = useState('');
   const [c1DniUrl, setC1DniUrl] = useState<string | null>(null);
   const [c1EsMenor, setC1EsMenor] = useState(false);
   const [c1TutorNom, setC1TutorNom] = useState('');
@@ -181,12 +181,12 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
   const [c1TutorDni, setC1TutorDni] = useState('');
   const [c1TutorTelefon, setC1TutorTelefon] = useState('');
   const [c1TutorAccepta, setC1TutorAccepta] = useState(false);
-  const [c1UniformeTipus, setC1UniformeTipus] = useState<'compra' | 'lloguer'>('compra');
+  const [c1UniformeTipus, setC1UniformeTipus] = useState<'compra' | 'lloguer' | ''>('');
   
   // Comparser 2 state
   const [c2Nom, setC2Nom] = useState('');
   const [c2Cognoms, setC2Cognoms] = useState('');
-  const [c2Talla, setC2Talla] = useState('M');
+  const [c2Talla, setC2Talla] = useState('');
   const [c2DniUrl, setC2DniUrl] = useState<string | null>(null);
   const [c2EsMenor, setC2EsMenor] = useState(false);
   const [c2TutorNom, setC2TutorNom] = useState('');
@@ -194,7 +194,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
   const [c2TutorDni, setC2TutorDni] = useState('');
   const [c2TutorTelefon, setC2TutorTelefon] = useState('');
   const [c2TutorAccepta, setC2TutorAccepta] = useState(false);
-  const [c2UniformeTipus, setC2UniformeTipus] = useState<'compra' | 'lloguer'>('compra');
+  const [c2UniformeTipus, setC2UniformeTipus] = useState<'compra' | 'lloguer' | ''>('');
 
   // Dynamic uniform/equipment selections state
   const [seleccionsUniforme, setSeleccionsUniforme] = useState<Record<string, { c1Talla: string; c2Talla: string; c1Quantitat: number; c2Quantitat: number; c1Tipus: 'compra' | 'lloguer'; c2Tipus: 'compra' | 'lloguer'; c1Vol?: boolean; c2Vol?: boolean }>>(() => {
@@ -210,8 +210,8 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
     ];
     lines.forEach(l => {
       initial[l.id] = {
-        c1Talla: l.opcions[0] || 'M',
-        c2Talla: l.opcions[0] || 'M',
+        c1Talla: '',
+        c2Talla: '',
         c1Quantitat: 1,
         c2Quantitat: 1,
         c1Tipus: 'compra',

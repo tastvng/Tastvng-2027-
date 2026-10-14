@@ -106,8 +106,8 @@ export const AdminManualRegistrationModal: React.FC<AdminManualRegistrationModal
     ];
     lines.forEach(l => {
       initial[l.id] = {
-        c1Talla: l.opcions[0] || 'M',
-        c2Talla: l.opcions[0] || 'M',
+        c1Talla: '',
+        c2Talla: '',
         c1Quantitat: 1,
         c2Quantitat: 1,
         c1Tipus: 'compra',

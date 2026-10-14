@@ -103,7 +103,7 @@ export function calculateInscriptionOrderBreakdown(
   for (const linia of liniis) {
     if (linia.actiu === false) continue;
 
-    const sel = seleccionsUniforme[linia.id] || seleccionsUniforme['uniforme'] || seleccionsUniforme['armilla'];
+    const sel = seleccionsUniforme[linia.id] || seleccionsUniforme['uniforme'] || seleccionsUniforme['armilla'] || Object.values(seleccionsUniforme)[0];
     const isOptional = !!(linia.opcional || linia.armilla_opcional || config?.armilla_opcional);
     const liniaNom = (language === 'es' ? (linia.nomES || linia.nom) : linia.nom) || 'Armilla';
 
@@ -148,8 +148,8 @@ export function calculateInscriptionOrderBreakdown(
     const hasExplicitC1Vol = typeof c1VolCandidate === 'boolean';
     const hasExplicitC2Vol = typeof c2VolCandidate === 'boolean';
 
-    const rawTalla1 = ((sel as any)?.c1Talla || registration.c1Talla || '').trim();
-    const rawTalla2 = ((sel as any)?.c2Talla || registration.c2Talla || '').trim();
+    const rawTalla1 = (registration.c1Talla || (sel as any)?.c1Talla || '').trim();
+    const rawTalla2 = (registration.c2Talla || (sel as any)?.c2Talla || '').trim();
     const hasT1 = !!rawTalla1 && rawTalla1.toLowerCase() !== 'cap';
     const hasT2 = !!rawTalla2 && rawTalla2.toLowerCase() !== 'cap';
 
@@ -165,8 +165,8 @@ export function calculateInscriptionOrderBreakdown(
     const finalQty = (p1Wants ? 1 : 0) + (p2Wants ? 1 : 0);
 
     if (finalQty > 0) {
-      const c1Tipus = ((sel as any)?.c1Tipus || registration.c1UniformeTipus || 'compra').toLowerCase();
-      const c2Tipus = ((sel as any)?.c2Tipus || registration.c2UniformeTipus || 'compra').toLowerCase();
+      const c1Tipus = (registration.c1UniformeTipus || (sel as any)?.c1Tipus || 'compra').toLowerCase();
+      const c2Tipus = (registration.c2UniformeTipus || (sel as any)?.c2Tipus || 'compra').toLowerCase();
 
       const activeTalla1 = p1Wants ? rawTalla1 : '';
       const activeTalla2 = p2Wants ? rawTalla2 : '';
@@ -290,15 +290,16 @@ export function calculateInscriptionOrderBreakdown(
       const isForbidden = /doma|mocador|pañuelo|panuelo/i.test(extId) || /doma|mocador|pañuelo|panuelo/i.test(extNom);
       const isClavells = /clavell/i.test(extId) || /clavell/i.test(extNom);
       const isCorbati = /corbat|pajarit/i.test(extId) || /corbat|pajarit/i.test(extNom);
-      const isArmillaExtra = /armilla|chaleco/i.test(extId) || /armilla|chaleco/i.test(extNom);
+      const isArmillaExtra = /armilla|chaleco/i.test(extId) || /armilla|chaleco/i.test(extNom) || extId.startsWith('lin-');
+      const isEsmorzar = /esmorzar|almuerzo/i.test(extId) || /esmorzar|almuerzo/i.test(extNom) || extId.startsWith('esm-');
 
       // Discard legacy domàs / mocadors unless it was renamed to clavells / corbatí
       if (isForbidden && !isClavells && !isCorbati) {
         continue;
       }
 
-      // Do not duplicate armilla if already processed
-      if (isArmillaExtra && processedExtraIds.has('armilla')) {
+      // Do not duplicate or parse armilla as generic extra; uniforms are handled authoritatively in step 2
+      if (isArmillaExtra) {
         continue;
       }
 
@@ -312,18 +313,24 @@ export function calculateInscriptionOrderBreakdown(
         processedExtraIds.add('corbati');
         processedExtraIds.add('pajarita');
       }
+      if (isEsmorzar) {
+        processedExtraIds.add('esmorzar');
+        processedExtraIds.add('almuerzo');
+      }
 
       const cleanNom = isClavells 
         ? (language === 'ca' ? 'Clavells' : 'Claveles')
         : isCorbati 
           ? (language === 'ca' ? 'Corbatí' : 'Pajarita')
-          : extNom;
+          : isEsmorzar
+            ? 'Esmorzar'
+            : extNom;
 
       materials.push({
-        id: isClavells ? 'clavells' : (isCorbati ? 'corbati' : (ext.id || `ext-${materials.length}`)),
+        id: isClavells ? 'clavells' : (isCorbati ? 'corbati' : (isEsmorzar ? (ext.id || 'esmorzar') : (ext.id || `ext-${materials.length}`))),
         nom: cleanNom,
         quantitat: ext.quantitat,
-        modalitat: (ext as any).modalitat || (extId.startsWith('esm-') ? 'Esmorzar' : (language === 'ca' ? 'Complements' : 'Complementos')),
+        modalitat: isEsmorzar ? 'Esmorzar' : ((ext as any).modalitat || (language === 'ca' ? 'Complements' : 'Complementos')),
         preuUnitari: ext.preuUnitari,
         subtotal: ext.quantitat * ext.preuUnitari
       });
@@ -332,13 +339,24 @@ export function calculateInscriptionOrderBreakdown(
 
   // 4. Dynamic question materials with configured prices (e.g. Esmorzar / Breakfast)
   const respostes = registration.respostesCuestionari || {};
-  const preguntesConfig = config?.preguntesFormulari || [];
-  const isSavedRegistration = Boolean(
-    (registration.codiSeguiment && String(registration.codiSeguiment).trim() !== '') ||
-    (registration.creadoEn && String(registration.creadoEn).trim() !== '')
-  );
+  const fallbackPreguntes = [
+    {
+      id: 'preg-esmorzar-9zzpekm',
+      titol: 'Voleu esmorzar?',
+      concepte: 'Esmorzar',
+      ambit: 'comparser' as const,
+      tipus: 'select' as const,
+      opcions: ['Sí', 'No'],
+      preus: { 'Sí': 5 },
+      activa: true,
+      requerit: true
+    }
+  ];
+  const preguntesConfig = (config?.preguntesFormulari && config.preguntesFormulari.length > 0)
+    ? config.preguntesFormulari
+    : fallbackPreguntes;
 
-  if (preguntesConfig.length > 0 && (!isSavedRegistration || opts?.recalcularEsmorzar)) {
+  if (preguntesConfig.length > 0) {
     for (const q of preguntesConfig) {
       if (!q.preus || typeof q.preus !== 'object') continue;
 
@@ -381,8 +399,13 @@ export function calculateInscriptionOrderBreakdown(
 
         processedExtraIds.add(lineId);
         processedExtraIds.add(lineId.toLowerCase());
+        processedExtraIds.add('esmorzar');
+        processedExtraIds.add('almuerzo');
 
-        let baseName = (language === 'es' && q.concepteES ? q.concepteES : q.concepte) || q.titol;
+        let baseName = (q.concepte || q.titol || 'Esmorzar');
+        if (/almuerzo/i.test(baseName) || /esmorzar/i.test(baseName) || q.id.includes('esmorzar')) {
+          baseName = 'Esmorzar';
+        }
         if (hasMultiplePricedOptions) {
           baseName = `${baseName} (${opt})`;
         }
@@ -638,3 +661,51 @@ export function generateItemizedBreakdownHtml(
     </table>
   `;
 }
+
+/**
+ * Returns armilla details for a specific participant (1 or 2).
+ * Strictly checks whether armilla was actually selected.
+ * Returns label '—' if no armilla was chosen.
+ */
+export function getParticipantArmillaInfo(
+  registration: Inscripcio,
+  participantNum: 1 | 2,
+  config?: SistemaConfig | null,
+  language: 'ca' | 'es' = 'ca'
+): { hasArmilla: boolean; talla: string; modalitat: string; label: string } {
+  const isOptional = !!(config?.armilla_opcional ?? true);
+  const seleccionsUniforme = registration.seleccionsUniforme || {};
+  const sel = seleccionsUniforme['lin-1'] || seleccionsUniforme['lin-9yk7qnutn'] || seleccionsUniforme['uniforme'] || seleccionsUniforme['armilla'] || Object.values(seleccionsUniforme)[0];
+  const regAny = registration as any;
+
+  if (participantNum === 1) {
+    const c1VolCandidate = (sel as any)?.c1Vol ?? regAny.c1Vol ?? regAny.c1_vol ?? regAny.c1VolArmilla ?? regAny.c1_vol_armilla;
+    const hasExplicitVol = typeof c1VolCandidate === 'boolean';
+    const rawTalla = (registration.c1Talla || (sel as any)?.c1Talla || '').trim();
+    const hasT = !!rawTalla && rawTalla.toLowerCase() !== 'cap' && rawTalla.toLowerCase() !== 'null' && rawTalla.toLowerCase() !== 'undefined';
+    const wants = hasExplicitVol ? c1VolCandidate === true : (isOptional ? false : hasT);
+
+    if (!wants || !rawTalla) {
+      return { hasArmilla: false, talla: '', modalitat: '', label: '—' };
+    }
+    const tipus = (registration.c1UniformeTipus || (sel as any)?.c1Tipus || '').toLowerCase();
+    const isLloguer = tipus.includes('lloguer') || tipus.includes('alquiler');
+    const modalitat = isLloguer ? (language === 'ca' ? 'Lloguer' : 'Alquiler') : (language === 'ca' ? 'Compra' : 'Compra');
+    return { hasArmilla: true, talla: rawTalla, modalitat, label: `Talla ${rawTalla} • ${modalitat}` };
+  } else {
+    const c2VolCandidate = (sel as any)?.c2Vol ?? regAny.c2Vol ?? regAny.c2_vol ?? regAny.c2VolArmilla ?? regAny.c2_vol_armilla;
+    const hasExplicitVol = typeof c2VolCandidate === 'boolean';
+    const rawTalla = (registration.c2Talla || (sel as any)?.c2Talla || '').trim();
+    const hasT = !!rawTalla && rawTalla.toLowerCase() !== 'cap' && rawTalla.toLowerCase() !== 'null' && rawTalla.toLowerCase() !== 'undefined';
+    const wants = hasExplicitVol ? c2VolCandidate === true : (isOptional ? false : hasT);
+
+    if (!wants || !rawTalla) {
+      return { hasArmilla: false, talla: '', modalitat: '', label: '—' };
+    }
+    const tipus = (registration.c2UniformeTipus || (sel as any)?.c2Tipus || '').toLowerCase();
+    const isLloguer = tipus.includes('lloguer') || tipus.includes('alquiler');
+    const modalitat = isLloguer ? (language === 'ca' ? 'Lloguer' : 'Alquiler') : (language === 'ca' ? 'Compra' : 'Compra');
+    return { hasArmilla: true, talla: rawTalla, modalitat, label: `Talla ${rawTalla} • ${modalitat}` };
+  }
+}
+

@@ -301,8 +301,8 @@ export const ComparserCard: React.FC<ComparserCardProps> = ({
           const defaultVol = !isOptional;
           const rawSel = seleccionsUniforme[linia.id];
           const volProducte = rawSel && rawSel[keyVol] !== undefined ? !!rawSel[keyVol] : defaultVol;
-          const sel = rawSel || { [keyTalla]: linia.opcions[0] || 'M', [keyQuantitat]: 1, [keyTipus]: 'compra', [keyVol]: defaultVol };
-          const tallaVal = sel[keyTalla] || linia.opcions[0] || 'M';
+          const sel = rawSel || { [keyTalla]: '', [keyQuantitat]: 1, [keyTipus]: 'compra', [keyVol]: defaultVol };
+          const tallaVal = sel[keyTalla] || '';
           const quantitatVal = sel[keyQuantitat] || 1;
           const tipusVal = sel[keyTipus] || 'compra';
 
@@ -380,6 +380,7 @@ export const ComparserCard: React.FC<ComparserCardProps> = ({
                       }}
                       className="flex-1 bg-white border border-zinc-200 focus:border-fuchsia-500 rounded-xl px-4 py-2.5 text-xs font-bold focus:outline-none cursor-pointer"
                     >
+                      <option value="">{language === 'ca' ? 'Triar talla...' : 'Elegir talla...'}</option>
                       {linia.opcions.map(opt => (
                         <option key={opt} value={opt}>{opt}</option>
                       ))}

@@ -53,7 +53,7 @@ import AdminPersonalitzacio from './AdminPersonalitzacio';
 import { AdminStaffManagement } from './AdminStaffManagement';
 import { ResumEsmorzarsModal } from './ResumEsmorzarsModal';
 import { calculateDailySummaries } from '../dailySummary';
-import { calculateInscriptionOrderBreakdown, validateInscriptionTotal } from '../utils/orderCalculations';
+import { calculateInscriptionOrderBreakdown, validateInscriptionTotal, getParticipantArmillaInfo } from '../utils/orderCalculations';
 import { getPaymentSummary, metodesTexto, formatEuro } from '../utils/paymentCalculations';
 import { buildUnifiedEmailHtml } from '../utils/ticketGenerator';
 import { getEntityConfigSync, fetchLiveEntityConfig } from '../utils/entityConfig';
@@ -1048,7 +1048,8 @@ export default function AdminDashboard({
       const preuArmilla = armillaVal === 'NO' ? "" : (tip1 === 'lloguer' ? (config.liniisUniforme?.[0]?.preuLloguer || 30) : (config.liniisUniforme?.[0]?.preu || 30));
 
       // L (Talla Armilla)
-      const tallaArmilla = armillaVal === 'NO' ? "" : (selUni?.c1Talla || i.c1Talla || "M");
+      const armInfo1 = getParticipantArmillaInfo(i, 1, config);
+      const tallaArmilla = armInfo1.hasArmilla ? armInfo1.talla : "";
 
       // M (Clavells)
       const clavellsInfo = getExtraInfo(i, /clavell|clavel/i);
@@ -1919,9 +1920,17 @@ export default function AdminDashboard({
                             </span>
                           )}
                         </p>
-                        <p className="text-[10px] text-zinc-400 font-mono">
-                          Talla {item.c1Talla} <span className="text-[#ff0090] font-sans font-bold text-[9px] uppercase px-1 pb-0.5 bg-fuchsia-50/50 rounded border border-fuchsia-100/50 ml-1">{item.c1UniformeTipus === 'lloguer' ? (language === 'ca' ? 'Lloguer' : 'Alquiler') : (language === 'ca' ? 'Compra' : 'Compra')}</span>
-                        </p>
+                        {(() => {
+                          const armillaInfo = getParticipantArmillaInfo(item, 1, config, language);
+                          if (!armillaInfo.hasArmilla) {
+                            return <p className="text-[10px] text-zinc-400 font-mono">—</p>;
+                          }
+                          return (
+                            <p className="text-[10px] text-zinc-400 font-mono">
+                              Talla {armillaInfo.talla} <span className="text-[#ff0090] font-sans font-bold text-[9px] uppercase px-1 pb-0.5 bg-fuchsia-50/50 rounded border border-fuchsia-100/50 ml-1">{armillaInfo.modalitat}</span>
+                            </p>
+                          );
+                        })()}
                       </td>
 
                       {/* Participant 2 info */}
@@ -1934,9 +1943,17 @@ export default function AdminDashboard({
                             </span>
                           )}
                         </p>
-                        <p className="text-[10px] text-zinc-400 font-mono">
-                          Talla {item.c2Talla} <span className="text-[#ff0090] font-sans font-bold text-[9px] uppercase px-1 pb-0.5 bg-fuchsia-50/50 rounded border border-fuchsia-100/50 ml-1">{item.c2UniformeTipus === 'lloguer' ? (language === 'ca' ? 'Lloguer' : 'Alquiler') : (language === 'ca' ? 'Compra' : 'Compra')}</span>
-                        </p>
+                        {(() => {
+                          const armillaInfo = getParticipantArmillaInfo(item, 2, config, language);
+                          if (!armillaInfo.hasArmilla) {
+                            return <p className="text-[10px] text-zinc-400 font-mono">—</p>;
+                          }
+                          return (
+                            <p className="text-[10px] text-zinc-400 font-mono">
+                              Talla {armillaInfo.talla} <span className="text-[#ff0090] font-sans font-bold text-[9px] uppercase px-1 pb-0.5 bg-fuchsia-50/50 rounded border border-fuchsia-100/50 ml-1">{armillaInfo.modalitat}</span>
+                            </p>
+                          );
+                        })()}
                       </td>
 
                       {/* Category display */}
