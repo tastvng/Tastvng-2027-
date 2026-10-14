@@ -264,49 +264,20 @@ export default function AdminDashboard({
       // 1. Calculate breakdown using canonical function
       const breakdown = calculateInscriptionOrderBreakdown(item, config, language);
 
-      // 2. Validate total against preinscription
+      // 2. Validate total against preinscription (Point 6: show as notice, do not block)
       const validation = validateInscriptionTotal(item, config, language);
       if (!validation.valid) {
-        const errMsg = validation.errorMessage || (language === 'ca' ? "Error de concordança de preu entre el tiquet i la preinscripció." : "Error de concordancia de precio entre el ticket y la preinscripción.");
-        alert(errMsg);
-        setRowSmtpSending(prev => ({ ...prev, [item.id]: 'error' }));
-        return;
-      }
-
-      // 3. Resolve live entity config
-      let entityConfig = getEntityConfigSync(language, config);
-      try {
-        const live = await fetchLiveEntityConfig(language);
-        if (live) entityConfig = live;
-      } catch (e) {}
-
-      // 4. Resolve DNI signed URLs if present
-      let resolvedC1Dni: string | null = null;
-      let resolvedC2Dni: string | null = null;
-      if (item.c1DniUrl) {
-        try { resolvedC1Dni = await getDniSignedUrl(item.c1DniUrl); } catch (e) {}
-      }
-      if (item.c2DniUrl) {
-        try { resolvedC2Dni = await getDniSignedUrl(item.c2DniUrl); } catch (e) {}
-      }
-
-      // 5. Build Unified Single Source of Truth Template
-      const { subject: emailSubject, html: emailHtml } = buildUnifiedEmailHtml({
-        registration: item,
-        entityConfig,
-        breakdown,
-        c1DniSignedUrl: resolvedC1Dni,
-        c2DniSignedUrl: resolvedC2Dni,
-        language
-      });
-
-      const emailAttachments: any[] = [];
-      if (entityConfig.logoUrl && entityConfig.logoUrl.startsWith('data:')) {
-        emailAttachments.push({
-          filename: 'logo.png',
-          content: entityConfig.logoUrl,
-          cid: 'tast-email-logo-cid'
-        });
+        const warnMsg = language === 'ca'
+          ? `Avís de concordança de preu: El total calculat (${formatEuro(validation.expectedTotal)}) difereix del registrat a la fitxa (${formatEuro(validation.registeredTotal)}). Voleu enviar el correu igualment?`
+          : `Aviso de concordancia de precio: El total calculado (${formatEuro(validation.expectedTotal)}) difiere del registrado en la ficha (${formatEuro(validation.registeredTotal)}). ¿Desea enviar el correo igualmente?`;
+        if (!confirm(warnMsg)) {
+          setRowSmtpSending(prev => {
+            const next = { ...prev };
+            delete next[item.id];
+            return next;
+          });
+          return;
+        }
       }
 
       let adminToken = '';
@@ -318,6 +289,7 @@ export default function AdminDashboard({
         }
       } catch {}
 
+      // Dispatch to recipient(s) using only inscription ID (Point 1)
       const sendPromises = emailList.map(emailTo => {
         return fetch('/api/email?action=send', {
           method: 'POST',
@@ -327,15 +299,8 @@ export default function AdminDashboard({
           },
           body: JSON.stringify({
             id: item.id,
-            inscriptionId: item.id,
-            codiSeguiment: item.codiSeguiment,
-            emailData: {
-              to: emailTo,
-              subject: emailSubject,
-              html: emailHtml,
-              attachments: emailAttachments,
-              codiSeguiment: item.codiSeguiment
-            }
+            to: emailTo,
+            language
           })
         }).catch(err => {
           console.error(`Fetch to /api/email?action=send failed for ${emailTo}:`, err);
@@ -698,8 +663,8 @@ export default function AdminDashboard({
 
   // Stats calculation
   const totalInscrites = inscripcions.length;
-  const adultCount = inscripcions.filter(i => i.categoria === CategoriaParella.ADULT).length;
-  const juvenilCount = inscripcions.filter(i => i.categoria === CategoriaParella.JUVENIL).length;
+  const adultCount = inscripcions.filter(i => String(i.categoria || '').trim().toUpperCase() === 'ADULT').length;
+  const juvenilCount = inscripcions.filter(i => String(i.categoria || '').trim().toUpperCase() === 'JUVENIL').length;
   const esperaCount = inscripcions.filter(i => i.llistaEspera).length;
   
   // Real collected amount, cash/bizum split, pending and partial counts

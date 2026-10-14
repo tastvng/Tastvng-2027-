@@ -957,66 +957,36 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
         const c1CognomsNormalized = c1Cognoms.trim().toLowerCase().replace(/\s+/g, ' ');
         
         const c2NomNormalized = c2Nom.trim().toLowerCase().replace(/\s+/g, ' ');
-        const c2CognomsNormalized = c2Cognoms.trim().toLowerCase().replace(/\s+/g, ' ');
+        const norm = (s: string) => s.trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, ' ');
+        const myEmail = emailContactoPareja.trim().toLowerCase();
+        const myC1 = `${norm(c1Nom)} ${norm(c1Cognoms)}`;
+        const myC2 = `${norm(c2Nom)} ${norm(c2Cognoms)}`;
 
-        let c1AlreadyRegistered = false;
-        let c2AlreadyRegistered = false;
+        let coupleAlreadyRegistered = false;
 
         for (const ins of existingInscripcions) {
-          const insC1Nom = (ins.c1Nom || '').trim().toLowerCase().replace(/\s+/g, ' ');
-          const insC1Cognoms = (ins.c1Cognoms || '').trim().toLowerCase().replace(/\s+/g, ' ');
-          
-          const insC2Nom = (ins.c2Nom || '').trim().toLowerCase().replace(/\s+/g, ' ');
-          const insC2Cognoms = (ins.c2Cognoms || '').trim().toLowerCase().replace(/\s+/g, ' ');
+          const insEmail = (ins.emailContactoPareja || ins.c1Email || ins.c2Email || '').trim().toLowerCase();
+          if (insEmail !== myEmail) continue;
 
-          // Check Comparser 1 matching ANY of the registrants (either as c1 or c2)
-          if (
-            c1NomNormalized && c1CognomsNormalized && (
-              (c1NomNormalized === insC1Nom && c1CognomsNormalized === insC1Cognoms) ||
-              (c1NomNormalized === insC2Nom && c1CognomsNormalized === insC2Cognoms)
-            )
-          ) {
-            c1AlreadyRegistered = true;
-          }
+          const insC1 = `${norm(ins.c1Nom || '')} ${norm(ins.c1Cognoms || '')}`;
+          const insC2 = `${norm(ins.c2Nom || '')} ${norm(ins.c2Cognoms || '')}`;
 
-          // Check Comparser 2 matching ANY of the registrants (either as c1 or c2)
+          // Check if BOTH members match under the same email (Point 5)
           if (
-            c2NomNormalized && c2CognomsNormalized && (
-              (c2NomNormalized === insC1Nom && c2CognomsNormalized === insC1Cognoms) ||
-              (c2NomNormalized === insC2Nom && c2CognomsNormalized === insC2Cognoms)
-            )
+            (myC1 === insC1 && myC2 === insC2) ||
+            (myC1 === insC2 && myC2 === insC1)
           ) {
-            c2AlreadyRegistered = true;
+            coupleAlreadyRegistered = true;
+            break;
           }
         }
 
-        if (c1AlreadyRegistered) {
-          tempErrors.c1Nom = language === 'ca'
-            ? "⚠️ El primer participant ja està inscrit al registre oficial! Reviseu o contacteu amb secretaria."
-            : "⚠️ ¡El primer participante ya está inscrito en el registro oficial! Revisad o contactad con secretaría.";
-          tempErrors.c1Duplicat = language === 'ca'
-            ? "El primer participant ja es troba inscrit prèviament."
-            : "El primer participante ya se encuentra inscrito previamente.";
-        }
-
-        if (c2AlreadyRegistered) {
-          tempErrors.c2Nom = language === 'ca'
-            ? "⚠️ El segon participant ja està inscrit al registre oficial! Reviseu o contacteu amb secretaria."
-            : "⚠️ ¡El segundo participante ya está inscrito en el registro oficial! Revisad o contactad con secretaría.";
-          tempErrors.c2Duplicat = language === 'ca'
-            ? "El segon participant ja es troba inscrit prèviament."
-            : "El segundo participante ya se encuentra inscrito previamente.";
-        }
-
-        if (c1AlreadyRegistered || c2AlreadyRegistered) {
-          tempErrors.duplicateGlobal = language === 'ca'
-            ? "No s'ha pogut enviar: Un o ambdós participants ja consten inscrits a les Comparses."
-            : "No se ha podido enviar: Uno o ambos participantes ya constan inscritos en las Comparsas.";
-          
-          alert(language === 'ca'
-            ? "⚠️ Avís: Ja consteu inscrits al registre oficial! Rebreu el comprovant o contacteu amb secretaria si teniu qualsevol dubte."
-            : "⚠️ Aviso: ¡Ya constáis inscritos en el registro oficial! Recibiréis vuestro comprobante o contactad con secretaría ante cualquier duda."
-          );
+        if (coupleAlreadyRegistered) {
+          const dupMsg = language === 'ca'
+            ? "⚠️ Aquesta parella ja està inscrita amb aquest correu electrònic! Si necessiteu fer canvis o no heu rebut el comprovant, contacteu amb secretaria."
+            : "⚠️ ¡Esta pareja ya está inscrita con este correo electrónico! Si necesitáis realizar cambios o no habéis recibido el comprobante, contactad con secretaría.";
+          tempErrors.duplicateGlobal = dupMsg;
+          alert(dupMsg);
         }
       }
     } catch (e) {
@@ -1087,49 +1057,68 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
       let finalC1DniUrl = c1DniUrl || '';
       let finalC2DniUrl = c2DniUrl || '';
 
-      // Upload DNI documents securely via server endpoint with magic bytes & rate-limiting
-      if (c1DniUrl && c1DniUrl.startsWith('data:')) {
-        try {
-          const res = await fetch('/api/inscriptions?action=upload-dni', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              codiSeguiment: tempRef,
-              participant: 'c1',
-              fileData: c1DniUrl
-            })
-          });
-          if (res.ok) {
-            const data = await res.json();
-            if (data.storagePath) {
-              finalC1DniUrl = data.storagePath;
+      // Upload DNI documents to Storage (bucket dnis) with retry (Point 3a)
+      // Never store base64 into the table; if upload fails, abort and show error.
+      const uploadWithRetry = async (fileData: string, participant: 'c1' | 'c2', maxRetries = 3): Promise<string> => {
+        if (!fileData || !fileData.startsWith('data:')) return fileData;
+        let lastErr: any = null;
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+          try {
+            const res = await fetch('/api/inscriptions?action=upload-dni', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                codiSeguiment: tempRef,
+                participant,
+                fileData
+              })
+            });
+            if (res.ok) {
+              const data = await res.json();
+              if (data.storagePath) {
+                return data.storagePath;
+              }
+            } else {
+              const errData = await res.json().catch(() => null);
+              throw new Error(errData?.error || `Error ${res.status}`);
+            }
+          } catch (e: any) {
+            lastErr = e;
+            if (attempt < maxRetries) {
+              await new Promise(r => setTimeout(r, 600 * attempt));
             }
           }
-        } catch (e) {
-          console.warn("Notice: server DNI upload fallback for c1:", e);
         }
+        throw new Error(lastErr?.message || (language === 'ca' ? "Error en pujar el document DNI a l'emmagatzematge." : "Error al subir el documento DNI al almacenamiento."));
+      };
+
+      try {
+        if (c1DniUrl && c1DniUrl.startsWith('data:')) {
+          finalC1DniUrl = await uploadWithRetry(c1DniUrl, 'c1');
+        }
+        if (c2DniUrl && c2DniUrl.startsWith('data:')) {
+          finalC2DniUrl = await uploadWithRetry(c2DniUrl, 'c2');
+        }
+      } catch (uploadErr: any) {
+        setIsSubmitting(false);
+        const errMsg = uploadErr?.message || (language === 'ca'
+          ? "No s'ha pogut pujar el document DNI a l'emmagatzematge. S'ha aturat el registre per seguretat."
+          : "No se ha podido subir el documento DNI al almacenamiento. Se ha detenido el registro por seguridad.");
+        setSubmitError({ message: errMsg });
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
       }
 
-      if (c2DniUrl && c2DniUrl.startsWith('data:')) {
-        try {
-          const res = await fetch('/api/inscriptions?action=upload-dni', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              codiSeguiment: tempRef,
-              participant: 'c2',
-              fileData: c2DniUrl
-            })
-          });
-          if (res.ok) {
-            const data = await res.json();
-            if (data.storagePath) {
-              finalC2DniUrl = data.storagePath;
-            }
-          }
-        } catch (e) {
-          console.warn("Notice: server DNI upload fallback for c2:", e);
-        }
+      // Final safeguard: Never allow data URL in DNI fields
+      if (finalC1DniUrl.startsWith('data:') || finalC2DniUrl.startsWith('data:')) {
+        setIsSubmitting(false);
+        setSubmitError({
+          message: language === 'ca'
+            ? "No es permet guardar imatges en base64 directament a la base de dades. Si us plau, torneu-ho a provar."
+            : "No se permite guardar imágenes en base64 directamente en la base de datos. Por favor, vuelva a intentarlo."
+        });
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+        return;
       }
 
       const finalRespostes: Record<string, string> = {
@@ -1169,7 +1158,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
         c1TutorCognoms: c1EsMenor ? c1TutorCognoms : '',
         c1TutorDni: c1EsMenor ? c1TutorDni : '',
         c1TutorTelefon: c1EsMenor ? c1TutorTelefon : '',
-        c1UniformeTipus,
+        c1UniformeTipus: (c1UniformeTipus || undefined) as any,
         c2Nom,
         c2Cognoms,
         c2Email: emailContactoPareja.trim(),
@@ -1181,7 +1170,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
         c2TutorCognoms: c2EsMenor ? c2TutorCognoms : '',
         c2TutorDni: c2EsMenor ? c2TutorDni : '',
         c2TutorTelefon: c2EsMenor ? c2TutorTelefon : '',
-        c2UniformeTipus,
+        c2UniformeTipus: (c2UniformeTipus || undefined) as any,
         respostesCuestionari: finalRespostes,
         seleccionsUniforme,
         extresSeleccionats: extresGuardats,

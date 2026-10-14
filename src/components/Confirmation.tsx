@@ -172,37 +172,7 @@ export default function Confirmation({ registration, onClear, onUpdate, config }
         return;
       }
 
-      // Ensure DNI signed URLs are resolved before building email
-      let resolvedC1Dni = c1DniSignedUrl;
-      let resolvedC2Dni = c2DniSignedUrl;
-
-      if (!resolvedC1Dni && (activeReg.c1DniUrl || registration.c1DniUrl)) {
-        resolvedC1Dni = await getDniSignedUrl(activeReg.c1DniUrl || registration.c1DniUrl);
-      }
-      if (!resolvedC2Dni && (activeReg.c2DniUrl || registration.c2DniUrl)) {
-        resolvedC2Dni = await getDniSignedUrl(activeReg.c2DniUrl || registration.c2DniUrl);
-      }
-
-      // Unified Single Source of Truth Template
-      const { subject, html } = buildUnifiedEmailHtml({
-        registration: activeReg,
-        entityConfig,
-        breakdown: currentBreakdown,
-        c1DniSignedUrl: resolvedC1Dni,
-        c2DniSignedUrl: resolvedC2Dni,
-        language
-      });
-
-      const emailAttachments: any[] = [];
-      if (entityConfig.logoUrl && entityConfig.logoUrl.startsWith('data:')) {
-        emailAttachments.push({
-          filename: 'logo.png',
-          content: entityConfig.logoUrl,
-          cid: 'tast-email-logo-cid'
-        });
-      }
-
-      // Dispatch to recipient(s)
+      // Dispatch email using only registration ID - server queries necessary columns without DNI (Point 1)
       const sendPromises = emailList.map(emailTo => {
         return fetch('/api/email?action=send', {
           method: 'POST',
@@ -211,15 +181,8 @@ export default function Confirmation({ registration, onClear, onUpdate, config }
           },
           body: JSON.stringify({
             id: activeReg.id,
-            inscriptionId: activeReg.id,
-            codiSeguiment: activeReg.codiSeguiment,
-            emailData: {
-              to: emailTo,
-              subject,
-              html,
-              attachments: emailAttachments,
-              codiSeguiment: activeReg.codiSeguiment
-            }
+            to: emailTo,
+            language
           })
         }).catch(err => {
           console.error(`Fetch to /api/email?action=send failed for ${emailTo}:`, err);
@@ -434,7 +397,7 @@ export default function Confirmation({ registration, onClear, onUpdate, config }
             className="w-full sm:w-auto shrink-0 bg-red-650 hover:bg-red-700 active:bg-red-800 text-white font-black text-xs px-4 py-3 rounded-xl transition-all shadow-md hover:scale-[1.01] active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer border border-red-700 font-sans"
             id="btn-retry-smtp-error"
           >
-            <RefreshCw size={13} className={smtpStatus === 'sending' ? 'animate-spin' : ''} />
+            <RefreshCw size={13} className={(smtpStatus as string) === 'sending' ? 'animate-spin' : ''} />
             {language === 'ca' ? "Reintentar enviament" : "Reintentar envío"}
           </button>
         </motion.div>
@@ -505,10 +468,19 @@ export default function Confirmation({ registration, onClear, onUpdate, config }
 
             <div className="flex justify-between items-center text-xs">
               <span className="text-zinc-500 font-bold uppercase tracking-wide">
-                {language === 'ca' ? 'Contacte:' : 'Contacto:'}
+                {language === 'ca' ? 'Correu de contacte:' : 'Correo de contacto:'}
               </span>
               <span className="font-mono text-zinc-700 text-right text-[11px]">
                 {currentReg.emailContactoPareja || currentReg.c1Email || currentReg.c2Email || registration.emailContactoPareja || registration.c1Email || registration.c2Email}
+              </span>
+            </div>
+
+            <div className="flex justify-between items-center text-xs">
+              <span className="text-zinc-500 font-bold uppercase tracking-wide">
+                {language === 'ca' ? 'Telèfon de contacte:' : 'Teléfono de contacto:'}
+              </span>
+              <span className="font-mono text-zinc-700 text-right text-[11px]">
+                {currentReg.c1Telefon || (currentReg.respostesCuestionari as any)?.telefonContactoPareja || currentReg.telefonContactoPareja || registration.c1Telefon || (registration.respostesCuestionari as any)?.telefonContactoPareja || '—'}
               </span>
             </div>
 

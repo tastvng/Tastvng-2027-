@@ -346,7 +346,16 @@ function parseJSON(val: any): any {
 
 function parseInscripcionesRows(rows: any[]): Inscripcio[] {
   if (!rows) return [];
-  return rows.filter(Boolean).map(r => {
+  const seenIds = new Set<string>();
+  const uniqueRows: any[] = [];
+  for (const r of rows) {
+    if (!r) continue;
+    const rowId = String(r.id || r.key || '');
+    if (rowId && seenIds.has(rowId)) continue;
+    if (rowId) seenIds.add(rowId);
+    uniqueRows.push(r);
+  }
+  return uniqueRows.map(r => {
     // Fallback if the whole object was saved inside a single JSON field
     if (r.value && typeof r.value === 'object') return r.value;
     if (r.data && typeof r.data === 'object') return r.data;
@@ -519,6 +528,8 @@ function parseInscripcionesRows(rows: any[]): Inscripcio[] {
 
 const CAMEL_COLUMNS = "id, codiSeguiment, categoria, c1Nom, c1Cognoms, c1Email, c1Telefon, c1Talla, c1DniUrl, c1EsMenor, c1TutorNom, c1TutorCognoms, c1TutorDni, c1TutorTelefon, c1UniformeTipus, c2Nom, c2Cognoms, c2Email, c2Telefon, c2Talla, c2DniUrl, c2EsMenor, c2TutorNom, c2TutorCognoms, c2TutorDni, c2TutorTelefon, c2UniformeTipus, respostesCuestionari, seleccionsUniforme, preuCalculat, teDomasBalco, teMocadorsExtra, pagaments, estatPagament, metodePagament, estatDni, entregaMaterial, estat_inscripcio, posicio_global, bandera, creadoEn, actualizadoEn";
 
+const CAMEL_COLUMNS_NO_DNI = "id, codiSeguiment, categoria, c1Nom, c1Cognoms, c1Email, c1Telefon, c1Talla, c1EsMenor, c1TutorNom, c1TutorCognoms, c1TutorDni, c1TutorTelefon, c1UniformeTipus, c2Nom, c2Cognoms, c2Email, c2Telefon, c2Talla, c2EsMenor, c2TutorNom, c2TutorCognoms, c2TutorDni, c2TutorTelefon, c2UniformeTipus, respostesCuestionari, seleccionsUniforme, preuCalculat, teDomasBalco, teMocadorsExtra, pagaments, estatPagament, metodePagament, estatDni, entregaMaterial, estat_inscripcio, posicio_global, bandera, creadoEn, actualizadoEn";
+
 const SNAKE_COLUMNS = "id, codi_seguiment, categoria, c1_nom, c1_cognoms, c1_email, c1_telefon, c1_talla, c1_dni_url, c1_es_menor, c1_tutor_nom, c1_tutor_cognoms, c1_tutor_dni, c1_tutor_telefon, c1_uniforme_tipus, c2_nom, c2_cognoms, c2_email, c2_telefon, c2_talla, c2_dni_url, c2_es_menor, c2_tutor_nom, c2_tutor_cognoms, c2_tutor_dni, c2_tutor_telefon, c2_uniforme_tipus, respostes_cuestionari, seleccions_uniforme, preu_calculat, te_domas_balco, te_mocadors_extra, estat_pagament, metode_pagament, estat_dni, entrega_material, estat_inscripcio, posicio_global, bandera, creado_en, actualizado_en";
 
 export interface InscripcionesQueryResult {
@@ -606,8 +617,9 @@ export async function getSupabaseInscripcionesResult(): Promise<InscripcionesQue
   try {
     const { data, error } = await supabase
       .from('inscripciones')
-      .select('*')
+      .select(CAMEL_COLUMNS_NO_DNI)
       .order('creadoEn', { ascending: false })
+      .order('id', { ascending: true })
       .limit(3000);
 
     if (error) {
@@ -867,17 +879,38 @@ export async function saveSupabaseInscripcion(ins: Inscripcio): Promise<SaveInsc
   try {
     const tableName = 'inscripciones';
 
-    // GUARANTEE: Never insert an empty tracking code. Allocate atomically if not set.
-    if (!ins.codiSeguiment || !ins.codiSeguiment.trim()) {
-      const isWaitlist = ins.estatInscripcio === 'llista_espera' || (!ins.estatInscripcio && ins.llistaEspera);
-      const { determineCodeGroup, allocateNextCode } = await import('./utils/codeAllocator');
-      const codeGroup = determineCodeGroup(ins.categoria, Boolean(isWaitlist));
-      let existingCodes: string[] = [];
-      try {
-        const { data: dbCodes } = await insertClient.from('inscripciones').select('codiSeguiment, codi_seguiment');
-        existingCodes = (dbCodes || []).map((x: any) => x.codiSeguiment || x.codi_seguiment).filter(Boolean);
-      } catch {}
-      ins.codiSeguiment = allocateNextCode(existingCodes, codeGroup);
+    // Check if another inscription already exists with same email and same two members (Point 5)
+    try {
+      const { data: existingRows } = await insertClient
+        .from(tableName)
+        .select('c1Nom, c1Cognoms, c2Nom, c2Cognoms, emailContactoPareja, c1Email, c2Email');
+
+      const norm = (s: string) => (s || '').trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, ' ');
+      const myEmail = contactEmail.toLowerCase();
+      const myC1 = `${norm(ins.c1Nom)} ${norm(ins.c1Cognoms)}`;
+      const myC2 = `${norm(ins.c2Nom)} ${norm(ins.c2Cognoms)}`;
+
+      const coupleAlreadyExists = (existingRows || []).some((r: any) => {
+        const rEmail = (r.emailContactoPareja || r.c1Email || r.c2Email || '').trim().toLowerCase();
+        if (rEmail !== myEmail) return false;
+        const rC1 = `${norm(r.c1Nom)} ${norm(r.c1Cognoms)}`;
+        const rC2 = `${norm(r.c2Nom)} ${norm(r.c2Cognoms)}`;
+        return (
+          (myC1 === rC1 && myC2 === rC2) ||
+          (myC1 === rC2 && myC2 === rC1)
+        );
+      });
+
+      if (coupleAlreadyExists) {
+        return {
+          ok: false,
+          step: 'validation',
+          error: "Aquesta parella ja consta inscrita amb aquest correu electrònic. Si necessiteu fer canvis, contacteu amb secretaria.",
+          code: "COUPLE_ALREADY_REGISTERED"
+        };
+      }
+    } catch (chkErr) {
+      console.warn("Notice checking couple duplicate on direct client:", chkErr);
     }
 
     const enrichedRespostes = {
@@ -892,17 +925,15 @@ export async function saveSupabaseInscripcion(ins: Inscripcio): Promise<SaveInsc
     };
 
     // Clean column mapping strictly adhering to public.inscripciones schema
-    // Note: NEVER use .upsert() or .select() here to ensure no 42501 RLS select/update violation occurs
-    const insertRow = {
+    const insertRow: Record<string, any> = {
       id: ins.id,
-      codiSeguiment: ins.codiSeguiment,
       categoria: ins.categoria,
       c1Nom: ins.c1Nom,
       c1Cognoms: ins.c1Cognoms,
       c1Email: contactEmail,
       c1Telefon: contactTelefon,
       c1Talla: ins.c1Talla,
-      c1DniUrl: ins.c1DniUrl || null,
+      c1DniUrl: ins.c1DniUrl && !ins.c1DniUrl.startsWith('data:') ? ins.c1DniUrl : null,
       c1EsMenor: Boolean(ins.c1EsMenor),
       c1TutorNom: ins.c1TutorNom || null,
       c1TutorCognoms: ins.c1TutorCognoms || null,
@@ -914,7 +945,7 @@ export async function saveSupabaseInscripcion(ins: Inscripcio): Promise<SaveInsc
       c2Email: contactEmail,
       c2Telefon: contactTelefon,
       c2Talla: ins.c2Talla,
-      c2DniUrl: ins.c2DniUrl || null,
+      c2DniUrl: ins.c2DniUrl && !ins.c2DniUrl.startsWith('data:') ? ins.c2DniUrl : null,
       c2EsMenor: Boolean(ins.c2EsMenor),
       c2TutorNom: ins.c2TutorNom || null,
       c2TutorCognoms: ins.c2TutorCognoms || null,
@@ -931,28 +962,32 @@ export async function saveSupabaseInscripcion(ins: Inscripcio): Promise<SaveInsc
       estatDni: ins.estatDni || 'PENDENT',
       entregaMaterial: ins.entregaMaterial || 'PENDENT',
       estat_inscripcio: ins.estatInscripcio || 'obertes',
-      posicio_global: typeof ins.posicioGlobal === 'number' ? ins.posicioGlobal : null,
       bandera: typeof ins.bandera === 'number' ? ins.bandera : 0,
       creadoEn: ins.creadoEn || new Date().toISOString(),
       actualizadoEn: ins.actualizadoEn || new Date().toISOString()
     };
+
+    if (ins.codiSeguiment && ins.codiSeguiment.trim()) {
+      insertRow.codiSeguiment = ins.codiSeguiment.trim();
+    }
 
     const response = await insertClient
       .from(tableName)
       .insert(insertRow);
 
     if (!response.error) {
-      // If the database trigger assigned a canonical code, attempt to read it
-      let finalCode = ins.codiSeguiment;
+      // Read the trigger-assigned canonical code and position (Point 4)
+      let finalCode = ins.codiSeguiment || '';
+      let finalPos: number | undefined = undefined;
       try {
         const { data: rowCheck } = await insertClient
           .from(tableName)
-          .select('codiSeguiment, codi_seguiment')
+          .select('codiSeguiment, codi_seguiment, posicio_global')
           .eq('id', ins.id)
           .maybeSingle();
         if (rowCheck) {
-          const dbCode = (rowCheck.codiSeguiment || rowCheck.codi_seguiment || '').trim();
-          if (dbCode) finalCode = dbCode;
+          finalCode = (rowCheck.codiSeguiment || rowCheck.codi_seguiment || finalCode).trim();
+          finalPos = rowCheck.posicio_global;
         }
       } catch {}
 
@@ -961,7 +996,8 @@ export async function saveSupabaseInscripcion(ins: Inscripcio): Promise<SaveInsc
         ok: true,
         step: 'database_insert',
         id: ins.id,
-        codiSeguiment: finalCode
+        codiSeguiment: finalCode,
+        details: { posicioGlobal: finalPos }
       };
     }
 

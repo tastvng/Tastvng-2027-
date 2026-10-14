@@ -343,6 +343,47 @@ ${textToTranslate}
   httpServer.listen(PORT, "0.0.0.0", () => {
     console.log(`Server listening on port ${PORT} with environment ${process.env.NODE_ENV || 'production'}`);
   });
+
+  // Background Worker: Automatic email retry for pending / failed emails (Point 5)
+  // Checks and retries pending confirmation emails every 2 minutes without intervention
+  setInterval(async () => {
+    try {
+      const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+      if (!supabaseUrl || !serviceRoleKey) return;
+      const client = createClient(supabaseUrl, serviceRoleKey);
+
+      const { data: rows } = await client
+        .from('inscripciones')
+        .select('id, codiSeguiment, respostesCuestionari')
+        .limit(100);
+
+      const pendingRows = (rows || []).filter((r: any) => {
+        const code = (r.codiSeguiment || '').trim();
+        if (!code) return false;
+        const resp = typeof r.respostesCuestionari === 'object' && r.respostesCuestionari ? r.respostesCuestionari : {};
+        const isEnviat = r.mailEnviat === true || resp.mailEnviat === true || resp.mailEstat === 'enviat' || resp.estatCorreu === 'enviat';
+        return !isEnviat;
+      });
+
+      if (pendingRows.length > 0) {
+        console.log(`[Email Auto-Retry Worker]: Found ${pendingRows.length} pending/failed emails. Processing batch...`);
+        for (const item of pendingRows.slice(0, 5)) {
+          try {
+            await fetch(`http://127.0.0.1:${PORT}/api/email?action=send`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ id: item.id })
+            });
+          } catch (retryErr) {
+            console.warn(`[Email Auto-Retry Worker]: Retry failed for inscription ${item.id}`);
+          }
+        }
+      }
+    } catch (e) {
+      // quiet background error
+    }
+  }, 2 * 60 * 1000);
 }
 
 startServer().catch((err) => {

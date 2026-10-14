@@ -88,6 +88,7 @@ export function buildUnifiedEmailHtml(options: TicketGenerationOptions): {
   const itemizedTableHtml = generateItemizedBreakdownHtml(breakdown, language);
 
   const contactEmail = (registration.emailContactoPareja || registration.c1Email || registration.c2Email || '').trim();
+  const contactPhone = (registration.c1Telefon || (registration.respostesCuestionari as any)?.telefonContactoPareja || registration.telefonContactoPareja || registration.c2Telefon || '').trim();
   const officialContactEmail = "tastvng@gmail.com";
 
   const observacions = (
@@ -160,6 +161,14 @@ export function buildUnifiedEmailHtml(options: TicketGenerationOptions): {
             </td>
           </tr>
           ` : ''}
+          <tr>
+            <td style="padding: 6px 0; color: #6b7280; font-weight: bold; text-transform: uppercase; font-size: 11px;">
+              ${language === 'ca' ? 'Telèfon de contacte:' : 'Teléfono de contacto:'}
+            </td>
+            <td style="padding: 6px 0; text-align: right; color: #374151; font-family: monospace;">
+              ${contactPhone || '—'}
+            </td>
+          </tr>
           <tr>
             <td style="padding: 6px 0; color: #6b7280; font-weight: bold; text-transform: uppercase; font-size: 11px;">
               ${language === 'ca' ? 'Categoria:' : 'Categoría:'}

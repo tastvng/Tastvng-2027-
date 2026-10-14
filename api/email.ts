@@ -213,9 +213,9 @@ export default async function emailHandler(req: any, res: any) {
       attachments = body.attachments || [];
     }
 
-    // If only an inscription ID was provided (e.g. from manual retry) and no HTML,
-    // look up the existing inscription from Supabase to extract recipient and details.
-    if ((!to || !html) && inscriptionId) {
+    // If inscriptionId is provided, look up existing inscription from Supabase
+    // selecting ONLY the columns needed for the email, STRICTLY EXCLUDING c1DniUrl and c2DniUrl (Point 1).
+    if (inscriptionId) {
       try {
         const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
         const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
@@ -224,27 +224,261 @@ export default async function emailHandler(req: any, res: any) {
           const supabase = createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false } });
           const { data: ins, error: fetchErr } = await supabase
             .from('inscripciones')
-            .select('*')
+            .select('id, codiSeguiment, categoria, c1Nom, c1Cognoms, c1Email, c1Telefon, c2Nom, c2Cognoms, c2Email, c2Telefon, preuCalculat, respostesCuestionari, seleccionsUniforme, estatInscripcio, estat_inscripcio, posicioGlobal, posicio_global')
             .eq('id', inscriptionId)
             .single();
 
           if (!fetchErr && ins) {
-            to = ins.c1Email || ins.c2Email || ins.emailContactoPareja || '';
-            codiSeguiment = ins.codiSeguiment || codiSeguiment;
-            subject = `Confirmació de preinscripció - El Tast 2027 [${codiSeguiment}]`;
+            const lang = body.language === 'es' ? 'es' : 'ca';
+            const isCorrection = Boolean(body.isCorrection);
+            const rawResp = typeof ins.respostesCuestionari === 'object' && ins.respostesCuestionari !== null
+              ? ins.respostesCuestionari
+              : (typeof ins.respostesCuestionari === 'string' ? JSON.parse(ins.respostesCuestionari || '{}') : {});
+
+            to = (body.to || body.email || (ins as any).emailContactoPareja || rawResp.emailContactoPareja || ins.c1Email || ins.c2Email || '').trim();
+            codiSeguiment = (ins.codiSeguiment || (ins as any).codi_seguiment || (ins as any).codigo || codiSeguiment || '').trim();
+
+            const isAdult = String(ins.categoria || '').trim().toUpperCase() === 'ADULT';
+            const categoriaLabel = isAdult 
+              ? (lang === 'ca' ? 'PARELLA ADULTA' : 'PAREJA ADULTA') 
+              : (lang === 'ca' ? 'PARELLA JUVENIL' : 'PAREJA JUVENIL');
+
+            const isWaitlist = ins.estatInscripcio === 'llista_espera' ||
+                               ins.estat_inscripcio === 'llista_espera' ||
+                               ins.estatInscripcio === 'espera' ||
+                               ins.estat_inscripcio === 'espera';
+
+            const posicio = ins.posicioGlobal || ins.posicio_global;
+            const contactPhone = (ins.c1Telefon || rawResp.telefonContactoPareja || ins.c2Telefon || '').trim();
+
+            // Unified official total calculation (Point 6):
+            // 45 base quota + 30 per armilla where c1Vol/c2Vol is true + 8 * clavells + 10 * corbati + 5 per each breakfast 'Sí'
+            let armillesCount = 0;
+            const selUni = typeof ins.seleccionsUniforme === 'object' && ins.seleccionsUniforme !== null ? ins.seleccionsUniforme : {};
+            const firstUni = Object.values(selUni)[0] as any;
+            if (firstUni) {
+              if (firstUni.c1Vol === true) armillesCount++;
+              if (firstUni.c2Vol === true) armillesCount++;
+            }
+
+            const clavellsQty = Math.max(0, parseInt(String(rawResp.clavells_qty || 0), 10) || 0);
+            const corbatiQty = Math.max(0, parseInt(String(rawResp.corbati_qty || 0), 10) || 0);
+
+            let esmorzarCount = 0;
+            Object.keys(rawResp).forEach(k => {
+              if (k.startsWith('preg-') && (k.endsWith('__c1') || k.endsWith('__c2'))) {
+                const val = String(rawResp[k] || '').trim().toLowerCase();
+                if (val === 'sí' || val === 'si') esmorzarCount++;
+              }
+            });
+
+            const quotaBase = 45;
+            const armillesTotal = armillesCount * 30;
+            const clavellsTotal = clavellsQty * 8;
+            const corbatiTotal = corbatiQty * 10;
+            const esmorzarTotal = esmorzarCount * 5;
+            const totalCalculat = quotaBase + armillesTotal + clavellsTotal + corbatiTotal + esmorzarTotal;
+
+            const prefixSubject = isCorrection ? (lang === 'ca' ? '[VERSIÓ CORREGIDA] ' : '[VERSIÓN CORREGIDA] ') : '';
+            subject = codiSeguiment
+              ? `${prefixSubject}Confirmació de preinscripció - El Tast 2027 [CODI DE SEGUIMENT: ${codiSeguiment}]`
+              : `${prefixSubject}Confirmació de preinscripció - El Tast 2027`;
+
+            const qrUrl = codiSeguiment
+              ? `https://api.qrserver.com/v1/create-qr-code/?size=250x250&color=e6007e&data=${encodeURIComponent(codiSeguiment)}`
+              : '';
+
+            const correctionBannerHtml = isCorrection ? `
+              <div style="background-color: #fef3c7; border: 1.5px solid #f59e0b; padding: 14px 18px; border-radius: 14px; text-align: center; margin-bottom: 22px; font-weight: bold; color: #92400e; font-size: 13px; line-height: 1.4;">
+                ⚠️ ${lang === 'ca' ? 'Aquesta és una versió corregida de la vostra inscripció amb les dades i el desglossament de materials actualitzats.' : 'Esta es una versión corregida de su inscripción con los datos y el desglose de materiales actualizados.'}
+              </div>
+            ` : '';
+
+            // Build itemized table rows
+            let breakdownRows = `
+              <tr style="border-bottom: 1px solid #f0f0f2;">
+                <td style="padding: 10px 8px; font-weight: 600; color: #111115;">Quota inscripció (${categoriaLabel})</td>
+                <td style="padding: 10px 8px; text-align: center; font-family: monospace;">1</td>
+                <td style="padding: 10px 8px; text-align: center; font-size: 11px; color: #666;">Inscripció</td>
+                <td style="padding: 10px 8px; text-align: right; font-family: monospace;">45.00€</td>
+                <td style="padding: 10px 8px; text-align: right; font-weight: 700; font-family: monospace;">45.00€</td>
+              </tr>
+            `;
+
+            if (armillesCount > 0) {
+              breakdownRows += `
+                <tr style="border-bottom: 1px solid #f0f0f2;">
+                  <td style="padding: 10px 8px; font-weight: 600; color: #111115;">Armilla oficial</td>
+                  <td style="padding: 10px 8px; text-align: center; font-family: monospace;">${armillesCount}</td>
+                  <td style="padding: 10px 8px; text-align: center; font-size: 11px; color: #666;">Vestuari</td>
+                  <td style="padding: 10px 8px; text-align: right; font-family: monospace;">30.00€</td>
+                  <td style="padding: 10px 8px; text-align: right; font-weight: 700; font-family: monospace;">${armillesTotal}.00€</td>
+                </tr>
+              `;
+            }
+
+            if (clavellsQty > 0) {
+              breakdownRows += `
+                <tr style="border-bottom: 1px solid #f0f0f2;">
+                  <td style="padding: 10px 8px; font-weight: 600; color: #111115;">Clavells</td>
+                  <td style="padding: 10px 8px; text-align: center; font-family: monospace;">${clavellsQty}</td>
+                  <td style="padding: 10px 8px; text-align: center; font-size: 11px; color: #666;">Complements</td>
+                  <td style="padding: 10px 8px; text-align: right; font-family: monospace;">8.00€</td>
+                  <td style="padding: 10px 8px; text-align: right; font-weight: 700; font-family: monospace;">${clavellsTotal}.00€</td>
+                </tr>
+              `;
+            }
+
+            if (corbatiQty > 0) {
+              breakdownRows += `
+                <tr style="border-bottom: 1px solid #f0f0f2;">
+                  <td style="padding: 10px 8px; font-weight: 600; color: #111115;">Corbatí</td>
+                  <td style="padding: 10px 8px; text-align: center; font-family: monospace;">${corbatiQty}</td>
+                  <td style="padding: 10px 8px; text-align: center; font-size: 11px; color: #666;">Complements</td>
+                  <td style="padding: 10px 8px; text-align: right; font-family: monospace;">10.00€</td>
+                  <td style="padding: 10px 8px; text-align: right; font-weight: 700; font-family: monospace;">${corbatiTotal}.00€</td>
+                </tr>
+              `;
+            }
+
+            if (esmorzarCount > 0) {
+              breakdownRows += `
+                <tr style="border-bottom: 1px solid #f0f0f2;">
+                  <td style="padding: 10px 8px; font-weight: 600; color: #111115;">Esmorzar de Comparsers</td>
+                  <td style="padding: 10px 8px; text-align: center; font-family: monospace;">${esmorzarCount}</td>
+                  <td style="padding: 10px 8px; text-align: center; font-size: 11px; color: #666;">Tiquets</td>
+                  <td style="padding: 10px 8px; text-align: right; font-family: monospace;">5.00€</td>
+                  <td style="padding: 10px 8px; text-align: right; font-weight: 700; font-family: monospace;">${esmorzarTotal}.00€</td>
+                </tr>
+              `;
+            }
+
             html = `
-              <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 25px; border: 1px solid #eaeaea; border-radius: 16px;">
-                <h1 style="color: #ff0090; font-size: 22px; text-align: center;">Preinscripció Confirmada!</h1>
-                <p style="text-align: center; color: #555;">Gràcies per la vostra inscripció a El Tast 2027.</p>
-                <div style="background: #fdf2f8; border: 1px dashed #ff0090; padding: 15px; border-radius: 12px; text-align: center; margin: 20px 0;">
-                  <span style="font-size: 11px; font-family: monospace; color: #be185d;">CODI DE SEGUIMENT</span><br/>
-                  <strong style="font-size: 24px; color: #ff0090; font-family: monospace;">CODI DE SEGUIMENT: ${codiSeguiment}</strong>
+              <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 620px; margin: 0 auto; padding: 32px 24px; border: 1px solid #e2e4e8; border-radius: 24px; background-color: #ffffff; color: #111115;">
+                <div style="text-align: center; margin-bottom: 25px;">
+                  <span style="background-color: #ff0090; color: #ffffff; padding: 10px 24px; font-size: 13px; font-weight: bold; border-radius: 50px; letter-spacing: 1px; display: inline-block; text-transform: uppercase;">
+                    ASSOCIACIÓ CULTURAL EL TAST
+                  </span>
                 </div>
-                <table style="width: 100%; border-collapse: collapse; font-size: 14px; margin: 20px 0;">
-                  <tr><td style="padding: 6px 0; color: #666;">Parella:</td><td style="text-align: right; font-weight: bold;">${ins.c1Nom || ''} &amp; ${ins.c2Nom || ''}</td></tr>
-                  <tr><td style="padding: 6px 0; color: #666;">Categoria:</td><td style="text-align: right; font-weight: bold;">${ins.categoria || 'Adult'}</td></tr>
-                  <tr><td style="padding: 6px 0; color: #666;">Total a Pagar:</td><td style="text-align: right; font-weight: bold; color: #ff0090; font-size: 18px;">${ins.preuCalculat || 0}€</td></tr>
-                </table>
+                ${correctionBannerHtml}
+                <div style="text-align: center; margin-bottom: 24px;">
+                  <span style="font-size: 11px; font-weight: 800; color: #ff0090; text-transform: uppercase; letter-spacing: 1.5px; display: block; margin-bottom: 6px;">
+                    ${lang === 'ca' ? 'COMPROVANT OFICIAL DE REGISTRE' : 'COMPROBANTE OFICIAL DE REGISTRO'}
+                  </span>
+                  <h1 style="color: #111115; font-size: 22px; font-weight: 900; margin: 0; text-transform: uppercase; letter-spacing: -0.5px;">
+                    El Tast &bull; Comparses 2027
+                  </h1>
+                </div>
+
+                <div style="background-color: #fcf6fa; border: 1.5px dashed #ff0090; padding: 18px; border-radius: 18px; text-align: center; margin-bottom: 28px;">
+                  <span style="font-size: 11px; font-family: monospace; color: #cc0073; text-transform: uppercase; letter-spacing: 2px; font-weight: bold; display: block; margin-bottom: 6px;">
+                    CODI DE SEGUIMENT
+                  </span>
+                  <span style="font-size: 24px; font-family: monospace; font-weight: 950; color: #ff0090; letter-spacing: 1.5px; display: block;">
+                    ${codiSeguiment ? `CODI DE SEGUIMENT: ${codiSeguiment}` : `<span style="color: #dc2626; font-size: 14px;">⚠️ ERROR: CODI DE SEGUIMENT BUIT</span>`}
+                  </span>
+                </div>
+
+                ${qrUrl ? `
+                <div style="text-align: center; margin: 24px 0;">
+                  <div style="display: inline-block; padding: 14px; background-color: #f8f9fa; border: 1px solid #e1e1e6; border-radius: 18px;">
+                    <img src="${qrUrl}" alt="QR Codi" width="180" height="180" style="display: block; border-radius: 10px;" />
+                  </div>
+                </div>
+                ` : ''}
+
+                <div style="border-top: 1px solid #e5e7eb; border-bottom: 1px solid #e5e7eb; padding: 18px 0; margin-bottom: 24px;">
+                  <table style="width: 100%; border-collapse: collapse; font-size: 13px;" cellpadding="0" cellspacing="0">
+                    <tr>
+                      <td style="padding: 6px 0; color: #6b7280; font-weight: bold; text-transform: uppercase; font-size: 11px; width: 40%;">
+                        ${lang === 'ca' ? 'Parella:' : 'Pareja:'}
+                      </td>
+                      <td style="padding: 6px 0; text-align: right; font-weight: 800; color: #111115;">
+                        ${ins.c1Nom || ''} ${ins.c1Cognoms || ''} &amp; ${ins.c2Nom || ''} ${ins.c2Cognoms || ''}
+                      </td>
+                    </tr>
+                    ${to ? `
+                    <tr>
+                      <td style="padding: 6px 0; color: #6b7280; font-weight: bold; text-transform: uppercase; font-size: 11px;">
+                        ${lang === 'ca' ? 'Correu de contacte:' : 'Correo de contacto:'}
+                      </td>
+                      <td style="padding: 6px 0; text-align: right; color: #374151; font-family: monospace;">
+                        ${to}
+                      </td>
+                    </tr>
+                    ` : ''}
+                    <tr>
+                      <td style="padding: 6px 0; color: #6b7280; font-weight: bold; text-transform: uppercase; font-size: 11px;">
+                        ${lang === 'ca' ? 'Telèfon de contacte:' : 'Teléfono de contacto:'}
+                      </td>
+                      <td style="padding: 6px 0; text-align: right; color: #374151; font-family: monospace;">
+                        ${contactPhone || '—'}
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style="padding: 6px 0; color: #6b7280; font-weight: bold; text-transform: uppercase; font-size: 11px;">
+                        ${lang === 'ca' ? 'Categoria:' : 'Categoría:'}
+                      </td>
+                      <td style="padding: 6px 0; text-align: right; font-weight: bold; color: #111115;">
+                        <span style="background-color: #fdf2f8; color: #be185d; border: 1px solid #fbcfe8; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-family: monospace;">
+                          ${categoriaLabel}
+                        </span>
+                      </td>
+                    </tr>
+                    <tr>
+                      <td style="padding: 6px 0; color: #6b7280; font-weight: bold; text-transform: uppercase; font-size: 11px;">
+                        ${lang === 'ca' ? 'Estat d’inscripció:' : 'Estado de inscripción:'}
+                      </td>
+                      <td style="padding: 6px 0; text-align: right; font-weight: bold;">
+                        ${isWaitlist
+                          ? `<span style="color: #b45309; background-color: #fef3c7; border: 1px solid #f59e0b; padding: 2px 8px; border-radius: 6px; font-size: 11px;">${lang === 'ca' ? "LLISTA D'ESPERA" : "LISTA DE ESPERA"}</span>`
+                          : `<span style="color: #047857; background-color: #d1fae5; border: 1px solid #10b981; padding: 2px 8px; border-radius: 6px; font-size: 11px;">${lang === 'ca' ? "OBERTA" : "ABIERTA"}</span>`
+                        }
+                      </td>
+                    </tr>
+                    ${posicio ? `
+                    <tr>
+                      <td style="padding: 6px 0; color: #6b7280; font-weight: bold; text-transform: uppercase; font-size: 11px;">
+                        ${lang === 'ca' ? 'Posició global assignada:' : 'Posición global asignada:'}
+                      </td>
+                      <td style="padding: 6px 0; text-align: right; font-weight: 900; color: #ff0090; font-family: monospace;">
+                        #${posicio}
+                      </td>
+                    </tr>
+                    ` : ''}
+                  </table>
+                </div>
+
+                <div style="margin-bottom: 28px;">
+                  <span style="font-size: 11px; font-weight: 800; color: #111115; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 6px;">
+                    ${lang === 'ca' ? 'DESGLOSSAMENT OFICIAL DE MATERIALS I QUOTA:' : 'DESGLOSE OFICIAL DE MATERIALES Y CUOTA:'}
+                  </span>
+                  <table style="width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px;" cellpadding="0" cellspacing="0">
+                    <thead>
+                      <tr style="background-color: #f8f9fa; border-bottom: 2px solid #e1e1e6; text-transform: uppercase; font-size: 10px; color: #666670;">
+                        <th style="padding: 10px 8px; text-align: left;">Concepte</th>
+                        <th style="padding: 10px 8px; text-align: center;">Quantitat</th>
+                        <th style="padding: 10px 8px; text-align: center;">Modalitat</th>
+                        <th style="padding: 10px 8px; text-align: right;">Preu unitari</th>
+                        <th style="padding: 10px 8px; text-align: right;">Subtotal</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${breakdownRows}
+                    </tbody>
+                    <tfoot>
+                      <tr style="border-top: 2px solid #ff0090; background-color: #fcf6fa;">
+                        <td colspan="4" style="padding: 14px 8px; font-weight: 900; font-size: 13px; color: #111115; text-transform: uppercase;">
+                          TOTAL A PAGAR:
+                        </td>
+                        <td style="padding: 14px 8px; text-align: right; font-weight: 950; color: #ff0090; font-size: 20px; font-family: monospace;">
+                          ${totalCalculat}€
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+
                 <p style="font-size: 12px; color: #888; text-align: center; margin-top: 30px;">Associació Cultural El Tast &bull; tastvng@gmail.com</p>
               </div>
             `;
@@ -285,11 +519,14 @@ export default async function emailHandler(req: any, res: any) {
           if (supabaseUrl && supabaseKey) {
             const supabase = createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false } });
             const nowIso = new Date().toISOString();
-            const { data: cur } = await supabase.from('inscripciones').select('respostesCuestionari, respostes_cuestionari').eq('id', inscriptionId).maybeSingle();
-            const curResp = cur?.respostesCuestionari || cur?.respostes_cuestionari || {};
+            const { data: cur } = await supabase.from('inscripciones').select('respostesCuestionari').eq('id', inscriptionId).maybeSingle();
+            let curResp = cur?.respostesCuestionari || {};
+            if (typeof curResp === 'string') {
+              try { curResp = JSON.parse(curResp); } catch { curResp = {}; }
+            }
             await supabase.from('inscripciones').update({
               respostesCuestionari: {
-                ...(typeof curResp === 'object' ? curResp : {}),
+                ...(typeof curResp === 'object' && curResp !== null ? curResp : {}),
                 mailEnviat: false,
                 mailData: nowIso,
                 mailEstat: 'pendent',
@@ -385,11 +622,14 @@ export default async function emailHandler(req: any, res: any) {
           if (supabaseUrl && supabaseKey) {
             const supabase = createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false } });
             const nowIso = new Date().toISOString();
-            const { data: cur } = await supabase.from('inscripciones').select('respostesCuestionari, respostes_cuestionari').eq('id', inscriptionId).maybeSingle();
-            const curResp = cur?.respostesCuestionari || cur?.respostes_cuestionari || {};
+            const { data: cur } = await supabase.from('inscripciones').select('respostesCuestionari').eq('id', inscriptionId).maybeSingle();
+            let curResp = cur?.respostesCuestionari || {};
+            if (typeof curResp === 'string') {
+              try { curResp = JSON.parse(curResp); } catch { curResp = {}; }
+            }
             await supabase.from('inscripciones').update({
               respostesCuestionari: {
-                ...(typeof curResp === 'object' ? curResp : {}),
+                ...(typeof curResp === 'object' && curResp !== null ? curResp : {}),
                 mailEnviat: true,
                 mailData: nowIso,
                 mailEstat: 'enviat',
@@ -435,16 +675,18 @@ export default async function emailHandler(req: any, res: any) {
           if (supabaseUrl && supabaseKey) {
             const supabase = createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false } });
             const nowIso = new Date().toISOString();
-            const errMsg = sendError?.message || "Error al trametre el correu SMTP";
-            const { data: cur } = await supabase.from('inscripciones').select('respostesCuestionari, respostes_cuestionari').eq('id', inscriptionId).maybeSingle();
-            const curResp = cur?.respostesCuestionari || cur?.respostes_cuestionari || {};
+            const { data: cur } = await supabase.from('inscripciones').select('respostesCuestionari').eq('id', inscriptionId).maybeSingle();
+            let curResp = cur?.respostesCuestionari || {};
+            if (typeof curResp === 'string') {
+              try { curResp = JSON.parse(curResp); } catch { curResp = {}; }
+            }
             await supabase.from('inscripciones').update({
               respostesCuestionari: {
-                ...(typeof curResp === 'object' ? curResp : {}),
+                ...(typeof curResp === 'object' && curResp !== null ? curResp : {}),
                 mailEnviat: false,
                 mailData: nowIso,
                 mailEstat: 'fallat',
-                mailError: errMsg,
+                mailError: sendError?.message || String(sendError),
                 estatCorreu: 'fallat'
               },
               actualizadoEn: nowIso

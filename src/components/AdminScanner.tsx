@@ -1315,11 +1315,11 @@ export default function AdminScanner({
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
                     <div className="bg-zinc-900 p-2.5 rounded-xl border border-zinc-800">
                       <span className="text-zinc-500 text-[10px] block font-mono">ARMILLA</span>
-                      <strong className="text-zinc-200">{standbyRecord.c1TallaArmilla || '—'} / {standbyRecord.c2TallaArmilla || '—'}</strong>
+                      <strong className="text-zinc-200">{standbyRecord.c1Talla || (standbyRecord as any).c1TallaArmilla || '—'} / {standbyRecord.c2Talla || (standbyRecord as any).c2TallaArmilla || '—'}</strong>
                     </div>
                     <div className="bg-zinc-900 p-2.5 rounded-xl border border-zinc-800">
                       <span className="text-zinc-500 text-[10px] block font-mono">CORBATÍ</span>
-                      <strong className="text-zinc-200">{standbyRecord.teCorbati ? "Sí" : "No"}</strong>
+                      <strong className="text-zinc-200">{(standbyRecord as any).teCorbati ? "Sí" : "No"}</strong>
                     </div>
                     <div className="bg-zinc-900 p-2.5 rounded-xl border border-zinc-800">
                       <span className="text-zinc-500 text-[10px] block font-mono">MOCADORS</span>

@@ -2905,7 +2905,7 @@ export default function AdminPortada({ onAddLog }: AdminPortadaProps) {
                   className="absolute inset-0 w-full h-full z-0 transition-all duration-300"
                   style={{
                     objectPosition: `${config.bgImatgeX ?? 50}% ${config.bgImatgeY ?? 50}%`,
-                    objectFit: config.bgImatgeScale || 'cover',
+                    objectFit: (config.bgImatgeScale as any) || 'cover',
                     opacity: (config.bgImatgeOpacity ?? 40) / 100,
                     filter: `saturate(${config.bgImatgeSaturacio ?? 100}%) brightness(${config.bgImatgeBrightness ?? 100}%)`
                   }}

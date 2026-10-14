@@ -117,10 +117,12 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
       : (registration.mailEstat === 'enviat' || registration.respostesCuestionari?.estatCorreu === 'enviat');
   });
   const [mailData, setMailData] = useState<string | undefined>(() => {
-    return registration.mailData || registration.respostesCuestionari?.mailData || registration.respostesCuestionari?.dataUltimCorreu;
+    const raw = registration.mailData || registration.respostesCuestionari?.mailData || registration.respostesCuestionari?.dataUltimCorreu;
+    return typeof raw === 'string' ? raw : undefined;
   });
   const [mailError, setMailError] = useState<string | null | undefined>(() => {
-    return registration.mailError || registration.respostesCuestionari?.mailError;
+    const rawErr = registration.mailError || registration.respostesCuestionari?.mailError;
+    return typeof rawErr === 'string' ? rawErr : null;
   });
   const [mailEstat, setMailEstat] = useState<'pendent' | 'enviat' | 'fallat'>(() => {
     if (registration.mailEstat) return registration.mailEstat;
@@ -136,11 +138,11 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
     c1Nom,
     c1Cognoms,
     c1Talla: c1Talla.trim(),
-    c1UniformeTipus: c1Talla.trim() ? c1UniformeTipus : '',
+    c1UniformeTipus: (c1Talla.trim() ? c1UniformeTipus : undefined) as any,
     c2Nom,
     c2Cognoms,
     c2Talla: c2Talla.trim(),
-    c2UniformeTipus: c2Talla.trim() ? c2UniformeTipus : '',
+    c2UniformeTipus: (c2Talla.trim() ? c2UniformeTipus : undefined) as any,
     extresSeleccionats,
     respostesCuestionari,
     emailContactoPareja: emailContactoPareja.trim(),
@@ -258,44 +260,7 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
     setEmailSendStatus(null);
 
     try {
-      const entityConfig = getEntityConfig(language, config);
       const isCorrection = Boolean(mailEnviat || mailEstat === 'enviat');
-
-      let resolvedC1Dni: string | null = null;
-      let resolvedC2Dni: string | null = null;
-      if (c1DniUrl) resolvedC1Dni = c1DniUrl;
-      else if (c1RawPath) {
-        try {
-          const { getDniSignedUrl } = await import('../supabaseClient');
-          resolvedC1Dni = await getDniSignedUrl(c1RawPath);
-        } catch {}
-      }
-      if (c2DniUrl) resolvedC2Dni = c2DniUrl;
-      else if (c2RawPath) {
-        try {
-          const { getDniSignedUrl } = await import('../supabaseClient');
-          resolvedC2Dni = await getDniSignedUrl(c2RawPath);
-        } catch {}
-      }
-
-      const { subject: emailSubject, html: emailHtml } = buildUnifiedEmailHtml({
-        registration: currentRecord,
-        entityConfig,
-        breakdown,
-        c1DniSignedUrl: resolvedC1Dni,
-        c2DniSignedUrl: resolvedC2Dni,
-        language,
-        isCorrection
-      });
-
-      const emailAttachments: any[] = [];
-      if (entityConfig.logoUrl && entityConfig.logoUrl.startsWith('data:')) {
-        emailAttachments.push({
-          filename: 'logo.png',
-          content: entityConfig.logoUrl,
-          cid: 'tast-email-logo-cid'
-        });
-      }
 
       let adminToken = '';
       try {
@@ -311,15 +276,9 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
         },
         body: JSON.stringify({
           id: registration.id,
-          inscriptionId: registration.id,
-          codiSeguiment: codeToSend,
-          emailData: {
-            to: coupleEmail,
-            subject: emailSubject,
-            html: emailHtml,
-            attachments: emailAttachments,
-            codiSeguiment: codeToSend
-          }
+          to: coupleEmail,
+          isCorrection,
+          language
         })
       });
 
@@ -680,7 +639,31 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
 
     setValidationError(null);
 
-    // Concurrency check: verify if another admin updated pagaments in the database
+    // Validate unique tracking code if manually corrected (Point 4)
+    const cleanCode = (codiSeguiment || '').trim();
+    if (cleanCode && cleanCode !== (registration.codiSeguiment || '').trim()) {
+      if (supabase) {
+        try {
+          const { data: dupCheck } = await supabase
+            .from('inscripciones')
+            .select('id')
+            .ilike('codiSeguiment', cleanCode)
+            .neq('id', registration.id)
+            .maybeSingle();
+
+          if (dupCheck) {
+            setValidationError(
+              language === 'ca'
+                ? `El codi de seguiment "${cleanCode}" ja està assignat a una altra inscripció.`
+                : `El código de seguimiento "${cleanCode}" ya está asignado a otra inscripción.`
+            );
+            return;
+          }
+        } catch (e) {
+          console.warn("Notice checking duplicate code:", e);
+        }
+      }
+    }
     if (supabase && registration.id) {
       try {
         const { data: dbRow } = await supabase
@@ -722,7 +705,7 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
       c1Email: emailContactoPareja.trim(),
       c1Telefon: telefonContactoPareja.trim(),
       c1Talla: c1Talla.trim(),
-      c1UniformeTipus: c1Talla.trim() ? c1UniformeTipus : '',
+      c1UniformeTipus: (c1Talla.trim() ? c1UniformeTipus : undefined) as any,
       c1TutorNom: c1TutorNom.trim(),
       c1TutorCognoms: c1TutorCognoms.trim(),
       c1TutorDni: c1TutorDni.trim(),
@@ -732,7 +715,7 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
       c2Email: emailContactoPareja.trim(),
       c2Telefon: telefonContactoPareja.trim(),
       c2Talla: c2Talla.trim(),
-      c2UniformeTipus: c2Talla.trim() ? c2UniformeTipus : '',
+      c2UniformeTipus: (c2Talla.trim() ? c2UniformeTipus : undefined) as any,
       c2TutorNom: c2TutorNom.trim(),
       c2TutorCognoms: c2TutorCognoms.trim(),
       c2TutorDni: c2TutorDni.trim(),
@@ -906,7 +889,7 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
                   {language === 'ca' ? 'Comú per a la parella' : 'Común para la pareja'}
                 </span>
               </div>
-              <div className="pt-1">
+              <div className="pt-1 space-y-3">
                 <div>
                   <label className="block text-[10px] text-zinc-600 font-bold uppercase font-mono mb-1">
                     {language === 'ca' ? 'Correu electrònic *' : 'Correo electrónico *'}
@@ -918,6 +901,19 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
                     className="w-full bg-white border border-zinc-200 focus:border-fuchsia-500 rounded-xl px-3 py-2 text-xs font-bold font-sans focus:outline-none truncate" 
                     placeholder={language === 'ca' ? 'Ex. parella@gmail.com' : 'Ej. pareja@gmail.com'}
                     id="admin-input-couple-email"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] text-zinc-600 font-bold uppercase font-mono mb-1">
+                    {language === 'ca' ? 'Telèfon de contacte' : 'Teléfono de contacto'}
+                  </label>
+                  <input 
+                    type="tel" 
+                    value={telefonContactoPareja} 
+                    onChange={(e) => setTelefonContactoPareja(e.target.value)}
+                    className="w-full bg-white border border-zinc-200 focus:border-fuchsia-500 rounded-xl px-3 py-2 text-xs font-bold font-sans focus:outline-none truncate" 
+                    placeholder={language === 'ca' ? 'Ex. 612345678 (o —)' : 'Ej. 612345678 (o —)'}
+                    id="admin-input-couple-phone"
                   />
                 </div>
               </div>

@@ -497,7 +497,7 @@ export default async function inscriptionsHandler(req: any, res: any) {
         c1Email: contactEmail,
         c1Telefon: contactTelefon,
         c1Talla: reg.c1Talla ? String(reg.c1Talla).toUpperCase().trim() : '',
-        c1DniUrl: reg.c1DniUrl ? String(reg.c1DniUrl) : null,
+        c1DniUrl: reg.c1DniUrl && !String(reg.c1DniUrl).startsWith('data:') ? String(reg.c1DniUrl) : null,
         c1EsMenor: Boolean(reg.c1EsMenor),
         c1TutorNom: reg.c1TutorNom ? String(reg.c1TutorNom).trim() : null,
         c1TutorCognoms: reg.c1TutorCognoms ? String(reg.c1TutorCognoms).trim() : null,
@@ -510,7 +510,7 @@ export default async function inscriptionsHandler(req: any, res: any) {
         c2Email: contactEmail,
         c2Telefon: contactTelefon,
         c2Talla: reg.c2Talla ? String(reg.c2Talla).toUpperCase().trim() : '',
-        c2DniUrl: reg.c2DniUrl ? String(reg.c2DniUrl) : null,
+        c2DniUrl: reg.c2DniUrl && !String(reg.c2DniUrl).startsWith('data:') ? String(reg.c2DniUrl) : null,
         c2EsMenor: Boolean(reg.c2EsMenor),
         c2TutorNom: reg.c2TutorNom ? String(reg.c2TutorNom).trim() : null,
         c2TutorCognoms: reg.c2TutorCognoms ? String(reg.c2TutorCognoms).trim() : null,
@@ -529,7 +529,6 @@ export default async function inscriptionsHandler(req: any, res: any) {
         estatDni: reg.estatDni || 'PENDENT',
         entregaMaterial: reg.entregaMaterial || 'PENDENT',
         estat_inscripcio: reg.estatInscripcio || reg.estat_inscripcio || 'obertes',
-        posicio_global: typeof reg.posicioGlobal === 'number' && reg.posicioGlobal > 1 ? reg.posicioGlobal : null,
         bandera: typeof reg.bandera === 'number' ? reg.bandera : 0,
         creadoEn: reg.creadoEn || nowIso,
         actualizadoEn: nowIso
@@ -546,79 +545,55 @@ export default async function inscriptionsHandler(req: any, res: any) {
         });
       }
 
-      // 6. Perform ATOMIC code allocation and INSERT into public.inscripciones
-      const lockToken = crypto.randomUUID();
-      let confirmedCode = codiSeguiment;
-
+      // 4. Before inserting, verify if another inscription already exists with the same email
+      // and the exact same two members (Point 5). The same email with different couples is valid!
       try {
-        await new Promise<void>((resolve, reject) => {
-          inMemoryLockQueue = inMemoryLockQueue.then(async () => {
-            let lockAcquired = false;
-            try {
-              lockAcquired = await acquireDistributedLock(serverSupabase, lockToken, 7000);
+        const { data: existingRows } = await serverSupabase
+          .from('inscripciones')
+          .select('c1Nom, c1Cognoms, c2Nom, c2Cognoms, emailContactoPareja, c1Email, c2Email');
 
-              // Query all currently registered tracking codes and calculate next correlative position
-              const { data: existingRows, error: fetchErr } = await serverSupabase
-                .from('inscripciones')
-                .select('codiSeguiment, posicio_global');
+        const norm = (s: string) => (s || '').trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, ' ');
+        const myEmail = contactEmail.toLowerCase();
+        const myC1 = `${norm(c1Nom)} ${norm(c1Cognoms)}`;
+        const myC2 = `${norm(c2Nom)} ${norm(c2Cognoms)}`;
 
-              if (fetchErr) {
-                throw fetchErr;
-              }
-
-              const existingCodes = (existingRows || []).map((r: any) => r.codiSeguiment).filter(Boolean);
-
-              // If codiSeguiment was not pre-allocated, allocate the lowest free code
-              if (!confirmedCode) {
-                confirmedCode = allocateNextCode(existingCodes, codeGroup);
-              }
-              insertRow.codiSeguiment = confirmedCode;
-
-              // Correlative unique posicio_global
-              const maxPos = (existingRows || []).reduce((max: number, r: any) => {
-                const p = Number(r.posicio_global || 0);
-                return p > max ? p : max;
-              }, 0);
-              insertRow.posicio_global = maxPos + 1;
-
-              // Insert row into database
-              const { error: insertError } = await serverSupabase
-                .from('inscripciones')
-                .insert(insertRow);
-
-              if (insertError) {
-                // If a duplicate code collision occurs under concurrent load, retry with fresh scan
-                if (
-                  insertError.code === '23505' ||
-                  insertError.message?.toLowerCase().includes('duplicate') ||
-                  insertError.message?.toLowerCase().includes('unique')
-                ) {
-                  console.warn("[Concurrency retry]: Code collision detected, reallocating atomically...");
-                  const { data: retryRows } = await serverSupabase
-                    .from('inscripciones')
-                    .select('codiSeguiment');
-                  const refreshedCodes = (retryRows || []).map((r: any) => r.codiSeguiment).filter(Boolean);
-                  confirmedCode = allocateNextCode(refreshedCodes, codeGroup);
-                  insertRow.codiSeguiment = confirmedCode;
-                  const retryInsert = await serverSupabase.from('inscripciones').insert(insertRow);
-                  if (retryInsert.error) {
-                    throw retryInsert.error;
-                  }
-                } else {
-                  throw insertError;
-                }
-              }
-
-              resolve();
-            } catch (err) {
-              reject(err);
-            } finally {
-              if (lockAcquired) {
-                await releaseDistributedLock(serverSupabase, lockToken);
-              }
-            }
-          });
+        const coupleAlreadyExists = (existingRows || []).some((r: any) => {
+          const rEmail = (r.emailContactoPareja || r.c1Email || r.c2Email || '').trim().toLowerCase();
+          if (rEmail !== myEmail) return false;
+          const rC1 = `${norm(r.c1Nom)} ${norm(r.c1Cognoms)}`;
+          const rC2 = `${norm(r.c2Nom)} ${norm(r.c2Cognoms)}`;
+          return (
+            (myC1 === rC1 && myC2 === rC2) ||
+            (myC1 === rC2 && myC2 === rC1)
+          );
         });
+
+        if (coupleAlreadyExists) {
+          return res.status(409).json({
+            ok: false,
+            step: "validation",
+            error: "Aquesta parella ja consta inscrita amb aquest correu electrònic. Si necessiteu fer canvis, contacteu amb secretaria.",
+            code: "COUPLE_ALREADY_REGISTERED"
+          });
+        }
+      } catch (chkErr) {
+        console.warn("Notice checking couple duplicate on server:", chkErr);
+      }
+
+      // 5. Insert directly into public.inscripciones WITHOUT pre-calculating code or position (Point 4).
+      // The database trigger assigns codiSeguiment and posicio_global. Read it back via .select().
+      let insertedRow: any = null;
+      try {
+        const { data, error: insertError } = await serverSupabase
+          .from('inscripciones')
+          .insert(insertRow)
+          .select('id, codiSeguiment, posicio_global, categoria, c1Nom, c1Cognoms, c1Email, c1Telefon, c2Nom, c2Cognoms, c2Email, c2Telefon, preuCalculat, respostesCuestionari')
+          .single();
+
+        if (insertError) {
+          throw insertError;
+        }
+        insertedRow = data;
       } catch (err: any) {
         console.error("[INSERT error]:", {
           table: "public.inscripciones",
@@ -636,14 +611,77 @@ export default async function inscriptionsHandler(req: any, res: any) {
         });
       }
 
-      console.log(`[INSERT ok]: table public.inscripciones, id: ${insertRow.id}, codi: ${confirmedCode}, user: ${insertRow.c1Nom} & ${insertRow.c2Nom}`);
+      const confirmedCode = (insertedRow?.codiSeguiment || '').trim();
+      const confirmedPosition = insertedRow?.posicio_global;
+
+      console.log(`[INSERT ok]: table public.inscripciones, id: ${insertedRow.id}, codi: ${confirmedCode}, posicio: ${confirmedPosition}`);
+
+      // 6. Automatic Email Sending (Point 5):
+      // Just after saving and with code assigned, trigger the confirmation email.
+      // If it fails, set mailEstat = 'pendent' and mailError so background worker retries it.
+      let mailSentOk = false;
+      let mailSendError: string | null = null;
+
+      try {
+        const mailRes = await fetch('http://127.0.0.1:3000/api/email?action=send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: insertedRow.id,
+            language: reg.language || 'ca'
+          })
+        });
+        const mailJson = await mailRes.json().catch(() => null);
+        if (mailRes.ok && mailJson?.ok && mailJson?.emailSent) {
+          mailSentOk = true;
+        } else {
+          mailSendError = mailJson?.message || mailJson?.error || `HTTP ${mailRes.status}`;
+        }
+      } catch (mErr: any) {
+        mailSendError = mErr?.message || String(mErr);
+      }
+
+      if (!mailSentOk) {
+        try {
+          const nowIso = new Date().toISOString();
+          const { data: cur } = await serverSupabase
+            .from('inscripciones')
+            .select('respostesCuestionari')
+            .eq('id', insertedRow.id)
+            .maybeSingle();
+          let curResp = cur?.respostesCuestionari || {};
+          if (typeof curResp === 'string') {
+            try { curResp = JSON.parse(curResp); } catch { curResp = {}; }
+          }
+          await serverSupabase.from('inscripciones').update({
+            respostesCuestionari: {
+              ...(typeof curResp === 'object' && curResp !== null ? curResp : {}),
+              mailEnviat: false,
+              mailData: nowIso,
+              mailEstat: 'pendent',
+              mailError: mailSendError || "Pendent d'enviament automàtic",
+              estatCorreu: 'pendent'
+            },
+            actualizadoEn: nowIso
+          }).eq('id', insertedRow.id);
+        } catch (statusErr) {
+          console.warn("Could not set initial mail status to pendent:", statusErr);
+        }
+      }
 
       return res.status(200).json({
         ok: true,
         step: "database_insert",
-        id: insertRow.id,
+        id: insertedRow.id,
         codiSeguiment: confirmedCode,
-        data: insertRow
+        posicioGlobal: confirmedPosition,
+        mailSent: mailSentOk,
+        mailEstat: mailSentOk ? 'enviat' : 'pendent',
+        data: {
+          ...insertedRow,
+          codiSeguiment: confirmedCode,
+          posicioGlobal: confirmedPosition
+        }
       });
     }
 
@@ -775,10 +813,13 @@ export default async function inscriptionsHandler(req: any, res: any) {
         });
       }
 
+      const LISTING_COLUMNS = "id, codiSeguiment, categoria, c1Nom, c1Cognoms, c1Email, c1Telefon, c1Talla, c1EsMenor, c1TutorNom, c1TutorCognoms, c1TutorDni, c1TutorTelefon, c1UniformeTipus, c2Nom, c2Cognoms, c2Email, c2Telefon, c2Talla, c2EsMenor, c2TutorNom, c2TutorCognoms, c2TutorDni, c2TutorTelefon, c2UniformeTipus, respostesCuestionari, seleccionsUniforme, preuCalculat, teDomasBalco, teMocadorsExtra, pagaments, estatPagament, metodePagament, estatDni, entregaMaterial, estat_inscripcio, posicio_global, bandera, creadoEn, actualizadoEn";
+
       const { data, error } = await serverSupabase
         .from('inscripciones')
-        .select('*')
+        .select(LISTING_COLUMNS)
         .order('creadoEn', { ascending: false })
+        .order('id', { ascending: true })
         .limit(3000);
 
       if (error) {
@@ -918,13 +959,12 @@ export default async function inscriptionsHandler(req: any, res: any) {
           });
 
         if (uploadError) {
-          console.warn("Notice during server-side DNI storage upload:", uploadError.message);
-          return res.status(200).json({
-            ok: true,
-            success: true,
-            path: safeFileName,
-            storagePath: `dnis/${safeFileName}`,
-            notice: "Upload staged securely."
+          console.error("Error during server-side DNI storage upload:", uploadError.message);
+          return res.status(500).json({
+            ok: false,
+            step: "upload_dni",
+            error: uploadError.message,
+            code: "STORAGE_UPLOAD_ERROR"
           });
         }
 
@@ -1163,6 +1203,50 @@ export default async function inscriptionsHandler(req: any, res: any) {
       const cleanUpdates = { ...updates };
       delete cleanUpdates.id;
       cleanUpdates.actualizadoEn = new Date().toISOString();
+
+      // Prevent base64 images from ever being saved in DNI columns (Point 1 & 3)
+      if (typeof cleanUpdates.c1DniUrl === 'string' && cleanUpdates.c1DniUrl.startsWith('data:')) {
+        delete cleanUpdates.c1DniUrl;
+      }
+      if (typeof cleanUpdates.c2DniUrl === 'string' && cleanUpdates.c2DniUrl.startsWith('data:')) {
+        delete cleanUpdates.c2DniUrl;
+      }
+
+      // Check duplicate codiSeguiment if code is being manually updated (Point 4)
+      if (cleanUpdates.codiSeguiment) {
+        const codeToCheck = String(cleanUpdates.codiSeguiment).trim();
+        const { data: dupCheck } = await serverSupabase
+          .from('inscripciones')
+          .select('id')
+          .ilike('codiSeguiment', codeToCheck)
+          .neq('id', id)
+          .maybeSingle();
+        if (dupCheck) {
+          return res.status(400).json({
+            ok: false,
+            step: "database_update",
+            error: `El codi de seguiment "${codeToCheck}" ja està assignat a una altra inscripció.`,
+            code: "DUPLICATE_CODE"
+          });
+        }
+      }
+
+      // Always merge respostesCuestionari with existing DB row - NEVER replace (Point 2)
+      if (cleanUpdates.respostesCuestionari && typeof cleanUpdates.respostesCuestionari === 'object') {
+        const { data: curRow } = await serverSupabase
+          .from('inscripciones')
+          .select('respostesCuestionari')
+          .eq('id', id)
+          .maybeSingle();
+        let existingResp = curRow?.respostesCuestionari || {};
+        if (typeof existingResp === 'string') {
+          try { existingResp = JSON.parse(existingResp); } catch { existingResp = {}; }
+        }
+        cleanUpdates.respostesCuestionari = {
+          ...(typeof existingResp === 'object' && existingResp !== null ? existingResp : {}),
+          ...cleanUpdates.respostesCuestionari
+        };
+      }
 
       const { data, error } = await serverSupabase
         .from('inscripciones')

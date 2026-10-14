@@ -407,7 +407,7 @@ export default function PortadaPage({
           className="absolute inset-0 w-full h-full z-0 transition-all duration-700"
           style={{
             objectPosition: `${liveConfig.bgImatgeX ?? 50}% ${liveConfig.bgImatgeY ?? 50}%`,
-            objectFit: liveConfig.bgImatgeScale || 'cover',
+            objectFit: (liveConfig.bgImatgeScale as any) || 'cover',
             opacity: (liveConfig.bgImatgeOpacity ?? 40) / 100,
             filter: `saturate(${liveConfig.bgImatgeSaturacio ?? 100}%) brightness(${liveConfig.bgImatgeBrightness ?? 100}%)`
           }}

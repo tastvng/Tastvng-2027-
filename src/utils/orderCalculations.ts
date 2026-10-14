@@ -673,38 +673,29 @@ export function getParticipantArmillaInfo(
   config?: SistemaConfig | null,
   language: 'ca' | 'es' = 'ca'
 ): { hasArmilla: boolean; talla: string; modalitat: string; label: string } {
-  const isOptional = !!(config?.armilla_opcional ?? true);
   const seleccionsUniforme = registration.seleccionsUniforme || {};
   const sel = seleccionsUniforme['lin-1'] || seleccionsUniforme['lin-9yk7qnutn'] || seleccionsUniforme['uniforme'] || seleccionsUniforme['armilla'] || Object.values(seleccionsUniforme)[0];
   const regAny = registration as any;
 
   if (participantNum === 1) {
-    const c1VolCandidate = (sel as any)?.c1Vol ?? regAny.c1Vol ?? regAny.c1_vol ?? regAny.c1VolArmilla ?? regAny.c1_vol_armilla;
-    const hasExplicitVol = typeof c1VolCandidate === 'boolean';
-    const rawTalla = (registration.c1Talla || (sel as any)?.c1Talla || '').trim();
-    const hasT = !!rawTalla && rawTalla.toLowerCase() !== 'cap' && rawTalla.toLowerCase() !== 'null' && rawTalla.toLowerCase() !== 'undefined';
-    const wants = hasExplicitVol ? c1VolCandidate === true : (isOptional ? false : hasT);
-
-    if (!wants || !rawTalla) {
+    const c1Vol = (sel as any)?.c1Vol === true || regAny.c1Vol === true || regAny.c1_vol === true;
+    if (!c1Vol) {
       return { hasArmilla: false, talla: '', modalitat: '', label: '—' };
     }
-    const tipus = (registration.c1UniformeTipus || (sel as any)?.c1Tipus || '').toLowerCase();
+    const rawTalla = (registration.c1Talla || (sel as any)?.c1Talla || '').trim();
+    const tipus = (registration.c1UniformeTipus || (sel as any)?.c1Tipus || 'compra').toLowerCase();
     const isLloguer = tipus.includes('lloguer') || tipus.includes('alquiler');
-    const modalitat = isLloguer ? (language === 'ca' ? 'Lloguer' : 'Alquiler') : (language === 'ca' ? 'Compra' : 'Compra');
+    const modalitat = isLloguer ? (language === 'ca' ? 'LLOGUER' : 'ALQUILER') : (language === 'ca' ? 'COMPRA' : 'COMPRA');
     return { hasArmilla: true, talla: rawTalla, modalitat, label: `Talla ${rawTalla} • ${modalitat}` };
   } else {
-    const c2VolCandidate = (sel as any)?.c2Vol ?? regAny.c2Vol ?? regAny.c2_vol ?? regAny.c2VolArmilla ?? regAny.c2_vol_armilla;
-    const hasExplicitVol = typeof c2VolCandidate === 'boolean';
-    const rawTalla = (registration.c2Talla || (sel as any)?.c2Talla || '').trim();
-    const hasT = !!rawTalla && rawTalla.toLowerCase() !== 'cap' && rawTalla.toLowerCase() !== 'null' && rawTalla.toLowerCase() !== 'undefined';
-    const wants = hasExplicitVol ? c2VolCandidate === true : (isOptional ? false : hasT);
-
-    if (!wants || !rawTalla) {
+    const c2Vol = (sel as any)?.c2Vol === true || regAny.c2Vol === true || regAny.c2_vol === true;
+    if (!c2Vol) {
       return { hasArmilla: false, talla: '', modalitat: '', label: '—' };
     }
-    const tipus = (registration.c2UniformeTipus || (sel as any)?.c2Tipus || '').toLowerCase();
+    const rawTalla = (registration.c2Talla || (sel as any)?.c2Talla || '').trim();
+    const tipus = (registration.c2UniformeTipus || (sel as any)?.c2Tipus || 'compra').toLowerCase();
     const isLloguer = tipus.includes('lloguer') || tipus.includes('alquiler');
-    const modalitat = isLloguer ? (language === 'ca' ? 'Lloguer' : 'Alquiler') : (language === 'ca' ? 'Compra' : 'Compra');
+    const modalitat = isLloguer ? (language === 'ca' ? 'LLOGUER' : 'ALQUILER') : (language === 'ca' ? 'COMPRA' : 'COMPRA');
     return { hasArmilla: true, talla: rawTalla, modalitat, label: `Talla ${rawTalla} • ${modalitat}` };
   }
 }

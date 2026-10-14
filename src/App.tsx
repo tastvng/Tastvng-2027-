@@ -808,7 +808,7 @@ export default function App() {
   };
 
   const getEstatInscripcioGlobalFromDatabase = async (): Promise<'obertes' | 'llista_espera'> => {
-    let globalStatus = config.estatInscripcions || 'obertes';
+    let globalStatus: string = config.estatInscripcions || 'obertes';
     if (isSupabaseConfigured) {
       try {
         const dbStatus = await getSupabaseSetting<string>('estat_inscripcio_global', config.estatInscripcions || 'obertes');
@@ -840,15 +840,10 @@ export default function App() {
       }
     }
 
-    const maxPos = latestInscripcions.reduce((max, ins) => {
-      return ins.posicioGlobal && ins.posicioGlobal > max ? ins.posicioGlobal : max;
-    }, 0);
-    newReg.posicioGlobal = maxPos > 0 ? maxPos + 1 : (latestInscripcions.length + 1);
-
-    // Rule 12: No construyas el código solo visualmente en el frontend.
-    // Rule 13: Antes de guardar, buscar el primer número libre del grupo correspondiente.
-    // Rule 14: Confirmar el código únicamente después de completar correctamente el INSERT.
+    // Do NOT calculate or send codiSeguiment or posicio_global upon creation (Point 4).
+    // The database triggers assign them on INSERT; we read what the database returns.
     newReg.codiSeguiment = '';
+    delete (newReg as any).posicioGlobal;
 
     // 3. PERSIST FIRST IN SUPABASE:
     // Only proceed to confirmation if the DB insert completes with ok: true!
@@ -918,15 +913,12 @@ export default function App() {
     const categoryStatus = await getEstatInscripcioGlobalFromDatabase();
     newReg.estatInscripcio = categoryStatus;
 
-    // 2. Determine global position (using in-memory list which is up to date for manual screen)
-    const maxPos = inscripcions.reduce((max, ins) => {
-      return ins.posicioGlobal && ins.posicioGlobal > max ? ins.posicioGlobal : max;
-    }, 0);
-    newReg.posicioGlobal = maxPos > 0 ? maxPos + 1 : (inscripcions.length + 1);
+    // Do NOT pre-calculate code or position; let database trigger assign them (Point 4)
+    newReg.codiSeguiment = '';
+    delete (newReg as any).posicioGlobal;
 
     const isWaitlist = newReg.estatInscripcio === 'llista_espera' || (!newReg.estatInscripcio && newReg.llistaEspera);
     const codeGroup = determineCodeGroup(newReg.categoria, Boolean(isWaitlist));
-    newReg.codiSeguiment = '';
 
     if (isSupabaseConfigured) {
       try {
