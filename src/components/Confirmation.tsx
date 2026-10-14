@@ -129,6 +129,21 @@ export default function Confirmation({ registration, onClear, onUpdate, config }
       console.error("[EMAIL BLOCKED - EMPTY TRACKING CODE]:", err);
       setSmtpStatus('error');
       setSmtpError(err);
+      if (onUpdate) {
+        onUpdate({
+          ...activeReg,
+          mailEnviat: false,
+          mailEstat: 'pendent',
+          mailError: err,
+          respostesCuestionari: {
+            ...activeReg.respostesCuestionari,
+            mailEnviat: false,
+            mailEstat: 'pendent',
+            mailError: err,
+            estatCorreu: 'pendent'
+          }
+        });
+      }
       return;
     }
 
@@ -238,11 +253,21 @@ export default function Confirmation({ registration, onClear, onUpdate, config }
         console.log('[EMAIL ok]:', { to: emailList, codi: activeReg.codiSeguiment });
         setSmtpStatus('success');
         if (onUpdate) {
+          const nowIso = new Date().toISOString();
           onUpdate({
             ...activeReg,
+            mailEnviat: true,
+            mailData: nowIso,
+            mailEstat: 'enviat',
+            mailError: null,
             respostesCuestionari: {
               ...activeReg.respostesCuestionari,
-              estatCorreu: 'enviat'
+              mailEnviat: true,
+              mailData: nowIso,
+              mailEstat: 'enviat',
+              mailError: null,
+              estatCorreu: 'enviat',
+              dataUltimCorreu: nowIso
             }
           });
         }
@@ -252,10 +277,19 @@ export default function Confirmation({ registration, onClear, onUpdate, config }
         setSmtpStatus('error');
         setSmtpError(errorMsg);
         if (onUpdate) {
+          const nowIso = new Date().toISOString();
           onUpdate({
             ...activeReg,
+            mailEnviat: false,
+            mailData: nowIso,
+            mailEstat: 'fallat',
+            mailError: errorMsg,
             respostesCuestionari: {
               ...activeReg.respostesCuestionari,
+              mailEnviat: false,
+              mailData: nowIso,
+              mailEstat: 'fallat',
+              mailError: errorMsg,
               estatCorreu: 'fallat'
             }
           });
@@ -266,10 +300,19 @@ export default function Confirmation({ registration, onClear, onUpdate, config }
       setSmtpStatus('error');
       setSmtpError(err.message || 'Error de conexión');
       if (onUpdate) {
+        const nowIso = new Date().toISOString();
         onUpdate({
           ...activeReg,
+          mailEnviat: false,
+          mailData: nowIso,
+          mailEstat: 'fallat',
+          mailError: err?.message || 'Error de conexión',
           respostesCuestionari: {
             ...activeReg.respostesCuestionari,
+            mailEnviat: false,
+            mailData: nowIso,
+            mailEstat: 'fallat',
+            mailError: err?.message || 'Error de conexión',
             estatCorreu: 'fallat'
           }
         });

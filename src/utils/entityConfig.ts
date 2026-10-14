@@ -90,3 +90,5 @@ export async function fetchLiveEntityConfig(language: 'ca' | 'es' = 'ca'): Promi
 
   return getEntityConfigSync(language);
 }
+
+export const getEntityConfig = getEntityConfigSync;

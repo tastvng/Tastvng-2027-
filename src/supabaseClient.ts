@@ -380,9 +380,9 @@ function parseInscripcionesRows(rows: any[]): Inscripcio[] {
                           typeof r.respostes === 'object' && r.respostes ? { ...r.respostes } :
                           parseJSON(r.respostesCuestionari || r.respostes_cuestionari || r.respostes || '{}');
 
-    // Purge legacy fields from questionnaire answers (do NOT delete clavells or corbati)
+    // Purge legacy contact and internal fields from questionnaire answers (do NOT delete mail status or materials)
     const FORBIDDEN_KEYS = [
-      'estatCorreu', 'domas_qty', 'mocadors_qty', 'correuContacteParella',
+      'domas_qty', 'mocadors_qty', 'correuContacteParella',
       'telefonContacteParella', 'emailContactoPareja', 'telefonContactoPareja',
       'teDomasBalco', 'teMocadorsExtra'
     ];
@@ -492,6 +492,24 @@ function parseInscripcionesRows(rows: any[]): Inscripcio[] {
       estatInscripcio,
       posicioGlobal: r.posicioGlobal !== undefined ? Number(r.posicioGlobal) : (r.posicio_global !== undefined ? Number(r.posicio_global) : undefined),
       bandera: r.bandera !== undefined ? Number(r.bandera) : 0,
+
+      // Mail delivery status tracking
+      mailEnviat: r.mailEnviat !== undefined ? Boolean(r.mailEnviat)
+        : (r.mail_enviat !== undefined ? Boolean(r.mail_enviat)
+        : (rawRespostes.mailEnviat !== undefined ? Boolean(rawRespostes.mailEnviat)
+        : (rawRespostes.estatCorreu === 'enviat'))),
+      mailData: r.mailData || r.mail_data || rawRespostes.mailData || rawRespostes.dataUltimCorreu || undefined,
+      mailError: r.mailError || r.mail_error || rawRespostes.mailError || undefined,
+      mailEstat: (() => {
+        const val = r.mailEstat || r.mail_estat || rawRespostes.mailEstat;
+        if (val) {
+          const s = String(val).toLowerCase();
+          return s === 'enviat' ? 'enviat' : (s === 'fallat' ? 'fallat' : 'pendent');
+        }
+        if (rawRespostes.estatCorreu === 'enviat' || r.mail_enviat === true || r.mailEnviat === true) return 'enviat';
+        if (rawRespostes.estatCorreu === 'fallat' || r.mail_error || rawRespostes.mailError) return 'fallat';
+        return 'pendent';
+      })(),
 
       creadoEn: String(r.creadoEn || r.creado_en || r.created_at || new Date().toISOString()),
       actualizadoEn: String(r.actualizadoEn || r.actualizado_en || r.updated_at || new Date().toISOString())
@@ -848,10 +866,29 @@ export async function saveSupabaseInscripcion(ins: Inscripcio): Promise<SaveInsc
 
   try {
     const tableName = 'inscripciones';
+
+    // GUARANTEE: Never insert an empty tracking code. Allocate atomically if not set.
+    if (!ins.codiSeguiment || !ins.codiSeguiment.trim()) {
+      const isWaitlist = ins.estatInscripcio === 'llista_espera' || (!ins.estatInscripcio && ins.llistaEspera);
+      const { determineCodeGroup, allocateNextCode } = await import('./utils/codeAllocator');
+      const codeGroup = determineCodeGroup(ins.categoria, Boolean(isWaitlist));
+      let existingCodes: string[] = [];
+      try {
+        const { data: dbCodes } = await insertClient.from('inscripciones').select('codiSeguiment, codi_seguiment');
+        existingCodes = (dbCodes || []).map((x: any) => x.codiSeguiment || x.codi_seguiment).filter(Boolean);
+      } catch {}
+      ins.codiSeguiment = allocateNextCode(existingCodes, codeGroup);
+    }
+
     const enrichedRespostes = {
       ...(ins.respostesCuestionari || {}),
       emailContactoPareja: contactEmail,
-      telefonContactoPareja: contactTelefon
+      telefonContactoPareja: contactTelefon,
+      mailEnviat: ins.mailEnviat !== undefined ? ins.mailEnviat : false,
+      mailData: ins.mailData || null,
+      mailError: ins.mailError || null,
+      mailEstat: ins.mailEstat || 'pendent',
+      estatCorreu: ins.mailEstat || 'pendent'
     };
 
     // Clean column mapping strictly adhering to public.inscripciones schema
@@ -905,12 +942,26 @@ export async function saveSupabaseInscripcion(ins: Inscripcio): Promise<SaveInsc
       .insert(insertRow);
 
     if (!response.error) {
-      console.log(`[INSERT ok]: table public.inscripciones, id: ${ins.id}, codi: ${ins.codiSeguiment}, user: ${ins.c1Nom} & ${ins.c2Nom}`);
+      // If the database trigger assigned a canonical code, attempt to read it
+      let finalCode = ins.codiSeguiment;
+      try {
+        const { data: rowCheck } = await insertClient
+          .from(tableName)
+          .select('codiSeguiment, codi_seguiment')
+          .eq('id', ins.id)
+          .maybeSingle();
+        if (rowCheck) {
+          const dbCode = (rowCheck.codiSeguiment || rowCheck.codi_seguiment || '').trim();
+          if (dbCode) finalCode = dbCode;
+        }
+      } catch {}
+
+      console.log(`[INSERT ok]: table public.inscripciones, id: ${ins.id}, codi: ${finalCode}, user: ${ins.c1Nom} & ${ins.c2Nom}`);
       return {
         ok: true,
         step: 'database_insert',
         id: ins.id,
-        codiSeguiment: ins.codiSeguiment
+        codiSeguiment: finalCode
       };
     }
 

@@ -373,12 +373,22 @@ export default function AdminDashboard({
         if (onAddLog) {
           onAddLog(`📧 SMTP: Correu de confirmació manual enviat correctament a ${emailList.join(', ')}`);
         }
+        const nowIso = new Date().toISOString();
         if (onSaveInscripcio) {
           onSaveInscripcio({
             ...item,
+            mailEnviat: true,
+            mailData: nowIso,
+            mailEstat: 'enviat',
+            mailError: null,
             respostesCuestionari: {
               ...item.respostesCuestionari,
-              estatCorreu: 'enviat'
+              mailEnviat: true,
+              mailData: nowIso,
+              mailEstat: 'enviat',
+              mailError: null,
+              estatCorreu: 'enviat',
+              dataUltimCorreu: nowIso
             }
           });
         }
@@ -391,11 +401,20 @@ export default function AdminDashboard({
       if (onAddLog) {
         onAddLog(`⚠️ Error SMTP manual per a ${item.codiSeguiment}: ${err.message || err}`);
       }
+      const nowIso = new Date().toISOString();
       if (onSaveInscripcio) {
         onSaveInscripcio({
           ...item,
+          mailEnviat: false,
+          mailData: nowIso,
+          mailEstat: 'fallat',
+          mailError: err?.message || String(err),
           respostesCuestionari: {
             ...item.respostesCuestionari,
+            mailEnviat: false,
+            mailData: nowIso,
+            mailEstat: 'fallat',
+            mailError: err?.message || String(err),
             estatCorreu: 'fallat'
           }
         });
@@ -1842,7 +1861,53 @@ export default function AdminDashboard({
                 </button>
               </div>
             ) : (
-              <table className="w-full text-left border-collapse table-auto">
+              <>
+                {/* Warning banner for pending or failed emails */}
+                {(() => {
+                  const pendingCount = filteredInscripcions.filter(i => {
+                    const st = i.mailEstat || i.respostesCuestionari?.mailEstat || i.respostesCuestionari?.estatCorreu;
+                    return st === 'pendent' || (!i.mailEnviat && !st);
+                  }).length;
+                  const failedCount = filteredInscripcions.filter(i => {
+                    const st = i.mailEstat || i.respostesCuestionari?.mailEstat || i.respostesCuestionari?.estatCorreu;
+                    return st === 'fallat' || st === 'error';
+                  }).length;
+
+                  if (pendingCount === 0 && failedCount === 0) return null;
+
+                  return (
+                    <div className="m-4 p-3.5 bg-amber-50 border border-amber-300 rounded-2xl flex flex-wrap items-center justify-between gap-3 text-xs text-amber-900 shadow-xs" id="banner-pending-failed-emails">
+                      <div className="flex items-center gap-2.5">
+                        <AlertTriangle size={18} className="text-amber-600 shrink-0" />
+                        <div>
+                          <strong className="font-bold">
+                            {language === 'ca' ? "Avisos de correu de confirmació:" : "Avisos de correo de confirmación:"}
+                          </strong>
+                          <span className="ml-1.5">
+                            {pendingCount > 0 && (
+                              <span className="font-semibold text-amber-800">
+                                {pendingCount} {language === 'ca' ? (pendingCount === 1 ? 'correu pendent' : 'correus pendents') : (pendingCount === 1 ? 'correo pendiente' : 'correos pendientes')}
+                              </span>
+                            )}
+                            {pendingCount > 0 && failedCount > 0 && ' • '}
+                            {failedCount > 0 && (
+                              <span className="font-semibold text-red-700">
+                                {failedCount} {language === 'ca' ? (failedCount === 1 ? 'correu fallit' : 'correus fallits') : (failedCount === 1 ? 'correo fallido' : 'correos fallidos')}
+                              </span>
+                            )}
+                          </span>
+                        </div>
+                      </div>
+                      <span className="text-[11px] text-amber-700 font-mono">
+                        {language === 'ca' 
+                          ? "Pots enviar-los directament des de la columna \"Correu Enviat\" o des de la fitxa."
+                          : "Puedes enviarlos directamente desde la columna \"Correo Enviado\" o desde la ficha."}
+                      </span>
+                    </div>
+                  );
+                })()}
+
+                <table className="w-full text-left border-collapse table-auto">
                 <thead>
                   <tr className="bg-zinc-100 text-[10px] font-bold text-zinc-500 uppercase tracking-widest border-b border-zinc-200">
                     <th className="px-2 py-4 text-center w-10">
@@ -2070,48 +2135,92 @@ export default function AdminDashboard({
                       {/* Correu / Notificació status and manual trigger */}
                       <td className="px-2 md:px-3 py-3 text-center whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                         {(() => {
-                          const currentStatus = rowSmtpSending[item.id] || item.respostesCuestionari?.estatCorreu || 'enviat';
+                          const isSending = rowSmtpSending[item.id] === 'sending';
+                          const status = isSending ? 'sending' : (
+                            item.mailEstat || 
+                            item.respostesCuestionari?.mailEstat || 
+                            item.respostesCuestionari?.estatCorreu || 
+                            (item.mailEnviat ? 'enviat' : 'pendent')
+                          );
+                          const mailDate: string | undefined = typeof item.mailData === 'string' ? item.mailData : (typeof item.respostesCuestionari?.mailData === 'string' ? item.respostesCuestionari.mailData : (typeof item.respostesCuestionari?.dataUltimCorreu === 'string' ? item.respostesCuestionari.dataUltimCorreu : undefined));
+                          const mailErr: string | undefined = typeof item.mailError === 'string' ? item.mailError : (typeof item.respostesCuestionari?.mailError === 'string' ? item.respostesCuestionari.mailError : undefined);
+                          const hasCode = !!(item.codiSeguiment || '').trim();
                           
-                          if (currentStatus === 'sending') {
+                          if (status === 'sending') {
                             return (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-fuchsia-50 text-fuchsia-600 animate-pulse">
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-fuchsia-50 text-fuchsia-600 border border-fuchsia-200 animate-pulse">
                                 <Send size={9} className="animate-bounce" /> {language === 'ca' ? "Enviant..." : "Enviando..."}
                               </span>
                             );
                           }
                           
-                          if (currentStatus === 'fallat' || currentStatus === 'error') {
+                          if (status === 'fallat' || status === 'error') {
                             return (
-                              <div className="flex flex-col sm:flex-row items-center justify-center gap-1">
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-800" title={language === 'ca' ? "S'ha produït un error a l'SMTP" : "Se produjo un error en el SMTP"}>
+                              <div className="flex flex-col items-center justify-center gap-1">
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-800 border border-red-300" title={mailErr || (language === 'ca' ? "S'ha produït un error a l'SMTP" : "Se produjo un error en el SMTP")}>
                                   <AlertCircle size={10} /> {language === 'ca' ? "Fallat" : "Fallido"}
                                 </span>
                                 <button
                                   type="button"
                                   onClick={() => handleResendEmail(item)}
-                                  className="p-1 text-[9px] font-extrabold bg-zinc-900 border border-zinc-200 hover:bg-[#ff0090] text-white rounded-md cursor-pointer flex items-center gap-1 transition-all hover:scale-105 active:scale-95"
-                                  title={language === 'ca' ? "Re-enviar comprovant manualment ara" : "Re-enviar comprobante manualmente ahora"}
+                                  className="px-2 py-0.5 text-[9px] font-bold bg-red-600 hover:bg-red-700 text-white rounded-md cursor-pointer flex items-center gap-1 transition-all shadow-xs"
+                                  title={mailErr || (language === 'ca' ? "Reintentar enviament" : "Reintentar envío")}
                                 >
-                                  <Send size={8} /> {language === 'ca' ? "Enviar" : "Enviar"}
+                                  <RefreshCw size={8} /> {language === 'ca' ? "Reintentar" : "Reintentar"}
                                 </button>
+                                {mailErr && (
+                                  <span className="text-[8px] text-red-500 font-mono max-w-[120px] truncate block" title={mailErr}>
+                                    {mailErr}
+                                  </span>
+                                )}
                               </div>
                             );
                           }
                           
-                          // Default is success 'enviat'
+                          if (status === 'pendent' || !item.mailEnviat) {
+                            return (
+                              <div className="flex flex-col items-center justify-center gap-1">
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 animate-pulse" title={!hasCode ? (language === 'ca' ? "Pendent de codi de seguiment" : "Pendiente de código de seguimiento") : (language === 'ca' ? "Correu pendent d'enviar" : "Correo pendiente de enviar")}>
+                                  <Clock size={10} /> {language === 'ca' ? "Pendent" : "Pendiente"}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleResendEmail(item)}
+                                  className="px-2 py-0.5 text-[9px] font-bold bg-amber-500 hover:bg-amber-600 text-white rounded-md cursor-pointer flex items-center gap-1 transition-all shadow-xs hover:scale-105"
+                                  title={language === 'ca' ? "Enviar correu de confirmació ara" : "Enviar correo de confirmación ahora"}
+                                >
+                                  <Send size={8} /> {language === 'ca' ? "Enviar correu" : "Enviar correo"}
+                                </button>
+                                {!hasCode && (
+                                  <span className="text-[8px] text-amber-600 font-mono font-bold">
+                                    ⚠️ {language === 'ca' ? "Sense codi" : "Sin código"}
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          }
+
+                          // Success: 'enviat'
                           return (
-                            <div className="flex items-center justify-center gap-1.5 inline-flex">
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-green-100 text-green-800">
-                                <CheckCircle size={10} /> {language === 'ca' ? "Enviat" : "Enviado"}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => handleResendEmail(item)}
-                                className="p-1 hover:bg-zinc-100 rounded-md text-zinc-400 hover:text-zinc-900 cursor-pointer transition-all"
-                                title={language === 'ca' ? "Re-enviar comprovant" : "Volver a enviar comprobante"}
-                              >
-                                <RefreshCw size={10} />
-                              </button>
+                            <div className="flex flex-col items-center justify-center gap-0.5">
+                              <div className="flex items-center justify-center gap-1">
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-green-100 text-green-800 border border-green-200">
+                                  <CheckCircle size={10} /> {language === 'ca' ? "Enviat" : "Enviado"}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleResendEmail(item)}
+                                  className="p-1 hover:bg-zinc-100 rounded-md text-zinc-400 hover:text-zinc-900 cursor-pointer transition-all"
+                                  title={language === 'ca' ? "Reenviar correu" : "Reenviar correo"}
+                                >
+                                  <RefreshCw size={10} />
+                                </button>
+                              </div>
+                              {mailDate && (
+                                <span className="text-[8px] text-zinc-400 font-mono">
+                                  {new Date(mailDate).toLocaleDateString('ca-ES')} {new Date(mailDate).toLocaleTimeString('ca-ES', { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                              )}
                             </div>
                           );
                         })()}
@@ -2158,6 +2267,7 @@ export default function AdminDashboard({
                   ))}
                 </tbody>
               </table>
+            </>
             )}
           </div>
         </div>

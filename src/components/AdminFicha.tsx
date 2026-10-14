@@ -14,6 +14,8 @@ import {
   RotateCw, 
   ZoomIn, 
   Check, 
+  CheckCircle,
+  Clock,
   X, 
   Sparkles, 
   Save, 
@@ -101,13 +103,31 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
   const [extresSeleccionats, setExtresSeleccionats] = useState<any[]>(() => registration.extresSeleccionats || []);
   const [respostesCuestionari, setRespostesCuestionari] = useState<Record<string, any>>(() => registration.respostesCuestionari || {});
 
-  // Material Editing Mode (Point 9) and Email Resend (Point 10)
+  // Material Editing Mode (Point 9) and Email Resend (Point 10 & 12)
   const [isEditingMaterials, setIsEditingMaterials] = useState(false);
   const [justSavedMaterials, setJustSavedMaterials] = useState(false);
   const [lastMaterialChanges, setLastMaterialChanges] = useState<string[]>([]);
   const [showEmailModal, setShowEmailModal] = useState(false);
   const [isSendingModifiedEmail, setIsSendingModifiedEmail] = useState(false);
   const [emailSendStatus, setEmailSendStatus] = useState<{ ok: boolean; msg: string } | null>(null);
+
+  const [mailEnviat, setMailEnviat] = useState<boolean>(() => {
+    return registration.mailEnviat !== undefined
+      ? Boolean(registration.mailEnviat)
+      : (registration.mailEstat === 'enviat' || registration.respostesCuestionari?.estatCorreu === 'enviat');
+  });
+  const [mailData, setMailData] = useState<string | undefined>(() => {
+    return registration.mailData || registration.respostesCuestionari?.mailData || registration.respostesCuestionari?.dataUltimCorreu;
+  });
+  const [mailError, setMailError] = useState<string | null | undefined>(() => {
+    return registration.mailError || registration.respostesCuestionari?.mailError;
+  });
+  const [mailEstat, setMailEstat] = useState<'pendent' | 'enviat' | 'fallat'>(() => {
+    if (registration.mailEstat) return registration.mailEstat;
+    if (registration.mailEnviat || registration.respostesCuestionari?.estatCorreu === 'enviat') return 'enviat';
+    if (registration.mailError || registration.respostesCuestionari?.mailError) return 'fallat';
+    return 'pendent';
+  });
 
   const currentRecord = useMemo<Inscripcio>(() => ({
     ...registration,
@@ -122,8 +142,14 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
     c2Talla: c2Talla.trim(),
     c2UniformeTipus: c2Talla.trim() ? c2UniformeTipus : '',
     extresSeleccionats,
-    respostesCuestionari
-  }), [registration, codiSeguiment, categoria, c1Nom, c1Cognoms, c1Talla, c1UniformeTipus, c2Nom, c2Cognoms, c2Talla, c2UniformeTipus, extresSeleccionats, respostesCuestionari]);
+    respostesCuestionari,
+    emailContactoPareja: emailContactoPareja.trim(),
+    telefonContactoPareja: telefonContactoPareja.trim(),
+    mailEnviat,
+    mailData,
+    mailError,
+    mailEstat
+  }), [registration, codiSeguiment, categoria, c1Nom, c1Cognoms, c1Talla, c1UniformeTipus, c2Nom, c2Cognoms, c2Talla, c2UniformeTipus, extresSeleccionats, respostesCuestionari, emailContactoPareja, telefonContactoPareja, mailEnviat, mailData, mailError, mailEstat]);
 
   // Single Source of Truth Order Breakdown and Validation
   const breakdown = useMemo(() => {
@@ -211,6 +237,144 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
 
     const updatedExtres = [...nonEsmorzar, ...newEsmorzar];
     setExtresSeleccionats(updatedExtres);
+  };
+
+  const handleSendEmail = async () => {
+    const coupleEmail = (emailContactoPareja || registration.c1Email || registration.c2Email || '').trim();
+    if (!coupleEmail || !coupleEmail.includes('@')) {
+      alert(language === 'ca' ? "No s'ha trobat cap adreça de correu de contacte vàlida." : "No se encontró ninguna dirección de correo de contacto válida.");
+      return;
+    }
+
+    const codeToSend = (codiSeguiment || registration.codiSeguiment || '').trim();
+    if (!codeToSend) {
+      alert(language === 'ca'
+        ? "El codi de seguiment real està buit a Supabase. No es pot enviar el correu sense codi de parella."
+        : "El código de seguimiento real está vacío en Supabase. No se puede enviar el correo sin código de pareja.");
+      return;
+    }
+
+    setIsSendingModifiedEmail(true);
+    setEmailSendStatus(null);
+
+    try {
+      const entityConfig = getEntityConfig(language, config);
+      const isCorrection = Boolean(mailEnviat || mailEstat === 'enviat');
+
+      let resolvedC1Dni: string | null = null;
+      let resolvedC2Dni: string | null = null;
+      if (c1DniUrl) resolvedC1Dni = c1DniUrl;
+      else if (c1RawPath) {
+        try {
+          const { getDniSignedUrl } = await import('../supabaseClient');
+          resolvedC1Dni = await getDniSignedUrl(c1RawPath);
+        } catch {}
+      }
+      if (c2DniUrl) resolvedC2Dni = c2DniUrl;
+      else if (c2RawPath) {
+        try {
+          const { getDniSignedUrl } = await import('../supabaseClient');
+          resolvedC2Dni = await getDniSignedUrl(c2RawPath);
+        } catch {}
+      }
+
+      const { subject: emailSubject, html: emailHtml } = buildUnifiedEmailHtml({
+        registration: currentRecord,
+        entityConfig,
+        breakdown,
+        c1DniSignedUrl: resolvedC1Dni,
+        c2DniSignedUrl: resolvedC2Dni,
+        language,
+        isCorrection
+      });
+
+      const emailAttachments: any[] = [];
+      if (entityConfig.logoUrl && entityConfig.logoUrl.startsWith('data:')) {
+        emailAttachments.push({
+          filename: 'logo.png',
+          content: entityConfig.logoUrl,
+          cid: 'tast-email-logo-cid'
+        });
+      }
+
+      let adminToken = '';
+      try {
+        const session = (await supabase?.auth.getSession())?.data?.session;
+        adminToken = session?.access_token || '';
+      } catch {}
+
+      const res = await fetch('/api/email?action=send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(adminToken ? { 'Authorization': `Bearer ${adminToken}` } : {})
+        },
+        body: JSON.stringify({
+          id: registration.id,
+          inscriptionId: registration.id,
+          codiSeguiment: codeToSend,
+          emailData: {
+            to: coupleEmail,
+            subject: emailSubject,
+            html: emailHtml,
+            attachments: emailAttachments,
+            codiSeguiment: codeToSend
+          }
+        })
+      });
+
+      const nowIso = new Date().toISOString();
+      const resJson = await res.json().catch(() => null);
+
+      if (res.ok && resJson?.ok !== false && resJson?.emailSent !== false) {
+        setMailEnviat(true);
+        setMailData(nowIso);
+        setMailEstat('enviat');
+        setMailError(null);
+        setEmailSendStatus({
+          ok: true,
+          msg: language === 'ca' ? `Correu enviat correctament a ${coupleEmail}` : `Correo enviado correctamente a ${coupleEmail}`
+        });
+
+        const recordWithMail: Inscripcio = {
+          ...currentRecord,
+          mailEnviat: true,
+          mailData: nowIso,
+          mailEstat: 'enviat',
+          mailError: null,
+          respostesCuestionari: {
+            ...currentRecord.respostesCuestionari,
+            mailEnviat: true,
+            mailData: nowIso,
+            mailEstat: 'enviat',
+            mailError: null,
+            estatCorreu: 'enviat',
+            dataUltimCorreu: nowIso
+          }
+        };
+        onSave(recordWithMail);
+      } else {
+        const errMsg = resJson?.message || resJson?.error || `Error ${res.status}`;
+        setMailEnviat(false);
+        setMailEstat('fallat');
+        setMailError(errMsg);
+        setEmailSendStatus({
+          ok: false,
+          msg: language === 'ca' ? `Error enviant correu: ${errMsg}` : `Error enviando correo: ${errMsg}`
+        });
+      }
+    } catch (err: any) {
+      const errMsg = err?.message || String(err);
+      setMailEnviat(false);
+      setMailEstat('fallat');
+      setMailError(errMsg);
+      setEmailSendStatus({
+        ok: false,
+        msg: language === 'ca' ? `Error de xarxa: ${errMsg}` : `Error de red: ${errMsg}`
+      });
+    } finally {
+      setIsSendingModifiedEmail(false);
+    }
   };
 
   // State variables replicating the sheet parameters
@@ -585,6 +749,19 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
       llistaEspera,
       estatInscripcio,
       bandera,
+      mailEnviat,
+      mailData,
+      mailError,
+      mailEstat,
+      respostesCuestionari: {
+        ...respostesCuestionari,
+        mailEnviat,
+        mailData,
+        mailError,
+        mailEstat,
+        estatCorreu: mailEstat,
+        dataUltimCorreu: mailData
+      },
       actualizadoEn: new Date().toISOString()
     };
 
@@ -622,15 +799,64 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
           </div>
         </div>
 
-        <button 
-          onClick={handleGuardaCanvis}
-          className="text-xs bg-fuchsia-600 hover:bg-fuchsia-500 font-bold px-5 py-2.5 rounded-xl transition flex items-center gap-1.5 shadow"
-          id="btn-ficha-save"
-        >
-          {saveSuccess 
-            ? (language === 'ca' ? "S'ha desat!" : "¡Guardado!") 
-            : (language === 'ca' ? "Desar Canvis" : "Guardar Cambios")} <Save size={14} />
-        </button>
+        <div className="flex items-center gap-2">
+          <button 
+            type="button"
+            onClick={() => {
+              setEmailSendStatus(null);
+              setShowEmailModal(true);
+            }}
+            className={`text-xs font-bold px-4 py-2.5 rounded-xl transition flex items-center gap-1.5 shadow cursor-pointer ${
+              mailEnviat || mailEstat === 'enviat'
+                ? 'bg-zinc-800 hover:bg-zinc-700 text-fuchsia-300 border border-fuchsia-500/30'
+                : 'bg-amber-500 hover:bg-amber-600 text-zinc-950 font-black'
+            }`}
+            id="btn-ficha-email-resend"
+            title={mailEnviat ? (language === 'ca' ? "Reenviar correu modificat" : "Reenviar correo modificado") : (language === 'ca' ? "Enviar correu de confirmació" : "Enviar correo de confirmación")}
+          >
+            <Send size={14} />
+            {mailEnviat || mailEstat === 'enviat'
+              ? (language === 'ca' ? "Reenviar correu modificat" : "Reenviar correo modificado")
+              : (language === 'ca' ? "Enviar correu" : "Enviar correo")}
+          </button>
+
+          <button 
+            onClick={handleGuardaCanvis}
+            className="text-xs bg-fuchsia-600 hover:bg-fuchsia-500 font-bold px-5 py-2.5 rounded-xl transition flex items-center gap-1.5 shadow"
+            id="btn-ficha-save"
+          >
+            {saveSuccess 
+              ? (language === 'ca' ? "S'ha desat!" : "¡Guardado!") 
+              : (language === 'ca' ? "Desar Canvis" : "Guardar Cambios")} <Save size={14} />
+          </button>
+        </div>
+      </div>
+
+      {/* Email metadata banner */}
+      <div className="bg-zinc-900/60 border border-zinc-800 rounded-2xl px-4 py-2.5 flex flex-wrap items-center justify-between text-xs font-mono">
+        <div className="flex items-center gap-2">
+          <Mail size={14} className="text-zinc-400" />
+          <span>
+            {mailEnviat || mailEstat === 'enviat' ? (
+              <span className="text-emerald-400 font-semibold inline-flex items-center gap-1">
+                <CheckCircle size={12} /> {language === 'ca' ? "Últim correu enviat:" : "Último correo enviado:"} {mailData ? `${new Date(mailData).toLocaleDateString('ca-ES')} ${new Date(mailData).toLocaleTimeString('ca-ES', { hour: '2-digit', minute: '2-digit' })}` : '—'}
+              </span>
+            ) : mailEstat === 'fallat' ? (
+              <span className="text-red-400 font-semibold inline-flex items-center gap-1">
+                <AlertTriangle size={12} /> {language === 'ca' ? "Error en darrer enviament:" : "Error en último envío:"} {mailError || 'Error desconegut'}
+              </span>
+            ) : (
+              <span className="text-amber-400 font-semibold inline-flex items-center gap-1">
+                <Clock size={12} /> {language === 'ca' ? "Correu pendent d'enviar" : "Correo pendiente de enviar"}
+              </span>
+            )}
+          </span>
+        </div>
+        {emailContactoPareja && (
+          <span className="text-zinc-400 text-[11px]">
+            {language === 'ca' ? "Destinatari:" : "Destinatario:"} <strong className="text-zinc-200">{emailContactoPareja}</strong>
+          </span>
+        )}
       </div>
 
       {saveSuccess && (
@@ -1951,6 +2177,113 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
               ? "Prem a qualsevol lloc per tancar el visor de seguretat" 
               : "Pulsa en cualquier lugar para cerrar el visor de seguridad"}
           </p>
+        </div>
+      )}
+
+      {/* Email Preview & Confirmation Modal (Points 10 & 12) */}
+      {showEmailModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-zinc-900 border border-zinc-750 text-white rounded-3xl max-w-lg w-full p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
+              <h3 className="font-bold text-base text-fuchsia-400 flex items-center gap-2">
+                <Mail size={18} />
+                {mailEnviat || mailEstat === 'enviat'
+                  ? (language === 'ca' ? "Reenviar correu modificat" : "Reenviar correo modificado")
+                  : (language === 'ca' ? "Enviar correu de confirmació" : "Enviar correo de confirmación")}
+              </h3>
+              <button 
+                type="button"
+                onClick={() => { setShowEmailModal(false); setEmailSendStatus(null); }}
+                className="text-zinc-400 hover:text-white p-1 rounded-lg cursor-pointer transition"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div className="bg-zinc-950 p-3.5 rounded-xl border border-zinc-800 space-y-2 font-mono">
+                <div className="flex justify-between">
+                  <span className="text-zinc-500">Destinatari:</span>
+                  <span className="font-bold text-white">{emailContactoPareja || registration.c1Email || '—'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-zinc-500">Codi parella:</span>
+                  <span className="font-bold text-fuchsia-400">{codiSeguiment || '—'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-zinc-500">Parella:</span>
+                  <span className="font-bold text-white">{c1Nom} &amp; {c2Nom}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-zinc-500">Total a pagar:</span>
+                  <span className="font-bold text-white">{formatEuro(breakdown.totalCalculat)}</span>
+                </div>
+              </div>
+
+              <div className="bg-zinc-950/60 p-3 rounded-xl border border-zinc-850">
+                <span className="text-[10px] uppercase font-bold text-zinc-400 font-mono block mb-1.5">
+                  {language === 'ca' ? "Materials i equipament a enviar:" : "Materiales y equipamiento a enviar:"}
+                </span>
+                <ul className="space-y-1 text-zinc-300">
+                  {breakdown.materials.map(m => (
+                    <li key={m.id} className="flex justify-between">
+                      <span>• {m.nom} ({m.modalitat}):</span>
+                      <strong className="text-white">{m.quantitat} u. ({m.subtotal}€)</strong>
+                    </li>
+                  ))}
+                  {breakdown.materials.length === 0 && (
+                    <li className="text-zinc-500 italic">Sense materials addicionals</li>
+                  )}
+                </ul>
+              </div>
+
+              {mailEnviat && (
+                <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-300 text-[11px] leading-relaxed">
+                  ⚠️ {language === 'ca'
+                    ? "Aquest correu s'enviarà indicant expressament que és una versió corregida de la inscripció."
+                    : "Este correo se enviará indicando expresamente que es una versión corregida de la inscripción."}
+                </div>
+              )}
+
+              {emailSendStatus && (
+                <div className={`p-3 rounded-xl text-xs font-semibold ${
+                  emailSendStatus.ok 
+                    ? 'bg-emerald-950/80 border border-emerald-700 text-emerald-300' 
+                    : 'bg-rose-950/80 border border-rose-700 text-rose-300'
+                }`}>
+                  {emailSendStatus.msg}
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-zinc-800">
+              <button
+                type="button"
+                onClick={() => { setShowEmailModal(false); setEmailSendStatus(null); }}
+                className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl text-xs font-bold transition cursor-pointer"
+              >
+                {language === 'ca' ? "Tancar" : "Cerrar"}
+              </button>
+              <button
+                type="button"
+                disabled={isSendingModifiedEmail || !emailContactoPareja}
+                onClick={handleSendEmail}
+                className="px-5 py-2 bg-fuchsia-600 hover:bg-fuchsia-500 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow cursor-pointer"
+              >
+                {isSendingModifiedEmail ? (
+                  <>
+                    <RefreshCw size={13} className="animate-spin" />
+                    {language === 'ca' ? "Enviant..." : "Enviando..."}
+                  </>
+                ) : (
+                  <>
+                    <Send size={13} />
+                    {language === 'ca' ? "Confirmar i Enviar" : "Confirmar y Enviar"}
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -457,13 +457,20 @@ export default async function inscriptionsHandler(req: any, res: any) {
         try { respostesCuestionari = JSON.parse(reg.respostesCuestionari); } catch { respostesCuestionari = {}; }
       }
 
-      // Purge legacy contact and internal fields from questionnaire answers (do NOT delete clavells or corbati)
+      // Purge legacy contact and internal fields from questionnaire answers (do NOT delete mail status or materials)
       const FORBIDDEN_RESPOSTES_KEYS = [
-        'estatCorreu', 'domas_qty', 'mocadors_qty', 'correuContacteParella',
+        'domas_qty', 'mocadors_qty', 'correuContacteParella',
         'telefonContacteParella', 'emailContactoPareja', 'telefonContactoPareja',
         'teDomasBalco', 'teMocadorsExtra'
       ];
       FORBIDDEN_RESPOSTES_KEYS.forEach(k => delete respostesCuestionari[k]);
+
+      // Initialize mail tracking in respostesCuestionari
+      respostesCuestionari.mailEnviat = reg.mailEnviat !== undefined ? reg.mailEnviat : false;
+      respostesCuestionari.mailData = reg.mailData || null;
+      respostesCuestionari.mailError = reg.mailError || null;
+      respostesCuestionari.mailEstat = reg.mailEstat || 'pendent';
+      respostesCuestionari.estatCorreu = reg.mailEstat || 'pendent';
 
       // Preserve selected materials in respostesCuestionari so they are persisted to Supabase
       if (Array.isArray(reg.extresSeleccionats) && reg.extresSeleccionats.length > 0) {

@@ -9,6 +9,7 @@ export interface TicketGenerationOptions {
   c1DniSignedUrl?: string | null;
   c2DniSignedUrl?: string | null;
   language?: 'ca' | 'es';
+  isCorrection?: boolean;
 }
 
 /**
@@ -19,7 +20,7 @@ export function buildUnifiedEmailHtml(options: TicketGenerationOptions): {
   subject: string;
   html: string;
 } {
-  const { registration, entityConfig, breakdown, c1DniSignedUrl, c2DniSignedUrl, language = 'ca' } = options;
+  const { registration, entityConfig, breakdown, c1DniSignedUrl, c2DniSignedUrl, language = 'ca', isCorrection } = options;
 
   const realCode = (
     registration.codiSeguiment || 
@@ -33,9 +34,10 @@ export function buildUnifiedEmailHtml(options: TicketGenerationOptions): {
     ''
   ).trim();
 
+  const prefix = isCorrection ? (language === 'ca' ? '[VERSIÓ CORREGIDA] ' : '[VERSIÓN CORREGIDA] ') : '';
   const subjectBase = language === 'ca'
-    ? `Confirmació de preinscripció - ${entityConfig.nomEsdeveniment}`
-    : `Confirmación de preinscripción - ${entityConfig.nomEsdeveniment}`;
+    ? `${prefix}Confirmació de preinscripció - ${entityConfig.nomEsdeveniment}`
+    : `${prefix}Confirmación de preinscripción - ${entityConfig.nomEsdeveniment}`;
   const subject = realCode ? `${subjectBase} [CODI DE SEGUIMENT: ${realCode}]` : subjectBase;
 
   const isAdult = String(registration.categoria || '').toUpperCase().includes('ADULT') || 
@@ -100,9 +102,16 @@ export function buildUnifiedEmailHtml(options: TicketGenerationOptions): {
 
   const hasLogistics = !!(entityConfig.direccio || entityConfig.diesEntrega || entityConfig.horari);
 
+  const correctionBanner = isCorrection ? `
+    <div style="background-color: #fef3c7; border: 1.5px solid #f59e0b; padding: 14px 18px; border-radius: 14px; text-align: center; margin-bottom: 22px; font-weight: bold; color: #92400e; font-size: 13px; line-height: 1.4;">
+      ⚠️ ${language === 'ca' ? 'Aquesta és una versió corregida de la vostra inscripció amb les dades i el desglossament de materials actualitzats.' : 'Esta es una versión corregida de su inscripción con los datos y el desglose de materiales actualizados.'}
+    </div>
+  ` : '';
+
   const html = `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 620px; margin: 0 auto; padding: 32px 24px; border: 1px solid #e2e4e8; border-radius: 24px; background-color: #ffffff; color: #111115;">
       ${logoHtml}
+      ${correctionBanner}
 
       <div style="text-align: center; margin-bottom: 24px;">
         <span style="font-size: 11px; font-weight: 800; color: #ff0090; text-transform: uppercase; letter-spacing: 1.5px; display: block; margin-bottom: 6px;">

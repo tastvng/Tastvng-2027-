@@ -278,6 +278,30 @@ export default async function emailHandler(req: any, res: any) {
 
     // REQUIREMENT 8: Stop sending if tracking code is empty
     if (!codiSeguiment) {
+      if (inscriptionId) {
+        try {
+          const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+          const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+          if (supabaseUrl && supabaseKey) {
+            const supabase = createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false } });
+            const nowIso = new Date().toISOString();
+            const { data: cur } = await supabase.from('inscripciones').select('respostesCuestionari, respostes_cuestionari').eq('id', inscriptionId).maybeSingle();
+            const curResp = cur?.respostesCuestionari || cur?.respostes_cuestionari || {};
+            await supabase.from('inscripciones').update({
+              respostesCuestionari: {
+                ...(typeof curResp === 'object' ? curResp : {}),
+                mailEnviat: false,
+                mailData: nowIso,
+                mailEstat: 'pendent',
+                mailError: "El codi de seguiment real de la inscripció està buit a Supabase.",
+                estatCorreu: 'pendent'
+              },
+              actualizadoEn: nowIso
+            }).eq('id', inscriptionId);
+          }
+        } catch {}
+      }
+
       return res.status(400).json({
         ok: false,
         emailSent: false,
@@ -353,6 +377,34 @@ export default async function emailHandler(req: any, res: any) {
       const info = await transporter.sendMail(mailOptions);
       console.log(`[SMTP ok]: MessageId: ${info.messageId} to: ${to} codi: ${codiSeguiment}`);
 
+      // Persist success status into Supabase
+      if (inscriptionId) {
+        try {
+          const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+          const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+          if (supabaseUrl && supabaseKey) {
+            const supabase = createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false } });
+            const nowIso = new Date().toISOString();
+            const { data: cur } = await supabase.from('inscripciones').select('respostesCuestionari, respostes_cuestionari').eq('id', inscriptionId).maybeSingle();
+            const curResp = cur?.respostesCuestionari || cur?.respostes_cuestionari || {};
+            await supabase.from('inscripciones').update({
+              respostesCuestionari: {
+                ...(typeof curResp === 'object' ? curResp : {}),
+                mailEnviat: true,
+                mailData: nowIso,
+                mailEstat: 'enviat',
+                mailError: null,
+                estatCorreu: 'enviat',
+                dataUltimCorreu: nowIso
+              },
+              actualizadoEn: nowIso
+            }).eq('id', inscriptionId);
+          }
+        } catch (dbErr) {
+          console.warn("[SMTP status save warning]:", dbErr);
+        }
+      }
+
       // Contract matching Requirement 13
       return res.status(200).json({
         ok: true,
@@ -374,6 +426,34 @@ export default async function emailHandler(req: any, res: any) {
         port: smtpPort,
         user: maskString(smtpUser)
       });
+
+      // Persist failure status into Supabase
+      if (inscriptionId) {
+        try {
+          const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+          const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+          if (supabaseUrl && supabaseKey) {
+            const supabase = createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false } });
+            const nowIso = new Date().toISOString();
+            const errMsg = sendError?.message || "Error al trametre el correu SMTP";
+            const { data: cur } = await supabase.from('inscripciones').select('respostesCuestionari, respostes_cuestionari').eq('id', inscriptionId).maybeSingle();
+            const curResp = cur?.respostesCuestionari || cur?.respostes_cuestionari || {};
+            await supabase.from('inscripciones').update({
+              respostesCuestionari: {
+                ...(typeof curResp === 'object' ? curResp : {}),
+                mailEnviat: false,
+                mailData: nowIso,
+                mailEstat: 'fallat',
+                mailError: errMsg,
+                estatCorreu: 'fallat'
+              },
+              actualizadoEn: nowIso
+            }).eq('id', inscriptionId);
+          }
+        } catch (dbErr) {
+          console.warn("[SMTP error save warning]:", dbErr);
+        }
+      }
 
       // Contract matching Requirement 12
       return res.status(500).json({

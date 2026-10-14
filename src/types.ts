@@ -115,6 +115,12 @@ export interface Inscripcio {
   posicioGlobal?: number;
   bandera?: number; // 0 = No assignat, 1 = Bandera BOSS, 2 = Bandera No ni na, 3 = Bandera juvenil
   
+  // Seguiment d'enviament de correu de confirmació
+  mailEnviat?: boolean;
+  mailData?: string;
+  mailError?: string | null;
+  mailEstat?: 'pendent' | 'enviat' | 'fallat';
+
   creadoEn: string;
   actualizadoEn: string;
 }
