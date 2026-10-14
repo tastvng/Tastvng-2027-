@@ -64,8 +64,15 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
     registration.emailContactoPareja || registration.c1Email || registration.c2Email || ''
   );
   const [telefonContactoPareja, setTelefonContactoPareja] = useState(
-    registration.telefonContactoPareja || registration.c1Telefon || registration.c2Telefon || ''
+    registration.telefonContactoPareja || registration.c1Telefon || registration.c2Telefon || (registration.respostesCuestionari as any)?.telefonContactoPareja || (registration.respostesCuestionari as any)?.telefonContacteParella || ''
   );
+
+  React.useEffect(() => {
+    setEmailContactoPareja(registration.emailContactoPareja || registration.c1Email || registration.c2Email || '');
+    setTelefonContactoPareja(
+      registration.telefonContactoPareja || registration.c1Telefon || registration.c2Telefon || (registration.respostesCuestionari as any)?.telefonContactoPareja || (registration.respostesCuestionari as any)?.telefonContacteParella || ''
+    );
+  }, [registration.id]);
 
   // Participant 1
   const [c1Nom, setC1Nom] = useState(registration.c1Nom || '');
@@ -912,7 +919,7 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
                     value={telefonContactoPareja} 
                     onChange={(e) => setTelefonContactoPareja(e.target.value)}
                     className="w-full bg-white border border-zinc-200 focus:border-fuchsia-500 rounded-xl px-3 py-2 text-xs font-bold font-sans focus:outline-none truncate" 
-                    placeholder={language === 'ca' ? 'Ex. 612345678 (o —)' : 'Ej. 612345678 (o —)'}
+                    placeholder="—"
                     id="admin-input-couple-phone"
                   />
                 </div>
@@ -2201,6 +2208,10 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
                 <div className="flex justify-between">
                   <span className="text-zinc-500">Destinatari:</span>
                   <span className="font-bold text-white">{emailContactoPareja || registration.c1Email || '—'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-zinc-500">{language === 'ca' ? 'Telèfon:' : 'Teléfono:'}</span>
+                  <span className="font-bold text-white">{telefonContactoPareja || registration.c1Telefon || registration.c2Telefon || '—'}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-zinc-500">Codi parella:</span>

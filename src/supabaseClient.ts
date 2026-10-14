@@ -362,16 +362,22 @@ function parseInscripcionesRows(rows: any[]): Inscripcio[] {
     if (r.payload && typeof r.payload === 'object') return r.payload;
     if (r.config && typeof r.config === 'object') return r.config;
 
-    // Common couple contact extraction with migration from old c1/c2 fields
+    // Parse questionnaire responses first to safely extract legacy contact fields before purging
+    const rawRespostes: Record<string, any> = typeof r.respostesCuestionari === 'object' && r.respostesCuestionari ? { ...r.respostesCuestionari } :
+                          typeof r.respostes_cuestionari === 'object' && r.respostes_cuestionari ? { ...r.respostes_cuestionari } :
+                          typeof r.respostes === 'object' && r.respostes ? { ...r.respostes } :
+                          parseJSON(r.respostesCuestionari || r.respostes_cuestionari || r.respostes || '{}');
+
+    // Common couple contact extraction with migration from old c1/c2 fields and questionnaire
     const rawC1Email = r.c1Email !== undefined ? r.c1Email : (r.c1_email || r.c1email || '');
     const rawC2Email = r.c2Email !== undefined ? r.c2Email : (r.c2_email || r.c2email || '');
     const rawC1Telefon = r.c1Telefon !== undefined ? r.c1Telefon : (r.c1_telefon || r.c1telefon || '');
     const rawC2Telefon = r.c2Telefon !== undefined ? r.c2Telefon : (r.c2_telefon || r.c2telefon || '');
 
     const explicitEmail = r.emailContactoPareja !== undefined ? r.emailContactoPareja
-      : (r.email_contacto_pareja || r.emailcontactopareja || '');
+      : (r.email_contacto_pareja || r.emailcontactopareja || rawRespostes?.emailContactoPareja || rawRespostes?.correuContacteParella || '');
     const explicitTelefon = r.telefonContactoPareja !== undefined ? r.telefonContactoPareja
-      : (r.telefon_contacto_pareja || r.telefoncontactopareja || '');
+      : (r.telefon_contacto_pareja || r.telefoncontactopareja || rawRespostes?.telefonContactoPareja || rawRespostes?.telefonContacteParella || rawRespostes?.telefon || '');
 
     // Migration rule: Use explicit if set, otherwise first valid email/phone found
     const emailContactoPareja = explicitEmail ||
@@ -383,11 +389,6 @@ function parseInscripcionesRows(rows: any[]): Inscripcio[] {
       (rawC1Telefon && String(rawC1Telefon).trim().length > 0 ? rawC1Telefon : '') ||
       (rawC2Telefon && String(rawC2Telefon).trim().length > 0 ? rawC2Telefon : '') ||
       rawC1Telefon || rawC2Telefon || '';
-
-    const rawRespostes: Record<string, any> = typeof r.respostesCuestionari === 'object' && r.respostesCuestionari ? { ...r.respostesCuestionari } :
-                          typeof r.respostes_cuestionari === 'object' && r.respostes_cuestionari ? { ...r.respostes_cuestionari } :
-                          typeof r.respostes === 'object' && r.respostes ? { ...r.respostes } :
-                          parseJSON(r.respostesCuestionari || r.respostes_cuestionari || r.respostes || '{}');
 
     // Purge legacy contact and internal fields from questionnaire answers (do NOT delete mail status or materials)
     const FORBIDDEN_KEYS = [
@@ -1164,15 +1165,22 @@ export async function updateSupabaseInscripcion(ins: Inscripcio): Promise<{ ok: 
     console.warn("Could not read current respostesCuestionari directly from Supabase:", dbReadErr);
   }
 
+  const contactEmailVal = ins.emailContactoPareja !== undefined ? ins.emailContactoPareja : (ins.c1Email || ins.c2Email || '');
+  const contactTelefonVal = ins.telefonContactoPareja !== undefined ? ins.telefonContactoPareja : (ins.c1Telefon || ins.c2Telefon || '');
+
   const directUpdates: Record<string, any> = {
     codiSeguiment: ins.codiSeguiment,
     categoria: ins.categoria,
     c1Nom: ins.c1Nom,
     c1Cognoms: ins.c1Cognoms,
+    c1Email: contactEmailVal,
+    c1Telefon: contactTelefonVal,
     c1Talla: ins.c1Talla,
     c1UniformeTipus: ins.c1UniformeTipus,
     c2Nom: ins.c2Nom,
     c2Cognoms: ins.c2Cognoms,
+    c2Email: contactEmailVal,
+    c2Telefon: contactTelefonVal,
     c2Talla: ins.c2Talla,
     c2UniformeTipus: ins.c2UniformeTipus,
     preuCalculat: ins.preuCalculat,

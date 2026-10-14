@@ -88,7 +88,7 @@ export function buildUnifiedEmailHtml(options: TicketGenerationOptions): {
   const itemizedTableHtml = generateItemizedBreakdownHtml(breakdown, language);
 
   const contactEmail = (registration.emailContactoPareja || registration.c1Email || registration.c2Email || '').trim();
-  const contactPhone = (registration.c1Telefon || (registration.respostesCuestionari as any)?.telefonContactoPareja || registration.telefonContactoPareja || registration.c2Telefon || '').trim();
+  const contactPhone = (registration.telefonContactoPareja || registration.c1Telefon || registration.c2Telefon || (registration.respostesCuestionari as any)?.telefonContactoPareja || (registration.respostesCuestionari as any)?.telefonContacteParella || '').trim();
   const officialContactEmail = "tastvng@gmail.com";
 
   const observacions = (
