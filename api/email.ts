@@ -321,7 +321,7 @@ export default async function emailHandler(req: any, res: any) {
             : (typeof ins.respostesCuestionari === 'string' ? JSON.parse(ins.respostesCuestionari || '{}') : {});
 
           to = (body.to || body.email || (ins as any).emailContactoPareja || rawResp.emailContactoPareja || ins.c1Email || ins.c2Email || '').trim();
-          codiSeguiment = (ins.codiSeguiment || (ins as any).codi_seguiment || (ins as any).codigo || codiSeguiment || '').trim();
+          codiSeguiment = (ins.codiSeguiment || codiSeguiment || '').trim();
 
           const isAdult = String(ins.categoria || '').trim().toUpperCase() === 'ADULT';
           const categoriaLabel = isAdult 
@@ -580,11 +580,11 @@ export default async function emailHandler(req: any, res: any) {
           const supabase = createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false } });
           const { data: ins } = await supabase
             .from('inscripciones')
-            .select('codiSeguiment, codi_seguiment, codigo')
+            .select('codiSeguiment')
             .eq('id', inscriptionId)
             .maybeSingle();
           if (ins) {
-            codiSeguiment = (ins.codiSeguiment || (ins as any).codi_seguiment || (ins as any).codigo || '').trim();
+            codiSeguiment = (ins.codiSeguiment || '').trim();
           }
         }
       } catch (e) {

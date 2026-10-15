@@ -707,21 +707,12 @@ export async function getSupabaseInscripcionById(id: string): Promise<Inscripcio
   try {
     const { data, error } = await supabase
       .from('inscripciones')
-      .select('*')
+      .select(CAMEL_COLUMNS_NO_DNI)
       .eq('id', id)
       .maybeSingle();
       
     if (error || !data) {
-      // try fallback table name
-      const resFallback = await supabase
-        .from('inscripcions')
-        .select('*')
-        .eq('id', id)
-        .maybeSingle();
-      if (resFallback.error || !resFallback.data) {
-        return null;
-      }
-      return parseInscripcionesRows([resFallback.data])[0] || null;
+      return null;
     }
     return parseInscripcionesRows([data])[0] || null;
   } catch (err) {
@@ -743,56 +734,18 @@ export async function getSupabaseInscripcionByCodeOrId(codeOrId: string): Promis
     // 1. Try finding by codiSeguiment in 'inscripciones'
     let { data, error } = await supabase
       .from('inscripciones')
-      .select('*')
+      .select(CAMEL_COLUMNS_NO_DNI)
       .ilike('codiSeguiment', clean)
       .maybeSingle();
 
-    // 2. Try finding by snake_case 'codi_seguiment'
-    if (!data) {
-      const resCodiSnake = await supabase
-        .from('inscripciones')
-        .select('*')
-        .ilike('codi_seguiment', clean)
-        .maybeSingle();
-      data = resCodiSnake.data;
-    }
-
-    // 3. Try finding by id
+    // 2. Try finding by id
     if (!data) {
       const resId = await supabase
         .from('inscripciones')
-        .select('*')
+        .select(CAMEL_COLUMNS_NO_DNI)
         .eq('id', clean)
         .maybeSingle();
       data = resId.data;
-    }
-
-    // 4. Try fallback table 'inscripcions'
-    if (!data) {
-      const resFallback = await supabase
-        .from('inscripcions')
-        .select('*')
-        .ilike('codiSeguiment', clean)
-        .maybeSingle();
-      if (resFallback.data) {
-        data = resFallback.data;
-      } else {
-        const resFallbackSnake = await supabase
-          .from('inscripcions')
-          .select('*')
-          .ilike('codi_seguiment', clean)
-          .maybeSingle();
-        if (resFallbackSnake.data) {
-          data = resFallbackSnake.data;
-        } else {
-          const resFallbackId = await supabase
-            .from('inscripcions')
-            .select('*')
-            .eq('id', clean)
-            .maybeSingle();
-          data = resFallbackId.data;
-        }
-      }
     }
 
     if (data) {
@@ -1032,103 +985,62 @@ export async function saveSupabaseInscripcion(ins: Inscripcio): Promise<SaveInsc
 /**
  * Updates an existing inscription in public.inscripciones.
  */
-export async function updateSupabaseInscripcion(ins: Inscripcio): Promise<{ ok: boolean; error?: string }> {
-  const summary = getPaymentSummary(ins);
+export async function updateSupabaseInscripcion(
+  ins: Partial<Inscripcio> & { id: string },
+  changedFields?: Record<string, any>
+): Promise<{ ok: boolean; error?: string; code?: string; data?: any }> {
+  const summary = getPaymentSummary(ins as any);
   const derivedEstat = derivedEstatPagament(summary);
   const derivedMetode = derivedMetodePagament(ins.pagaments);
   const pagamentsPayload = ins.pagaments || [];
 
-  // Helper to determine if extresSeleccionats changed compared to DB and get merged respostesCuestionari
-  const getMergedRespostesIfNeeded = (dbRawRespostes: any): Record<string, any> | undefined => {
-    const parsedDbRespostes = typeof dbRawRespostes === "object" && dbRawRespostes !== null
-      ? { ...dbRawRespostes }
-      : (typeof dbRawRespostes === "string" ? parseJSON(dbRawRespostes) : {});
-    const dbExtres = Array.isArray(parsedDbRespostes.extresSeleccionats)
-      ? parsedDbRespostes.extresSeleccionats
-      : [];
-    const targetExtres = Array.isArray(ins.extresSeleccionats)
-      ? ins.extresSeleccionats
-      : [];
+  const contactEmailVal = ins.emailContactoPareja !== undefined ? ins.emailContactoPareja : (ins.c1Email || ins.c2Email || '');
+  const contactTelefonVal = ins.telefonContactoPareja !== undefined ? ins.telefonContactoPareja : (ins.c1Telefon || ins.c2Telefon || '');
 
-    const isDifferent = JSON.stringify(dbExtres) !== JSON.stringify(targetExtres);
-    if (!isDifferent) {
-      return undefined;
-    }
-
-    // Merge ONLY extresSeleccionats
-    if (targetExtres.length === 0) {
-      if (dbExtres.length > 0) {
-        return {
-          ...parsedDbRespostes,
-          extresSeleccionats: []
-        };
-      }
-      return undefined;
-    }
-
-    return {
-      ...parsedDbRespostes,
-      extresSeleccionats: targetExtres
-    };
+  const updatesPayload: Record<string, any> = changedFields ? { ...changedFields } : {
+    codiSeguiment: ins.codiSeguiment,
+    categoria: ins.categoria,
+    c1Nom: ins.c1Nom,
+    c1Cognoms: ins.c1Cognoms,
+    c1Email: contactEmailVal,
+    c1Telefon: contactTelefonVal,
+    c1Talla: ins.c1Talla,
+    c1UniformeTipus: ins.c1UniformeTipus,
+    c1TutorNom: ins.c1TutorNom,
+    c1TutorCognoms: ins.c1TutorCognoms,
+    c1TutorDni: ins.c1TutorDni,
+    c1TutorTelefon: ins.c1TutorTelefon,
+    c2Nom: ins.c2Nom,
+    c2Cognoms: ins.c2Cognoms,
+    c2Email: contactEmailVal,
+    c2Telefon: contactTelefonVal,
+    c2Talla: ins.c2Talla,
+    c2UniformeTipus: ins.c2UniformeTipus,
+    c2TutorNom: ins.c2TutorNom,
+    c2TutorCognoms: ins.c2TutorCognoms,
+    c2TutorDni: ins.c2TutorDni,
+    c2TutorTelefon: ins.c2TutorTelefon,
+    preuCalculat: ins.preuCalculat,
+    pagaments: pagamentsPayload,
+    estatPagament: derivedEstat,
+    metodePagament: derivedMetode,
+    estatDni: ins.estatDni,
+    entregaMaterial: ins.entregaMaterial,
+    estat_inscripcio: ins.estatInscripcio,
+    bandera: ins.bandera,
+    actualizadoEn: new Date().toISOString()
   };
 
+  if (ins.respostesCuestionari && !changedFields?.respostesCuestionari) {
+    updatesPayload.respostesCuestionari = ins.respostesCuestionari;
+  }
+  if (ins.seleccionsUniforme && !changedFields?.seleccionsUniforme) {
+    updatesPayload.seleccionsUniforme = ins.seleccionsUniforme;
+  }
+
   try {
-    // 1. Fetch current respostesCuestionari to inspect extresSeleccionats
-    let mergedRespostesForApi: Record<string, any> | undefined = undefined;
     const adminToken = await getAdminAccessToken();
     const authHeaders: Record<string, string> = adminToken ? { 'Authorization': `Bearer ${adminToken}` } : {};
-    try {
-      const getRes = await fetch(`/api/inscriptions?action=get&id=${encodeURIComponent(ins.id)}`, {
-        headers: authHeaders
-      });
-      if (getRes.ok) {
-        const getJson = await getRes.json();
-        if (getJson.ok && getJson.data) {
-          mergedRespostesForApi = getMergedRespostesIfNeeded(getJson.data.respostesCuestionari);
-        }
-      }
-    } catch (fetchErr) {
-      console.warn("Could not fetch current respostesCuestionari before update via API:", fetchErr);
-    }
-
-    const updatesPayload: Record<string, any> = {
-      codiSeguiment: ins.codiSeguiment,
-      categoria: ins.categoria,
-      c1Nom: ins.c1Nom,
-      c1Cognoms: ins.c1Cognoms,
-      c1Email: ins.emailContactoPareja || ins.c1Email,
-      c1Telefon: ins.telefonContactoPareja || ins.c1Telefon,
-      c1Talla: ins.c1Talla,
-      c1UniformeTipus: ins.c1UniformeTipus,
-      c1TutorNom: ins.c1TutorNom,
-      c1TutorCognoms: ins.c1TutorCognoms,
-      c1TutorDni: ins.c1TutorDni,
-      c1TutorTelefon: ins.c1TutorTelefon,
-      c2Nom: ins.c2Nom,
-      c2Cognoms: ins.c2Cognoms,
-      c2Email: ins.emailContactoPareja || ins.c2Email,
-      c2Telefon: ins.telefonContactoPareja || ins.c2Telefon,
-      c2Talla: ins.c2Talla,
-      c2UniformeTipus: ins.c2UniformeTipus,
-      c2TutorNom: ins.c2TutorNom,
-      c2TutorCognoms: ins.c2TutorCognoms,
-      c2TutorDni: ins.c2TutorDni,
-      c2TutorTelefon: ins.c2TutorTelefon,
-      preuCalculat: ins.preuCalculat,
-      pagaments: pagamentsPayload,
-      estatPagament: derivedEstat,
-      metodePagament: derivedMetode,
-      estatDni: ins.estatDni,
-      entregaMaterial: ins.entregaMaterial,
-      estat_inscripcio: ins.estatInscripcio,
-      bandera: ins.bandera,
-      actualizadoEn: new Date().toISOString()
-    };
-
-    if (mergedRespostesForApi !== undefined) {
-      updatesPayload.respostesCuestionari = mergedRespostesForApi;
-    }
-
     const postHeaders: Record<string, string> = {
       "Content-Type": "application/json",
       ...authHeaders
@@ -1141,72 +1053,35 @@ export async function updateSupabaseInscripcion(ins: Inscripcio): Promise<{ ok: 
         updates: updatesPayload
       })
     });
-    if (apiRes.ok) {
-      const data = await apiRes.json();
-      if (data.ok) return { ok: true };
+
+    const data = await apiRes.json().catch(() => null);
+    if (apiRes.ok && data?.ok) {
+      return { ok: true, data: data.data };
+    }
+    if (data && data.ok === false) {
+      return { ok: false, error: data.error, code: data.code };
+    }
+    if (!apiRes.ok) {
+      return { ok: false, error: data?.error || `Error ${apiRes.status}`, code: data?.code };
     }
   } catch (err: any) {
-    console.warn("API update failed, trying direct Supabase client:", err);
+    console.warn("API update failed with network error, trying direct Supabase client:", err);
   }
 
   if (!supabase) return { ok: false, error: "Supabase no disponible" };
 
-  let mergedRespostesForClient: Record<string, any> | undefined = undefined;
-  try {
-    const { data: currentDbRow } = await supabase
-      .from("inscripciones")
-      .select("respostesCuestionari")
-      .eq("id", ins.id)
-      .maybeSingle();
-    if (currentDbRow) {
-      mergedRespostesForClient = getMergedRespostesIfNeeded(currentDbRow.respostesCuestionari);
-    }
-  } catch (dbReadErr) {
-    console.warn("Could not read current respostesCuestionari directly from Supabase:", dbReadErr);
-  }
-
-  const contactEmailVal = ins.emailContactoPareja !== undefined ? ins.emailContactoPareja : (ins.c1Email || ins.c2Email || '');
-  const contactTelefonVal = ins.telefonContactoPareja !== undefined ? ins.telefonContactoPareja : (ins.c1Telefon || ins.c2Telefon || '');
-
-  const directUpdates: Record<string, any> = {
-    codiSeguiment: ins.codiSeguiment,
-    categoria: ins.categoria,
-    c1Nom: ins.c1Nom,
-    c1Cognoms: ins.c1Cognoms,
-    c1Email: contactEmailVal,
-    c1Telefon: contactTelefonVal,
-    c1Talla: ins.c1Talla,
-    c1UniformeTipus: ins.c1UniformeTipus,
-    c2Nom: ins.c2Nom,
-    c2Cognoms: ins.c2Cognoms,
-    c2Email: contactEmailVal,
-    c2Telefon: contactTelefonVal,
-    c2Talla: ins.c2Talla,
-    c2UniformeTipus: ins.c2UniformeTipus,
-    preuCalculat: ins.preuCalculat,
-    pagaments: pagamentsPayload,
-    estatPagament: derivedEstat,
-    metodePagament: derivedMetode,
-    estatDni: ins.estatDni,
-    entregaMaterial: ins.entregaMaterial,
-    estat_inscripcio: ins.estatInscripcio,
-    bandera: ins.bandera,
-    actualizadoEn: new Date().toISOString()
-  };
-
-  if (mergedRespostesForClient !== undefined) {
-    directUpdates.respostesCuestionari = mergedRespostesForClient;
-  }
-
-  const { error } = await supabase
+  const { data: directData, error } = await supabase
     .from("inscripciones")
-    .update(directUpdates)
-    .eq("id", ins.id);
+    .update(updatesPayload)
+    .eq("id", ins.id)
+    .select('id, codiSeguiment, categoria, c1Nom, c1Cognoms, c1Email, c1Telefon, c1Talla, c1EsMenor, c1TutorNom, c1TutorCognoms, c1TutorDni, c1TutorTelefon, c1UniformeTipus, c2Nom, c2Cognoms, c2Email, c2Telefon, c2Talla, c2EsMenor, c2TutorNom, c2TutorCognoms, c2TutorDni, c2TutorTelefon, c2UniformeTipus, respostesCuestionari, seleccionsUniforme, preuCalculat, teDomasBalco, teMocadorsExtra, pagaments, estatPagament, metodePagament, estatDni, entregaMaterial, estat_inscripcio, posicio_global, bandera, creadoEn, actualizadoEn')
+    .maybeSingle();
 
   if (error) {
-    return { ok: false, error: error.message };
+    return { ok: false, error: error.message, code: error.code };
   }
-  return { ok: true };
+
+  return { ok: true, data: directData };
 }
 
 export async function deleteSupabaseInscripcion(id: string): Promise<boolean> {

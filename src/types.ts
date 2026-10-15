@@ -76,6 +76,7 @@ export interface Inscripcio {
   c1TutorDni?: string;
   c1TutorTelefon?: string;
   c1UniformeTipus?: 'compra' | 'lloguer';
+  c1Vol?: boolean;
   
   // Comparser 2
   c2Nom: string;
@@ -90,6 +91,7 @@ export interface Inscripcio {
   c2TutorDni?: string;
   c2TutorTelefon?: string;
   c2UniformeTipus?: 'compra' | 'lloguer';
+  c2Vol?: boolean;
 
   // Camps dinàmics i addicionals
   respostesCuestionari: Record<string, string | boolean>;

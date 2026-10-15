@@ -765,10 +765,10 @@ export default function AdminDashboard({
       item.c2Cognoms || '',
       item.c2Email || '',
       item.c2Telefon || '',
-      item.c1UniformeTipus || 'compra',
-      item.c2UniformeTipus || 'compra',
-      (item.c1UniformeTipus === 'lloguer' ? 'lloguer alquiler renta rent' : 'compra venta sale buy'),
-      (item.c2UniformeTipus === 'lloguer' ? 'lloguer alquiler renta rent' : 'compra venta sale buy')
+      item.c1UniformeTipus || '',
+      item.c2UniformeTipus || '',
+      (item.c1UniformeTipus === 'lloguer' ? 'lloguer alquiler renta rent' : (item.c1UniformeTipus === 'compra' ? 'compra venta sale buy' : '')),
+      (item.c2UniformeTipus === 'lloguer' ? 'lloguer alquiler renta rent' : (item.c2UniformeTipus === 'compra' ? 'compra venta sale buy' : ''))
     ].map(f => String(f || '').toLowerCase());
     
     const query = searchQuery.trim().toLowerCase();

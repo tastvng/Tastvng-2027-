@@ -93,7 +93,7 @@ export async function sendConfirmationEmail(options: SendConfirmationOptions): P
     ? ins.respostesCuestionari
     : (typeof ins.respostesCuestionari === 'string' ? JSON.parse(ins.respostesCuestionari || '{}') : {});
 
-  const codiSeguiment = (ins.codiSeguiment || (ins as any).codi_seguiment || (ins as any).codigo || '').trim();
+  const codiSeguiment = (ins.codiSeguiment || '').trim();
 
   // Stop if tracking code is empty
   if (!codiSeguiment) {

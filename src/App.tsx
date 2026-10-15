@@ -70,7 +70,6 @@ import {
   checkCurrentUserIsAdmin,
   fetchAdminUsers
 } from './supabaseClient';
-import { allocateNextCode, determineCodeGroup } from './utils/codeAllocator';
 
 interface SecretariaErrorBoundaryProps {
   children: React.ReactNode;
@@ -886,15 +885,11 @@ export default function App() {
         language === 'ca' ? `Codi: ${newReg.codiSeguiment} - Registrada a Supabase` : `Código: ${newReg.codiSeguiment} - Registrada en Supabase`
       );
     } else {
-      const isWaitlist = newReg.estatInscripcio === 'llista_espera' || (!newReg.estatInscripcio && newReg.llistaEspera);
-      const codeGroup = determineCodeGroup(newReg.categoria, Boolean(isWaitlist));
-      newReg.codiSeguiment = allocateNextCode(latestInscripcions.map(i => i.codiSeguiment), codeGroup);
-      saveLogger.log(
-        'Inscripción',
-        language === 'ca' ? `Nova inscripció: ${newReg.c1Nom} & ${newReg.c2Nom}` : `Nueva inscripción: ${newReg.c1Nom} & ${newReg.c2Nom}`,
-        'success',
-        language === 'ca' ? `Codi: ${newReg.codiSeguiment} - Desat localment` : `Código: ${newReg.codiSeguiment} - Guardado localmente`
-      );
+      return {
+        ok: false,
+        error: "Supabase no està configurat al servidor.",
+        code: "CONFIG_ERROR"
+      };
     }
 
     // 4. Advance to confirmation view only after DB insert confirmation
@@ -917,78 +912,62 @@ export default function App() {
     newReg.codiSeguiment = '';
     delete (newReg as any).posicioGlobal;
 
-    const isWaitlist = newReg.estatInscripcio === 'llista_espera' || (!newReg.estatInscripcio && newReg.llistaEspera);
-    const codeGroup = determineCodeGroup(newReg.categoria, Boolean(isWaitlist));
+    if (!isSupabaseConfigured) {
+      console.error("Supabase no està configurat per desar l'alta manual.");
+      return;
+    }
 
-    if (isSupabaseConfigured) {
-      try {
-        const res = await saveSupabaseInscripcion(newReg);
-        if (res.ok) {
-          newReg.codiSeguiment = res.codiSeguiment;
-          if (res.id) newReg.id = res.id;
-          const updated = [newReg, ...inscripcions];
-          setInscripcions(updated);
-          syncWithGoogle(updated);
-          addLog(`✓ Inscripció manual registrada persistentment a Supabase: ${newReg.codiSeguiment}`);
-          saveLogger.log(
-            'Inscripción Manual',
-            language === 'ca' ? `Alta manual: ${newReg.c1Nom} & ${newReg.c2Nom}` : `Alta manual: ${newReg.c1Nom} & ${newReg.c2Nom}`,
-            'success',
-            language === 'ca' ? `Codi: ${newReg.codiSeguiment} - Sincronitzat amb Supabase` : `Código: ${newReg.codiSeguiment} - Sincronizado con Supabase`
-          );
-        } else {
-          newReg.codiSeguiment = allocateNextCode(inscripcions.map(i => i.codiSeguiment), codeGroup);
-          const updated = [newReg, ...inscripcions];
-          setInscripcions(updated);
-          syncWithGoogle(updated);
-          console.error("Error saving manual inscription to Supabase:", res.error);
-          saveLogger.log(
-            'Inscripción Manual',
-            language === 'ca' ? `Alta manual: ${newReg.c1Nom} & ${newReg.c2Nom}` : `Alta manual: ${newReg.c1Nom} & ${newReg.c2Nom}`,
-            'error',
-            undefined,
-            res.error
-          );
-        }
-      } catch (err) {
-        newReg.codiSeguiment = allocateNextCode(inscripcions.map(i => i.codiSeguiment), codeGroup);
+    try {
+      const res = await saveSupabaseInscripcion(newReg);
+      if (res.ok) {
+        newReg.codiSeguiment = res.codiSeguiment;
+        if (res.id) newReg.id = res.id;
         const updated = [newReg, ...inscripcions];
         setInscripcions(updated);
         syncWithGoogle(updated);
-        console.error("Error saving manual inscription to Supabase:", err);
+        addLog(`✓ Inscripció manual registrada persistentment a Supabase: ${newReg.codiSeguiment}`);
+        saveLogger.log(
+          'Inscripción Manual',
+          language === 'ca' ? `Alta manual: ${newReg.c1Nom} & ${newReg.c2Nom}` : `Alta manual: ${newReg.c1Nom} & ${newReg.c2Nom}`,
+          'success',
+          language === 'ca' ? `Codi: ${newReg.codiSeguiment} - Sincronitzat amb Supabase` : `Código: ${newReg.codiSeguiment} - Sincronizado con Supabase`
+        );
+      } else {
+        console.error("Error saving manual inscription to Supabase:", res.error);
+        saveLogger.log(
+          'Inscripción Manual',
+          language === 'ca' ? `Alta manual: ${newReg.c1Nom} & ${newReg.c2Nom}` : `Alta manual: ${newReg.c1Nom} & ${newReg.c2Nom}`,
+          'error',
+          undefined,
+          res.error
+        );
       }
-    } else {
-      newReg.codiSeguiment = allocateNextCode(inscripcions.map(i => i.codiSeguiment), codeGroup);
-      const updated = [newReg, ...inscripcions];
-      setInscripcions(updated);
-      syncWithGoogle(updated);
-      saveLogger.log(
-        'Inscripción Manual',
-        language === 'ca' ? `Alta manual: ${newReg.c1Nom} & ${newReg.c2Nom}` : `Alta manual: ${newReg.c1Nom} & ${newReg.c2Nom}`,
-        'success',
-        language === 'ca' ? `Codi: ${newReg.codiSeguiment} - Desat localment` : `Código: ${newReg.codiSeguiment} - Guardado localmente`
-      );
+    } catch (err) {
+      console.error("Error saving manual inscription to Supabase:", err);
     }
   };
 
   const deleteRegistration = async (id: string) => {
     const itemToDelete = inscripcions.find(i => i.id === id);
-    const updated = inscripcions.filter(i => i.id !== id);
-    setInscripcions(updated);
-    syncWithGoogle(updated);
-    addLog(`S'ha eliminat la inscripció de la parella: ${itemToDelete ? `${itemToDelete.c1Nom} & ${itemToDelete.c2Nom}` : id}`);
     if (isSupabaseConfigured) {
       try {
-        await deleteSupabaseInscripcion(id);
-        addLog(`✓ Inscripció eliminada a Supabase.`);
+        const ok = await deleteSupabaseInscripcion(id);
+        if (!ok) {
+          throw new Error("No s'ha pogut eliminar la inscripció de la base de dades.");
+        }
+        const updated = inscripcions.filter(i => i.id !== id);
+        setInscripcions(updated);
+        syncWithGoogle(updated);
+        addLog(`✓ Inscripció eliminada a Supabase: ${itemToDelete ? `${itemToDelete.c1Nom} & ${itemToDelete.c2Nom}` : id}`);
         saveLogger.log(
           'Inscripción',
           language === 'ca' ? `Eliminar inscripció: ${itemToDelete?.c1Nom || id}` : `Eliminar inscripción: ${itemToDelete?.c1Nom || id}`,
           'success',
           language === 'ca' ? `Sincronitzat amb Supabase` : `Sincronizado con Supabase`
         );
-      } catch (err) {
+      } catch (err: any) {
         console.error("Error deleting inscription from Supabase:", err);
+        showToast(language === 'ca' ? '❌ Error eliminant la inscripció' : '❌ Error eliminando la inscripción', 'error');
         saveLogger.log(
           'Inscripción',
           language === 'ca' ? `Eliminar inscripció: ${itemToDelete?.c1Nom || id}` : `Eliminar inscripción: ${itemToDelete?.c1Nom || id}`,
@@ -998,6 +977,9 @@ export default function App() {
         );
       }
     } else {
+      const updated = inscripcions.filter(i => i.id !== id);
+      setInscripcions(updated);
+      syncWithGoogle(updated);
       saveLogger.log(
         'Inscripción',
         language === 'ca' ? `Eliminar inscripció: ${itemToDelete?.c1Nom || id}` : `Eliminar inscripción: ${itemToDelete?.c1Nom || id}`,
@@ -1008,31 +990,40 @@ export default function App() {
   };
 
   const deleteMultipleRegistrations = async (ids: string[]) => {
-    const updated = inscripcions.filter(i => !ids.includes(i.id));
-    setInscripcions(updated);
-    syncWithGoogle(updated);
-    addLog(`S'han eliminat ${ids.length} inscripcions de forma massiva.`);
     if (isSupabaseConfigured) {
       try {
         await deleteMultipleSupabaseInscripciones(ids);
+        const updated = inscripcions.filter(i => !ids.includes(i.id));
+        setInscripcions(updated);
+        syncWithGoogle(updated);
         addLog(`✓ S'han eliminat ${ids.length} inscripcions a Supabase.`);
       } catch (err) {
         console.error("Error deleting multiple inscriptions from Supabase:", err);
+        showToast(language === 'ca' ? '❌ Error en eliminació massiva' : '❌ Error en eliminación masiva', 'error');
       }
+    } else {
+      const updated = inscripcions.filter(i => !ids.includes(i.id));
+      setInscripcions(updated);
+      syncWithGoogle(updated);
+      addLog(`S'han eliminat ${ids.length} inscripcions de forma massiva.`);
     }
   };
 
   const clearAllRegistrations = async () => {
-    setInscripcions([]);
-    syncWithGoogle([]);
-    addLog(`S'ha buidat completament la base de dades d'inscripcions.`);
     if (isSupabaseConfigured) {
       try {
         await clearAllSupabaseInscripciones();
+        setInscripcions([]);
+        syncWithGoogle([]);
         addLog(`✓ Base de dades d'inscripcions buidada a Supabase.`);
       } catch (err) {
         console.error("Error clearing all inscriptions from Supabase:", err);
+        showToast(language === 'ca' ? '❌ Error buidant la base de dades' : '❌ Error vaciando la base de datos', 'error');
       }
+    } else {
+      setInscripcions([]);
+      syncWithGoogle([]);
+      addLog(`S'ha buidat completament la base de dades d'inscripcions.`);
     }
   };
 
@@ -1072,37 +1063,43 @@ export default function App() {
     }
   };
 
-  const updateRegistration = async (updatedReg: Inscripcio) => {
-    const updated = inscripcions.map(i => i.id === updatedReg.id ? updatedReg : i);
-    setInscripcions(updated);
-    syncWithGoogle(updated);
-    addLog(`Ficha d'inscripció actualitzada del parella: ${updatedReg.c1Nom} (${updatedReg.codiSeguiment})`);
+  const updateRegistration = async (updatedReg: Inscripcio, modifiedFields?: Record<string, any>) => {
     if (isSupabaseConfigured) {
       try {
-        const res = await updateSupabaseInscripcion(updatedReg);
+        const res = await updateSupabaseInscripcion(updatedReg, modifiedFields);
         if (!res.ok) {
-          throw new Error(res.error || "Error al desar canvis");
+          throw new Error(res.error || "Error al desar canvis a la base de dades");
         }
-        addLog(`✓ Ficha actualitzada persistentment a Supabase.`);
+        const confirmedRecord: Inscripcio = res.data ? { ...updatedReg, ...res.data } : updatedReg;
+        const updated = inscripcions.map(i => i.id === confirmedRecord.id ? confirmedRecord : i);
+        setInscripcions(updated);
+        syncWithGoogle(updated);
+        addLog(`✓ Ficha actualitzada persistentment a Supabase: ${confirmedRecord.c1Nom} (${confirmedRecord.codiSeguiment})`);
         showToast(language === 'ca' ? '✓ Inscripció actualitzada correctament' : '✓ Inscripción actualizada correctamente', 'success');
         saveLogger.log(
           'Inscripción',
-          language === 'ca' ? `Actualitzar parella: ${updatedReg.c1Nom}` : `Actualizar pareja: ${updatedReg.c1Nom}`,
+          language === 'ca' ? `Actualitzar parella: ${confirmedRecord.c1Nom}` : `Actualizar pareja: ${confirmedRecord.c1Nom}`,
           'success',
-          language === 'ca' ? `Codi: ${updatedReg.codiSeguiment} - Sincronitzat amb Supabase` : `Código: ${updatedReg.codiSeguiment} - Sincronizado con Supabase`
+          language === 'ca' ? `Codi: ${confirmedRecord.codiSeguiment} - Sincronitzat amb Supabase` : `Código: ${confirmedRecord.codiSeguiment} - Sincronizado con Supabase`
         );
-      } catch (err) {
+        return { ok: true, data: confirmedRecord };
+      } catch (err: any) {
         console.error("Error updating inscription on Supabase:", err);
-        showToast(language === 'ca' ? '❌ Error al desar els canvis' : '❌ Error al guardar los cambios', 'error');
+        const errMsg = err?.message || String(err);
+        showToast(language === 'ca' ? `❌ ${errMsg}` : `❌ ${errMsg}`, 'error');
         saveLogger.log(
           'Inscripción',
           language === 'ca' ? `Actualitzar parella: ${updatedReg.c1Nom}` : `Actualizar pareja: ${updatedReg.c1Nom}`,
           'error',
           undefined,
-          err instanceof Error ? err.message : String(err)
+          errMsg
         );
+        return { ok: false, error: errMsg };
       }
     } else {
+      const updated = inscripcions.map(i => i.id === updatedReg.id ? updatedReg : i);
+      setInscripcions(updated);
+      syncWithGoogle(updated);
       showToast(language === 'ca' ? '✓ Inscripció actualitzada localment' : '✓ Inscripción actualizada localmente', 'success');
       saveLogger.log(
         'Inscripción',
@@ -1110,6 +1107,7 @@ export default function App() {
         'success',
         language === 'ca' ? `Codi: ${updatedReg.codiSeguiment} - Desat localment` : `Código: ${updatedReg.codiSeguiment} - Guardado localmente`
       );
+      return { ok: true, data: updatedReg };
     }
   };
 

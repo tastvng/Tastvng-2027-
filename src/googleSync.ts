@@ -93,6 +93,12 @@ export async function syncToGoogleSheet(
     return false;
   }
 
+  // Never sync an empty or uninitialized list to prevent wiping Google Sheet
+  if (!inscripcions || inscripcions.length === 0) {
+    console.warn("[googleSync] Sincronització cancel·lada: El llistat d'inscripcions està buit o no ha carregat.");
+    return false;
+  }
+
   return new Promise((resolve) => {
     // 1. Debounce consecutive executions (saves egress during bulk operations)
     if (syncTimeout) {

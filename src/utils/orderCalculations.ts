@@ -79,6 +79,10 @@ export function calculateInscriptionOrderBreakdown(
     categoriaQuotaBase = juvenilTariff ? juvenilTariff.valor : fallbackJuvenil;
   }
 
+  if (categoriaQuotaBase <= 0) {
+    categoriaQuotaBase = 45;
+  }
+
   const materials: SelectedMaterialItem[] = [];
   const processedExtraIds = new Set<string>();
   let fiancaTotal = 0;
@@ -165,8 +169,8 @@ export function calculateInscriptionOrderBreakdown(
     const finalQty = (p1Wants ? 1 : 0) + (p2Wants ? 1 : 0);
 
     if (finalQty > 0) {
-      const c1Tipus = (registration.c1UniformeTipus || (sel as any)?.c1Tipus || 'compra').toLowerCase();
-      const c2Tipus = (registration.c2UniformeTipus || (sel as any)?.c2Tipus || 'compra').toLowerCase();
+      const c1Tipus = (registration.c1UniformeTipus || (sel as any)?.c1Tipus || '').toLowerCase();
+      const c2Tipus = (registration.c2UniformeTipus || (sel as any)?.c2Tipus || '').toLowerCase();
 
       const activeTalla1 = p1Wants ? rawTalla1 : '';
       const activeTalla2 = p2Wants ? rawTalla2 : '';
@@ -683,20 +687,20 @@ export function getParticipantArmillaInfo(
       return { hasArmilla: false, talla: '', modalitat: '', label: '—' };
     }
     const rawTalla = (registration.c1Talla || (sel as any)?.c1Talla || '').trim();
-    const tipus = (registration.c1UniformeTipus || (sel as any)?.c1Tipus || 'compra').toLowerCase();
+    const tipus = (registration.c1UniformeTipus || (sel as any)?.c1Tipus || '').toLowerCase();
     const isLloguer = tipus.includes('lloguer') || tipus.includes('alquiler');
-    const modalitat = isLloguer ? (language === 'ca' ? 'LLOGUER' : 'ALQUILER') : (language === 'ca' ? 'COMPRA' : 'COMPRA');
-    return { hasArmilla: true, talla: rawTalla, modalitat, label: `Talla ${rawTalla} • ${modalitat}` };
+    const modalitat = tipus ? (isLloguer ? (language === 'ca' ? 'LLOGUER' : 'ALQUILER') : (language === 'ca' ? 'COMPRA' : 'COMPRA')) : '';
+    return { hasArmilla: true, talla: rawTalla, modalitat, label: modalitat ? `Talla ${rawTalla} • ${modalitat}` : (rawTalla ? `Talla ${rawTalla}` : '—') };
   } else {
     const c2Vol = (sel as any)?.c2Vol === true || regAny.c2Vol === true || regAny.c2_vol === true;
     if (!c2Vol) {
       return { hasArmilla: false, talla: '', modalitat: '', label: '—' };
     }
     const rawTalla = (registration.c2Talla || (sel as any)?.c2Talla || '').trim();
-    const tipus = (registration.c2UniformeTipus || (sel as any)?.c2Tipus || 'compra').toLowerCase();
+    const tipus = (registration.c2UniformeTipus || (sel as any)?.c2Tipus || '').toLowerCase();
     const isLloguer = tipus.includes('lloguer') || tipus.includes('alquiler');
-    const modalitat = isLloguer ? (language === 'ca' ? 'LLOGUER' : 'ALQUILER') : (language === 'ca' ? 'COMPRA' : 'COMPRA');
-    return { hasArmilla: true, talla: rawTalla, modalitat, label: `Talla ${rawTalla} • ${modalitat}` };
+    const modalitat = tipus ? (isLloguer ? (language === 'ca' ? 'LLOGUER' : 'ALQUILER') : (language === 'ca' ? 'COMPRA' : 'COMPRA')) : '';
+    return { hasArmilla: true, talla: rawTalla, modalitat, label: modalitat ? `Talla ${rawTalla} • ${modalitat}` : (rawTalla ? `Talla ${rawTalla}` : '—') };
   }
 }
 

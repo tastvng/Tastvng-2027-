@@ -2,10 +2,7 @@ import { verifySupabaseAdminToken } from "./_supabase-auth.js";
 import { sendConfirmationEmail } from "./_send-confirmation.js";
 import { createClient } from "@supabase/supabase-js";
 import crypto from "crypto";
-// ==========================================
-// SELF-CONTAINED CORS & SECURITY HELPERS
-// (Inlined to prevent runtime ESM ERR_MODULE_NOT_FOUND on Vercel Node runtime)
-// ==========================================
+export const LIGHT_COLUMNS = "id, codiSeguiment, categoria, c1Nom, c1Cognoms, c1Email, c1Telefon, c1Talla, c1EsMenor, c1TutorNom, c1TutorCognoms, c1TutorDni, c1TutorTelefon, c1UniformeTipus, c2Nom, c2Cognoms, c2Email, c2Telefon, c2Talla, c2EsMenor, c2TutorNom, c2TutorCognoms, c2TutorDni, c2TutorTelefon, c2UniformeTipus, respostesCuestionari, seleccionsUniforme, preuCalculat, teDomasBalco, teMocadorsExtra, pagaments, estatPagament, metodePagament, estatDni, entregaMaterial, estat_inscripcio, posicio_global, bandera, creadoEn, actualizadoEn";
 
 export function getStrictAllowedOrigins(): Set<string> {
   const allowed = new Set<string>();
@@ -754,7 +751,11 @@ export default async function inscriptionsHandler(req: any, res: any) {
         return res.status(400).json({ ok: false, error: "ID o Codi de seguiment requerit." });
       }
 
-      let q = serverSupabase.from('inscripciones').select('*');
+      const selectedColumns = isPublicCodeQuery
+        ? 'codiSeguiment, categoria, estatPagament, preuCalculat'
+        : 'id, codiSeguiment, categoria, c1Nom, c1Cognoms, c1Email, c1Telefon, c1Talla, c1EsMenor, c1TutorNom, c1TutorCognoms, c1TutorDni, c1TutorTelefon, c1UniformeTipus, c2Nom, c2Cognoms, c2Email, c2Telefon, c2Talla, c2EsMenor, c2TutorNom, c2TutorCognoms, c2TutorDni, c2TutorTelefon, c2UniformeTipus, respostesCuestionari, seleccionsUniforme, preuCalculat, teDomasBalco, teMocadorsExtra, pagaments, estatPagament, metodePagament, estatDni, entregaMaterial, estat_inscripcio, posicio_global, bandera, creadoEn, actualizadoEn';
+
+      let q = serverSupabase.from('inscripciones').select(selectedColumns);
       if (targetId) {
         q = q.eq('id', targetId);
       } else {
@@ -763,31 +764,13 @@ export default async function inscriptionsHandler(req: any, res: any) {
 
       const { data, error } = await q.maybeSingle();
 
-      const filterPublicFields = (row: any) => ({
-        codiSeguiment: row.codiSeguiment || row.codi_seguiment || targetCodi,
-        categoria: row.categoria,
-        estatPagament: row.estatPagament || row.estat_pagament || 'PENDENT',
-        preuCalculat: typeof row.preuCalculat === 'number' ? row.preuCalculat : (typeof row.preu_calculat === 'number' ? row.preu_calculat : 0)
-      });
-
       if (error || !data) {
-        let qFallback = serverSupabase.from('inscripcions').select('*');
-        if (targetId) qFallback = qFallback.eq('id', targetId);
-        else qFallback = qFallback.eq('codiSeguiment', targetCodi);
-
-        const { data: fbData } = await qFallback.maybeSingle();
-        if (fbData) {
-          return res.status(200).json({
-            ok: true,
-            data: isPublicCodeQuery ? filterPublicFields(fbData) : fbData
-          });
-        }
         return res.status(404).json({ ok: false, error: "Inscripció no trobada" });
       }
 
       return res.status(200).json({
         ok: true,
-        data: isPublicCodeQuery ? filterPublicFields(data) : data
+        data
       });
     }
 
@@ -1230,14 +1213,16 @@ export default async function inscriptionsHandler(req: any, res: any) {
         }
       }
 
+      // Read previous row for history audit and merging
+      const { data: previousRow } = await serverSupabase
+        .from('inscripciones')
+        .select(LIGHT_COLUMNS)
+        .eq('id', id)
+        .maybeSingle();
+
       // Always merge respostesCuestionari with existing DB row - NEVER replace (Point 2)
       if (cleanUpdates.respostesCuestionari && typeof cleanUpdates.respostesCuestionari === 'object') {
-        const { data: curRow } = await serverSupabase
-          .from('inscripciones')
-          .select('respostesCuestionari')
-          .eq('id', id)
-          .maybeSingle();
-        let existingResp = curRow?.respostesCuestionari || {};
+        let existingResp = previousRow?.respostesCuestionari || {};
         if (typeof existingResp === 'string') {
           try { existingResp = JSON.parse(existingResp); } catch { existingResp = {}; }
         }
@@ -1251,7 +1236,7 @@ export default async function inscriptionsHandler(req: any, res: any) {
         .from('inscripciones')
         .update(cleanUpdates)
         .eq('id', id)
-        .select()
+        .select(LIGHT_COLUMNS)
         .single();
 
       if (error) {
@@ -1263,6 +1248,42 @@ export default async function inscriptionsHandler(req: any, res: any) {
           code: error.code,
           details: error.details
         });
+      }
+
+      // Record manual edit history if fields changed
+      if (previousRow) {
+        try {
+          const authHeader = req?.headers?.authorization || req?.headers?.Authorization;
+          const token = typeof authHeader === 'string' && authHeader.startsWith('Bearer ') ? authHeader.substring(7).trim() : '';
+          const adminInfo = token ? await verifySupabaseAdminToken(token) : { valid: false };
+          const modifiedBy = adminInfo.email || adminInfo.userId || 'admin';
+          const historyRows: any[] = [];
+
+          for (const [key, val] of Object.entries(cleanUpdates)) {
+            if (key === 'actualizadoEn') continue;
+            const prevVal = (previousRow as any)[key];
+            const prevStr = typeof prevVal === 'object' && prevVal !== null ? JSON.stringify(prevVal) : String(prevVal ?? '');
+            const newStr = typeof val === 'object' && val !== null ? JSON.stringify(val) : String(val ?? '');
+            if (prevStr !== newStr) {
+              historyRows.push({
+                inscripcion_id: id,
+                codi_seguiment: cleanUpdates.codiSeguiment || previousRow.codiSeguiment || '',
+                camp: key,
+                valor_anterior: prevStr,
+                valor_nou: newStr,
+                modificat_per: modifiedBy,
+                modificat_el: new Date().toISOString()
+              });
+            }
+          }
+
+          if (historyRows.length > 0) {
+            await serverSupabase.from('inscripciones_historial').insert(historyRows);
+          }
+        } catch (hErr) {
+          // Non-blocking: table might not exist yet before SQL execution
+          console.warn("[Historial notice]: inscripciones_historial recording skipped or table not created yet:", hErr);
+        }
       }
 
       return res.status(200).json({

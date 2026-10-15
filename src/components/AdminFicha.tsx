@@ -39,19 +39,55 @@ import TranslatedText from './TranslatedText';
 import { Inscripcio, EstatPagament, EstatVerificacio, EstatInscripcio, MetodePagament, CategoriaParella, SistemaConfig, PagamentRegistrat } from '../types';
 import { calculateInscriptionOrderBreakdown, validateInscriptionTotal } from '../utils/orderCalculations';
 import { determineCodeGroup, allocateNextCode } from '../utils/codeAllocator';
-import { parseScopeAndQuestionId, isPreguntaVisible } from '../utils/questionVisibility';
+import { parseScopeAndQuestionId, isPreguntaVisible, answerKey } from '../utils/questionVisibility';
 import { getPaymentSummary, derivedEstatPagament, derivedMetodePagament, parseImport, formatEuro } from '../utils/paymentCalculations';
 import { supabase } from '../supabaseClient';
 import { buildUnifiedEmailHtml } from '../utils/ticketGenerator';
 import { getEntityConfig } from '../utils/entityConfig';
+import { DynamicQuestionsSection } from './DynamicQuestionsSection';
 
 interface AdminFichaProps {
   registration: Inscripcio;
   allInscripcions?: Inscripcio[];
   config?: SistemaConfig;
   onBack: () => void;
-  onSave: (updatedRecord: Inscripcio) => void;
+  onSave: (updatedRecord: Inscripcio, modifiedFields?: Record<string, any>) => Promise<any> | void;
   onRefresh?: () => Promise<any> | void;
+}
+
+function didEmailRelevantFieldsChange(initial: Inscripcio, current: Inscripcio): boolean {
+  if ((initial.codiSeguiment || '').trim() !== (current.codiSeguiment || '').trim()) return true;
+  if (initial.categoria !== current.categoria) return true;
+  const initialEmail = (initial.emailContactoPareja || initial.c1Email || '').trim();
+  const currentEmail = (current.emailContactoPareja || current.c1Email || '').trim();
+  if (initialEmail !== currentEmail) return true;
+  if (Number(initial.preuCalculat || 0) !== Number(current.preuCalculat || 0)) return true;
+
+  const initC1Vol = Boolean((initial as any).c1Vol || ((Object.values(initial.seleccionsUniforme || {})[0] as any)?.c1Vol) || (initial.c1Talla && initial.c1Talla.toLowerCase() !== 'cap'));
+  const initC2Vol = Boolean((initial as any).c2Vol || ((Object.values(initial.seleccionsUniforme || {})[0] as any)?.c2Vol) || (initial.c2Talla && initial.c2Talla.toLowerCase() !== 'cap'));
+  const curC1Vol = Boolean((current as any).c1Vol);
+  const curC2Vol = Boolean((current as any).c2Vol);
+  if (initC1Vol !== curC1Vol || initC2Vol !== curC2Vol) return true;
+  if ((initial.c1Talla || '').trim() !== (current.c1Talla || '').trim()) return true;
+  if ((initial.c2Talla || '').trim() !== (current.c2Talla || '').trim()) return true;
+  if ((initial.c1UniformeTipus || '') !== (current.c1UniformeTipus || '')) return true;
+  if ((initial.c2UniformeTipus || '') !== (current.c2UniformeTipus || '')) return true;
+
+  const oldResp = initial.respostesCuestionari || {};
+  const newResp = current.respostesCuestionari || {};
+  if (String(oldResp.clavells_qty || '0') !== String(newResp.clavells_qty || '0')) return true;
+  if (String(oldResp.corbati_qty || '0') !== String(newResp.corbati_qty || '0')) return true;
+
+  const allKeys = new Set([...Object.keys(oldResp), ...Object.keys(newResp)]);
+  for (const k of allKeys) {
+    if (/esmorzar|bocata|gluten|tomaquet|esm-/i.test(k)) {
+      if (String(oldResp[k] ?? '') !== String(newResp[k] ?? '')) {
+        return true;
+      }
+    }
+  }
+
+  return false;
 }
 
 export default function AdminFicha({ registration, allInscripcions = [], config, onBack, onSave, onRefresh }: AdminFichaProps) {
@@ -74,17 +110,37 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
     );
   }, [registration.id]);
 
+  // Initial armilla intent (c1Vol / c2Vol)
+  const selUni = registration.seleccionsUniforme || {};
+  const firstUni = Object.values(selUni)[0] as any;
+  const initC1Vol = typeof (registration as any).c1Vol === 'boolean'
+    ? (registration as any).c1Vol
+    : (typeof firstUni?.c1Vol === 'boolean'
+      ? firstUni.c1Vol
+      : Boolean(registration.c1Talla && registration.c1Talla.trim() && registration.c1Talla.toLowerCase() !== 'cap'));
+  const initC2Vol = typeof (registration as any).c2Vol === 'boolean'
+    ? (registration as any).c2Vol
+    : (typeof firstUni?.c2Vol === 'boolean'
+      ? firstUni.c2Vol
+      : Boolean(registration.c2Talla && registration.c2Talla.trim() && registration.c2Talla.toLowerCase() !== 'cap'));
+
+  const [c1Vol, setC1Vol] = useState<boolean>(initC1Vol);
+  const [c2Vol, setC2Vol] = useState<boolean>(initC2Vol);
+
   // Participant 1
   const [c1Nom, setC1Nom] = useState(registration.c1Nom || '');
   const [c1Cognoms, setC1Cognoms] = useState(registration.c1Cognoms || '');
+  const [c1Email, setC1Email] = useState(registration.c1Email || '');
+  const [c1Telefon, setC1Telefon] = useState(registration.c1Telefon || '');
   const [c1Talla, setC1Talla] = useState<string>(() => {
     const raw = (registration.c1Talla || '').trim();
     if (!raw || raw.toLowerCase() === 'cap' || raw.toLowerCase() === 'null' || raw.toLowerCase() === 'undefined') return '';
     return raw;
   });
-  const [c1UniformeTipus, setC1UniformeTipus] = useState<'compra' | 'lloguer'>(() => {
-    return (registration.c1UniformeTipus as 'compra' | 'lloguer') || 'compra';
+  const [c1UniformeTipus, setC1UniformeTipus] = useState<string>(() => {
+    return (registration.c1UniformeTipus as string) || '';
   });
+  const [c1EsMenor, setC1EsMenor] = useState<boolean>(Boolean(registration.c1EsMenor));
   const [c1TutorNom, setC1TutorNom] = useState(registration.c1TutorNom || '');
   const [c1TutorCognoms, setC1TutorCognoms] = useState(registration.c1TutorCognoms || '');
   const [c1TutorDni, setC1TutorDni] = useState(registration.c1TutorDni || '');
@@ -93,24 +149,69 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
   // Participant 2
   const [c2Nom, setC2Nom] = useState(registration.c2Nom || '');
   const [c2Cognoms, setC2Cognoms] = useState(registration.c2Cognoms || '');
+  const [c2Email, setC2Email] = useState(registration.c2Email || '');
+  const [c2Telefon, setC2Telefon] = useState(registration.c2Telefon || '');
   const [c2Talla, setC2Talla] = useState<string>(() => {
     const raw = (registration.c2Talla || '').trim();
     if (!raw || raw.toLowerCase() === 'cap' || raw.toLowerCase() === 'null' || raw.toLowerCase() === 'undefined') return '';
     return raw;
   });
-  const [c2UniformeTipus, setC2UniformeTipus] = useState<'compra' | 'lloguer'>(() => {
-    return (registration.c2UniformeTipus as 'compra' | 'lloguer') || 'compra';
+  const [c2UniformeTipus, setC2UniformeTipus] = useState<string>(() => {
+    return (registration.c2UniformeTipus as string) || '';
   });
+  const [c2EsMenor, setC2EsMenor] = useState<boolean>(Boolean(registration.c2EsMenor));
   const [c2TutorNom, setC2TutorNom] = useState(registration.c2TutorNom || '');
   const [c2TutorCognoms, setC2TutorCognoms] = useState(registration.c2TutorCognoms || '');
   const [c2TutorDni, setC2TutorDni] = useState(registration.c2TutorDni || '');
   const [c2TutorTelefon, setC2TutorTelefon] = useState(registration.c2TutorTelefon || '');
 
+  // Clavells and Corbatí quantities
+  const initClavells = Number(
+    registration.respostesCuestionari?.clavells_qty ??
+    (registration.extresSeleccionats || []).find(e => /clavell/i.test(e.nom))?.quantitat ??
+    (registration as any).clavells ??
+    0
+  );
+  const initCorbati = Number(
+    registration.respostesCuestionari?.corbati_qty ??
+    (registration.extresSeleccionats || []).find(e => /corbat/i.test(e.nom))?.quantitat ??
+    (registration as any).corbati ??
+    0
+  );
+  const [clavellsQty, setClavellsQty] = useState<number>(isNaN(initClavells) ? 0 : initClavells);
+  const [corbatiQty, setCorbatiQty] = useState<number>(isNaN(initCorbati) ? 0 : initCorbati);
+
+  // Dynamic configured questions from table preguntes / config
+  const [preguntesList, setPreguntesList] = useState<any[]>(() => config?.preguntesFormulari || []);
+
+  React.useEffect(() => {
+    let active = true;
+    async function loadQuestions() {
+      try {
+        const { cargarPreguntesDetallat } = await import('../api/questionnaireApi');
+        const res = await cargarPreguntesDetallat(false);
+        if (active && res && res.data && res.data.length > 0) {
+          setPreguntesList(res.data);
+        }
+      } catch (err) {
+        console.warn("Could not load dynamic questions in AdminFicha:", err);
+      }
+    }
+    loadQuestions();
+    return () => { active = false; };
+  }, []);
+
   // Local extras and questionnaire state
   const [extresSeleccionats, setExtresSeleccionats] = useState<any[]>(() => registration.extresSeleccionats || []);
   const [respostesCuestionari, setRespostesCuestionari] = useState<Record<string, any>>(() => registration.respostesCuestionari || {});
 
-  // Material Editing Mode (Point 9) and Email Resend (Point 10 & 12)
+  // DB Save and Drive sync status indicators
+  const [dbSaveStatus, setDbSaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
+  const [driveSyncStatus, setDriveSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
+  const [driveSyncError, setDriveSyncError] = useState<string | null>(null);
+  const [mailPendingResend, setMailPendingResend] = useState<boolean>(false);
+
+  // Material Editing Mode and Email Resend
   const [isEditingMaterials, setIsEditingMaterials] = useState(false);
   const [justSavedMaterials, setJustSavedMaterials] = useState(false);
   const [lastMaterialChanges, setLastMaterialChanges] = useState<string[]>([]);
@@ -138,27 +239,75 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
     return 'pendent';
   });
 
-  const currentRecord = useMemo<Inscripcio>(() => ({
-    ...registration,
-    codiSeguiment,
-    categoria,
-    c1Nom,
-    c1Cognoms,
-    c1Talla: c1Talla.trim(),
-    c1UniformeTipus: (c1Talla.trim() ? c1UniformeTipus : undefined) as any,
-    c2Nom,
-    c2Cognoms,
-    c2Talla: c2Talla.trim(),
-    c2UniformeTipus: (c2Talla.trim() ? c2UniformeTipus : undefined) as any,
-    extresSeleccionats,
-    respostesCuestionari,
-    emailContactoPareja: emailContactoPareja.trim(),
-    telefonContactoPareja: telefonContactoPareja.trim(),
-    mailEnviat,
-    mailData,
-    mailError,
-    mailEstat
-  }), [registration, codiSeguiment, categoria, c1Nom, c1Cognoms, c1Talla, c1UniformeTipus, c2Nom, c2Cognoms, c2Talla, c2UniformeTipus, extresSeleccionats, respostesCuestionari, emailContactoPareja, telefonContactoPareja, mailEnviat, mailData, mailError, mailEstat]);
+  const currentRecord = useMemo<Inscripcio>(() => {
+    const effResp: Record<string, any> = {
+      ...respostesCuestionari,
+      clavells_qty: String(clavellsQty),
+      corbati_qty: String(corbatiQty),
+      mailEnviat,
+      mailData,
+      mailError,
+      mailEstat,
+      estatCorreu: mailEstat,
+      dataUltimCorreu: mailData
+    };
+
+    const selUniRecord = {
+      ...(registration.seleccionsUniforme || {}),
+      'lin-1': {
+        c1Vol,
+        c1Talla: c1Vol ? c1Talla.trim() : '',
+        c1Tipus: c1Vol ? c1UniformeTipus : '',
+        c2Vol,
+        c2Talla: c2Vol ? c2Talla.trim() : '',
+        c2Tipus: c2Vol ? c2UniformeTipus : ''
+      }
+    };
+
+    return {
+      ...registration,
+      codiSeguiment: codiSeguiment.trim(),
+      categoria,
+      c1Nom: c1Nom.trim(),
+      c1Cognoms: c1Cognoms.trim(),
+      c1Email: c1Email.trim() || emailContactoPareja.trim(),
+      c1Telefon: c1Telefon.trim() || telefonContactoPareja.trim(),
+      c1Talla: c1Vol ? c1Talla.trim() : '',
+      c1UniformeTipus: c1Vol ? (c1UniformeTipus as any) : undefined,
+      c1EsMenor,
+      c1TutorNom: c1TutorNom.trim(),
+      c1TutorCognoms: c1TutorCognoms.trim(),
+      c1TutorDni: c1TutorDni.trim(),
+      c1TutorTelefon: c1TutorTelefon.trim(),
+      c2Nom: c2Nom.trim(),
+      c2Cognoms: c2Cognoms.trim(),
+      c2Email: c2Email.trim() || emailContactoPareja.trim(),
+      c2Telefon: c2Telefon.trim() || telefonContactoPareja.trim(),
+      c2Talla: c2Vol ? c2Talla.trim() : '',
+      c2UniformeTipus: c2Vol ? (c2UniformeTipus as any) : undefined,
+      c2EsMenor,
+      c2TutorNom: c2TutorNom.trim(),
+      c2TutorCognoms: c2TutorCognoms.trim(),
+      c2TutorDni: c2TutorDni.trim(),
+      c2TutorTelefon: c2TutorTelefon.trim(),
+      emailContactoPareja: emailContactoPareja.trim(),
+      telefonContactoPareja: telefonContactoPareja.trim(),
+      c1Vol,
+      c2Vol,
+      seleccionsUniforme: selUniRecord,
+      extresSeleccionats,
+      respostesCuestionari: effResp,
+      mailEnviat,
+      mailData,
+      mailError,
+      mailEstat
+    } as any;
+  }, [
+    registration, codiSeguiment, categoria, emailContactoPareja, telefonContactoPareja,
+    c1Nom, c1Cognoms, c1Email, c1Telefon, c1Talla, c1UniformeTipus, c1EsMenor, c1TutorNom, c1TutorCognoms, c1TutorDni, c1TutorTelefon, c1Vol,
+    c2Nom, c2Cognoms, c2Email, c2Telefon, c2Talla, c2UniformeTipus, c2EsMenor, c2TutorNom, c2TutorCognoms, c2TutorDni, c2TutorTelefon, c2Vol,
+    extresSeleccionats, respostesCuestionari, clavellsQty, corbatiQty, mailEnviat, mailData, mailError, mailEstat
+  ]);
 
   // Single Source of Truth Order Breakdown and Validation
   const breakdown = useMemo(() => {
@@ -634,6 +783,34 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
     setPagaments(pagaments.filter(p => p.id !== id));
   };
 
+  const handleSyncDrive = async (recordToSync?: Inscripcio) => {
+    const target = recordToSync || currentRecord;
+    setDriveSyncStatus('syncing');
+    setDriveSyncError(null);
+    try {
+      const { syncToGoogleSheet } = await import('../googleSync');
+      const updatedList = (allInscripcions || []).map(i => i.id === target.id ? target : i);
+      if (!updatedList.some(i => i.id === target.id)) {
+        updatedList.push(target);
+      }
+      const ok = await syncToGoogleSheet(
+        updatedList,
+        config?.googleSheetSyncUrl,
+        config?.googleSheetSyncActive,
+        config
+      );
+      if (ok) {
+        setDriveSyncStatus('success');
+      } else {
+        setDriveSyncStatus('error');
+        setDriveSyncError(language === 'ca' ? "No s'ha pogut sincronitzar amb Drive" : "No se pudo sincronizar con Drive");
+      }
+    } catch (err: any) {
+      setDriveSyncStatus('error');
+      setDriveSyncError(err?.message || String(err));
+    }
+  };
+
   const handleGuardaCanvis = async () => {
     if (!c1Nom.trim() || !c2Nom.trim()) {
       setValidationError(
@@ -646,31 +823,20 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
 
     setValidationError(null);
 
-    // Validate unique tracking code if manually corrected (Point 4)
+    // Validate unique tracking code and prompt confirmation if email was already sent (Point 4)
     const cleanCode = (codiSeguiment || '').trim();
-    if (cleanCode && cleanCode !== (registration.codiSeguiment || '').trim()) {
-      if (supabase) {
-        try {
-          const { data: dupCheck } = await supabase
-            .from('inscripciones')
-            .select('id')
-            .ilike('codiSeguiment', cleanCode)
-            .neq('id', registration.id)
-            .maybeSingle();
-
-          if (dupCheck) {
-            setValidationError(
-              language === 'ca'
-                ? `El codi de seguiment "${cleanCode}" ja està assignat a una altra inscripció.`
-                : `El código de seguimiento "${cleanCode}" ya está asignado a otra inscripción.`
-            );
-            return;
-          }
-        } catch (e) {
-          console.warn("Notice checking duplicate code:", e);
-        }
+    const hadMailSent = Boolean(registration.mailEnviat || registration.mailEstat === 'enviat' || mailEnviat || mailEstat === 'enviat');
+    if (cleanCode && cleanCode !== (registration.codiSeguiment || '').trim() && hadMailSent) {
+      const confirmCodeChange = window.confirm(
+        language === 'ca'
+          ? "Aquesta inscripció ja té el correu enviat. Si canvieu el codi de seguiment, la parella tindrà un codi diferent al que va rebre per correu. Voleu continuar?"
+          : "Esta inscripción ya tiene el correo enviado. Si cambia el código de seguimiento, la pareja tendrá un código diferente al que recibió por correo. ¿Desea continuar?"
+      );
+      if (!confirmCodeChange) {
+        return;
       }
     }
+
     if (supabase && registration.id) {
       try {
         const { data: dbRow } = await supabase
@@ -698,35 +864,43 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
       }
     }
 
+    const affectsEmail = didEmailRelevantFieldsChange(registration, currentRecord);
+    const newMailEstat = affectsEmail ? 'pendent' : mailEstat;
+    const newMailEnviat = affectsEmail ? false : mailEnviat;
+
     const derivedEstat = derivedEstatPagament(paymentSummary);
     const derivedMetode = derivedMetodePagament(pagaments);
 
     const updatedInscripcio: Inscripcio = {
-      ...registration,
-      codiSeguiment,
+      ...currentRecord,
+      codiSeguiment: cleanCode,
       categoria,
       emailContactoPareja: emailContactoPareja.trim(),
       telefonContactoPareja: telefonContactoPareja.trim(),
       c1Nom: c1Nom.trim(),
       c1Cognoms: c1Cognoms.trim(),
-      c1Email: emailContactoPareja.trim(),
-      c1Telefon: telefonContactoPareja.trim(),
-      c1Talla: c1Talla.trim(),
-      c1UniformeTipus: (c1Talla.trim() ? c1UniformeTipus : undefined) as any,
+      c1Email: c1Email.trim() || emailContactoPareja.trim(),
+      c1Telefon: c1Telefon.trim() || telefonContactoPareja.trim(),
+      c1Talla: c1Vol ? c1Talla.trim() : '',
+      c1UniformeTipus: c1Vol ? (c1UniformeTipus as any) : undefined,
+      c1EsMenor,
       c1TutorNom: c1TutorNom.trim(),
       c1TutorCognoms: c1TutorCognoms.trim(),
       c1TutorDni: c1TutorDni.trim(),
       c1TutorTelefon: c1TutorTelefon.trim(),
       c2Nom: c2Nom.trim(),
       c2Cognoms: c2Cognoms.trim(),
-      c2Email: emailContactoPareja.trim(),
-      c2Telefon: telefonContactoPareja.trim(),
-      c2Talla: c2Talla.trim(),
-      c2UniformeTipus: (c2Talla.trim() ? c2UniformeTipus : undefined) as any,
+      c2Email: c2Email.trim() || emailContactoPareja.trim(),
+      c2Telefon: c2Telefon.trim() || telefonContactoPareja.trim(),
+      c2Talla: c2Vol ? c2Talla.trim() : '',
+      c2UniformeTipus: c2Vol ? (c2UniformeTipus as any) : undefined,
+      c2EsMenor,
       c2TutorNom: c2TutorNom.trim(),
       c2TutorCognoms: c2TutorCognoms.trim(),
       c2TutorDni: c2TutorDni.trim(),
       c2TutorTelefon: c2TutorTelefon.trim(),
+      c1Vol,
+      c2Vol,
       extresSeleccionats,
       preuCalculat: breakdown.totalCalculat,
       pagaments,
@@ -739,57 +913,171 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
       llistaEspera,
       estatInscripcio,
       bandera,
-      mailEnviat,
-      mailData,
-      mailError,
-      mailEstat,
+      mailEnviat: newMailEnviat,
+      mailEstat: newMailEstat,
       respostesCuestionari: {
-        ...respostesCuestionari,
-        mailEnviat,
-        mailData,
-        mailError,
-        mailEstat,
-        estatCorreu: mailEstat,
-        dataUltimCorreu: mailData
+        ...currentRecord.respostesCuestionari,
+        mailEnviat: newMailEnviat,
+        mailEstat: newMailEstat,
+        estatCorreu: newMailEstat
       },
       actualizadoEn: new Date().toISOString()
     };
 
-    onSave(updatedInscripcio);
-    setSaveSuccess(true);
-    setTimeout(() => {
-      setSaveSuccess(false);
-      onBack();
-    }, 1500);
+    // Calculate diff: ONLY modified fields sent to DB (point 2.b)
+    const modifiedUpdates: Record<string, any> = {};
+    if (cleanCode !== (registration.codiSeguiment || '').trim()) modifiedUpdates.codiSeguiment = cleanCode;
+    if (categoria !== registration.categoria) modifiedUpdates.categoria = categoria;
+    if (c1Nom.trim() !== (registration.c1Nom || '').trim()) modifiedUpdates.c1Nom = c1Nom.trim();
+    if (c1Cognoms.trim() !== (registration.c1Cognoms || '').trim()) modifiedUpdates.c1Cognoms = c1Cognoms.trim();
+    const effEmail = emailContactoPareja.trim();
+    if (effEmail !== (registration.emailContactoPareja || registration.c1Email || '').trim()) {
+      modifiedUpdates.c1Email = effEmail;
+      modifiedUpdates.c2Email = effEmail;
+    }
+    const effTel = telefonContactoPareja.trim();
+    if (effTel !== (registration.telefonContactoPareja || registration.c1Telefon || '').trim()) {
+      modifiedUpdates.c1Telefon = effTel;
+      modifiedUpdates.c2Telefon = effTel;
+    }
+    if (c1Vol !== initC1Vol || c1Talla.trim() !== (registration.c1Talla || '').trim()) {
+      modifiedUpdates.c1Talla = c1Vol ? c1Talla.trim() : '';
+    }
+    if (c1Vol !== initC1Vol || c1UniformeTipus !== (registration.c1UniformeTipus || '')) {
+      modifiedUpdates.c1UniformeTipus = c1Vol ? c1UniformeTipus : null;
+    }
+    if (c1EsMenor !== Boolean(registration.c1EsMenor)) modifiedUpdates.c1EsMenor = c1EsMenor;
+    if (c1TutorNom.trim() !== (registration.c1TutorNom || '').trim()) modifiedUpdates.c1TutorNom = c1TutorNom.trim();
+    if (c1TutorCognoms.trim() !== (registration.c1TutorCognoms || '').trim()) modifiedUpdates.c1TutorCognoms = c1TutorCognoms.trim();
+    if (c1TutorDni.trim() !== (registration.c1TutorDni || '').trim()) modifiedUpdates.c1TutorDni = c1TutorDni.trim();
+    if (c1TutorTelefon.trim() !== (registration.c1TutorTelefon || '').trim()) modifiedUpdates.c1TutorTelefon = c1TutorTelefon.trim();
+
+    if (c2Nom.trim() !== (registration.c2Nom || '').trim()) modifiedUpdates.c2Nom = c2Nom.trim();
+    if (c2Cognoms.trim() !== (registration.c2Cognoms || '').trim()) modifiedUpdates.c2Cognoms = c2Cognoms.trim();
+    if (c2Vol !== initC2Vol || c2Talla.trim() !== (registration.c2Talla || '').trim()) {
+      modifiedUpdates.c2Talla = c2Vol ? c2Talla.trim() : '';
+    }
+    if (c2Vol !== initC2Vol || c2UniformeTipus !== (registration.c2UniformeTipus || '')) {
+      modifiedUpdates.c2UniformeTipus = c2Vol ? c2UniformeTipus : null;
+    }
+    if (c2EsMenor !== Boolean(registration.c2EsMenor)) modifiedUpdates.c2EsMenor = c2EsMenor;
+    if (c2TutorNom.trim() !== (registration.c2TutorNom || '').trim()) modifiedUpdates.c2TutorNom = c2TutorNom.trim();
+    if (c2TutorCognoms.trim() !== (registration.c2TutorCognoms || '').trim()) modifiedUpdates.c2TutorCognoms = c2TutorCognoms.trim();
+    if (c2TutorDni.trim() !== (registration.c2TutorDni || '').trim()) modifiedUpdates.c2TutorDni = c2TutorDni.trim();
+    if (c2TutorTelefon.trim() !== (registration.c2TutorTelefon || '').trim()) modifiedUpdates.c2TutorTelefon = c2TutorTelefon.trim();
+
+    if (breakdown.totalCalculat !== registration.preuCalculat) modifiedUpdates.preuCalculat = breakdown.totalCalculat;
+    if (hasUnsavedPayments) {
+      modifiedUpdates.pagaments = pagaments;
+      modifiedUpdates.estatPagament = derivedEstat;
+      modifiedUpdates.metodePagament = derivedMetode;
+    }
+    if (estatDni !== registration.estatDni) modifiedUpdates.estatDni = estatDni;
+    if (entregaMaterial !== registration.entregaMaterial) modifiedUpdates.entregaMaterial = entregaMaterial;
+    if (bandera !== registration.bandera) modifiedUpdates.bandera = bandera;
+
+    if (c1Vol !== initC1Vol || c2Vol !== initC2Vol || c1Talla !== (registration.c1Talla || '') || c2Talla !== (registration.c2Talla || '')) {
+      modifiedUpdates.seleccionsUniforme = updatedInscripcio.seleccionsUniforme;
+    }
+
+    // respostesCuestionari diff (send only changed keys)
+    const diffResp: Record<string, any> = {};
+    const oldResp = registration.respostesCuestionari || {};
+    const newResp = updatedInscripcio.respostesCuestionari || {};
+    for (const [k, v] of Object.entries(newResp)) {
+      if (oldResp[k] !== v) {
+        diffResp[k] = v;
+      }
+    }
+    if (Object.keys(diffResp).length > 0) {
+      modifiedUpdates.respostesCuestionari = diffResp;
+    }
+
+    setDbSaveStatus('saving');
+    try {
+      const saveRes: any = await onSave(updatedInscripcio, modifiedUpdates);
+      if (saveRes && saveRes.ok === false) {
+        setDbSaveStatus('error');
+        setValidationError(saveRes.error || "Error al desar canvis");
+        return;
+      }
+      setDbSaveStatus('success');
+      setSaveSuccess(true);
+      if (affectsEmail) {
+        setMailEstat('pendent');
+        setMailEnviat(false);
+        setMailPendingResend(true);
+      }
+      const confirmed = (saveRes && saveRes.data) ? saveRes.data : updatedInscripcio;
+      await handleSyncDrive(confirmed);
+      setTimeout(() => {
+        setSaveSuccess(false);
+      }, 3000);
+    } catch (err: any) {
+      setDbSaveStatus('error');
+      setValidationError(err?.message || "Error al desar canvis a la base de dades");
+    }
   };
 
   return (
     <div className="space-y-6" id="registration-detail-container">
       {/* Detail header toolbar */}
-      <div className="flex justify-between items-center bg-zinc-900 border border-zinc-800 rounded-3xl p-5 text-white shadow">
+      <div className="flex flex-wrap justify-between items-center bg-zinc-900 border border-zinc-800 rounded-3xl p-5 text-white shadow gap-3">
         <button 
           onClick={onBack}
-          className="text-xs bg-zinc-800 hover:bg-zinc-700 font-bold px-4 py-2.5 rounded-xl transition flex items-center gap-1.5"
+          className="text-xs bg-zinc-800 hover:bg-zinc-700 font-bold px-4 py-2.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer"
           id="btn-ficha-back"
         >
           <ArrowLeft size={14} /> {language === 'ca' ? 'Tornar al taulell' : 'Volver al tablero'}
         </button>
 
         <div className="text-center">
-          <span className="font-mono text-[9px] text-fuchsia-400 font-bold uppercase tracking-wider">
-            CODI DE SEGUIMENT
+          <span className="font-mono text-[9px] text-fuchsia-400 font-bold uppercase tracking-wider block mb-0.5">
+            CODI DE SEGUIMENT (Editable)
           </span>
           <div className="flex items-center justify-center gap-2">
-            <h2 className="font-sans font-extrabold text-base tracking-tight text-fuchsia-400">{codiSeguiment}</h2>
+            <input 
+              type="text"
+              value={codiSeguiment}
+              onChange={(e) => setCodiSeguiment(e.target.value.toUpperCase().trim())}
+              className="font-sans font-extrabold text-base tracking-tight text-fuchsia-400 bg-zinc-800 border border-zinc-700 focus:border-fuchsia-500 rounded-lg px-2.5 py-0.5 text-center uppercase w-32 focus:outline-none"
+              title={language === 'ca' ? "Editar codi de seguiment" : "Editar código de seguimiento"}
+            />
             {codiSeguiment !== registration.codiSeguiment && (
               <span className="text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full border border-amber-500/30">
-                {language === 'ca' ? `Nou codi (Antic: ${registration.codiSeguiment})` : `Nuevo código (Antiguo: ${registration.codiSeguiment})`}
+                {language === 'ca' ? `Antic: ${registration.codiSeguiment}` : `Antiguo: ${registration.codiSeguiment}`}
               </span>
             )}
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {dbSaveStatus === 'success' && (
+            <span className="text-xs bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2.5 py-1.5 rounded-xl font-bold flex items-center gap-1">
+              <Check size={13} /> Base de dades ✓
+            </span>
+          )}
+          {driveSyncStatus === 'syncing' && (
+            <span className="text-xs bg-zinc-800 text-zinc-300 border border-zinc-700 px-2.5 py-1.5 rounded-xl font-bold flex items-center gap-1 animate-pulse">
+              <RotateCw size={13} className="animate-spin" /> Drive...
+            </span>
+          )}
+          {driveSyncStatus === 'success' && (
+            <span className="text-xs bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2.5 py-1.5 rounded-xl font-bold flex items-center gap-1">
+              <Check size={13} /> Drive ✓
+            </span>
+          )}
+          {driveSyncStatus === 'error' && (
+            <button
+              type="button"
+              onClick={() => handleSyncDrive()}
+              className="text-xs bg-red-500/20 text-red-300 hover:bg-red-500/30 border border-red-500/40 px-2.5 py-1.5 rounded-xl font-bold flex items-center gap-1 cursor-pointer transition"
+              title={driveSyncError || "Error en sincronitzar amb Drive"}
+            >
+              <RefreshCw size={13} /> Drive ✗ ({language === 'ca' ? 'Reintentar' : 'Reintentar'})
+            </button>
+          )}
+
           <button 
             type="button"
             onClick={() => {
@@ -812,12 +1100,15 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
 
           <button 
             onClick={handleGuardaCanvis}
-            className="text-xs bg-fuchsia-600 hover:bg-fuchsia-500 font-bold px-5 py-2.5 rounded-xl transition flex items-center gap-1.5 shadow"
+            disabled={dbSaveStatus === 'saving'}
+            className="text-xs bg-fuchsia-600 hover:bg-fuchsia-500 font-bold px-5 py-2.5 rounded-xl transition flex items-center gap-1.5 shadow cursor-pointer disabled:opacity-50"
             id="btn-ficha-save"
           >
-            {saveSuccess 
-              ? (language === 'ca' ? "S'ha desat!" : "¡Guardado!") 
-              : (language === 'ca' ? "Desar Canvis" : "Guardar Cambios")} <Save size={14} />
+            {dbSaveStatus === 'saving' 
+              ? (language === 'ca' ? "Desant..." : "Guardando...")
+              : saveSuccess 
+                ? (language === 'ca' ? "S'ha desat!" : "¡Guardado!") 
+                : (language === 'ca' ? "Desar Canvis" : "Guardar Cambios")} <Save size={14} />
           </button>
         </div>
       </div>
@@ -849,13 +1140,42 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
         )}
       </div>
 
+      {mailPendingResend && (
+        <div className="bg-amber-50 border border-amber-300 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3 text-amber-900 shadow-xs">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="text-amber-600 shrink-0" size={18} />
+            <div>
+              <span className="font-bold text-xs block">
+                {language === 'ca' ? "Canvis desats: Correu pendent de reenviar" : "Cambios guardados: Correo pendiente de reenviar"}
+              </span>
+              <span className="text-[11px] text-amber-700">
+                {language === 'ca' 
+                  ? "S'han modificat dades de la inscripció (materials, import, contacte o esmorzar). Podeu reenviar el correu amb les dades actualitzades."
+                  : "Se han modificado datos de la inscripción (materiales, importe, contacto o almuerzo). Puede reenviar el correo con los datos actualizados."}
+              </span>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={handleSendEmail}
+            disabled={isSendingModifiedEmail}
+            className="text-xs bg-amber-500 hover:bg-amber-600 text-zinc-950 font-black px-4 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+          >
+            <Send size={13} />
+            {isSendingModifiedEmail 
+              ? (language === 'ca' ? "Enviant..." : "Enviando...") 
+              : (language === 'ca' ? "Reenviar correu modificat" : "Reenviar correo modificado")}
+          </button>
+        </div>
+      )}
+
       {saveSuccess && (
         <div className="bg-green-100 border border-green-200 text-green-800 p-4 rounded-2xl font-semibold flex items-center gap-2">
           <ShieldCheck size={20} className="text-green-600 animate-bounce" />
           <span>
             {language === 'ca' 
-              ? "Ficha d'inscripció actualitzada i guardada correctament al sistema de l'entitat! Redirigint..."
-              : "¡Ficha de inscripción actualizada y guardada correctamente en el sistema de la entidad! Redireccionando..."}
+              ? "Ficha d'inscripció actualitzada i guardada correctament al sistema de l'entitat!"
+              : "¡Ficha de inscripción actualizada y guardada correctamente en el sistema de la entidad!"}
           </span>
         </div>
       )}
@@ -872,14 +1192,20 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
         <div className="lg:col-span-2 space-y-6">
           <div className="bg-white rounded-3xl border border-zinc-200 p-6 shadow-sm space-y-6">
             
-            <div className="flex items-center gap-2 mb-2 pb-2 border-b border-zinc-100">
-              <span className={`text-[10px] uppercase font-bold font-mono px-2 py-0.5 rounded ${
-                registration.categoria === CategoriaParella.ADULT 
-                  ? 'bg-zinc-900 text-white' 
-                  : 'bg-fuchsia-100 text-fuchsia-800'
-              }`}>
-                {registration.categoria}
-              </span>
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-2 pb-2 border-b border-zinc-100">
+              <div className="flex items-center gap-2">
+                <label className="text-[10px] uppercase font-bold font-mono text-zinc-500">
+                  {language === 'ca' ? 'CATEGORIA (Editable):' : 'CATEGORÍA (Editable):'}
+                </label>
+                <select
+                  value={categoria}
+                  onChange={(e) => setCategoria(e.target.value as CategoriaParella)}
+                  className="text-xs font-bold font-sans bg-zinc-100 hover:bg-zinc-200 border border-zinc-300 rounded-lg px-2.5 py-1 text-zinc-900 cursor-pointer focus:outline-none"
+                >
+                  <option value={CategoriaParella.ADULT}>ADULT</option>
+                  <option value={CategoriaParella.JUVENIL}>JUVENIL</option>
+                </select>
+              </div>
               <span className="font-sans font-bold text-zinc-700 text-sm">
                 {language === 'ca' ? "Informació dels Participants" : "Información de los Participantes"}
               </span>
@@ -956,112 +1282,135 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
 
                   <div className="grid grid-cols-2 gap-1.5">
                     <div>
-                      <label className="block text-[9px] text-zinc-500 uppercase font-mono mb-0.5">Talla</label>
-                      <select
-                        value={c1Talla}
-                        onChange={(e) => setC1Talla(e.target.value)}
-                        className="w-full bg-white border border-zinc-200 rounded-lg px-2 py-1.5 text-xs font-bold font-sans focus:outline-none cursor-pointer"
-                      >
-                        <option value="">{language === 'ca' ? 'Sense armilla' : 'Sin chaleco'}</option>
-                        <option value="XS">XS</option>
-                        <option value="S">S</option>
-                        <option value="M">M</option>
-                        <option value="L">L</option>
-                        <option value="XL">XL</option>
-                        <option value="XXL">XXL</option>
-                        <option value="3XL">3XL</option>
-                      </select>
+                      <label className="block text-[9px] text-zinc-500 uppercase font-mono mb-0.5">Correu P1</label>
+                      <input 
+                        type="email" 
+                        value={c1Email} 
+                        onChange={(e) => setC1Email(e.target.value)}
+                        placeholder={emailContactoPareja}
+                        className="w-full bg-white border border-zinc-200 focus:border-[#ff0090] rounded-lg px-2.5 py-1.5 text-xs font-sans focus:outline-none" 
+                      />
                     </div>
                     <div>
-                      <label className="block text-[9px] text-zinc-500 uppercase font-mono mb-0.5">Adquisició</label>
-                      <select
-                        value={c1UniformeTipus}
-                        onChange={(e) => setC1UniformeTipus(e.target.value as 'compra' | 'lloguer')}
-                        className="w-full bg-white border border-[#ff0090]/40 rounded-lg px-2 py-1.5 text-xs font-bold text-[#ff0090] font-sans focus:outline-none cursor-pointer"
-                      >
-                        <option value="compra">{language === 'ca' ? 'Compra' : 'Compra (Venta)'}</option>
-                        <option value="lloguer">{language === 'ca' ? 'Lloguer (Alquiler)' : 'Alquiler'}</option>
-                      </select>
+                      <label className="block text-[9px] text-zinc-500 uppercase font-mono mb-0.5">Telèfon P1</label>
+                      <input 
+                        type="tel" 
+                        value={c1Telefon} 
+                        onChange={(e) => setC1Telefon(e.target.value)}
+                        placeholder={telefonContactoPareja}
+                        className="w-full bg-white border border-zinc-200 focus:border-[#ff0090] rounded-lg px-2.5 py-1.5 text-xs font-sans focus:outline-none" 
+                      />
                     </div>
                   </div>
 
-                  {(() => {
-                    const entries = Object.entries(registration.seleccionsUniforme || {}).filter(([liniaId, sel]) => {
-                      const linia = config?.liniisUniforme?.find(l => l.id === liniaId);
-                      const isOptional = !!(linia?.opcional || linia?.armilla_opcional || config?.armilla_opcional);
-                      const c1VolCandidate = (sel as any)?.c1Vol ?? (registration as any).c1Vol ?? (registration as any).c1_vol;
-                      const hasExplicitC1Vol = typeof c1VolCandidate === 'boolean';
-                      const effTalla1 = (c1Talla || registration.c1Talla || sel.c1Talla || '').trim();
-                      const hasT1 = !!effTalla1 && effTalla1.toLowerCase() !== 'cap' && effTalla1.toLowerCase() !== 'null' && effTalla1.toLowerCase() !== 'undefined';
-                      const p1Wants = hasExplicitC1Vol ? c1VolCandidate === true : (isOptional ? false : hasT1);
-                      return p1Wants && hasT1;
-                    });
+                  <div className="space-y-2 pt-1 border-t border-zinc-150">
+                    <label className="flex items-center gap-2 text-xs font-bold text-zinc-800 cursor-pointer">
+                      <input 
+                        type="checkbox"
+                        checked={c1Vol}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          setC1Vol(checked);
+                          if (!checked) {
+                            setC1Talla('');
+                          }
+                        }}
+                        className="rounded border-zinc-300 text-fuchsia-600 focus:ring-fuchsia-500 cursor-pointer"
+                      />
+                      <span>{language === 'ca' ? 'Vol armilla (Comparser 1)' : 'Quiere chaleco (Comparser 1)'}</span>
+                    </label>
 
-                    if (entries.length === 0 && !c1Talla.trim()) return null;
-
-                    const effTalla1 = (c1Talla || registration.c1Talla || '').trim();
-                    const effTip1 = c1UniformeTipus || registration.c1UniformeTipus || 'lloguer';
-
-                    return (
-                      <div className="space-y-1 bg-white p-2 border border-zinc-150 rounded-xl">
-                        <span className="block text-[8px] font-mono text-zinc-400 uppercase font-bold tracking-wider mb-1">
-                          {language === 'ca' ? "Comanda d'Equipament (Detalls):" : "Pedido de Equipamiento (Detalles):"}
-                        </span>
-                        <div className="flex justify-between items-center text-[10px] py-0.5">
-                          <span className="text-zinc-500 truncate pr-1">Armilla:</span>
-                          <span className="font-mono text-zinc-900 font-extrabold">
-                            {effTalla1} [{effTip1.substring(0,3).toUpperCase()}]
-                          </span>
+                    {c1Vol && (
+                      <div className="grid grid-cols-2 gap-1.5 p-2 bg-fuchsia-50/50 rounded-xl border border-fuchsia-100">
+                        <div>
+                          <label className="block text-[9px] text-zinc-500 uppercase font-mono mb-0.5">Talla</label>
+                          <select
+                            value={c1Talla}
+                            onChange={(e) => setC1Talla(e.target.value)}
+                            className="w-full bg-white border border-zinc-200 rounded-lg px-2 py-1.5 text-xs font-bold font-sans focus:outline-none cursor-pointer"
+                          >
+                            <option value="">{language === 'ca' ? '-- Tria talla --' : '-- Elige talla --'}</option>
+                            <option value="XS">XS</option>
+                            <option value="S">S</option>
+                            <option value="M">M</option>
+                            <option value="L">L</option>
+                            <option value="XL">XL</option>
+                            <option value="XXL">XXL</option>
+                            <option value="3XL">3XL</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[9px] text-zinc-500 uppercase font-mono mb-0.5">Adquisició</label>
+                          <select
+                            value={c1UniformeTipus || 'compra'}
+                            onChange={(e) => setC1UniformeTipus(e.target.value as 'compra' | 'lloguer')}
+                            className="w-full bg-white border border-[#ff0090]/40 rounded-lg px-2 py-1.5 text-xs font-bold text-[#ff0090] font-sans focus:outline-none cursor-pointer"
+                          >
+                            <option value="compra">{language === 'ca' ? 'Compra' : 'Compra (Venta)'}</option>
+                            <option value="lloguer">{language === 'ca' ? 'Lloguer (Alquiler)' : 'Alquiler'}</option>
+                          </select>
                         </div>
                       </div>
-                    );
-                  })()}
+                    )}
+                  </div>
 
-                  {registration.c1EsMenor && (
-                    <div className="bg-amber-50/60 border border-amber-200/60 rounded-xl p-2.5 space-y-2 mt-1">
-                      <span className="block text-[8px] font-mono text-amber-800 uppercase font-black tracking-wider">TUTOR (Editable):</span>
-                      <div className="grid grid-cols-2 gap-1.5">
-                        <div>
-                          <label className="block text-[8px] text-zinc-400 uppercase font-mono">Nom</label>
-                          <input 
-                            type="text" 
-                            value={c1TutorNom} 
-                            onChange={(e) => setC1TutorNom(e.target.value)} 
-                            className="w-full bg-white border border-zinc-200 rounded px-1.5 py-0.5 text-[10px] focus:outline-none" 
-                          />
+                  <div className="space-y-1.5 pt-1 border-t border-zinc-150">
+                    <label className="flex items-center gap-2 text-xs font-semibold text-zinc-700 cursor-pointer">
+                      <input 
+                        type="checkbox"
+                        checked={c1EsMenor}
+                        onChange={(e) => setC1EsMenor(e.target.checked)}
+                        className="rounded border-zinc-300 text-fuchsia-600 focus:ring-fuchsia-500 cursor-pointer"
+                      />
+                      <span>{language === 'ca' ? 'És menor d’edat' : 'Es menor de edad'}</span>
+                    </label>
+
+                    {c1EsMenor && (
+                      <div className="bg-amber-50/60 border border-amber-200/60 rounded-xl p-2.5 space-y-2 mt-1">
+                        <span className="block text-[8px] font-mono text-amber-800 uppercase font-black tracking-wider">TUTOR (Editable):</span>
+                        <div className="grid grid-cols-2 gap-1.5">
+                          <div>
+                            <label className="block text-[8px] text-zinc-400 uppercase font-mono">Nom</label>
+                            <input 
+                              type="text" 
+                              value={c1TutorNom} 
+                              onChange={(e) => setC1TutorNom(e.target.value)} 
+                              className="w-full bg-white border border-zinc-200 rounded px-1.5 py-0.5 text-[10px] focus:outline-none" 
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[8px] text-zinc-400 uppercase font-mono">Cognoms</label>
+                            <input 
+                              type="text" 
+                              value={c1TutorCognoms} 
+                              onChange={(e) => setC1TutorCognoms(e.target.value)} 
+                              className="w-full bg-white border border-zinc-200 rounded px-1.5 py-0.5 text-[10px] focus:outline-none" 
+                            />
+                          </div>
                         </div>
-                        <div>
-                          <label className="block text-[8px] text-zinc-400 uppercase font-mono">Cognoms</label>
-                          <input 
-                            type="text" 
-                            value={c1TutorCognoms} 
-                            onChange={(e) => setC1TutorCognoms(e.target.value)} 
-                            className="w-full bg-white border border-zinc-200 rounded px-1.5 py-0.5 text-[10px] focus:outline-none" 
-                          />
+                        <div className="grid grid-cols-2 gap-1.5">
+                          <div>
+                            <label className="block text-[8px] text-zinc-400 uppercase font-mono">DNI</label>
+                            <input 
+                              type="text" 
+                              value={c1TutorDni} 
+                              onChange={(e) => setC1TutorDni(e.target.value)} 
+                              className="w-full bg-white border border-zinc-200 rounded px-1.5 py-0.5 text-[10px] font-mono focus:outline-none" 
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[8px] text-zinc-400 uppercase font-mono">Mòbil</label>
+                            <input 
+                              type="tel" 
+                              value={c1TutorTelefon} 
+                              onChange={(e) => setC1TutorTelefon(e.target.value)} 
+                              className="w-full bg-white border border-zinc-200 rounded px-1.5 py-0.5 text-[10px] font-mono focus:outline-none" 
+                            />
+                          </div>
                         </div>
                       </div>
-                      <div className="grid grid-cols-2 gap-1.5">
-                        <div>
-                          <label className="block text-[8px] text-zinc-400 uppercase font-mono">DNI</label>
-                          <input 
-                            type="text" 
-                            value={c1TutorDni} 
-                            onChange={(e) => setC1TutorDni(e.target.value)} 
-                            className="w-full bg-white border border-zinc-200 rounded px-1.5 py-0.5 text-[10px] font-mono focus:outline-none" 
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-[8px] text-zinc-400 uppercase font-mono">Mòbil</label>
-                          <input 
-                            type="tel" 
-                            value={c1TutorTelefon} 
-                            onChange={(e) => setC1TutorTelefon(e.target.value)} 
-                            className="w-full bg-white border border-zinc-200 rounded px-1.5 py-0.5 text-[10px] font-mono focus:outline-none" 
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -1093,116 +1442,204 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
 
                   <div className="grid grid-cols-2 gap-1.5">
                     <div>
-                      <label className="block text-[9px] text-zinc-500 uppercase font-mono mb-0.5">Talla</label>
-                      <select
-                        value={c2Talla}
-                        onChange={(e) => setC2Talla(e.target.value)}
-                        className="w-full bg-white border border-zinc-200 rounded-lg px-2 py-1.5 text-xs font-bold font-sans focus:outline-none cursor-pointer"
-                      >
-                        <option value="">{language === 'ca' ? 'Sense armilla' : 'Sin chaleco'}</option>
-                        <option value="XS">XS</option>
-                        <option value="S">S</option>
-                        <option value="M">M</option>
-                        <option value="L">L</option>
-                        <option value="XL">XL</option>
-                        <option value="XXL">XXL</option>
-                        <option value="3XL">3XL</option>
-                      </select>
+                      <label className="block text-[9px] text-zinc-500 uppercase font-mono mb-0.5">Correu P2</label>
+                      <input 
+                        type="email" 
+                        value={c2Email} 
+                        onChange={(e) => setC2Email(e.target.value)}
+                        placeholder={emailContactoPareja}
+                        className="w-full bg-white border border-zinc-200 focus:border-[#ff0090] rounded-lg px-2.5 py-1.5 text-xs font-sans focus:outline-none" 
+                      />
                     </div>
                     <div>
-                      <label className="block text-[9px] text-zinc-500 uppercase font-mono mb-0.5">Adquisició</label>
-                      <select
-                        value={c2UniformeTipus}
-                        onChange={(e) => setC2UniformeTipus(e.target.value as 'compra' | 'lloguer')}
-                        className="w-full bg-white border border-[#ff0090]/40 rounded-lg px-2 py-1.5 text-xs font-bold text-[#ff0090] font-sans focus:outline-none cursor-pointer"
-                      >
-                        <option value="compra">{language === 'ca' ? 'Compra' : 'Compra (Venta)'}</option>
-                        <option value="lloguer">{language === 'ca' ? 'Lloguer (Alquiler)' : 'Alquiler'}</option>
-                      </select>
+                      <label className="block text-[9px] text-zinc-500 uppercase font-mono mb-0.5">Telèfon P2</label>
+                      <input 
+                        type="tel" 
+                        value={c2Telefon} 
+                        onChange={(e) => setC2Telefon(e.target.value)}
+                        placeholder={telefonContactoPareja}
+                        className="w-full bg-white border border-zinc-200 focus:border-[#ff0090] rounded-lg px-2.5 py-1.5 text-xs font-sans focus:outline-none" 
+                      />
                     </div>
                   </div>
 
-                  {(() => {
-                    const entries = Object.entries(registration.seleccionsUniforme || {}).filter(([liniaId, sel]) => {
-                      const linia = config?.liniisUniforme?.find(l => l.id === liniaId);
-                      const isOptional = !!(linia?.opcional || linia?.armilla_opcional || config?.armilla_opcional);
-                      const c2VolCandidate = (sel as any)?.c2Vol ?? (registration as any).c2Vol ?? (registration as any).c2_vol;
-                      const hasExplicitC2Vol = typeof c2VolCandidate === 'boolean';
-                      const rawTalla2 = (sel.c2Talla || registration.c2Talla || '').trim();
-                      const hasT2 = !!rawTalla2 && rawTalla2.toLowerCase() !== 'cap' && rawTalla2.toLowerCase() !== 'null' && rawTalla2.toLowerCase() !== 'undefined';
-                      const p2Wants = hasExplicitC2Vol ? c2VolCandidate === true : (isOptional ? false : hasT2);
-                      // Si material.armilla es null, undefined o vacío -> no renderizar esa fila
-                      return p2Wants && hasT2 && !!sel.c2Talla;
-                    });
+                  <div className="space-y-2 pt-1 border-t border-zinc-150">
+                    <label className="flex items-center gap-2 text-xs font-bold text-zinc-800 cursor-pointer">
+                      <input 
+                        type="checkbox"
+                        checked={c2Vol}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          setC2Vol(checked);
+                          if (!checked) {
+                            setC2Talla('');
+                          }
+                        }}
+                        className="rounded border-zinc-300 text-fuchsia-600 focus:ring-fuchsia-500 cursor-pointer"
+                      />
+                      <span>{language === 'ca' ? 'Vol armilla (Comparser 2)' : 'Quiere chaleco (Comparser 2)'}</span>
+                    </label>
 
-                    if (entries.length === 0) return null;
-
-                    return (
-                      <div className="space-y-1 bg-white p-2 border border-zinc-150 rounded-xl">
-                        <span className="block text-[8px] font-mono text-zinc-400 uppercase font-bold tracking-wider mb-1">
-                          {language === 'ca' ? "Comanda d'Equipament (Detalls):" : "Pedido de Equipamiento (Detalles):"}
-                        </span>
-                        {entries.map(([liniaId, sel]) => {
-                          const linia = config?.liniisUniforme?.find(l => l.id === liniaId);
-                          const nomLinia = linia ? (language === 'es' ? (linia.nomES || linia.nom) : linia.nom) : liniaId;
-                          return (
-                            <div key={liniaId} className="flex justify-between items-center text-[10px] py-0.5">
-                              <span className="text-zinc-500 truncate pr-1">{nomLinia}:</span>
-                              <span className="font-mono text-zinc-900 font-extrabold font-sans">
-                                {sel.c2Talla} {linia?.requeixQuantitat && `(${sel.c2Quantitat || sel.quantitat || 1} u)`} {sel.c2Tipus ? `[${sel.c2Tipus.substring(0,3).toUpperCase()}]` : ''}
-                              </span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    );
-                  })()}
-
-                  {registration.c2EsMenor && (
-                    <div className="bg-amber-50/60 border border-amber-200/60 rounded-xl p-2.5 space-y-2 mt-1">
-                      <span className="block text-[8px] font-mono text-amber-800 uppercase font-black tracking-wider">TUTOR (Editable):</span>
-                      <div className="grid grid-cols-2 gap-1.5">
+                    {c2Vol && (
+                      <div className="grid grid-cols-2 gap-1.5 p-2 bg-fuchsia-50/50 rounded-xl border border-fuchsia-100">
                         <div>
-                          <label className="block text-[8px] text-zinc-400 uppercase font-mono">Nom</label>
-                          <input 
-                            type="text" 
-                            value={c2TutorNom} 
-                            onChange={(e) => setC2TutorNom(e.target.value)} 
-                            className="w-full bg-white border border-zinc-200 rounded px-1.5 py-0.5 text-[10px] focus:outline-none" 
-                          />
+                          <label className="block text-[9px] text-zinc-500 uppercase font-mono mb-0.5">Talla</label>
+                          <select
+                            value={c2Talla}
+                            onChange={(e) => setC2Talla(e.target.value)}
+                            className="w-full bg-white border border-zinc-200 rounded-lg px-2 py-1.5 text-xs font-bold font-sans focus:outline-none cursor-pointer"
+                          >
+                            <option value="">{language === 'ca' ? '-- Tria talla --' : '-- Elige talla --'}</option>
+                            <option value="XS">XS</option>
+                            <option value="S">S</option>
+                            <option value="M">M</option>
+                            <option value="L">L</option>
+                            <option value="XL">XL</option>
+                            <option value="XXL">XXL</option>
+                            <option value="3XL">3XL</option>
+                          </select>
                         </div>
                         <div>
-                          <label className="block text-[8px] text-zinc-400 uppercase font-mono">Cognoms</label>
-                          <input 
-                            type="text" 
-                            value={c2TutorCognoms} 
-                            onChange={(e) => setC2TutorCognoms(e.target.value)} 
-                            className="w-full bg-white border border-zinc-200 rounded px-1.5 py-0.5 text-[10px] focus:outline-none" 
-                          />
+                          <label className="block text-[9px] text-zinc-500 uppercase font-mono mb-0.5">Adquisició</label>
+                          <select
+                            value={c2UniformeTipus || 'compra'}
+                            onChange={(e) => setC2UniformeTipus(e.target.value as 'compra' | 'lloguer')}
+                            className="w-full bg-white border border-[#ff0090]/40 rounded-lg px-2 py-1.5 text-xs font-bold text-[#ff0090] font-sans focus:outline-none cursor-pointer"
+                          >
+                            <option value="compra">{language === 'ca' ? 'Compra' : 'Compra (Venta)'}</option>
+                            <option value="lloguer">{language === 'ca' ? 'Lloguer (Alquiler)' : 'Alquiler'}</option>
+                          </select>
                         </div>
                       </div>
-                      <div className="grid grid-cols-2 gap-1.5">
-                        <div>
-                          <label className="block text-[8px] text-zinc-400 uppercase font-mono">DNI</label>
-                          <input 
-                            type="text" 
-                            value={c2TutorDni} 
-                            onChange={(e) => setC2TutorDni(e.target.value)} 
-                            className="w-full bg-white border border-zinc-200 rounded px-1.5 py-0.5 text-[10px] font-mono focus:outline-none" 
-                          />
+                    )}
+                  </div>
+
+                  <div className="space-y-1.5 pt-1 border-t border-zinc-150">
+                    <label className="flex items-center gap-2 text-xs font-semibold text-zinc-700 cursor-pointer">
+                      <input 
+                        type="checkbox"
+                        checked={c2EsMenor}
+                        onChange={(e) => setC2EsMenor(e.target.checked)}
+                        className="rounded border-zinc-300 text-fuchsia-600 focus:ring-fuchsia-500 cursor-pointer"
+                      />
+                      <span>{language === 'ca' ? 'És menor d’edat' : 'Es menor de edad'}</span>
+                    </label>
+
+                    {c2EsMenor && (
+                      <div className="bg-amber-50/60 border border-amber-200/60 rounded-xl p-2.5 space-y-2 mt-1">
+                        <span className="block text-[8px] font-mono text-amber-800 uppercase font-black tracking-wider">TUTOR (Editable):</span>
+                        <div className="grid grid-cols-2 gap-1.5">
+                          <div>
+                            <label className="block text-[8px] text-zinc-400 uppercase font-mono">Nom</label>
+                            <input 
+                              type="text" 
+                              value={c2TutorNom} 
+                              onChange={(e) => setC2TutorNom(e.target.value)} 
+                              className="w-full bg-white border border-zinc-200 rounded px-1.5 py-0.5 text-[10px] focus:outline-none" 
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[8px] text-zinc-400 uppercase font-mono">Cognoms</label>
+                            <input 
+                              type="text" 
+                              value={c2TutorCognoms} 
+                              onChange={(e) => setC2TutorCognoms(e.target.value)} 
+                              className="w-full bg-white border border-zinc-200 rounded px-1.5 py-0.5 text-[10px] focus:outline-none" 
+                            />
+                          </div>
                         </div>
-                        <div>
-                          <label className="block text-[8px] text-zinc-400 uppercase font-mono">Mòbil</label>
-                          <input 
-                            type="tel" 
-                            value={c2TutorTelefon} 
-                            onChange={(e) => setC2TutorTelefon(e.target.value)} 
-                            className="w-full bg-white border border-zinc-200 rounded px-1.5 py-0.5 text-[10px] font-mono focus:outline-none" 
-                          />
+                        <div className="grid grid-cols-2 gap-1.5">
+                          <div>
+                            <label className="block text-[8px] text-zinc-400 uppercase font-mono">DNI</label>
+                            <input 
+                              type="text" 
+                              value={c2TutorDni} 
+                              onChange={(e) => setC2TutorDni(e.target.value)} 
+                              className="w-full bg-white border border-zinc-200 rounded px-1.5 py-0.5 text-[10px] font-mono focus:outline-none" 
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[8px] text-zinc-400 uppercase font-mono">Mòbil</label>
+                            <input 
+                              type="tel" 
+                              value={c2TutorTelefon} 
+                              onChange={(e) => setC2TutorTelefon(e.target.value)} 
+                              className="w-full bg-white border border-zinc-200 rounded px-1.5 py-0.5 text-[10px] font-mono focus:outline-none" 
+                            />
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Complements i Extres: Clavells i Corbatí */}
+            <div className="bg-zinc-50 rounded-2xl p-4.5 border border-zinc-200/60 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="font-sans font-black text-xs text-zinc-700 uppercase tracking-wider block">
+                  {language === 'ca' ? "Complements i Extres (Editables)" : "Complementos y Extras (Editables)"}
+                </span>
+                <span className="text-[10px] text-zinc-400 font-mono">
+                  {language === 'ca' ? "Clavells: 8€ / Corbatí: 10€" : "Claveles: 8€ / Pajarita: 10€"}
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="bg-white p-3 rounded-xl border border-zinc-200 flex items-center justify-between">
+                  <div>
+                    <label className="block text-xs font-bold text-zinc-800">
+                      {language === 'ca' ? "Clavells" : "Claveles"}
+                    </label>
+                    <span className="text-[10px] text-zinc-400 font-mono">8,00 € / unitat</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setClavellsQty(Math.max(0, clavellsQty - 1))}
+                      className="w-7 h-7 flex items-center justify-center rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold cursor-pointer"
+                    >-</button>
+                    <input 
+                      type="number"
+                      min="0"
+                      value={clavellsQty}
+                      onChange={(e) => setClavellsQty(Math.max(0, parseInt(e.target.value) || 0))}
+                      className="w-14 text-center font-mono font-bold text-sm bg-zinc-50 border border-zinc-200 rounded-lg py-1 focus:outline-none focus:border-fuchsia-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setClavellsQty(clavellsQty + 1)}
+                      className="w-7 h-7 flex items-center justify-center rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold cursor-pointer"
+                    >+</button>
+                  </div>
+                </div>
+
+                <div className="bg-white p-3 rounded-xl border border-zinc-200 flex items-center justify-between">
+                  <div>
+                    <label className="block text-xs font-bold text-zinc-800">
+                      {language === 'ca' ? "Corbatí" : "Pajarita"}
+                    </label>
+                    <span className="text-[10px] text-zinc-400 font-mono">10,00 € / unitat</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setCorbatiQty(Math.max(0, corbatiQty - 1))}
+                      className="w-7 h-7 flex items-center justify-center rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold cursor-pointer"
+                    >-</button>
+                    <input 
+                      type="number"
+                      min="0"
+                      value={corbatiQty}
+                      onChange={(e) => setCorbatiQty(Math.max(0, parseInt(e.target.value) || 0))}
+                      className="w-14 text-center font-mono font-bold text-sm bg-zinc-50 border border-zinc-200 rounded-lg py-1 focus:outline-none focus:border-fuchsia-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setCorbatiQty(corbatiQty + 1)}
+                      className="w-7 h-7 flex items-center justify-center rounded-lg bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold cursor-pointer"
+                    >+</button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1298,82 +1735,67 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
               </div>
             </div>
 
-            {/* Answers questionnaire block */}
+            {/* Dynamic & Configured Questions Section (Editable from Ficha) */}
+            <div className="space-y-4 pt-2 border-t border-zinc-100">
+              <DynamicQuestionsSection
+                preguntesList={preguntesList}
+                respostesCuestionari={respostesCuestionari}
+                onAnswerChange={(qId, val, scope) => {
+                  const q = preguntesList.find(p => p.id === qId);
+                  const k = q ? answerKey(q, scope) : (scope === 'parella' ? qId : `${qId}__${scope}`);
+                  setRespostesCuestionari(prev => ({
+                    ...prev,
+                    [k]: val === false ? 'No' : (val === true ? 'Sí' : val)
+                  }));
+                }}
+                errors={{}}
+                c1Nom={c1Nom}
+                c1Cognoms={c1Cognoms}
+                c2Nom={c2Nom}
+                c2Cognoms={c2Cognoms}
+                titolFormulariDinamic={language === 'ca' ? "Qüestionari Comparsiler (Editable)" : "Cuestionario Comparsiler (Editable)"}
+                cuestionariActiu={true}
+              />
+            </div>
+
+            {/* Other recorded questionnaire responses if any exist */}
             {(() => {
               const FORBIDDEN_KEYS = new Set([
                 'estatCorreu', 'domas_qty', 'mocadors_qty', 'correuContacteParella',
                 'telefonContacteParella', 'emailContactoPareja', 'telefonContactoPareja',
                 'teDomasBalco', 'teMocadorsExtra', 'clavells_qty', 'corbati_qty', 'esmorzar_qty',
-                'extresSeleccionats', 'extres_seleccionats', 'extres'
+                'extresSeleccionats', 'extres_seleccionats', 'extres', 'mailEnviat', 'mailData', 'mailError', 'mailEstat', 'dataUltimCorreu'
               ]);
-              const rawAnswers = registration.respostesCuestionari || {};
-              const allQuestions = config?.preguntesFormulari || [];
+              const rawAnswers = respostesCuestionari || {};
+              const handledKeys = new Set<string>();
+              for (const q of (preguntesList || [])) {
+                handledKeys.add(q.id);
+                handledKeys.add(`${q.id}__c1`);
+                handledKeys.add(`${q.id}__c2`);
+              }
 
-              const validEntries = Object.entries(rawAnswers).filter(([k, v]) => {
-                if (FORBIDDEN_KEYS.has(k) || k.startsWith('extra_qty_') || k.startsWith('_')) return false;
+              const legacyEntries = Object.entries(rawAnswers).filter(([k, v]) => {
+                if (FORBIDDEN_KEYS.has(k) || handledKeys.has(k) || k.startsWith('extra_qty_') || k.startsWith('_')) return false;
                 if (v === undefined || v === null || v === '') return false;
                 if (typeof v === 'object') return false;
                 const s = String(v).trim().toLowerCase();
-                if (s === 'fallat' || s === 'sense resposta' || s === 'sin respuesta') return false;
-
-                // Check condition visibility if key corresponds to a dynamic question
-                const { questionId, scope } = parseScopeAndQuestionId(k);
-                const q = allQuestions.find(p => p.id === questionId);
-                if (q) {
-                  const isVisible = isPreguntaVisible(q, rawAnswers, allQuestions, scope);
-                  if (!isVisible) return false;
-                }
-
-                return true;
+                return s !== 'fallat' && s !== 'sense resposta' && s !== 'sin respuesta';
               });
 
-              if (validEntries.length === 0) return null;
+              if (legacyEntries.length === 0) return null;
 
               return (
-                <div className="bg-zinc-50 p-5 rounded-2xl border border-zinc-100 space-y-4">
-                  <span className="font-sans font-black text-xs text-zinc-600 uppercase tracking-wider block">
-                    {language === 'ca' ? "RESPOSTES AL QÜESTIONARI COMPARSILER:" : "RESPUESTAS AL CUESTIONARIO COMPARSILER:"}
+                <div className="bg-zinc-50 p-4 rounded-2xl border border-zinc-200/60 text-xs space-y-2">
+                  <span className="font-mono text-[10px] text-zinc-500 uppercase font-bold tracking-wider block">
+                    {language === 'ca' ? "Altres respostes registrades:" : "Otras respuestas registradas:"}
                   </span>
-                  <div className="divide-y divide-zinc-200/60 text-xs space-y-3 pt-1">
-                    {validEntries.map(([key, value]) => {
-                      let label = "";
-                      let suffix = "";
-                      const { questionId, scope } = parseScopeAndQuestionId(key);
-                      const configPregunta = allQuestions.find(p => p.id === questionId);
-
-                      if (configPregunta) {
-                        label = configPregunta.titol;
-                        if (scope === 'c1') {
-                          const c1NomFull = registration.c1Nom ? `${registration.c1Nom} ${registration.c1Cognoms}`.trim() : (language === 'ca' ? 'Participant 1' : 'Participante 1');
-                          suffix = ` (Comparser 1 · ${c1NomFull})`;
-                        } else if (scope === 'c2') {
-                          const c2NomFull = registration.c2Nom ? `${registration.c2Nom} ${registration.c2Cognoms}`.trim() : (language === 'ca' ? 'Participant 2' : 'Participante 2');
-                          suffix = ` (Comparser 2 · ${c2NomFull})`;
-                        }
-                      } else if (key === 'preg-1' || key === 'q-1') {
-                        label = language === 'ca' ? "Primera vegada saltant amb El Tast?" : "¿Primera vez saliendo con El Tast?";
-                      } else if (key === 'preg-2' || key === 'q-2') {
-                        label = language === 'ca' ? "Participació al dinar de germanor de la colla?" : "¿Participación en la comida de hermandad de la colla?";
-                      } else if (key === 'preg-3' || key === 'q-3') {
-                        label = language === 'ca' ? "Intoleràncies alimentàries o comentaris dietètics:" : "Intolerancias alimentarias o comentarios dietéticos:";
-                      } else {
-                        label = key;
-                      }
-
-                      return (
-                        <div key={key} className="pt-2">
-                          <p className="font-bold text-zinc-800 mb-1 leading-relaxed">
-                            <TranslatedText text={label} />
-                            {suffix && <span className="text-zinc-500 font-normal">{suffix}</span>}
-                          </p>
-                          <p className="text-zinc-600 font-mono italic">
-                            {value === true ? 'Sí' : value === false ? 'No' : (
-                              <TranslatedText text={String(value)} />
-                            )}
-                          </p>
-                        </div>
-                      );
-                    })}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {legacyEntries.map(([k, val]) => (
+                      <div key={k} className="p-2 bg-white rounded-lg border border-zinc-150">
+                        <span className="font-bold text-zinc-700 block text-[11px]">{k}:</span>
+                        <span className="text-zinc-600 font-mono text-[11px]">{String(val)}</span>
+                      </div>
+                    ))}
                   </div>
                 </div>
               );
