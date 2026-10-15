@@ -1,5 +1,7 @@
 import nodemailer from "nodemailer";
 import { createClient } from "@supabase/supabase-js";
+import { verifySupabaseAdminToken } from "./_supabase-auth.js";
+import { sendConfirmationEmail } from "./_send-confirmation.js";
 
 function maskString(val: string): string {
   if (!val) return '';
@@ -179,6 +181,80 @@ export default async function emailHandler(req: any, res: any) {
       }
     }
 
+    // ==========================================
+    // ROUTE 2.5: Retry Pending Emails (action=retry-pending)
+    // Protected admin action: Retries up to 5 emails with mailEstat != 'enviat'
+    // ==========================================
+    if (action === 'retry-pending') {
+      const authHeader = req?.headers?.authorization || req?.headers?.Authorization;
+      const token = authHeader && typeof authHeader === 'string' && authHeader.startsWith('Bearer ')
+        ? authHeader.substring(7).trim()
+        : '';
+
+      let isAdmin = false;
+      if (token) {
+        try {
+          const authRes = await verifySupabaseAdminToken(token);
+          isAdmin = !!authRes.valid;
+        } catch {
+          isAdmin = false;
+        }
+      }
+
+      if (!isAdmin) {
+        return res.status(401).json({
+          ok: false,
+          error: "UNAUTHORIZED",
+          message: "Es requereix autorització d'administrador per reintentar correus pendents."
+        });
+      }
+
+      const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+      if (!supabaseUrl || !serviceRoleKey) {
+        return res.status(500).json({ ok: false, error: "CONFIG_MISSING", message: "Supabase no configurat" });
+      }
+
+      const supabase = createClient(supabaseUrl, serviceRoleKey);
+      const { data: rows, error: qErr } = await supabase
+        .from('inscripciones')
+        .select('id, codiSeguiment, respostesCuestionari')
+        .order('creadoEn', { ascending: false })
+        .limit(100);
+
+      if (qErr) {
+        return res.status(500).json({ ok: false, error: qErr.message });
+      }
+
+      const pendingRows = (rows || []).filter((r: any) => {
+        const code = (r.codiSeguiment || '').trim();
+        if (!code) return false;
+        const resp = typeof r.respostesCuestionari === 'object' && r.respostesCuestionari
+          ? r.respostesCuestionari
+          : (typeof r.respostesCuestionari === 'string' ? JSON.parse(r.respostesCuestionari || '{}') : {});
+        const isEnviat = (r as any).mailEnviat === true || resp.mailEnviat === true || resp.mailEstat === 'enviat' || resp.estatCorreu === 'enviat';
+        return !isEnviat;
+      });
+
+      const batch = pendingRows.slice(0, 5);
+      const results = [];
+      for (const item of batch) {
+        try {
+          const sendRes = await sendConfirmationEmail({ inscriptionId: item.id });
+          results.push({ id: item.id, ...sendRes });
+        } catch (err: any) {
+          results.push({ id: item.id, ok: false, emailSent: false, error: err?.message || String(err) });
+        }
+      }
+
+      return res.status(200).json({
+        ok: true,
+        pendingTotal: pendingRows.length,
+        retriedCount: batch.length,
+        results
+      });
+    }
+
     // =========================================================================
     // ROUTE 3: Send Confirmation Email (default POST or action=send)
     // NOTE: This function NEVER inserts or modifies records in public.inscripciones.
@@ -224,32 +300,39 @@ export default async function emailHandler(req: any, res: any) {
           const supabase = createClient(supabaseUrl, supabaseKey, { auth: { persistSession: false } });
           const { data: ins, error: fetchErr } = await supabase
             .from('inscripciones')
-            .select('id, codiSeguiment, categoria, c1Nom, c1Cognoms, c1Email, c1Telefon, c2Nom, c2Cognoms, c2Email, c2Telefon, preuCalculat, respostesCuestionari, seleccionsUniforme, estatInscripcio, estat_inscripcio, posicioGlobal, posicio_global')
+            .select('id, codiSeguiment, categoria, c1Nom, c1Cognoms, c1Email, c1Telefon, c2Nom, c2Cognoms, c2Email, c2Telefon, preuCalculat, respostesCuestionari, seleccionsUniforme, estat_inscripcio, posicio_global')
             .eq('id', inscriptionId)
             .single();
 
-          if (!fetchErr && ins) {
-            const lang = body.language === 'es' ? 'es' : 'ca';
-            const isCorrection = Boolean(body.isCorrection);
-            const rawResp = typeof ins.respostesCuestionari === 'object' && ins.respostesCuestionari !== null
-              ? ins.respostesCuestionari
-              : (typeof ins.respostesCuestionari === 'string' ? JSON.parse(ins.respostesCuestionari || '{}') : {});
+          if (fetchErr || !ins) {
+            console.error("[Email fetch inscription error]:", fetchErr);
+            return res.status(404).json({
+              ok: false,
+              emailSent: false,
+              error: "INSCRIPTION_NOT_FOUND",
+              message: fetchErr ? `Error consultant la inscripció: ${fetchErr.message}` : "Inscripció no trobada a la base de dades."
+            });
+          }
 
-            to = (body.to || body.email || (ins as any).emailContactoPareja || rawResp.emailContactoPareja || ins.c1Email || ins.c2Email || '').trim();
-            codiSeguiment = (ins.codiSeguiment || (ins as any).codi_seguiment || (ins as any).codigo || codiSeguiment || '').trim();
+          const lang = body.language === 'es' ? 'es' : 'ca';
+          const isCorrection = Boolean(body.isCorrection);
+          const rawResp = typeof ins.respostesCuestionari === 'object' && ins.respostesCuestionari !== null
+            ? ins.respostesCuestionari
+            : (typeof ins.respostesCuestionari === 'string' ? JSON.parse(ins.respostesCuestionari || '{}') : {});
 
-            const isAdult = String(ins.categoria || '').trim().toUpperCase() === 'ADULT';
-            const categoriaLabel = isAdult 
-              ? (lang === 'ca' ? 'PARELLA ADULTA' : 'PAREJA ADULTA') 
-              : (lang === 'ca' ? 'PARELLA JUVENIL' : 'PAREJA JUVENIL');
+          to = (body.to || body.email || (ins as any).emailContactoPareja || rawResp.emailContactoPareja || ins.c1Email || ins.c2Email || '').trim();
+          codiSeguiment = (ins.codiSeguiment || (ins as any).codi_seguiment || (ins as any).codigo || codiSeguiment || '').trim();
 
-            const isWaitlist = ins.estatInscripcio === 'llista_espera' ||
-                               ins.estat_inscripcio === 'llista_espera' ||
-                               ins.estatInscripcio === 'espera' ||
-                               ins.estat_inscripcio === 'espera';
+          const isAdult = String(ins.categoria || '').trim().toUpperCase() === 'ADULT';
+          const categoriaLabel = isAdult 
+            ? (lang === 'ca' ? 'PARELLA ADULTA' : 'PAREJA ADULTA') 
+            : (lang === 'ca' ? 'PARELLA JUVENIL' : 'PAREJA JUVENIL');
 
-            const posicio = ins.posicioGlobal || ins.posicio_global;
-            const contactPhone = (ins.c1Telefon || rawResp.telefonContactoPareja || ins.c2Telefon || '').trim();
+          const isWaitlist = ins.estat_inscripcio === 'llista_espera' ||
+                             ins.estat_inscripcio === 'espera';
+
+          const posicio = ins.posicio_global;
+          const contactPhone = ((ins as any).telefonContactoPareja || ins.c1Telefon || ins.c2Telefon || rawResp.telefonContactoPareja || '').trim();
 
             // Unified official total calculation (Point 6):
             // 45 base quota + 30 per armilla where c1Vol/c2Vol is true + 8 * clavells + 10 * corbati + 5 per each breakfast 'Sí'
@@ -482,7 +565,6 @@ export default async function emailHandler(req: any, res: any) {
                 <p style="font-size: 12px; color: #888; text-align: center; margin-top: 30px;">Associació Cultural El Tast &bull; tastvng@gmail.com</p>
               </div>
             `;
-          }
         }
       } catch (dbErr) {
         console.warn("[SMTP Lookup Inscription warning]:", dbErr);

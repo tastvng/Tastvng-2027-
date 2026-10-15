@@ -229,6 +229,44 @@ export default function AdminDashboard({
     loadAdminSettings();
   }, []);
 
+  // Periodic background retry of pending / failed emails (every 2 minutes while Secretaría panel is open)
+  useEffect(() => {
+    let isMounted = true;
+    const retryPendingEmails = async () => {
+      try {
+        const { getAdminAccessToken } = await import('../supabaseClient');
+        const token = await getAdminAccessToken();
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json'
+        };
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+        const res = await fetch('/api/email?action=retry-pending', {
+          method: 'POST',
+          headers
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.retriedCount > 0 && onRefreshInscripcions && isMounted) {
+            onRefreshInscripcions();
+          }
+        }
+      } catch {
+        // silent background retry
+      }
+    };
+
+    const initialTimer = setTimeout(retryPendingEmails, 5000);
+    const interval = setInterval(retryPendingEmails, 2 * 60 * 1000);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(initialTimer);
+      clearInterval(interval);
+    };
+  }, [onRefreshInscripcions]);
+
   // Manual confirmation email resender with robust CID logo embedding to prevent blank emails
   const handleResendEmail = async (item: Inscripcio) => {
     setRowSmtpSending(prev => ({ ...prev, [item.id]: 'sending' }));

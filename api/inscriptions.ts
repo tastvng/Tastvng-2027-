@@ -1,4 +1,5 @@
 import { verifySupabaseAdminToken } from "./_supabase-auth.js";
+import { sendConfirmationEmail } from "./_send-confirmation.js";
 import { createClient } from "@supabase/supabase-js";
 import crypto from "crypto";
 // ==========================================
@@ -548,9 +549,13 @@ export default async function inscriptionsHandler(req: any, res: any) {
       // 4. Before inserting, verify if another inscription already exists with the same email
       // and the exact same two members (Point 5). The same email with different couples is valid!
       try {
-        const { data: existingRows } = await serverSupabase
+        const { data: existingRows, error: dupCheckErr } = await serverSupabase
           .from('inscripciones')
-          .select('c1Nom, c1Cognoms, c2Nom, c2Cognoms, emailContactoPareja, c1Email, c2Email');
+          .select('c1Nom, c1Cognoms, c2Nom, c2Cognoms, c1Email, c2Email');
+
+        if (dupCheckErr) {
+          console.error("[DUPLICATE_CHECK_ERROR] Error comprobant parelles duplicades a public.inscripciones:", dupCheckErr);
+        }
 
         const norm = (s: string) => (s || '').trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, ' ');
         const myEmail = contactEmail.toLowerCase();
@@ -558,7 +563,7 @@ export default async function inscriptionsHandler(req: any, res: any) {
         const myC2 = `${norm(c2Nom)} ${norm(c2Cognoms)}`;
 
         const coupleAlreadyExists = (existingRows || []).some((r: any) => {
-          const rEmail = (r.emailContactoPareja || r.c1Email || r.c2Email || '').trim().toLowerCase();
+          const rEmail = (r.c1Email || r.c2Email || '').trim().toLowerCase();
           if (rEmail !== myEmail) return false;
           const rC1 = `${norm(r.c1Nom)} ${norm(r.c1Cognoms)}`;
           const rC2 = `${norm(r.c2Nom)} ${norm(r.c2Cognoms)}`;
@@ -616,26 +621,20 @@ export default async function inscriptionsHandler(req: any, res: any) {
 
       console.log(`[INSERT ok]: table public.inscripciones, id: ${insertedRow.id}, codi: ${confirmedCode}, posicio: ${confirmedPosition}`);
 
-      // 6. Automatic Email Sending (Point 5):
-      // Just after saving and with code assigned, trigger the confirmation email.
-      // If it fails, set mailEstat = 'pendent' and mailError so background worker retries it.
+      // 6. Automatic Email Sending (Point 3):
+      // Just after saving and with code assigned, trigger the confirmation email directly without HTTP.
       let mailSentOk = false;
       let mailSendError: string | null = null;
 
       try {
-        const mailRes = await fetch('http://127.0.0.1:3000/api/email?action=send', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            id: insertedRow.id,
-            language: reg.language || 'ca'
-          })
+        const mailResult = await sendConfirmationEmail({
+          inscriptionId: insertedRow.id,
+          language: reg.language || 'ca'
         });
-        const mailJson = await mailRes.json().catch(() => null);
-        if (mailRes.ok && mailJson?.ok && mailJson?.emailSent) {
+        if (mailResult.ok && mailResult.emailSent) {
           mailSentOk = true;
         } else {
-          mailSendError = mailJson?.message || mailJson?.error || `HTTP ${mailRes.status}`;
+          mailSendError = mailResult.message || mailResult.error || "Error enviant correu";
         }
       } catch (mErr: any) {
         mailSendError = mErr?.message || String(mErr);
