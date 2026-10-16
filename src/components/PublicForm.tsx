@@ -33,6 +33,7 @@ import { CodigoVestimentaModal } from './CodigoVestimentaModal';
 import { DEFAULT_CATEGORIA_DESCRIPTIONS } from '../data';
 import { calculateInscriptionOrderBreakdown } from '../utils/orderCalculations';
 import { answerKey, isPreguntaVisible, cleanupDescendantsOnAnswerChange, visibleAnswers, QuestionScope } from '../utils/questionVisibility';
+import { compressDniImage } from '../utils/imageCompression';
 
 interface PublicFormProps {
   config: SistemaConfig;
@@ -772,7 +773,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
     setCameraOwner(null);
   };
 
-  const capturePhoto = () => {
+  const capturePhoto = async () => {
     if (cameraVideoRef.current && canvasRef.current) {
       const video = cameraVideoRef.current;
       const canvas = canvasRef.current;
@@ -781,25 +782,31 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
         canvas.width = video.videoWidth || 640;
         canvas.height = video.videoHeight || 480;
         context.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const dataUrl = canvas.toDataURL('image/webp');
-        if (cameraOwner === 'c1') {
-          setC1DniUrl(dataUrl);
-          if (errors.c1Dni) {
-            setErrors(prev => {
-              const copy = { ...prev };
-              delete copy.c1Dni;
-              return copy;
-            });
+        const rawDataUrl = canvas.toDataURL('image/webp', 0.9);
+        try {
+          const compressed = await compressDniImage(rawDataUrl, 1280, 0.7);
+          const dataUrl = compressed.dataUrl;
+          if (cameraOwner === 'c1') {
+            setC1DniUrl(dataUrl);
+            if (errors.c1Dni) {
+              setErrors(prev => {
+                const copy = { ...prev };
+                delete copy.c1Dni;
+                return copy;
+              });
+            }
+          } else if (cameraOwner === 'c2') {
+            setC2DniUrl(dataUrl);
+            if (errors.c2Dni) {
+              setErrors(prev => {
+                const copy = { ...prev };
+                delete copy.c2Dni;
+                return copy;
+              });
+            }
           }
-        } else if (cameraOwner === 'c2') {
-          setC2DniUrl(dataUrl);
-          if (errors.c2Dni) {
-            setErrors(prev => {
-              const copy = { ...prev };
-              delete copy.c2Dni;
-              return copy;
-            });
-          }
+        } catch (e) {
+          console.error("Error compressing camera photo:", e);
         }
       }
       stopCamera();
@@ -831,16 +838,16 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
     stopCamera();
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>, owner: 'c1' | 'c2') => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, owner: 'c1' | 'c2') => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 10 * 1024 * 1024) {
-        alert(language === 'ca' ? "L'arxiu supera el màxim permès de 10MB." : "El archivo supera el máximo permitido de 10MB.");
+      if (file.size > 15 * 1024 * 1024) {
+        alert(language === 'ca' ? "L'arxiu supera el màxim permès de 15MB." : "El archivo supera el máximo permitido de 15MB.");
         return;
       }
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const dataUrl = reader.result as string;
+      try {
+        const compressed = await compressDniImage(file, 1280, 0.7);
+        const dataUrl = compressed.dataUrl;
         if (owner === 'c1') {
           setC1DniUrl(dataUrl);
           if (errors.c1Dni) {
@@ -860,8 +867,10 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
             });
           }
         }
-      };
-      reader.readAsDataURL(file);
+      } catch (err) {
+        console.error("Error compressing gallery image:", err);
+        alert(language === 'ca' ? "Error en processar la imatge seleccionada." : "Error al procesar la imagen seleccionada.");
+      }
     }
   };
 
@@ -1061,6 +1070,13 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
       // Never store base64 into the table; if upload fails, abort and show error.
       const uploadWithRetry = async (fileData: string, participant: 'c1' | 'c2', maxRetries = 3): Promise<string> => {
         if (!fileData || !fileData.startsWith('data:')) return fileData;
+        let payloadData = fileData;
+        try {
+          const comp = await compressDniImage(fileData, 1280, 0.7);
+          payloadData = comp.dataUrl;
+        } catch {
+          // If already compressed or canvas fails, proceed with original
+        }
         let lastErr: any = null;
         for (let attempt = 1; attempt <= maxRetries; attempt++) {
           try {
@@ -1070,7 +1086,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
               body: JSON.stringify({
                 codiSeguiment: tempRef,
                 participant,
-                fileData
+                fileData: payloadData
               })
             });
             if (res.ok) {

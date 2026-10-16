@@ -707,7 +707,7 @@ export async function getSupabaseInscripcionById(id: string): Promise<Inscripcio
   try {
     const { data, error } = await supabase
       .from('inscripciones')
-      .select(CAMEL_COLUMNS_NO_DNI)
+      .select(CAMEL_COLUMNS)
       .eq('id', id)
       .maybeSingle();
       

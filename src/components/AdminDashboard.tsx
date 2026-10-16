@@ -44,7 +44,8 @@ import {
   Globe,
   EyeOff,
   RefreshCw,
-  UtensilsCrossed
+  UtensilsCrossed,
+  UploadCloud
 } from 'lucide-react';
 import { Inscripcio, CategoriaParella, EstatPagament, EstatVerificacio, EstatInscripcio, MetodePagament, SistemaConfig, NoticiaXarxes } from '../types';
 import ExcelJS from 'exceljs';
@@ -52,6 +53,7 @@ import AdminPortada from './AdminPortada';
 import AdminPersonalitzacio from './AdminPersonalitzacio';
 import { AdminStaffManagement } from './AdminStaffManagement';
 import { ResumEsmorzarsModal } from './ResumEsmorzarsModal';
+import { AdminDniMigrationModal } from './AdminDniMigrationModal';
 import { calculateDailySummaries } from '../dailySummary';
 import { calculateInscriptionOrderBreakdown, validateInscriptionTotal, getParticipantArmillaInfo } from '../utils/orderCalculations';
 import { getPaymentSummary, metodesTexto, formatEuro } from '../utils/paymentCalculations';
@@ -172,6 +174,7 @@ export default function AdminDashboard({
   // Staff management state (Official Supabase Auth + profiles via server API)
   const [showStaffModal, setShowStaffModal] = useState(false);
   const [showResumEsmorzarsModal, setShowResumEsmorzarsModal] = useState(false);
+  const [showDniMigrationModal, setShowDniMigrationModal] = useState(false);
   const [staffCount, setStaffCount] = useState<number>(3);
   const [inscriptionDeleteConfirmId, setInscriptionDeleteConfirmId] = useState<string | null>(null);
 
@@ -1666,6 +1669,16 @@ export default function AdminDashboard({
                   </button>
                 )}
 
+                <button 
+                  type="button"
+                  onClick={() => setShowDniMigrationModal(true)}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-4 py-3 rounded-2xl transition-all shadow flex items-center gap-1.5 cursor-pointer"
+                  id="btn-migrate-dnis"
+                  title={language === 'ca' ? "Migrar DNI antics en Base64 a Supabase Storage" : "Migrar DNI antiguos en Base64 a Supabase Storage"}
+                >
+                  <UploadCloud size={15} /> {language === 'ca' ? "Migrar DNI antics" : "Migrar DNI antiguos"}
+                </button>
+
                 {selectedIds.length > 0 && (
                   <button 
                     type="button"
@@ -3005,6 +3018,17 @@ export default function AdminDashboard({
         onClose={() => setShowResumEsmorzarsModal(false)}
         inscripcions={inscripcions}
         config={config}
+      />
+
+      {/* 4. Modal: Migració de DNI antics (Base64 a Supabase Storage) */}
+      <AdminDniMigrationModal
+        isOpen={showDniMigrationModal}
+        onClose={() => setShowDniMigrationModal(false)}
+        onMigrationComplete={() => {
+          if (onRefreshInscripcions) {
+            handleRefresh();
+          }
+        }}
       />
     </div>
   );

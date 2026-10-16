@@ -543,10 +543,10 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
       if (signed) {
         setC1DniUrl(signed);
       } else {
-        setDni1Error("No s'ha pogut obtenir l'enllaç");
+        setDni1Error("DNI no disponible");
       }
     } catch (err: any) {
-      setDni1Error(err?.message || "Error generant enllaç signat");
+      setDni1Error("DNI no disponible");
     } finally {
       setLoadingDni1(false);
     }
@@ -569,10 +569,10 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
       if (signed) {
         setC2DniUrl(signed);
       } else {
-        setDni2Error("No s'ha pogut obtenir l'enllaç");
+        setDni2Error("DNI no disponible");
       }
     } catch (err: any) {
-      setDni2Error(err?.message || "Error generant enllaç signat");
+      setDni2Error("DNI no disponible");
     } finally {
       setLoadingDni2(false);
     }
@@ -1885,16 +1885,16 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
                       </div>
                     ) : dni1Error ? (
                       <div className="flex flex-col items-center gap-2 text-center p-4">
-                        <span className="text-amber-400 text-xs">{dni1Error}</span>
+                        <span className="text-amber-400 text-xs font-semibold">DNI no disponible</span>
                         <button
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
                             resolveDni1(c1RawPath);
                           }}
-                          className="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-[10px] font-bold inline-flex items-center gap-1"
+                          className="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-[10px] font-bold inline-flex items-center gap-1 cursor-pointer"
                         >
-                          <RefreshCw size={10} /> {language === 'ca' ? "Regenerar enllaç" : "Regenerar enlace"}
+                          <RefreshCw size={10} /> Reintentar
                         </button>
                       </div>
                     ) : c1DniUrl ? (
@@ -1906,7 +1906,7 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
                           className="object-contain w-full h-full transition-transform duration-300"
                           referrerPolicy="no-referrer"
                           onError={() => {
-                            setDni1Error(language === 'ca' ? "Enllaç caducat o imatge no disponible" : "Enlace caducado o imagen no disponible");
+                            setDni1Error("DNI no disponible");
                           }}
                         />
                         <div className="absolute inset-0 bg-black/5 hover:bg-black/25 transition-colors" />
@@ -2007,16 +2007,16 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
                       </div>
                     ) : dni2Error ? (
                       <div className="flex flex-col items-center gap-2 text-center p-4">
-                        <span className="text-amber-400 text-xs">{dni2Error}</span>
+                        <span className="text-amber-400 text-xs font-semibold">DNI no disponible</span>
                         <button
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
                             resolveDni2(c2RawPath);
                           }}
-                          className="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-[10px] font-bold inline-flex items-center gap-1"
+                          className="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 text-white rounded-lg text-[10px] font-bold inline-flex items-center gap-1 cursor-pointer"
                         >
-                          <RefreshCw size={10} /> {language === 'ca' ? "Regenerar enllaç" : "Regenerar enlace"}
+                          <RefreshCw size={10} /> Reintentar
                         </button>
                       </div>
                     ) : c2DniUrl ? (
@@ -2028,7 +2028,7 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
                           className="object-contain w-full h-full transition-transform duration-300"
                           referrerPolicy="no-referrer"
                           onError={() => {
-                            setDni2Error(language === 'ca' ? "Enllaç caducat o imatge no disponible" : "Enlace caducado o imagen no disponible");
+                            setDni2Error("DNI no disponible");
                           }}
                         />
                         <div className="absolute inset-0 bg-black/5 hover:bg-black/25 transition-colors" />
