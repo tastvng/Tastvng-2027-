@@ -7,6 +7,7 @@
 
 import nodemailer from "nodemailer";
 import { createClient } from "@supabase/supabase-js";
+import { calculateInscriptionOrderBreakdown } from "../src/utils/orderCalculations";
 
 export interface SendConfirmationOptions {
   inscriptionId: string;
@@ -75,7 +76,7 @@ export async function sendConfirmationEmail(options: SendConfirmationOptions): P
   // 3. Fetch inscription using ONLY existing columns (estat_inscripcio, posicio_global)
   const { data: ins, error: fetchErr } = await supabase
     .from('inscripciones')
-    .select('id, codiSeguiment, categoria, c1Nom, c1Cognoms, c1Email, c1Telefon, c2Nom, c2Cognoms, c2Email, c2Telefon, preuCalculat, respostesCuestionari, seleccionsUniforme, estat_inscripcio, posicio_global')
+    .select('id, codiSeguiment, categoria, c1Nom, c1Cognoms, c1Email, c1Telefon, c1Talla, c1UniformeTipus, c2Nom, c2Cognoms, c2Email, c2Telefon, c2Talla, c2UniformeTipus, preuCalculat, respostesCuestionari, seleccionsUniforme, estat_inscripcio, posicio_global')
     .eq('id', inscriptionId)
     .single();
 
@@ -148,33 +149,92 @@ export async function sendConfirmationEmail(options: SendConfirmationOptions): P
   const posicio = ins.posicio_global;
   const contactPhone = ((ins as any).telefonContactoPareja || ins.c1Telefon || ins.c2Telefon || rawResp.telefonContactoPareja || rawResp.telefonContacteParella || '').trim();
 
-  // Official total calculation:
-  // 45 base quota + 30 per armilla where c1Vol/c2Vol is true + 8 * clavells + 10 * corbati + 5 per each breakfast 'Sí'
-  let armillesCount = 0;
-  const selUni = typeof ins.seleccionsUniforme === 'object' && ins.seleccionsUniforme !== null ? ins.seleccionsUniforme : {};
-  const firstUni = Object.values(selUni)[0] as any;
-  if (firstUni) {
-    if (firstUni.c1Vol === true) armillesCount++;
-    if (firstUni.c2Vol === true) armillesCount++;
+  // Load configuration and preguntes from Supabase
+  let config: any = null;
+  try {
+    const { data: pregRows, error: pregErr } = await supabase
+      .from('preguntes')
+      .select('id, titol, tipus, opcions, requerit, activa, ordre, condicio, ambit, presentacio, descripcio, preus, concepte, concepte_es')
+      .order('ordre', { ascending: true });
+
+    if (pregErr) {
+      console.warn("[sendConfirmationEmail] Error consultant taula preguntes:", pregErr.message);
+    }
+
+    const mappedPreguntes = (pregRows || []).map((row: any, idx: number) => {
+      let cond: any = null;
+      if (row.condicio) {
+        let parsed = row.condicio;
+        if (typeof parsed === 'string') {
+          try { parsed = JSON.parse(parsed); } catch {}
+        }
+        if (parsed && typeof parsed === 'object' && parsed.preguntaId) {
+          cond = { preguntaId: String(parsed.preguntaId), valor: String(parsed.valor) };
+        }
+      }
+
+      let cleanPreus: Record<string, number> | undefined = undefined;
+      if (row.preus) {
+        let parsed = row.preus;
+        if (typeof parsed === 'string') {
+          try { parsed = JSON.parse(parsed); } catch {}
+        }
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          const m: Record<string, number> = {};
+          for (const [k, v] of Object.entries(parsed)) {
+            const num = Number(v);
+            if (!isNaN(num) && num >= 0) m[k] = num;
+          }
+          if (Object.keys(m).length > 0) cleanPreus = m;
+        }
+      }
+
+      return {
+        id: String(row.id),
+        titol: String(row.titol || ''),
+        tipus: (row.tipus || 'text') as 'text' | 'select' | 'boolean',
+        opcions: Array.isArray(row.opcions)
+          ? row.opcions
+          : (typeof row.opcions === 'string' ? JSON.parse(row.opcions) : undefined),
+        requerit: !!row.requerit,
+        activa: row.activa !== false,
+        ordre: typeof row.ordre === 'number' ? row.ordre : idx,
+        descripcio: row.descripcio ? String(row.descripcio) : undefined,
+        condicio: cond,
+        ambit: row.ambit === 'comparser' ? 'comparser' : 'parella',
+        presentacio: row.presentacio === 'botons' ? 'botons' : 'desplegable',
+        preus: cleanPreus,
+        concepte: row.concepte ? String(row.concepte) : undefined,
+        concepteES: (row.concepte_es ?? row.concepteES) ? String(row.concepte_es ?? row.concepteES) : undefined
+      };
+    });
+
+    let dbConfigVal: any = null;
+    try {
+      const { data: stRow } = await supabase
+        .from('settings')
+        .select('value')
+        .eq('key', 'tast_config_2026')
+        .maybeSingle();
+      if (stRow?.value) {
+        dbConfigVal = typeof stRow.value === 'string' ? JSON.parse(stRow.value) : stRow.value;
+      }
+    } catch {}
+
+    config = {
+      ...(dbConfigVal && typeof dbConfigVal === 'object' ? dbConfigVal : {}),
+      preguntesFormulari: mappedPreguntes
+    };
+  } catch (err: any) {
+    console.warn("[sendConfirmationEmail] Excepció carregant preguntes:", err?.message || err);
   }
 
-  const clavellsQty = Math.max(0, parseInt(String(rawResp.clavells_qty || 0), 10) || 0);
-  const corbatiQty = Math.max(0, parseInt(String(rawResp.corbati_qty || 0), 10) || 0);
+  const breakdown = calculateInscriptionOrderBreakdown(ins as any, config, lang);
+  const totalCalculat = breakdown.totalCalculat;
 
-  let esmorzarCount = 0;
-  Object.keys(rawResp).forEach(k => {
-    if (k.startsWith('preg-') && (k.endsWith('__c1') || k.endsWith('__c2'))) {
-      const val = String(rawResp[k] || '').trim().toLowerCase();
-      if (val === 'sí' || val === 'si') esmorzarCount++;
-    }
-  });
-
-  const quotaBase = 45;
-  const armillesTotal = armillesCount * 30;
-  const clavellsTotal = clavellsQty * 8;
-  const corbatiTotal = corbatiQty * 10;
-  const esmorzarTotal = esmorzarCount * 5;
-  const totalCalculat = quotaBase + armillesTotal + clavellsTotal + corbatiTotal + esmorzarTotal;
+  if (typeof ins.preuCalculat === 'number' && !isNaN(ins.preuCalculat) && ins.preuCalculat !== totalCalculat) {
+    console.warn(`[sendConfirmationEmail] Advertència de total: el total calculat per al correu (${totalCalculat}€) no coincideix amb ins.preuCalculat (${ins.preuCalculat}€) per a la inscripció ${ins.id || codiSeguiment}.`);
+  }
 
   const prefixSubject = isCorrection ? (lang === 'ca' ? '[VERSIÓ CORREGIDA] ' : '[VERSIÓN CORREGIDA] ') : '';
   const subject = `${prefixSubject}Confirmació de preinscripció - El Tast 2027 [CODI DE SEGUIMENT: ${codiSeguiment}]`;
@@ -189,58 +249,22 @@ export async function sendConfirmationEmail(options: SendConfirmationOptions): P
 
   let breakdownRows = `
     <tr style="border-bottom: 1px solid #f0f0f2;">
-      <td style="padding: 10px 8px; font-weight: 600; color: #111115;">Quota inscripció (${categoriaLabel})</td>
+      <td style="padding: 10px 8px; font-weight: 600; color: #111115;">Quota inscripció (${breakdown.categoriaNom || categoriaLabel})</td>
       <td style="padding: 10px 8px; text-align: center; font-family: monospace;">1</td>
       <td style="padding: 10px 8px; text-align: center; font-size: 11px; color: #666;">Inscripció</td>
-      <td style="padding: 10px 8px; text-align: right; font-family: monospace;">45.00€</td>
-      <td style="padding: 10px 8px; text-align: right; font-weight: 700; font-family: monospace;">45.00€</td>
+      <td style="padding: 10px 8px; text-align: right; font-family: monospace;">${Number(breakdown.categoriaQuotaBase).toFixed(2)}€</td>
+      <td style="padding: 10px 8px; text-align: right; font-weight: 700; font-family: monospace;">${Number(breakdown.categoriaQuotaBase).toFixed(2)}€</td>
     </tr>
   `;
 
-  if (armillesCount > 0) {
+  for (const mat of breakdown.materials) {
     breakdownRows += `
       <tr style="border-bottom: 1px solid #f0f0f2;">
-        <td style="padding: 10px 8px; font-weight: 600; color: #111115;">Armilla oficial</td>
-        <td style="padding: 10px 8px; text-align: center; font-family: monospace;">${armillesCount}</td>
-        <td style="padding: 10px 8px; text-align: center; font-size: 11px; color: #666;">Vestuari</td>
-        <td style="padding: 10px 8px; text-align: right; font-family: monospace;">30.00€</td>
-        <td style="padding: 10px 8px; text-align: right; font-weight: 700; font-family: monospace;">${armillesTotal}.00€</td>
-      </tr>
-    `;
-  }
-
-  if (clavellsQty > 0) {
-    breakdownRows += `
-      <tr style="border-bottom: 1px solid #f0f0f2;">
-        <td style="padding: 10px 8px; font-weight: 600; color: #111115;">Clavells</td>
-        <td style="padding: 10px 8px; text-align: center; font-family: monospace;">${clavellsQty}</td>
-        <td style="padding: 10px 8px; text-align: center; font-size: 11px; color: #666;">Complements</td>
-        <td style="padding: 10px 8px; text-align: right; font-family: monospace;">8.00€</td>
-        <td style="padding: 10px 8px; text-align: right; font-weight: 700; font-family: monospace;">${clavellsTotal}.00€</td>
-      </tr>
-    `;
-  }
-
-  if (corbatiQty > 0) {
-    breakdownRows += `
-      <tr style="border-bottom: 1px solid #f0f0f2;">
-        <td style="padding: 10px 8px; font-weight: 600; color: #111115;">Corbatí</td>
-        <td style="padding: 10px 8px; text-align: center; font-family: monospace;">${corbatiQty}</td>
-        <td style="padding: 10px 8px; text-align: center; font-size: 11px; color: #666;">Complements</td>
-        <td style="padding: 10px 8px; text-align: right; font-family: monospace;">10.00€</td>
-        <td style="padding: 10px 8px; text-align: right; font-weight: 700; font-family: monospace;">${corbatiTotal}.00€</td>
-      </tr>
-    `;
-  }
-
-  if (esmorzarCount > 0) {
-    breakdownRows += `
-      <tr style="border-bottom: 1px solid #f0f0f2;">
-        <td style="padding: 10px 8px; font-weight: 600; color: #111115;">Esmorzar complet</td>
-        <td style="padding: 10px 8px; text-align: center; font-family: monospace;">${esmorzarCount}</td>
-        <td style="padding: 10px 8px; text-align: center; font-size: 11px; color: #666;">Esmorzar</td>
-        <td style="padding: 10px 8px; text-align: right; font-family: monospace;">5.00€</td>
-        <td style="padding: 10px 8px; text-align: right; font-weight: 700; font-family: monospace;">${esmorzarTotal}.00€</td>
+        <td style="padding: 10px 8px; font-weight: 600; color: #111115;">${mat.nom}</td>
+        <td style="padding: 10px 8px; text-align: center; font-family: monospace;">${mat.quantitat}</td>
+        <td style="padding: 10px 8px; text-align: center; font-size: 11px; color: #666;">${mat.modalitat || '—'}</td>
+        <td style="padding: 10px 8px; text-align: right; font-family: monospace;">${Number(mat.preuUnitari).toFixed(2)}€</td>
+        <td style="padding: 10px 8px; text-align: right; font-weight: 700; font-family: monospace;">${Number(mat.subtotal).toFixed(2)}€</td>
       </tr>
     `;
   }
