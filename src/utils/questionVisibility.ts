@@ -1,4 +1,4 @@
-import { PreguntaDinamica } from '../types';
+import type { PreguntaDinamica } from '../types';
 
 export type QuestionScope = 'parella' | 'c1' | 'c2';
 

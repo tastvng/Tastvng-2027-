@@ -2,7 +2,7 @@ import nodemailer from "nodemailer";
 import { createClient } from "@supabase/supabase-js";
 import { verifySupabaseAdminToken } from "./_supabase-auth.js";
 import { sendConfirmationEmail } from "./_send-confirmation.js";
-import { calculateInscriptionOrderBreakdown } from "../src/utils/orderCalculations";
+import { calculateInscriptionOrderBreakdown } from "../src/utils/orderCalculations.js";
 
 function maskString(val: string): string {
   if (!val) return '';

@@ -7,7 +7,7 @@
 
 import nodemailer from "nodemailer";
 import { createClient } from "@supabase/supabase-js";
-import { calculateInscriptionOrderBreakdown } from "../src/utils/orderCalculations";
+import { calculateInscriptionOrderBreakdown } from "../src/utils/orderCalculations.js";
 
 export interface SendConfirmationOptions {
   inscriptionId: string;

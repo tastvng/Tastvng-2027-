@@ -1,5 +1,5 @@
-import { Inscripcio, SistemaConfig, CategoriaParella } from '../types';
-import { answerKey, isPreguntaVisible } from './questionVisibility';
+import type { Inscripcio, SistemaConfig, CategoriaParella } from '../types';
+import { answerKey, isPreguntaVisible } from './questionVisibility.js';
 
 export interface SelectedMaterialItem {
   id: string;
@@ -52,7 +52,7 @@ export function calculateInscriptionOrderBreakdown(
     : options;
   // 1. Calculate Category Base Fee
   const isAdult = String(registration.categoria || '').toUpperCase().includes('ADULT') || 
-                  registration.categoria === CategoriaParella.ADULT;
+                  (registration.categoria as string) === 'ADULT';
 
   let categoriaQuotaBase = 0;
   let categoriaNom = '';
