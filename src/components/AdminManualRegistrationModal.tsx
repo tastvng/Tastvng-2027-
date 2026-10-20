@@ -798,6 +798,7 @@ export const AdminManualRegistrationModal: React.FC<AdminManualRegistrationModal
               setDniUrl={setC1DniUrl}
               esMenor={c1EsMenor}
               setEsMenor={setC1EsMenor}
+              categoria={categoria}
               tutorNom={c1TutorNom}
               setTutorNom={setC1TutorNom}
               tutorCognoms={c1TutorCognoms}
@@ -831,6 +832,7 @@ export const AdminManualRegistrationModal: React.FC<AdminManualRegistrationModal
               setDniUrl={setC2DniUrl}
               esMenor={c2EsMenor}
               setEsMenor={setC2EsMenor}
+              categoria={categoria}
               tutorNom={c2TutorNom}
               setTutorNom={setC2TutorNom}
               tutorCognoms={c2TutorCognoms}

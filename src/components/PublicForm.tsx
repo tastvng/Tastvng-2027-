@@ -177,6 +177,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
   const [c1Talla, setC1Talla] = useState('');
   const [c1DniUrl, setC1DniUrl] = useState<string | null>(null);
   const [c1EsMenor, setC1EsMenor] = useState(false);
+  const [c1Confirma18, setC1Confirma18] = useState(false);
   const [c1TutorNom, setC1TutorNom] = useState('');
   const [c1TutorCognoms, setC1TutorCognoms] = useState('');
   const [c1TutorDni, setC1TutorDni] = useState('');
@@ -190,12 +191,56 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
   const [c2Talla, setC2Talla] = useState('');
   const [c2DniUrl, setC2DniUrl] = useState<string | null>(null);
   const [c2EsMenor, setC2EsMenor] = useState(false);
+  const [c2Confirma18, setC2Confirma18] = useState(false);
   const [c2TutorNom, setC2TutorNom] = useState('');
   const [c2TutorCognoms, setC2TutorCognoms] = useState('');
   const [c2TutorDni, setC2TutorDni] = useState('');
   const [c2TutorTelefon, setC2TutorTelefon] = useState('');
   const [c2TutorAccepta, setC2TutorAccepta] = useState(false);
   const [c2UniformeTipus, setC2UniformeTipus] = useState<'compra' | 'lloguer' | ''>('');
+
+  const handleSetC1EsMenor = (val: boolean) => {
+    setC1EsMenor(val);
+    if (val) {
+      setC1Confirma18(false);
+      setErrors(prev => {
+        if (!prev.c1Confirma18) return prev;
+        const cp = { ...prev };
+        delete cp.c1Confirma18;
+        return cp;
+      });
+    }
+  };
+
+  const handleSetC2EsMenor = (val: boolean) => {
+    setC2EsMenor(val);
+    if (val) {
+      setC2Confirma18(false);
+      setErrors(prev => {
+        if (!prev.c2Confirma18) return prev;
+        const cp = { ...prev };
+        delete cp.c2Confirma18;
+        return cp;
+      });
+    }
+  };
+
+  const handleSelectCategoria = (selectedCat: CategoriaParella) => {
+    setCategoria(selectedCat);
+    if (selectedCat === CategoriaParella.JUVENIL) {
+      setC1EsMenor(true);
+      setC2EsMenor(true);
+      setC1Confirma18(false);
+      setC2Confirma18(false);
+      setErrors(prev => {
+        if (!prev.c1Confirma18 && !prev.c2Confirma18) return prev;
+        const cp = { ...prev };
+        delete cp.c1Confirma18;
+        delete cp.c2Confirma18;
+        return cp;
+      });
+    }
+  };
 
   // Dynamic uniform/equipment selections state
   const [seleccionsUniforme, setSeleccionsUniforme] = useState<Record<string, { c1Talla: string; c2Talla: string; c1Quantitat: number; c2Quantitat: number; c1Tipus: 'compra' | 'lloguer'; c2Tipus: 'compra' | 'lloguer'; c1Vol?: boolean; c2Vol?: boolean }>>(() => {
@@ -893,6 +938,14 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
       tempErrors.c1Dni = language === 'ca' ? "Heu de pujar una imatge del DNI frontal" : "Debe subir una imagen del DNI frontal";
     }
 
+    const isJuvenilCategory = categoria === CategoriaParella.JUVENIL || String(categoria).toUpperCase().includes('JUVENIL');
+
+    if (isJuvenilCategory && !c1EsMenor && !c1Confirma18) {
+      tempErrors.c1Confirma18 = language === 'ca'
+        ? "En categoria Juvenil cal marcar que és menor d'edat o confirmar que té 18 anys."
+        : "En categoría Juvenil debe marcar que es menor de edad o confirmar que tiene 18 años.";
+    }
+
     if (c1EsMenor) {
       if (!c1TutorNom.trim()) tempErrors.c1TutorNom = language === 'ca' ? "El nom del tutor és obligatori" : "El nombre del tutor es obligatorio";
       if (!c1TutorCognoms.trim()) tempErrors.c1TutorCognoms = language === 'ca' ? "Els cognoms del tutor són obligatoris" : "Los apellidos del tutor son obligatorios";
@@ -905,6 +958,12 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
     if (!c2Cognoms.trim()) tempErrors.c2Cognoms = language === 'ca' ? "Els cognoms del segon participant són obligatoris" : "Los apellidos del segundo participante son obligatorios";
     if (config.requerirDni !== false && !c2DniUrl) {
       tempErrors.c2Dni = language === 'ca' ? "Heu de pujar una imatge del DNI frontal del segon participant" : "Debe subir una imagen del DNI frontal del segundo participante";
+    }
+
+    if (isJuvenilCategory && !c2EsMenor && !c2Confirma18) {
+      tempErrors.c2Confirma18 = language === 'ca'
+        ? "En categoria Juvenil cal marcar que és menor d'edat o confirmar que té 18 anys."
+        : "En categoría Juvenil debe marcar que es menor de edad o confirmar que tiene 18 años.";
     }
 
     if (c2EsMenor) {
@@ -1461,11 +1520,11 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
 
               return (
                 <div 
-                  onClick={() => !isAdultDisabled && setCategoria(CategoriaParella.ADULT)}
+                  onClick={() => !isAdultDisabled && handleSelectCategoria(CategoriaParella.ADULT)}
                   onKeyDown={(e) => {
                     if ((e.key === 'Enter' || e.key === ' ') && !isAdultDisabled) {
                       e.preventDefault();
-                      setCategoria(CategoriaParella.ADULT);
+                      handleSelectCategoria(CategoriaParella.ADULT);
                     }
                   }}
                   role="radio"
@@ -1512,11 +1571,11 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
 
               return (
                 <div 
-                  onClick={() => !isJuvenilDisabled && setCategoria(CategoriaParella.JUVENIL)}
+                  onClick={() => !isJuvenilDisabled && handleSelectCategoria(CategoriaParella.JUVENIL)}
                   onKeyDown={(e) => {
                     if ((e.key === 'Enter' || e.key === ' ') && !isJuvenilDisabled) {
                       e.preventDefault();
-                      setCategoria(CategoriaParella.JUVENIL);
+                      handleSelectCategoria(CategoriaParella.JUVENIL);
                     }
                   }}
                   role="radio"
@@ -1672,7 +1731,19 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
             dniUrl={c1DniUrl}
             setDniUrl={setC1DniUrl}
             esMenor={c1EsMenor}
-            setEsMenor={setC1EsMenor}
+            setEsMenor={handleSetC1EsMenor}
+            categoria={categoria}
+            confirma18={c1Confirma18}
+            onConfirma18Change={(val) => {
+              setC1Confirma18(val);
+              if (val && errors.c1Confirma18) {
+                setErrors(prev => {
+                  const cp = { ...prev };
+                  delete cp.c1Confirma18;
+                  return cp;
+                });
+              }
+            }}
             tutorNom={c1TutorNom}
             setTutorNom={setC1TutorNom}
             tutorCognoms={c1TutorCognoms}
@@ -1705,7 +1776,19 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
             dniUrl={c2DniUrl}
             setDniUrl={setC2DniUrl}
             esMenor={c2EsMenor}
-            setEsMenor={setC2EsMenor}
+            setEsMenor={handleSetC2EsMenor}
+            categoria={categoria}
+            confirma18={c2Confirma18}
+            onConfirma18Change={(val) => {
+              setC2Confirma18(val);
+              if (val && errors.c2Confirma18) {
+                setErrors(prev => {
+                  const cp = { ...prev };
+                  delete cp.c2Confirma18;
+                  return cp;
+                });
+              }
+            }}
             tutorNom={c2TutorNom}
             setTutorNom={setC2TutorNom}
             tutorCognoms={c2TutorCognoms}

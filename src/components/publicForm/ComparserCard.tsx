@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Camera, Upload, Trash2, AlertTriangle, Check, Database, Info, Shield, ShieldCheck, ChevronDown, ChevronUp, Lock } from 'lucide-react';
-import { SistemaConfig } from '../../types';
+import { SistemaConfig, CategoriaParella } from '../../types';
 import { useLanguage } from '../../LanguageContext';
 import TranslatedText from '../TranslatedText';
 
@@ -14,6 +14,9 @@ interface ComparserCardProps {
   setDniUrl: (val: string | null) => void;
   esMenor: boolean;
   setEsMenor: (val: boolean) => void;
+  categoria?: CategoriaParella | string;
+  confirma18?: boolean;
+  onConfirma18Change?: (val: boolean) => void;
   tutorNom: string;
   setTutorNom: (val: string) => void;
   tutorCognoms: string;
@@ -57,6 +60,9 @@ export const ComparserCard: React.FC<ComparserCardProps> = ({
   setDniUrl,
   esMenor,
   setEsMenor,
+  categoria,
+  confirma18,
+  onConfirma18Change,
   tutorNom,
   setTutorNom,
   tutorCognoms,
@@ -84,6 +90,7 @@ export const ComparserCard: React.FC<ComparserCardProps> = ({
   const { language, t } = useLanguage();
   const prefix = `c${num}`;
   const [showPrivacyPolicy, setShowPrivacyPolicy] = useState(false);
+  const isJuvenil = categoria === CategoriaParella.JUVENIL || String(categoria || '').toUpperCase().includes('JUVENIL');
 
   // Keys for uniform line selection based on participant number
   const keyTalla = num === 1 ? 'c1Talla' : 'c2Talla';
@@ -184,6 +191,54 @@ export const ComparserCard: React.FC<ComparserCardProps> = ({
               </button>
             </div>
           </div>
+
+          {isJuvenil && !esMenor && (
+            <div className="pt-2 border-t border-zinc-200/60 space-y-2.5 animate-fadeIn">
+              <div className="text-[11px] bg-amber-50 text-amber-900 border border-amber-200 rounded-xl p-3 flex items-start gap-2.5 font-medium leading-relaxed">
+                <AlertTriangle className="shrink-0 text-amber-600 mt-0.5" size={16} />
+                <div>
+                  <p className="font-bold text-xs text-amber-950">
+                    {language === 'ca' ? "Avís: Categoria Juvenil" : "Aviso: Categoría Juvenil"}
+                  </p>
+                  <p className="text-[11px] text-amber-800 mt-0.5">
+                    {language === 'ca'
+                      ? "En la categoria Juvenil tots els participants han de ser menors d'edat, excepte si tenen 18 anys."
+                      : "En la categoría Juvenil todos los participantes deben ser menores de edad, excepto si tienen 18 años."}
+                  </p>
+                </div>
+              </div>
+
+              {onConfirma18Change && (
+                <div>
+                  <label className={`flex items-start gap-2.5 p-3 rounded-xl border transition-all cursor-pointer ${
+                    confirma18 
+                      ? 'bg-fuchsia-50 border-fuchsia-500 text-fuchsia-700 font-bold' 
+                      : errors[`${prefix}Confirma18`] 
+                        ? 'bg-red-50/50 border-red-300 text-red-950 animate-shake' 
+                        : 'bg-white border-zinc-200 text-zinc-700 hover:border-zinc-300'
+                  }`}>
+                    <input
+                      type="checkbox"
+                      id={`checkbox-${prefix}-confirma18`}
+                      checked={!!confirma18}
+                      onChange={(e) => onConfirma18Change(e.target.checked)}
+                      className="mt-0.5 rounded border-zinc-300 text-fuchsia-600 focus:ring-fuchsia-500 cursor-pointer"
+                    />
+                    <span className="text-xs font-semibold leading-tight select-none">
+                      {language === 'ca'
+                        ? "Parella juvenil: confirmo que aquest participant té 18 anys."
+                        : "Pareja juvenil: confirmo que este participante tiene 18 años."}
+                    </span>
+                  </label>
+                  {errors[`${prefix}Confirma18`] && (
+                    <p className="text-[10px] text-red-500 font-bold mt-1">
+                      {errors[`${prefix}Confirma18`]}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {esMenor && (
             <div className="pt-2 border-t border-zinc-200/60 space-y-3 animate-fadeIn">
