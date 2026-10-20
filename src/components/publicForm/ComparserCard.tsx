@@ -159,18 +159,18 @@ export const ComparserCard: React.FC<ComparserCardProps> = ({
 
         {/* Minor status and Tutor details */}
         <div className="bg-zinc-50 border border-zinc-200 rounded-2xl p-4 space-y-3">
-          <div className="flex justify-between items-center">
-            <span id={`label-${prefix}-esmenor`} className="block text-xs font-bold text-zinc-700 tracking-tight">
+          <div className="flex justify-between items-center gap-3">
+            <span id={`label-${prefix}-esmenor`} className="block text-xs font-bold text-zinc-700 tracking-tight flex-1 min-w-0">
               {language === 'ca' 
                 ? (num === 1 ? "El primer comparser és menor d'edat? *" : "El segon comparser o comparsera és menor d'edat? *")
                 : (num === 1 ? "¿El primer comparsero es menor de edad? *" : "¿El segundo participante (comparsero/a) es menor de edad? *")}
             </span>
-            <div className="flex rounded-lg overflow-hidden border border-zinc-200 bg-white p-0.5" role="group" aria-labelledby={`label-${prefix}-esmenor`}>
+            <div className="flex rounded-lg overflow-hidden border border-zinc-200 bg-white p-0.5 shrink-0" role="group" aria-labelledby={`label-${prefix}-esmenor`}>
               <button
                 type="button"
                 onClick={() => setEsMenor(false)}
                 aria-pressed={!esMenor}
-                className={`text-xs px-3 py-1 font-bold rounded-md transition-all cursor-pointer ${!esMenor ? 'bg-fuchsia-100 text-fuchsia-700 shadow-sm' : 'text-zinc-500 hover:text-zinc-800'}`}
+                className={`text-xs px-4 py-2 font-bold rounded-md transition-all cursor-pointer ${!esMenor ? 'bg-fuchsia-100 text-fuchsia-700 shadow-sm' : 'text-zinc-500 hover:text-zinc-800'}`}
               >
                 No
               </button>
@@ -178,7 +178,7 @@ export const ComparserCard: React.FC<ComparserCardProps> = ({
                 type="button"
                 onClick={() => setEsMenor(true)}
                 aria-pressed={esMenor}
-                className={`text-xs px-3 py-1 font-bold rounded-md transition-all cursor-pointer ${esMenor ? 'bg-fuchsia-600 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-800'}`}
+                className={`text-xs px-4 py-2 font-bold rounded-md transition-all cursor-pointer ${esMenor ? 'bg-fuchsia-600 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-800'}`}
               >
                 Sí
               </button>
