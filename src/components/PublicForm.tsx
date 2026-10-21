@@ -576,7 +576,9 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
       ? (e.currentTarget as HTMLVideoElement) 
       : (videoRef.current || (document.getElementById('video-cuestionari') as HTMLVideoElement | null));
     if (v && !videoWatchedRef.current) {
-      if (v.currentTime > maxWatchedTimeRef.current + 2) {
+      const dur = (!isNaN(v.duration) && isFinite(v.duration)) ? v.duration : 0;
+      const isNearEnd = (dur > 0 && v.currentTime >= dur - 3) || (dur > 0 && (v.currentTime / dur) >= 0.95);
+      if (!isNearEnd && v.currentTime > maxWatchedTimeRef.current + 2) {
         v.currentTime = maxWatchedTimeRef.current;
       }
     }

@@ -1,7 +1,15 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { CheckCircle2, AlertTriangle, RefreshCw, Shirt, VideoOff } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, RefreshCw, Shirt, VideoOff, Copy, Check } from 'lucide-react';
 import { useLanguage } from '../LanguageContext';
 import Player from '@vimeo/player';
+
+export const VIDEO_FALLBACK_SECONDS = 150;
+
+export function isInAppBrowser(): boolean {
+  if (typeof navigator === 'undefined' || !navigator.userAgent) return false;
+  const ua = navigator.userAgent;
+  return /Instagram|FBAN|FBAV|TikTok|Line/i.test(ua);
+}
 
 export interface CodigoVestimentaModalProps {
   youtubeUrl?: string;
@@ -123,6 +131,69 @@ export const CodigoVestimentaModal: React.FC<CodigoVestimentaModalProps> = ({
   const [videoLoadError, setVideoLoadError] = useState<string | null>(null);
   const [isMissingOriginal, setIsMissingOriginal] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+
+  // In-app browser detection (Instagram, Facebook, TikTok, Line)
+  const [isInApp] = useState<boolean>(() => isInAppBrowser());
+  const [copiedLink, setCopiedLink] = useState<boolean>(false);
+
+  // Plan B fallback mode state if Vimeo SDK cannot communicate
+  const [isSdkCommunicating, setIsSdkCommunicating] = useState<boolean>(false);
+  const [fallbackActivated, setFallbackActivated] = useState<boolean>(false);
+  const [fallbackRemainingSeconds, setFallbackRemainingSeconds] = useState<number>(VIDEO_FALLBACK_SECONDS);
+  const fallbackStartTimeRef = useRef<number | null>(null);
+  const sdkCommunicatingRef = useRef<boolean>(false);
+  const hasEndedRef = useRef<boolean>(false);
+  const videoDurationRef = useRef<number>(0);
+
+  const activateFallback = useCallback(() => {
+    if (sdkCommunicatingRef.current || hasEndedRef.current) return;
+    setFallbackActivated(prev => {
+      if (prev) return prev;
+      fallbackStartTimeRef.current = Date.now();
+      return true;
+    });
+  }, []);
+
+  const markSdkCommunicating = useCallback(() => {
+    sdkCommunicatingRef.current = true;
+    setIsSdkCommunicating(true);
+  }, []);
+
+  const handleCopyLink = async () => {
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(window.location.href);
+      } else {
+        const input = document.createElement('input');
+        input.value = window.location.href;
+        document.body.appendChild(input);
+        input.select();
+        document.execCommand('copy');
+        document.body.removeChild(input);
+      }
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2500);
+    } catch (e) {
+      console.warn('Could not copy link to clipboard:', e);
+    }
+  };
+
+  // Fallback timer countdown
+  useEffect(() => {
+    if (!fallbackActivated || videoWatched || isSdkCommunicating) return;
+
+    const tick = () => {
+      const now = Date.now();
+      const startTime = fallbackStartTimeRef.current || now;
+      const elapsed = Math.floor((now - startTime) / 1000);
+      const remaining = Math.max(0, VIDEO_FALLBACK_SECONDS - elapsed);
+      setFallbackRemainingSeconds(remaining);
+    };
+
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [fallbackActivated, videoWatched, isSdkCommunicating]);
 
   // Reference to iframe container for Vimeo Player SDK
   const vimeoIframeRef = useRef<HTMLIFrameElement | null>(null);
@@ -265,6 +336,7 @@ export const CodigoVestimentaModal: React.FC<CodigoVestimentaModalProps> = ({
     const iframe = vimeoIframeRef.current;
     let player: Player | null = null;
     let isMounted = true;
+    let readyResolved = false;
 
     // Safety timeout: stop spinner after 5 seconds so user can see and interact with Vimeo player
     const safetyTimeout = setTimeout(() => {
@@ -273,21 +345,43 @@ export const CodigoVestimentaModal: React.FC<CodigoVestimentaModalProps> = ({
       }
     }, 5000);
 
+    // Requirement 2: If player.ready() does not resolve in 8 seconds, activate fallback mode
+    const readyTimeout = setTimeout(() => {
+      if (isMounted && !readyResolved && !sdkCommunicatingRef.current) {
+        console.warn('[Vimeo] player.ready() not resolved in 8s -> activating fallback mode');
+        activateFallback();
+      }
+    }, 8000);
+
+    // Requirement 2: If after 20s from initialization no play/timeupdate event arrives, activate fallback mode
+    const playTimeout = setTimeout(() => {
+      if (isMounted && !sdkCommunicatingRef.current && !hasEndedRef.current) {
+        console.warn('[Vimeo] No play or timeupdate event received after 20s -> activating fallback mode');
+        activateFallback();
+      }
+    }, 20000);
+
     try {
       player = new Player(iframe);
       vimeoPlayerInstanceRef.current = player;
 
       player.ready().then(() => {
+        console.log('[Vimeo event] ready');
+        readyResolved = true;
         clearTimeout(safetyTimeout);
+        clearTimeout(readyTimeout);
         if (isMounted) {
           setIsLoading(false);
           setVideoLoadError(null);
         }
       }).catch((err: any) => {
+        console.log('[Vimeo event] ready error', err);
         clearTimeout(safetyTimeout);
+        clearTimeout(readyTimeout);
         if (!isMounted) return;
-        console.error('[Vimeo Player Ready Error]', err);
         setIsLoading(false);
+        activateFallback();
+
         const isBlocked = err?.name === 'PrivacyError' || 
           err?.name === 'SecurityError' ||
           (err?.message && (
@@ -313,6 +407,7 @@ export const CodigoVestimentaModal: React.FC<CodigoVestimentaModalProps> = ({
       });
 
       player.on('loaded', () => {
+        console.log('[Vimeo event] loaded');
         clearTimeout(safetyTimeout);
         if (isMounted) {
           setIsLoading(false);
@@ -320,6 +415,7 @@ export const CodigoVestimentaModal: React.FC<CodigoVestimentaModalProps> = ({
         }
         // Trigger loadedmetadata callback
         player?.getDuration().then(duration => {
+          videoDurationRef.current = duration;
           const fakeVideoElement = {
             duration,
             currentTime: 0,
@@ -329,48 +425,90 @@ export const CodigoVestimentaModal: React.FC<CodigoVestimentaModalProps> = ({
         }).catch(() => {});
       });
 
+      player.on('play', () => {
+        console.log('[Vimeo event] play');
+        markSdkCommunicating();
+      });
+
+      player.on('playing', () => {
+        console.log('[Vimeo event] playing');
+        markSdkCommunicating();
+      });
+
       let maxWatchedSeconds = 0;
 
       player.on('timeupdate', (data: { seconds: number; duration: number; percent: number }) => {
+        console.log('[Vimeo event] timeupdate', { seconds: data.seconds, percent: data.percent, duration: data.duration });
+        markSdkCommunicating();
+
+        if (data.duration > 0) {
+          videoDurationRef.current = data.duration;
+        }
+
         if (data.seconds > maxWatchedSeconds && data.seconds <= maxWatchedSeconds + 3) {
           maxWatchedSeconds = data.seconds;
         }
 
+        // Requirement 1: Mark as completed if percent >= 0.95 (not 0.999) or seconds near end
+        const isCompleted = data.percent >= 0.95 || (data.duration > 0 && data.seconds >= data.duration - 1.5);
+
         const fakeVideoElement = {
           duration: data.duration,
           currentTime: data.seconds,
-          ended: data.percent >= 0.999 || (data.duration > 0 && data.seconds >= data.duration - 0.5)
+          ended: isCompleted
         } as unknown as HTMLVideoElement;
 
         onVideoTimeUpdateRef.current?.({ currentTarget: fakeVideoElement } as unknown as React.SyntheticEvent<HTMLVideoElement>);
 
-        // Requirement 6: The button unlocks ONLY when the correct video has been completely played
-        if (data.duration > 0 && (data.seconds >= data.duration - 0.5 || data.percent >= 0.999)) {
+        if (isCompleted) {
+          hasEndedRef.current = true;
           onVideoEndedRef.current?.();
         }
       });
 
       player.on('ended', () => {
+        console.log('[Vimeo event] ended');
+        markSdkCommunicating();
+        hasEndedRef.current = true;
+        onVideoEndedRef.current?.();
+      });
+
+      (player as any).on('finish', () => {
+        console.log('[Vimeo event] finish');
+        markSdkCommunicating();
+        hasEndedRef.current = true;
         onVideoEndedRef.current?.();
       });
 
       player.on('pause', () => {
+        console.log('[Vimeo event] pause');
         onVideoPauseRef.current?.();
       });
 
       player.on('seeked', (data: any) => {
+        console.log('[Vimeo event] seeked', data);
         const seekTime = (data && typeof data.seconds === 'number') ? data.seconds : 0;
-        if (seekTime > maxWatchedSeconds + 2) {
-          player?.setCurrentTime(maxWatchedSeconds).catch(() => {});
+        const duration = videoDurationRef.current || (data && typeof data.duration === 'number' ? data.duration : 0);
+        const isNearEnd = (duration > 0 && seekTime >= duration - 3) || (data && typeof data.percent === 'number' && data.percent >= 0.95);
+
+        // Requirement 1: NO reviertas el tiempo si el vídeo ya ha terminado o el seek es al final
+        if (!hasEndedRef.current && !videoWatched && !isNearEnd) {
+          if (seekTime > maxWatchedSeconds + 2) {
+            console.log('[Vimeo anti-skip] reverting from', seekTime, 'to', maxWatchedSeconds);
+            player?.setCurrentTime(maxWatchedSeconds).catch(() => {});
+          }
         }
         onVideoSeekingRef.current?.({} as unknown as React.SyntheticEvent<HTMLVideoElement>);
       });
 
       player.on('error', (err: any) => {
+        console.log('[Vimeo event] error', err);
         clearTimeout(safetyTimeout);
+        clearTimeout(readyTimeout);
         if (!isMounted) return;
-        console.error('[Vimeo Player Error]', err);
         setIsLoading(false);
+        activateFallback();
+
         const isBlocked = err?.name === 'PrivacyError' || 
           err?.name === 'SecurityError' ||
           (err?.message && (
@@ -396,7 +534,10 @@ export const CodigoVestimentaModal: React.FC<CodigoVestimentaModalProps> = ({
       });
     } catch (err: any) {
       clearTimeout(safetyTimeout);
+      clearTimeout(readyTimeout);
+      clearTimeout(playTimeout);
       console.error('[Vimeo Init Error]', err);
+      activateFallback();
       setVideoLoadError(
         language === 'ca'
           ? "No s'ha pogut inicialitzar el reproductor de Vimeo."
@@ -407,6 +548,8 @@ export const CodigoVestimentaModal: React.FC<CodigoVestimentaModalProps> = ({
     return () => {
       isMounted = false;
       clearTimeout(safetyTimeout);
+      clearTimeout(readyTimeout);
+      clearTimeout(playTimeout);
       if (player) {
         try {
           player.destroy();
@@ -486,6 +629,40 @@ export const CodigoVestimentaModal: React.FC<CodigoVestimentaModalProps> = ({
           </div>
         </div>
       </div>
+
+      {/* In-app browser notice (Instagram, Facebook, TikTok, Line) */}
+      {isInApp && (
+        <div 
+          id="in-app-browser-warning"
+          className="bg-amber-500/15 border border-amber-500/40 rounded-2xl p-3.5 text-xs text-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fadeIn"
+        >
+          <div className="flex items-start gap-2.5">
+            <AlertTriangle className="text-amber-400 shrink-0 mt-0.5" size={16} />
+            <span className="leading-snug">
+              {language === 'ca'
+                ? "Per veure bé el vídeo, obre aquesta pàgina al navegador (Safari/Chrome)"
+                : "Para ver bien el vídeo, abre esta página en el navegador (Safari/Chrome)"}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={handleCopyLink}
+            className="shrink-0 inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold rounded-xl text-xs transition cursor-pointer active:scale-95 shadow-sm"
+          >
+            {copiedLink ? (
+              <>
+                <Check size={14} className="stroke-[2.5]" />
+                <span>{language === 'ca' ? "Enllaç copiat!" : "¡Enlace copiado!"}</span>
+              </>
+            ) : (
+              <>
+                <Copy size={14} />
+                <span>{language === 'ca' ? "Copiar enllaç" : "Copiar enlace"}</span>
+              </>
+            )}
+          </button>
+        </div>
+      )}
 
       {/* Video Container: explicit visible height, aspect-video, no display:none */}
       <div 
@@ -604,6 +781,57 @@ export const CodigoVestimentaModal: React.FC<CodigoVestimentaModalProps> = ({
           </div>
         )}
       </div>
+
+      {/* Fallback mode if Vimeo SDK cannot communicate */}
+      {!isSdkCommunicating && fallbackActivated && !videoWatched && (
+        <div 
+          id="video-fallback-container"
+          className="bg-zinc-900 border border-amber-500/30 rounded-2xl p-4 space-y-3 animate-fadeIn"
+        >
+          <div className="flex items-start gap-2.5">
+            <AlertTriangle className="text-amber-400 shrink-0 mt-0.5" size={16} />
+            <div>
+              <p className="text-xs font-bold text-amber-200">
+                {language === 'ca'
+                  ? "No podem comprovar automàticament que has vist el vídeo"
+                  : "No podemos comprobar automáticamente que has visto el vídeo"}
+              </p>
+              <p className="text-[11px] text-zinc-400 mt-0.5 leading-relaxed">
+                {language === 'ca'
+                  ? "El navegador actual no permet la comunicació amb el reproductor. Si ja heu reproduït el vídeo, podeu confirmar-ho un cop finalitzat el temps mínim."
+                  : "El navegador actual no permite la comunicación con el reproductor. Si ya has reproducido el vídeo, puedes confirmarlo una vez finalizado el tiempo mínimo."}
+              </p>
+            </div>
+          </div>
+
+          <div className="pt-1 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+            <button
+              type="button"
+              disabled={fallbackRemainingSeconds > 0}
+              onClick={() => {
+                onVideoEndedRef.current?.();
+              }}
+              className={`w-full sm:w-auto px-5 py-2.5 rounded-xl font-bold text-xs transition flex items-center justify-center gap-2 ${
+                fallbackRemainingSeconds > 0
+                  ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed border border-zinc-700/50'
+                  : 'bg-emerald-600 hover:bg-emerald-500 text-white cursor-pointer shadow-lg active:scale-95'
+              }`}
+            >
+              <CheckCircle2 size={16} />
+              <span>
+                {language === 'ca' ? "He vist el vídeo complet" : "He visto el vídeo completo"}
+                {fallbackRemainingSeconds > 0 ? ` (${fallbackRemainingSeconds}s)` : ''}
+              </span>
+            </button>
+
+            {fallbackRemainingSeconds > 0 && (
+              <span className="text-[10px] text-zinc-500 font-mono text-center sm:text-right">
+                {language === 'ca' ? `Es podrà prémer en ${fallbackRemainingSeconds} segons` : `Se podrá pulsar en ${fallbackRemainingSeconds} segundos`}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Requirement / Status Notice (Appears only once) */}
       {videoWatched ? (
