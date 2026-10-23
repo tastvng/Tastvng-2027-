@@ -45,7 +45,8 @@ import {
   EyeOff,
   RefreshCw,
   UtensilsCrossed,
-  UploadCloud
+  UploadCloud,
+  Flag
 } from 'lucide-react';
 import { Inscripcio, CategoriaParella, EstatPagament, EstatVerificacio, EstatInscripcio, MetodePagament, SistemaConfig, NoticiaXarxes } from '../types';
 import ExcelJS from 'exceljs';
@@ -53,6 +54,7 @@ import AdminPortada from './AdminPortada';
 import AdminPersonalitzacio from './AdminPersonalitzacio';
 import { AdminStaffManagement } from './AdminStaffManagement';
 import { ResumEsmorzarsModal } from './ResumEsmorzarsModal';
+import { LlistatBanderesModal } from './LlistatBanderesModal';
 import { AdminDniMigrationModal } from './AdminDniMigrationModal';
 import { calculateDailySummaries } from '../dailySummary';
 import { calculateInscriptionOrderBreakdown, validateInscriptionTotal, getParticipantArmillaInfo } from '../utils/orderCalculations';
@@ -174,6 +176,7 @@ export default function AdminDashboard({
   // Staff management state (Official Supabase Auth + profiles via server API)
   const [showStaffModal, setShowStaffModal] = useState(false);
   const [showResumEsmorzarsModal, setShowResumEsmorzarsModal] = useState(false);
+  const [showLlistatBanderesModal, setShowLlistatBanderesModal] = useState(false);
   const [showDniMigrationModal, setShowDniMigrationModal] = useState(false);
   const [staffCount, setStaffCount] = useState<number>(3);
   const [inscriptionDeleteConfirmId, setInscriptionDeleteConfirmId] = useState<string | null>(null);
@@ -1655,6 +1658,16 @@ export default function AdminDashboard({
                   <UtensilsCrossed size={15} /> {language === 'ca' ? "Resum Esmorzars" : "Resumen Almuerzos"}
                 </button>
 
+                <button 
+                  type="button"
+                  onClick={() => setShowLlistatBanderesModal(true)}
+                  className="bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs px-4 py-3 rounded-2xl transition-all shadow flex items-center gap-1.5 cursor-pointer"
+                  id="btn-llistat-banderes"
+                  title={language === 'ca' ? "Llistat de parelles classificades per banderes" : "Listado de parejas clasificadas por banderas"}
+                >
+                  <Flag size={15} /> {language === 'ca' ? "Llistat per Banderes" : "Listado por Banderas"}
+                </button>
+
                 {onRefreshInscripcions && (
                   <button 
                     type="button"
@@ -3016,6 +3029,14 @@ export default function AdminDashboard({
       <ResumEsmorzarsModal
         isOpen={showResumEsmorzarsModal}
         onClose={() => setShowResumEsmorzarsModal(false)}
+        inscripcions={inscripcions}
+        config={config}
+      />
+
+      {/* Modal: Llistat de Parelles per Banderes */}
+      <LlistatBanderesModal
+        isOpen={showLlistatBanderesModal}
+        onClose={() => setShowLlistatBanderesModal(false)}
         inscripcions={inscripcions}
         config={config}
       />
