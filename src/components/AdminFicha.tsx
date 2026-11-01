@@ -37,7 +37,7 @@ import {
 import { useLanguage } from '../LanguageContext';
 import TranslatedText from './TranslatedText';
 import { Inscripcio, EstatPagament, EstatVerificacio, EstatInscripcio, MetodePagament, CategoriaParella, SistemaConfig, PagamentRegistrat } from '../types';
-import { calculateInscriptionOrderBreakdown, validateInscriptionTotal } from '../utils/orderCalculations';
+import { calculateInscriptionOrderBreakdown, validateInscriptionTotal, buildCurrentExtres } from '../utils/orderCalculations';
 import { determineCodeGroup, allocateNextCode } from '../utils/codeAllocator';
 import { parseScopeAndQuestionId, isPreguntaVisible, answerKey } from '../utils/questionVisibility';
 import { getPaymentSummary, derivedEstatPagament, derivedMetodePagament, parseImport, formatEuro } from '../utils/paymentCalculations';
@@ -239,11 +239,25 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
     return 'pendent';
   });
 
+  // Dynamically compute current clean extras from scratch
+  const effExtres = useMemo(() => {
+    return buildCurrentExtres(
+      clavellsQty,
+      corbatiQty,
+      respostesCuestionari,
+      config,
+      language,
+      extresSeleccionats,
+      preguntesList
+    );
+  }, [clavellsQty, corbatiQty, respostesCuestionari, config, language, extresSeleccionats, preguntesList]);
+
   const currentRecord = useMemo<Inscripcio>(() => {
     const effResp: Record<string, any> = {
       ...respostesCuestionari,
       clavells_qty: String(clavellsQty),
       corbati_qty: String(corbatiQty),
+      extresSeleccionats: effExtres,
       mailEnviat,
       mailData,
       mailError,
@@ -252,17 +266,21 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
       dataUltimCorreu: mailData
     };
 
-    const selUniRecord = {
-      ...(registration.seleccionsUniforme || {}),
-      'lin-1': {
-        c1Vol,
-        c1Talla: c1Vol ? c1Talla.trim() : '',
-        c1Tipus: c1Vol ? c1UniformeTipus : '',
-        c2Vol,
-        c2Talla: c2Vol ? c2Talla.trim() : '',
-        c2Tipus: c2Vol ? c2UniformeTipus : ''
-      }
+    const currentUniformEntry = {
+      c1Vol,
+      c1Talla: c1Vol ? c1Talla.trim() : '',
+      c1Tipus: c1Vol ? c1UniformeTipus : '',
+      c2Vol,
+      c2Talla: c2Vol ? c2Talla.trim() : '',
+      c2Tipus: c2Vol ? c2UniformeTipus : ''
     };
+
+    const existingUniformeKeys = Object.keys(registration.seleccionsUniforme || {});
+    const uniformKeysToUpdate = new Set(['lin-1', 'uniforme', 'armilla', ...existingUniformeKeys]);
+    const selUniRecord: Record<string, any> = {};
+    for (const key of uniformKeysToUpdate) {
+      selUniRecord[key] = currentUniformEntry;
+    }
 
     return {
       ...registration,
@@ -275,10 +293,10 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
       c1Talla: c1Vol ? c1Talla.trim() : '',
       c1UniformeTipus: c1Vol ? (c1UniformeTipus as any) : undefined,
       c1EsMenor,
-      c1TutorNom: c1TutorNom.trim(),
-      c1TutorCognoms: c1TutorCognoms.trim(),
-      c1TutorDni: c1TutorDni.trim(),
-      c1TutorTelefon: c1TutorTelefon.trim(),
+      c1TutorNom: c1EsMenor ? c1TutorNom.trim() : '',
+      c1TutorCognoms: c1EsMenor ? c1TutorCognoms.trim() : '',
+      c1TutorDni: c1EsMenor ? c1TutorDni.trim() : '',
+      c1TutorTelefon: c1EsMenor ? c1TutorTelefon.trim() : '',
       c2Nom: c2Nom.trim(),
       c2Cognoms: c2Cognoms.trim(),
       c2Email: c2Email.trim() || emailContactoPareja.trim(),
@@ -286,16 +304,16 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
       c2Talla: c2Vol ? c2Talla.trim() : '',
       c2UniformeTipus: c2Vol ? (c2UniformeTipus as any) : undefined,
       c2EsMenor,
-      c2TutorNom: c2TutorNom.trim(),
-      c2TutorCognoms: c2TutorCognoms.trim(),
-      c2TutorDni: c2TutorDni.trim(),
-      c2TutorTelefon: c2TutorTelefon.trim(),
+      c2TutorNom: c2EsMenor ? c2TutorNom.trim() : '',
+      c2TutorCognoms: c2EsMenor ? c2TutorCognoms.trim() : '',
+      c2TutorDni: c2EsMenor ? c2TutorDni.trim() : '',
+      c2TutorTelefon: c2EsMenor ? c2TutorTelefon.trim() : '',
       emailContactoPareja: emailContactoPareja.trim(),
       telefonContactoPareja: telefonContactoPareja.trim(),
       c1Vol,
       c2Vol,
       seleccionsUniforme: selUniRecord,
-      extresSeleccionats,
+      extresSeleccionats: effExtres,
       respostesCuestionari: effResp,
       mailEnviat,
       mailData,
@@ -306,7 +324,7 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
     registration, codiSeguiment, categoria, emailContactoPareja, telefonContactoPareja,
     c1Nom, c1Cognoms, c1Email, c1Telefon, c1Talla, c1UniformeTipus, c1EsMenor, c1TutorNom, c1TutorCognoms, c1TutorDni, c1TutorTelefon, c1Vol,
     c2Nom, c2Cognoms, c2Email, c2Telefon, c2Talla, c2UniformeTipus, c2EsMenor, c2TutorNom, c2TutorCognoms, c2TutorDni, c2TutorTelefon, c2Vol,
-    extresSeleccionats, respostesCuestionari, clavellsQty, corbatiQty, mailEnviat, mailData, mailError, mailEstat
+    effExtres, respostesCuestionari, clavellsQty, corbatiQty, mailEnviat, mailData, mailError, mailEstat
   ]);
 
   // Single Source of Truth Order Breakdown and Validation
@@ -343,58 +361,139 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
   }, [pagaments]);
 
   const hasUnsavedExtres = useMemo(() => {
-    return JSON.stringify(extresSeleccionats) !== JSON.stringify(registration.extresSeleccionats || []);
-  }, [extresSeleccionats, registration.extresSeleccionats]);
+    return JSON.stringify(effExtres) !== JSON.stringify(registration.extresSeleccionats || []);
+  }, [effExtres, registration.extresSeleccionats]);
 
-  // Check if breakfast recalculation can be performed
-  const hasPricedBreakfastQuestion = useMemo(() => {
-    return (config?.preguntesFormulari || []).some(q => 
-      q.preus && typeof q.preus === 'object' && Object.values(q.preus).some(p => typeof p === 'number' && !isNaN(p) && p > 0)
-    );
-  }, [config?.preguntesFormulari]);
+  const [isRecalculating, setIsRecalculating] = useState(false);
 
-  const hasSavedEsmorzarLines = useMemo(() => {
-    return (extresSeleccionats || []).some(e => String(e.id || '').startsWith('esm-'));
-  }, [extresSeleccionats]);
+  // Recalculates breakdown from current fields, updates state and syncs to Supabase without touching payments
+  const handleRecalcular = async () => {
+    setIsRecalculating(true);
+    setValidationError(null);
 
-  const canRecalcularEsmorzar = hasPricedBreakfastQuestion || hasSavedEsmorzarLines;
+    try {
+      const cleanExtres = buildCurrentExtres(
+        clavellsQty,
+        corbatiQty,
+        respostesCuestionari,
+        config,
+        language,
+        extresSeleccionats,
+        preguntesList
+      );
 
-  const handleRecalcularEsmorzar = () => {
-    if (!canRecalcularEsmorzar) return;
+      const effResp: Record<string, any> = {
+        ...respostesCuestionari,
+        clavells_qty: String(clavellsQty),
+        corbati_qty: String(corbatiQty),
+        extresSeleccionats: cleanExtres,
+        mailEnviat,
+        mailData,
+        mailError,
+        mailEstat,
+        estatCorreu: mailEstat,
+        dataUltimCorreu: mailData
+      };
 
-    const recalculatedBreakdown = calculateInscriptionOrderBreakdown(
-      currentRecord,
-      config,
-      language,
-      { recalcularEsmorzar: true }
-    );
+      const currentUniformEntry = {
+        c1Vol,
+        c1Talla: c1Vol ? c1Talla.trim() : '',
+        c1Tipus: c1Vol ? c1UniformeTipus : '',
+        c2Vol,
+        c2Talla: c2Vol ? c2Talla.trim() : '',
+        c2Tipus: c2Vol ? c2UniformeTipus : ''
+      };
+      const existingUniformeKeys = Object.keys(registration.seleccionsUniforme || {});
+      const uniformKeysToUpdate = new Set(['lin-1', 'uniforme', 'armilla', ...existingUniformeKeys]);
+      const selUniRecord: Record<string, any> = {};
+      for (const key of uniformKeysToUpdate) {
+        selUniRecord[key] = currentUniformEntry;
+      }
 
-    const oldTotal = breakdown.totalCalculat;
-    const newTotal = recalculatedBreakdown.totalCalculat;
-    const diff = Math.round((newTotal - oldTotal) * 100) / 100;
-    const diffFormatted = diff >= 0 ? `+${formatEuro(diff)}` : `-${formatEuro(Math.abs(diff))}`;
+      const recRecord: Inscripcio = {
+        ...currentRecord,
+        categoria,
+        c1Vol,
+        c2Vol,
+        c1Talla: c1Vol ? c1Talla.trim() : '',
+        c1UniformeTipus: c1Vol ? (c1UniformeTipus as any) : undefined,
+        c2Talla: c2Vol ? c2Talla.trim() : '',
+        c2UniformeTipus: c2Vol ? (c2UniformeTipus as any) : undefined,
+        c1EsMenor,
+        c1TutorNom: c1EsMenor ? c1TutorNom.trim() : '',
+        c1TutorCognoms: c1EsMenor ? c1TutorCognoms.trim() : '',
+        c1TutorDni: c1EsMenor ? c1TutorDni.trim() : '',
+        c1TutorTelefon: c1EsMenor ? c1TutorTelefon.trim() : '',
+        c2EsMenor,
+        c2TutorNom: c2EsMenor ? c2TutorNom.trim() : '',
+        c2TutorCognoms: c2EsMenor ? c2TutorCognoms.trim() : '',
+        c2TutorDni: c2EsMenor ? c2TutorDni.trim() : '',
+        c2TutorTelefon: c2EsMenor ? c2TutorTelefon.trim() : '',
+        seleccionsUniforme: selUniRecord,
+        extresSeleccionats: cleanExtres,
+        respostesCuestionari: effResp
+      };
 
-    const confirmMsg = language === 'ca'
-      ? `Passarà de ${formatEuro(oldTotal)} a ${formatEuro(newTotal)} (${diffFormatted}). Això canvia el pendent de pagament. Continuar?`
-      : `Pasará de ${formatEuro(oldTotal)} a ${formatEuro(newTotal)} (${diffFormatted}). Esto cambia el pendiente de pago. ¿Continuar?`;
+      const newBreakdown = calculateInscriptionOrderBreakdown(recRecord, config, language, { recalcularEsmorzar: true });
+      const newPaymentSummary = getPaymentSummary({ ...recRecord, pagaments }, newBreakdown.totalCalculat);
+      const derivedEstat = derivedEstatPagament(newPaymentSummary);
+      const derivedMetode = derivedMetodePagament(pagaments);
 
-    if (!window.confirm(confirmMsg)) {
-      return;
+      setExtresSeleccionats(cleanExtres);
+      setRespostesCuestionari(effResp);
+
+      const updatedInscripcio: Inscripcio = {
+        ...recRecord,
+        preuCalculat: newBreakdown.totalCalculat,
+        pagaments, // Registered payments untouched
+        estatPagament: derivedEstat,
+        metodePagament: derivedMetode,
+        actualizadoEn: new Date().toISOString()
+      };
+
+      const modifiedUpdates: Record<string, any> = {
+        preuCalculat: newBreakdown.totalCalculat,
+        estatPagament: derivedEstat,
+        respostesCuestionari: effResp,
+        seleccionsUniforme: selUniRecord,
+        c1Talla: c1Vol ? c1Talla.trim() : '',
+        c1UniformeTipus: c1Vol ? c1UniformeTipus : null,
+        c2Talla: c2Vol ? c2Talla.trim() : '',
+        c2UniformeTipus: c2Vol ? c2UniformeTipus : null,
+        c1EsMenor,
+        c2EsMenor,
+        extresSeleccionats: cleanExtres
+      };
+      if (!c1EsMenor) {
+        modifiedUpdates.c1TutorNom = '';
+        modifiedUpdates.c1TutorCognoms = '';
+        modifiedUpdates.c1TutorDni = '';
+        modifiedUpdates.c1TutorTelefon = '';
+      }
+      if (!c2EsMenor) {
+        modifiedUpdates.c2TutorNom = '';
+        modifiedUpdates.c2TutorCognoms = '';
+        modifiedUpdates.c2TutorDni = '';
+        modifiedUpdates.c2TutorTelefon = '';
+      }
+
+      setDbSaveStatus('saving');
+      const saveRes: any = await onSave(updatedInscripcio, modifiedUpdates);
+      if (saveRes && saveRes.ok === false) {
+        setDbSaveStatus('error');
+        setValidationError(saveRes.error || (language === 'ca' ? "Error en desar el recàlcul" : "Error al guardar el recálculo"));
+      } else {
+        setDbSaveStatus('success');
+        setSaveSuccess(true);
+        setTimeout(() => setSaveSuccess(false), 2500);
+      }
+    } catch (err: any) {
+      console.error("Error recalculating ficha:", err);
+      setDbSaveStatus('error');
+      setValidationError(err?.message || (language === 'ca' ? "Error en recalcular" : "Error al recalcular"));
+    } finally {
+      setIsRecalculating(false);
     }
-
-    const nonEsmorzar = (extresSeleccionats || []).filter(e => !String(e.id || '').startsWith('esm-'));
-    const newEsmorzar = recalculatedBreakdown.materials
-      .filter(m => m.modalitat === 'Esmorzar' || m.id.startsWith('esm-'))
-      .map(m => ({
-        id: m.id,
-        nom: m.nom,
-        quantitat: m.quantitat,
-        preuUnitari: m.preuUnitari,
-        modalitat: m.modalitat
-      }));
-
-    const updatedExtres = [...nonEsmorzar, ...newEsmorzar];
-    setExtresSeleccionats(updatedExtres);
   };
 
   const handleSendEmail = async () => {
@@ -884,10 +983,10 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
       c1Talla: c1Vol ? c1Talla.trim() : '',
       c1UniformeTipus: c1Vol ? (c1UniformeTipus as any) : undefined,
       c1EsMenor,
-      c1TutorNom: c1TutorNom.trim(),
-      c1TutorCognoms: c1TutorCognoms.trim(),
-      c1TutorDni: c1TutorDni.trim(),
-      c1TutorTelefon: c1TutorTelefon.trim(),
+      c1TutorNom: c1EsMenor ? c1TutorNom.trim() : '',
+      c1TutorCognoms: c1EsMenor ? c1TutorCognoms.trim() : '',
+      c1TutorDni: c1EsMenor ? c1TutorDni.trim() : '',
+      c1TutorTelefon: c1EsMenor ? c1TutorTelefon.trim() : '',
       c2Nom: c2Nom.trim(),
       c2Cognoms: c2Cognoms.trim(),
       c2Email: c2Email.trim() || emailContactoPareja.trim(),
@@ -895,13 +994,13 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
       c2Talla: c2Vol ? c2Talla.trim() : '',
       c2UniformeTipus: c2Vol ? (c2UniformeTipus as any) : undefined,
       c2EsMenor,
-      c2TutorNom: c2TutorNom.trim(),
-      c2TutorCognoms: c2TutorCognoms.trim(),
-      c2TutorDni: c2TutorDni.trim(),
-      c2TutorTelefon: c2TutorTelefon.trim(),
+      c2TutorNom: c2EsMenor ? c2TutorNom.trim() : '',
+      c2TutorCognoms: c2EsMenor ? c2TutorCognoms.trim() : '',
+      c2TutorDni: c2EsMenor ? c2TutorDni.trim() : '',
+      c2TutorTelefon: c2EsMenor ? c2TutorTelefon.trim() : '',
       c1Vol,
       c2Vol,
-      extresSeleccionats,
+      extresSeleccionats: effExtres,
       preuCalculat: breakdown.totalCalculat,
       pagaments,
       estatPagament: derivedEstat,
@@ -917,6 +1016,9 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
       mailEstat: newMailEstat,
       respostesCuestionari: {
         ...currentRecord.respostesCuestionari,
+        clavells_qty: String(clavellsQty),
+        corbati_qty: String(corbatiQty),
+        extresSeleccionats: effExtres,
         mailEnviat: newMailEnviat,
         mailEstat: newMailEstat,
         estatCorreu: newMailEstat
@@ -924,7 +1026,9 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
       actualizadoEn: new Date().toISOString()
     };
 
-    // Calculate diff: ONLY modified fields sent to DB (point 2.b)
+    setExtresSeleccionats(effExtres);
+
+    // Calculate diff & ensure all recalculation fields are persisted
     const modifiedUpdates: Record<string, any> = {};
     if (cleanCode !== (registration.codiSeguiment || '').trim()) modifiedUpdates.codiSeguiment = cleanCode;
     if (categoria !== registration.categoria) modifiedUpdates.categoria = categoria;
@@ -940,58 +1044,41 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
       modifiedUpdates.c1Telefon = effTel;
       modifiedUpdates.c2Telefon = effTel;
     }
-    if (c1Vol !== initC1Vol || c1Talla.trim() !== (registration.c1Talla || '').trim()) {
-      modifiedUpdates.c1Talla = c1Vol ? c1Talla.trim() : '';
-    }
-    if (c1Vol !== initC1Vol || c1UniformeTipus !== (registration.c1UniformeTipus || '')) {
-      modifiedUpdates.c1UniformeTipus = c1Vol ? c1UniformeTipus : null;
-    }
-    if (c1EsMenor !== Boolean(registration.c1EsMenor)) modifiedUpdates.c1EsMenor = c1EsMenor;
-    if (c1TutorNom.trim() !== (registration.c1TutorNom || '').trim()) modifiedUpdates.c1TutorNom = c1TutorNom.trim();
-    if (c1TutorCognoms.trim() !== (registration.c1TutorCognoms || '').trim()) modifiedUpdates.c1TutorCognoms = c1TutorCognoms.trim();
-    if (c1TutorDni.trim() !== (registration.c1TutorDni || '').trim()) modifiedUpdates.c1TutorDni = c1TutorDni.trim();
-    if (c1TutorTelefon.trim() !== (registration.c1TutorTelefon || '').trim()) modifiedUpdates.c1TutorTelefon = c1TutorTelefon.trim();
 
-    if (c2Nom.trim() !== (registration.c2Nom || '').trim()) modifiedUpdates.c2Nom = c2Nom.trim();
-    if (c2Cognoms.trim() !== (registration.c2Cognoms || '').trim()) modifiedUpdates.c2Cognoms = c2Cognoms.trim();
-    if (c2Vol !== initC2Vol || c2Talla.trim() !== (registration.c2Talla || '').trim()) {
-      modifiedUpdates.c2Talla = c2Vol ? c2Talla.trim() : '';
-    }
-    if (c2Vol !== initC2Vol || c2UniformeTipus !== (registration.c2UniformeTipus || '')) {
-      modifiedUpdates.c2UniformeTipus = c2Vol ? c2UniformeTipus : null;
-    }
-    if (c2EsMenor !== Boolean(registration.c2EsMenor)) modifiedUpdates.c2EsMenor = c2EsMenor;
-    if (c2TutorNom.trim() !== (registration.c2TutorNom || '').trim()) modifiedUpdates.c2TutorNom = c2TutorNom.trim();
-    if (c2TutorCognoms.trim() !== (registration.c2TutorCognoms || '').trim()) modifiedUpdates.c2TutorCognoms = c2TutorCognoms.trim();
-    if (c2TutorDni.trim() !== (registration.c2TutorDni || '').trim()) modifiedUpdates.c2TutorDni = c2TutorDni.trim();
-    if (c2TutorTelefon.trim() !== (registration.c2TutorTelefon || '').trim()) modifiedUpdates.c2TutorTelefon = c2TutorTelefon.trim();
+    modifiedUpdates.c1Talla = c1Vol ? c1Talla.trim() : '';
+    modifiedUpdates.c1UniformeTipus = c1Vol ? c1UniformeTipus : null;
+    modifiedUpdates.c1EsMenor = c1EsMenor;
+    modifiedUpdates.c1TutorNom = c1EsMenor ? c1TutorNom.trim() : '';
+    modifiedUpdates.c1TutorCognoms = c1EsMenor ? c1TutorCognoms.trim() : '';
+    modifiedUpdates.c1TutorDni = c1EsMenor ? c1TutorDni.trim() : '';
+    modifiedUpdates.c1TutorTelefon = c1EsMenor ? c1TutorTelefon.trim() : '';
 
-    if (breakdown.totalCalculat !== registration.preuCalculat) modifiedUpdates.preuCalculat = breakdown.totalCalculat;
+    modifiedUpdates.c2Nom = c2Nom.trim();
+    modifiedUpdates.c2Cognoms = c2Cognoms.trim();
+    modifiedUpdates.c2Talla = c2Vol ? c2Talla.trim() : '';
+    modifiedUpdates.c2UniformeTipus = c2Vol ? c2UniformeTipus : null;
+    modifiedUpdates.c2EsMenor = c2EsMenor;
+    modifiedUpdates.c2TutorNom = c2EsMenor ? c2TutorNom.trim() : '';
+    modifiedUpdates.c2TutorCognoms = c2EsMenor ? c2TutorCognoms.trim() : '';
+    modifiedUpdates.c2TutorDni = c2EsMenor ? c2TutorDni.trim() : '';
+    modifiedUpdates.c2TutorTelefon = c2EsMenor ? c2TutorTelefon.trim() : '';
+
+    // Always update total calculated, payment status, and uniforms
+    modifiedUpdates.preuCalculat = breakdown.totalCalculat;
+    modifiedUpdates.estatPagament = derivedEstat;
+    modifiedUpdates.metodePagament = derivedMetode;
+    modifiedUpdates.seleccionsUniforme = updatedInscripcio.seleccionsUniforme;
+    modifiedUpdates.extresSeleccionats = effExtres;
+
     if (hasUnsavedPayments) {
       modifiedUpdates.pagaments = pagaments;
-      modifiedUpdates.estatPagament = derivedEstat;
-      modifiedUpdates.metodePagament = derivedMetode;
     }
     if (estatDni !== registration.estatDni) modifiedUpdates.estatDni = estatDni;
     if (entregaMaterial !== registration.entregaMaterial) modifiedUpdates.entregaMaterial = entregaMaterial;
     if (bandera !== registration.bandera) modifiedUpdates.bandera = bandera;
 
-    if (c1Vol !== initC1Vol || c2Vol !== initC2Vol || c1Talla !== (registration.c1Talla || '') || c2Talla !== (registration.c2Talla || '')) {
-      modifiedUpdates.seleccionsUniforme = updatedInscripcio.seleccionsUniforme;
-    }
-
-    // respostesCuestionari diff (send only changed keys)
-    const diffResp: Record<string, any> = {};
-    const oldResp = registration.respostesCuestionari || {};
-    const newResp = updatedInscripcio.respostesCuestionari || {};
-    for (const [k, v] of Object.entries(newResp)) {
-      if (oldResp[k] !== v) {
-        diffResp[k] = v;
-      }
-    }
-    if (Object.keys(diffResp).length > 0) {
-      modifiedUpdates.respostesCuestionari = diffResp;
-    }
+    // Send complete updated respostesCuestionari
+    modifiedUpdates.respostesCuestionari = updatedInscripcio.respostesCuestionari;
 
     setDbSaveStatus('saving');
     try {
@@ -1653,17 +1740,13 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={handleRecalcularEsmorzar}
-                    disabled={!canRecalcularEsmorzar}
-                    title={!canRecalcularEsmorzar ? (language === 'ca' ? "Cap esmorzar amb preu" : "Ningún almuerzo con precio") : undefined}
-                    className={`inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold rounded-xl transition border ${
-                      canRecalcularEsmorzar
-                        ? 'bg-zinc-100 hover:bg-zinc-200 text-zinc-800 border-zinc-300 shadow-xs cursor-pointer'
-                        : 'bg-zinc-100/50 text-zinc-400 border-zinc-200 cursor-not-allowed opacity-60'
-                    }`}
+                    onClick={handleRecalcular}
+                    disabled={isRecalculating}
+                    title={language === 'ca' ? "Recalcular desglose i total a partir dels camps actuals" : "Recalcular desglose y total a partir de los campos actuales"}
+                    className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold rounded-xl transition border bg-zinc-100 hover:bg-zinc-200 text-zinc-800 border-zinc-300 shadow-xs cursor-pointer disabled:opacity-50"
                   >
-                    <RefreshCw size={12} className={canRecalcularEsmorzar ? "text-fuchsia-600" : ""} />
-                    {language === 'ca' ? "Recalcular esmorzar amb els preus actuals" : "Recalcular almuerzo con los precios actuales"}
+                    <RefreshCw size={12} className={`text-fuchsia-600 ${isRecalculating ? "animate-spin" : ""}`} />
+                    {language === 'ca' ? "Recalcular materials i quota" : "Recalcular materiales y cuota"}
                   </button>
                   <span className="text-xs font-mono font-bold text-fuchsia-600 bg-fuchsia-50 px-2.5 py-1 rounded-lg border border-fuchsia-200">
                     {formatEuro(breakdown.totalCalculat)} Total
@@ -2238,16 +2321,12 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
                   <div className="mt-2 pt-1 border-t border-zinc-800">
                     <button
                       type="button"
-                      onClick={handleRecalcularEsmorzar}
-                      disabled={!canRecalcularEsmorzar}
-                      title={!canRecalcularEsmorzar ? (language === 'ca' ? "Cap esmorzar amb preu" : "Ningún almuerzo con precio") : (language === 'ca' ? "Recalcular desglose i total amb els preus actuals" : "Recalcular desglose y total con los precios actuales")}
-                      className={`w-full inline-flex items-center justify-center gap-1 text-[9px] font-bold px-1.5 py-1 rounded-md border transition ${
-                        canRecalcularEsmorzar
-                          ? 'bg-zinc-800 hover:bg-zinc-700 text-fuchsia-300 border-zinc-700 cursor-pointer'
-                          : 'bg-zinc-900 text-zinc-600 border-zinc-850 cursor-not-allowed opacity-50'
-                      }`}
+                      onClick={handleRecalcular}
+                      disabled={isRecalculating}
+                      title={language === 'ca' ? "Recalcular desglose i total a partir dels camps actuals" : "Recalcular desglose y total a partir de los campos actuales"}
+                      className="w-full inline-flex items-center justify-center gap-1 text-[9px] font-bold px-1.5 py-1 rounded-md border transition bg-zinc-800 hover:bg-zinc-700 text-fuchsia-300 border-zinc-700 cursor-pointer disabled:opacity-50"
                     >
-                      <RefreshCw size={9} />
+                      <RefreshCw size={9} className={isRecalculating ? "animate-spin" : ""} />
                       {language === 'ca' ? "Recalcular" : "Recalcular"}
                     </button>
                   </div>

@@ -145,15 +145,25 @@ export function calculateInscriptionOrderBreakdown(
 
     // Participant wants & selections:
     // Strictly respect individual participant choices.
-    // "una armilla seleccionada debe contabilizarse una sola vez por participante"
-    const c1VolCandidate = (sel as any)?.c1Vol ?? regAny.c1Vol ?? regAny.c1_vol ?? regAny.c1VolArmilla ?? regAny.c1_vol_armilla;
-    const c2VolCandidate = (sel as any)?.c2Vol ?? regAny.c2Vol ?? regAny.c2_vol ?? regAny.c2VolArmilla ?? regAny.c2_vol_armilla;
+    // Top-level registration fields take absolute precedence over old nested seleccionsUniforme.
+    const regC1Vol = typeof regAny.c1Vol === 'boolean'
+      ? regAny.c1Vol
+      : (typeof regAny.c1_vol === 'boolean' ? regAny.c1_vol : undefined);
+    const regC2Vol = typeof regAny.c2Vol === 'boolean'
+      ? regAny.c2Vol
+      : (typeof regAny.c2_vol === 'boolean' ? regAny.c2_vol : undefined);
+
+    const selC1Vol = typeof (sel as any)?.c1Vol === 'boolean' ? (sel as any).c1Vol : undefined;
+    const selC2Vol = typeof (sel as any)?.c2Vol === 'boolean' ? (sel as any).c2Vol : undefined;
+
+    const c1VolCandidate = regC1Vol ?? selC1Vol;
+    const c2VolCandidate = regC2Vol ?? selC2Vol;
 
     const hasExplicitC1Vol = typeof c1VolCandidate === 'boolean';
     const hasExplicitC2Vol = typeof c2VolCandidate === 'boolean';
 
-    const rawTalla1 = (registration.c1Talla || (sel as any)?.c1Talla || '').trim();
-    const rawTalla2 = (registration.c2Talla || (sel as any)?.c2Talla || '').trim();
+    const rawTalla1 = (regC1Vol === false ? '' : (registration.c1Talla || (sel as any)?.c1Talla || '')).trim();
+    const rawTalla2 = (regC2Vol === false ? '' : (registration.c2Talla || (sel as any)?.c2Talla || '')).trim();
     const hasT1 = !!rawTalla1 && rawTalla1.toLowerCase() !== 'cap';
     const hasT2 = !!rawTalla2 && rawTalla2.toLowerCase() !== 'cap';
 
@@ -167,6 +177,16 @@ export function calculateInscriptionOrderBreakdown(
 
     // Each participant gets at most 1 armilla. Never duplicated.
     const finalQty = (p1Wants ? 1 : 0) + (p2Wants ? 1 : 0);
+
+    // Always register uniform IDs as handled so step 3/5 never duplicates them
+    processedExtraIds.add(linia.id);
+    processedExtraIds.add(linia.id.toLowerCase());
+    processedExtraIds.add('armilla');
+    processedExtraIds.add('chaleco');
+    processedExtraIds.add('uniforme');
+    processedExtraIds.add(`${linia.id}-fianca`);
+    processedExtraIds.add('fianca');
+    processedExtraIds.add('fianza');
 
     if (finalQty > 0) {
       const c1Tipus = (registration.c1UniformeTipus || (sel as any)?.c1Tipus || '').toLowerCase();
@@ -213,12 +233,6 @@ export function calculateInscriptionOrderBreakdown(
       }
 
       const modalityLabel = detail ? `${baseModality} ${detail}` : baseModality;
-
-      processedExtraIds.add(linia.id);
-      processedExtraIds.add(linia.id.toLowerCase());
-      processedExtraIds.add('armilla');
-      processedExtraIds.add('chaleco');
-      processedExtraIds.add('uniforme');
 
       materials.push({
         id: linia.id,
@@ -271,13 +285,13 @@ export function calculateInscriptionOrderBreakdown(
 
   if (parsedExtres.length > 0) {
     for (const ext of parsedExtres) {
-      if (!ext || ext.quantitat <= 0) continue;
+      if (!ext || Number(ext.quantitat) <= 0) continue;
       
       const extId = String(ext.id || ext.nom || '');
       const extNom = String(ext.nom || '');
 
-      // Ignore any extra whose id ends in "-fianca" (fianza is always recalculated from line config)
-      if (extId.toLowerCase().endsWith('-fianca')) {
+      // Ignore any extra representing fianza (fianza is strictly recalculated from line config in step 2)
+      if (extId.toLowerCase().endsWith('-fianca') || /fian[cç]a|fianza/i.test(extId) || /fian[cç]a|fianza/i.test(extNom)) {
         continue;
       }
 
@@ -305,6 +319,24 @@ export function calculateInscriptionOrderBreakdown(
       // Do not duplicate or parse armilla as generic extra; uniforms are handled authoritatively in step 2
       if (isArmillaExtra) {
         continue;
+      }
+
+      // Respect current zero quantities from questionnaire responses
+      if (isClavells) {
+        const respClavells = (registration.respostesCuestionari as any)?.clavells_qty;
+        if (respClavells !== undefined && Number(respClavells) <= 0) {
+          processedExtraIds.add('clavells');
+          processedExtraIds.add('clavel');
+          continue;
+        }
+      }
+      if (isCorbati) {
+        const respCorbati = (registration.respostesCuestionari as any)?.corbati_qty;
+        if (respCorbati !== undefined && Number(respCorbati) <= 0) {
+          processedExtraIds.add('corbati');
+          processedExtraIds.add('pajarita');
+          continue;
+        }
       }
 
       processedExtraIds.add(extId);
@@ -702,5 +734,159 @@ export function getParticipantArmillaInfo(
     const modalitat = tipus ? (isLloguer ? (language === 'ca' ? 'LLOGUER' : 'ALQUILER') : (language === 'ca' ? 'COMPRA' : 'COMPRA')) : '';
     return { hasArmilla: true, talla: rawTalla, modalitat, label: modalitat ? `Talla ${rawTalla} • ${modalitat}` : (rawTalla ? `Talla ${rawTalla}` : '—') };
   }
+}
+
+/**
+ * Builds the clean, current extresSeleccionats array from scratch based on the active inputs:
+ * - Clavells (only if clavellsQty > 0)
+ * - Corbatí (only if corbatiQty > 0)
+ * - Esmorzar / Dynamic questions with prices (only positive count and positive price)
+ * - Preserves any valid non-standard custom extra with quantitat > 0
+ * Discards all 0-quantity items, unchecked items, uniforms, and fianza.
+ */
+export function buildCurrentExtres(
+  clavellsQty: number,
+  corbatiQty: number,
+  respostesCuestionari: Record<string, any> | undefined,
+  config: SistemaConfig | undefined | null,
+  language: 'ca' | 'es' = 'ca',
+  existingExtres?: any[],
+  preguntesConfig?: any[]
+): Array<{ id: string; nom: string; quantitat: number; preuUnitari: number; modalitat?: string }> {
+  const result: Array<{ id: string; nom: string; quantitat: number; preuUnitari: number; modalitat?: string }> = [];
+  const processed = new Set<string>();
+
+  // 1. Clavells
+  const safeClavellsQty = Math.max(0, Math.floor(Number(clavellsQty) || 0));
+  if (safeClavellsQty > 0) {
+    const tariffClavells = config?.tarifesDinamiques?.find(t => t.id === 'clavells' || /clavell/i.test(t.nom))?.valor;
+    const unitPrice = typeof tariffClavells === 'number' && !isNaN(tariffClavells) ? tariffClavells : 8.00;
+    result.push({
+      id: 'clavells',
+      nom: language === 'ca' ? 'Clavells' : 'Claveles',
+      quantitat: safeClavellsQty,
+      preuUnitari: unitPrice,
+      modalitat: language === 'ca' ? 'Complements' : 'Complementos'
+    });
+  }
+  processed.add('clavells');
+  processed.add('clavel');
+
+  // 2. Corbatí
+  const safeCorbatiQty = Math.max(0, Math.floor(Number(corbatiQty) || 0));
+  if (safeCorbatiQty > 0) {
+    const tariffCorbati = config?.tarifesDinamiques?.find(t => t.id === 'corbati' || /corbat|pajarit/i.test(t.nom))?.valor;
+    const unitPrice = typeof tariffCorbati === 'number' && !isNaN(tariffCorbati) ? tariffCorbati : 10.00;
+    result.push({
+      id: 'corbati',
+      nom: language === 'ca' ? 'Corbatí' : 'Pajarita',
+      quantitat: safeCorbatiQty,
+      preuUnitari: unitPrice,
+      modalitat: language === 'ca' ? 'Complements' : 'Complementos'
+    });
+  }
+  processed.add('corbati');
+  processed.add('pajarita');
+
+  // 3. Dynamic questions (Esmorzar, etc.)
+  const respostes = respostesCuestionari || {};
+  const activePreguntes = (preguntesConfig && preguntesConfig.length > 0)
+    ? preguntesConfig
+    : ((config?.preguntesFormulari && config.preguntesFormulari.length > 0)
+      ? config.preguntesFormulari
+      : [
+          {
+            id: 'preg-esmorzar-9zzpekm',
+            titol: 'Voleu esmorzar?',
+            concepte: 'Esmorzar',
+            ambit: 'comparser' as const,
+            tipus: 'select' as const,
+            opcions: ['Sí', 'No'],
+            preus: { 'Sí': 5 },
+            activa: true,
+            requerit: true
+          }
+        ]);
+
+  for (const q of activePreguntes) {
+    if (!q.preus || typeof q.preus !== 'object') continue;
+    const positivePriceOptions = Object.entries(q.preus).filter(([_, pr]) => typeof pr === 'number' && !isNaN(pr as number) && (pr as number) > 0);
+    if (positivePriceOptions.length === 0) continue;
+    const hasMultiplePricedOptions = positivePriceOptions.length > 1;
+
+    const scopesToEvaluate: ('parella' | 'c1' | 'c2')[] = q.ambit === 'comparser' ? ['c1', 'c2'] : ['parella'];
+    const optionCounts = new Map<string, number>();
+
+    for (const scope of scopesToEvaluate) {
+      if (!isPreguntaVisible(q, respostes, activePreguntes, scope)) continue;
+      const k = answerKey(q, scope);
+      const ans = String(respostes[k] ?? '').trim();
+      if (!ans) continue;
+
+      const price = q.preus[ans];
+      if (typeof price === 'number' && !isNaN(price) && price > 0) {
+        optionCounts.set(ans, (optionCounts.get(ans) || 0) + 1);
+      }
+    }
+
+    for (const [opt, count] of optionCounts.entries()) {
+      const unitPrice = q.preus[opt];
+      if (count <= 0 || typeof unitPrice !== 'number' || isNaN(unitPrice) || unitPrice <= 0) continue;
+
+      const slug = opt.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+      const lineId = `esm-${q.id}-${slug}`;
+
+      let baseName = (q.concepte || q.titol || 'Esmorzar');
+      if (/almuerzo/i.test(baseName) || /esmorzar/i.test(baseName) || q.id.includes('esmorzar')) {
+        baseName = 'Esmorzar';
+      }
+      if (hasMultiplePricedOptions) {
+        baseName = `${baseName} (${opt})`;
+      }
+
+      result.push({
+        id: lineId,
+        nom: baseName,
+        quantitat: count,
+        preuUnitari: unitPrice,
+        modalitat: 'Esmorzar'
+      });
+      processed.add(lineId);
+      processed.add('esmorzar');
+      processed.add('almuerzo');
+    }
+  }
+
+  // 4. Any other non-standard extra from existingExtres (if valid and positive quantity)
+  if (Array.isArray(existingExtres)) {
+    for (const ext of existingExtres) {
+      if (!ext || Number(ext.quantitat) <= 0) continue;
+      const id = String(ext.id || ext.nom || '');
+      const nom = String(ext.nom || '');
+      if (
+        processed.has(id) ||
+        processed.has(id.toLowerCase()) ||
+        /clavell/i.test(id) || /clavell/i.test(nom) ||
+        /corbat|pajarit/i.test(id) || /corbat|pajarit/i.test(nom) ||
+        /armilla|chaleco/i.test(id) || /armilla|chaleco/i.test(nom) || id.startsWith('lin-') ||
+        /fian[cç]a|fianza/i.test(id) || /fian[cç]a|fianza/i.test(nom) || id.endsWith('-fianca') ||
+        /doma|mocador|pañuelo|panuelo/i.test(id) || /doma|mocador|pañuelo|panuelo/i.test(nom) ||
+        id.startsWith('esm-') || /esmorzar|almuerzo/i.test(id) || /esmorzar|almuerzo/i.test(nom)
+      ) {
+        continue;
+      }
+      result.push({
+        id: ext.id || `ext-${result.length}`,
+        nom: ext.nom,
+        quantitat: Number(ext.quantitat),
+        preuUnitari: Number(ext.preuUnitari) || 0,
+        modalitat: ext.modalitat || (language === 'ca' ? 'Complements' : 'Complementos')
+      });
+      processed.add(id);
+      processed.add(id.toLowerCase());
+    }
+  }
+
+  return result;
 }
 

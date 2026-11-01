@@ -94,7 +94,7 @@ export interface Inscripcio {
   c2Vol?: boolean;
 
   // Camps dinàmics i addicionals
-  respostesCuestionari: Record<string, string | boolean>;
+  respostesCuestionari: Record<string, any>;
   seleccionsUniforme?: Record<string, { c1Talla: string; c2Talla: string; c1Quantitat?: number; c2Quantitat?: number; c1Tipus?: 'compra' | 'lloguer'; c2Tipus?: 'compra' | 'lloguer'; quantitat?: number }>;
   extresSeleccionats?: { id: string; nom: string; quantitat: number; preuUnitari: number }[];
   preuCalculat: number;
