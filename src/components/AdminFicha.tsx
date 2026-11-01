@@ -461,8 +461,7 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
         c2Talla: c2Vol ? c2Talla.trim() : '',
         c2UniformeTipus: c2Vol ? c2UniformeTipus : null,
         c1EsMenor,
-        c2EsMenor,
-        extresSeleccionats: cleanExtres
+        c2EsMenor
       };
       if (!c1EsMenor) {
         modifiedUpdates.c1TutorNom = '';
@@ -1068,7 +1067,6 @@ export default function AdminFicha({ registration, allInscripcions = [], config,
     modifiedUpdates.estatPagament = derivedEstat;
     modifiedUpdates.metodePagament = derivedMetode;
     modifiedUpdates.seleccionsUniforme = updatedInscripcio.seleccionsUniforme;
-    modifiedUpdates.extresSeleccionats = effExtres;
 
     if (hasUnsavedPayments) {
       modifiedUpdates.pagaments = pagaments;

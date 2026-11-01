@@ -1182,9 +1182,31 @@ export default async function inscriptionsHandler(req: any, res: any) {
         });
       }
 
-      const cleanUpdates = { ...updates };
+      const cleanUpdates: Record<string, any> = { ...updates };
       delete cleanUpdates.id;
       cleanUpdates.actualizadoEn = new Date().toISOString();
+
+      // Ensure extresSeleccionats is never sent as a top-level column; merge into respostesCuestionari
+      if (cleanUpdates.extresSeleccionats !== undefined || cleanUpdates.extres_seleccionats !== undefined) {
+        const extVal = cleanUpdates.extresSeleccionats !== undefined ? cleanUpdates.extresSeleccionats : cleanUpdates.extres_seleccionats;
+        delete cleanUpdates.extresSeleccionats;
+        delete cleanUpdates.extres_seleccionats;
+        const currentResp = cleanUpdates.respostesCuestionari || {};
+        cleanUpdates.respostesCuestionari = {
+          ...(typeof currentResp === 'object' && currentResp !== null ? currentResp : {}),
+          extresSeleccionats: extVal
+        };
+      }
+
+      // Sanitize non-existent top-level columns before sending to Supabase
+      delete cleanUpdates.emailContactoPareja;
+      delete cleanUpdates.telefonContactoPareja;
+      delete cleanUpdates.c1Vol;
+      delete cleanUpdates.c2Vol;
+      delete cleanUpdates.clavells;
+      delete cleanUpdates.corbati;
+      delete cleanUpdates.extresSeleccionats;
+      delete cleanUpdates.extres_seleccionats;
 
       // Prevent base64 images from ever being saved in DNI columns (Point 1 & 3)
       if (typeof cleanUpdates.c1DniUrl === 'string' && cleanUpdates.c1DniUrl.startsWith('data:')) {
@@ -1232,9 +1254,25 @@ export default async function inscriptionsHandler(req: any, res: any) {
         };
       }
 
+      // Filter to only columns that actually exist in the table schema
+      const VALID_UPDATE_COLUMNS = new Set([
+        'codiSeguiment', 'categoria',
+        'c1Nom', 'c1Cognoms', 'c1Email', 'c1Telefon', 'c1Talla', 'c1DniUrl', 'c1EsMenor', 'c1TutorNom', 'c1TutorCognoms', 'c1TutorDni', 'c1TutorTelefon', 'c1UniformeTipus',
+        'c2Nom', 'c2Cognoms', 'c2Email', 'c2Telefon', 'c2Talla', 'c2DniUrl', 'c2EsMenor', 'c2TutorNom', 'c2TutorCognoms', 'c2TutorDni', 'c2TutorTelefon', 'c2UniformeTipus',
+        'respostesCuestionari', 'seleccionsUniforme', 'preuCalculat', 'teDomasBalco', 'teMocadorsExtra',
+        'pagaments', 'estatPagament', 'metodePagament', 'estatDni', 'entregaMaterial', 'estat_inscripcio', 'posicio_global', 'bandera', 'actualizadoEn'
+      ]);
+
+      const finalDbUpdates: Record<string, any> = {};
+      for (const [key, value] of Object.entries(cleanUpdates)) {
+        if (VALID_UPDATE_COLUMNS.has(key)) {
+          finalDbUpdates[key] = value;
+        }
+      }
+
       const { data, error } = await serverSupabase
         .from('inscripciones')
-        .update(cleanUpdates)
+        .update(finalDbUpdates)
         .eq('id', id)
         .select(LIGHT_COLUMNS)
         .single();
@@ -1259,7 +1297,7 @@ export default async function inscriptionsHandler(req: any, res: any) {
           const modifiedBy = adminInfo.email || adminInfo.userId || 'admin';
           const historyRows: any[] = [];
 
-          for (const [key, val] of Object.entries(cleanUpdates)) {
+          for (const [key, val] of Object.entries(finalDbUpdates)) {
             if (key === 'actualizadoEn') continue;
             const prevVal = (previousRow as any)[key];
             const prevStr = typeof prevVal === 'object' && prevVal !== null ? JSON.stringify(prevVal) : String(prevVal ?? '');

@@ -1038,6 +1038,29 @@ export async function updateSupabaseInscripcion(
     updatesPayload.seleccionsUniforme = ins.seleccionsUniforme;
   }
 
+  // Ensure extresSeleccionats is never sent as a top-level column; merge into respostesCuestionari
+  if (updatesPayload.extresSeleccionats !== undefined || updatesPayload.extres_seleccionats !== undefined) {
+    const extVal = updatesPayload.extresSeleccionats !== undefined ? updatesPayload.extresSeleccionats : updatesPayload.extres_seleccionats;
+    delete updatesPayload.extresSeleccionats;
+    delete updatesPayload.extres_seleccionats;
+    const currentResp = updatesPayload.respostesCuestionari || ins.respostesCuestionari || {};
+    updatesPayload.respostesCuestionari = {
+      ...(typeof currentResp === 'object' && currentResp !== null ? currentResp : {}),
+      extresSeleccionats: extVal
+    };
+  }
+
+  // Sanitize non-existent top-level columns before sending to Supabase
+  delete updatesPayload.id;
+  delete updatesPayload.emailContactoPareja;
+  delete updatesPayload.telefonContactoPareja;
+  delete updatesPayload.c1Vol;
+  delete updatesPayload.c2Vol;
+  delete updatesPayload.clavells;
+  delete updatesPayload.corbati;
+  delete updatesPayload.extresSeleccionats;
+  delete updatesPayload.extres_seleccionats;
+
   try {
     const adminToken = await getAdminAccessToken();
     const authHeaders: Record<string, string> = adminToken ? { 'Authorization': `Bearer ${adminToken}` } : {};
