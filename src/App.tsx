@@ -1393,19 +1393,17 @@ export default function App() {
                 globalLogoColor={config.logoColor}
                 globalLogoText={config.logoText}
                 globalLogoUseImage={config.logoUseImage}
-                globalEstatInscripcions={(() => {
-                  const norm = (v?: string) => {
-                    const s = String(v || '').trim().toLowerCase();
-                    if (s === 'espera' || s === 'llista_espera') return 'espera';
-                    if (s === 'tancades') return 'tancades';
-                    return 'obertes';
-                  };
-                  const adultEstat = norm(config.estatInscripcionsAdult || config.estatInscripcions);
-                  const juvenilEstat = norm(config.estatInscripcionsJuvenil || config.estatInscripcions);
-                  if (adultEstat === 'tancades' && juvenilEstat === 'tancades') return 'tancades';
-                  if (adultEstat === 'espera' && juvenilEstat === 'espera') return 'espera';
-                  if (adultEstat === 'obertes' || juvenilEstat === 'obertes') return 'obertes';
-                  return 'espera';
+                estatAdult={(() => {
+                  const s = String(config.estatInscripcionsAdult || config.estatInscripcions || 'obertes').trim().toLowerCase();
+                  if (s === 'espera' || s === 'llista_espera') return 'espera';
+                  if (s === 'tancades') return 'tancades';
+                  return 'obertes';
+                })()}
+                estatJuvenil={(() => {
+                  const s = String(config.estatInscripcionsJuvenil || config.estatInscripcions || 'obertes').trim().toLowerCase();
+                  if (s === 'espera' || s === 'llista_espera') return 'espera';
+                  if (s === 'tancades') return 'tancades';
+                  return 'obertes';
                 })()}
                 onEnterForm={() => setView('public')}
                 onGoToLogin={() => setView('login')}

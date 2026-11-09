@@ -115,6 +115,8 @@ interface PortadaPageProps {
   globalLogoText?: string;
   globalLogoUseImage?: boolean;
   globalLogoImgUrl?: string;
+  estatAdult?: 'obertes' | 'espera' | 'tancades';
+  estatJuvenil?: 'obertes' | 'espera' | 'tancades';
   globalEstatInscripcions?: 'obertes' | 'espera' | 'tancades';
   onEnterForm: () => void;
   onGoToLogin: () => void;
@@ -126,12 +128,18 @@ export default function PortadaPage({
   globalLogoText = 'T',
   globalLogoUseImage = false,
   globalLogoImgUrl = '',
+  estatAdult,
+  estatJuvenil,
   globalEstatInscripcions = 'obertes',
   onEnterForm,
   onGoToLogin
 }: PortadaPageProps) {
   const { language, setLanguage } = useLanguage();
   const activeYear = useActiveYear();
+
+  const finalEstatAdult: 'obertes' | 'espera' | 'tancades' = estatAdult || globalEstatInscripcions || 'obertes';
+  const finalEstatJuvenil: 'obertes' | 'espera' | 'tancades' = estatJuvenil || globalEstatInscripcions || 'obertes';
+  const sameStatus = finalEstatAdult === finalEstatJuvenil;
 
   const [liveConfig, setLiveConfig] = React.useState<PortadaConfig>(() => ensureValidPortadaConfig(config, activeYear));
   const [customLogo, setCustomLogo] = React.useState(() => localStorage.getItem('tast_email_logo') || "");
@@ -256,13 +264,26 @@ export default function PortadaPage({
     : (liveConfig.botoTextES !== undefined && liveConfig.botoTextES.trim() !== '' ? liveConfig.botoTextES : (langData?.buttonText || DEFAULT_PORTADA_DATA.es.buttonText));
 
   // 6. Badge Text / Etiqueta de l'esdeveniment (always in currentLang)
-  const badgeText = globalEstatInscripcions === 'tancades'
+  const getCategoryStatusLabel = (st: 'obertes' | 'espera' | 'tancades', categoryName: string) => {
+    if (st === 'tancades') {
+      return `${categoryName}: ${currentLang === 'ca' ? 'Tancades' : 'Cerradas'}`;
+    }
+    if (st === 'espera') {
+      return `${categoryName}: ${currentLang === 'ca' ? "Llista d'espera" : "Lista de espera"}`;
+    }
+    return `${categoryName}: ${currentLang === 'ca' ? 'Obertes' : 'Abiertas'}`;
+  };
+
+  const singleBadgeText = finalEstatAdult === 'tancades'
     ? (currentLang === 'ca' ? 'Inscripcions Tancades' : 'Inscripciones Cerradas')
-    : globalEstatInscripcions === 'espera'
+    : finalEstatAdult === 'espera'
       ? (currentLang === 'ca' ? `Llista d'Espera ${activeYear}` : `Lista de Espera ${activeYear}`)
       : (currentLang === 'ca'
           ? (liveConfig.badgeTextCA !== undefined && liveConfig.badgeTextCA.trim() !== '' ? liveConfig.badgeTextCA : (langData?.badgeText || DEFAULT_PORTADA_DATA.ca.badgeText))
           : (liveConfig.badgeTextES !== undefined && liveConfig.badgeTextES.trim() !== '' ? liveConfig.badgeTextES : (langData?.badgeText || DEFAULT_PORTADA_DATA.es.badgeText)));
+
+  const adultBadgeText = getCategoryStatusLabel(finalEstatAdult, currentLang === 'ca' ? 'Parella Adulta' : 'Pareja Adulta');
+  const juvenilBadgeText = getCategoryStatusLabel(finalEstatJuvenil, currentLang === 'ca' ? 'Parella Juvenil' : 'Pareja Juvenil');
 
   // 7. Footer Text (always in currentLang)
   const footerText = (currentLang === 'ca'
@@ -543,47 +564,83 @@ export default function PortadaPage({
                 };
               }
 
+              const renderMiniTrafficLight = (status: 'obertes' | 'espera' | 'tancades') => (
+                <div className="flex items-center gap-1 bg-black/60 border border-white/10 px-1.5 py-0.5 rounded-full shrink-0">
+                  <div 
+                    className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${
+                      status === 'tancades'
+                        ? 'bg-red-500 shadow-[0_0_8px_#ef4444] animate-pulse scale-110'
+                        : 'bg-red-950/60 opacity-30 shadow-none'
+                    }`}
+                    title={language === 'ca' ? "Tancat" : "Cerrado"} 
+                  />
+                  <div 
+                    className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${
+                      status === 'espera'
+                        ? 'bg-amber-500 shadow-[0_0_8px_#f59e0b] animate-pulse scale-110'
+                        : 'bg-amber-950/60 opacity-30 shadow-none'
+                    }`}
+                    title={language === 'ca' ? "Llista d'espera" : "Lista de espera"} 
+                  />
+                  <div 
+                    className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${
+                      status === 'obertes'
+                        ? 'bg-emerald-500 shadow-[0_0_8px_#10b981] animate-pulse scale-110'
+                        : 'bg-emerald-950/60 opacity-30 shadow-none'
+                    }`}
+                    title={language === 'ca' ? "Obert" : "Abierto"} 
+                  />
+                </div>
+              );
+
+              if (sameStatus) {
+                return (
+                  <motion.div
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.5, delay: 0.1 }}
+                    className={badgeClasses}
+                    style={badgeStyles}
+                    id="unified-status-badge"
+                  >
+                    {renderMiniTrafficLight(finalEstatAdult)}
+                    <span className="leading-none mt-0.5 sm:mt-0">
+                      {singleBadgeText}
+                    </span>
+                  </motion.div>
+                );
+              }
+
               return (
-                <motion.div
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.5, delay: 0.1 }}
-                  className={badgeClasses}
-                  style={badgeStyles}
-                  id="unified-status-badge"
-                >
-                  {/* Traffic Light Mini Representation inside the single badge */}
-                  <div className="flex items-center gap-1 bg-black/60 border border-white/10 px-1.5 py-0.5 rounded-full shrink-0">
-                    <div 
-                      className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${
-                        globalEstatInscripcions === 'tancades'
-                          ? 'bg-red-500 shadow-[0_0_8px_#ef4444] animate-pulse scale-110'
-                          : 'bg-red-950/60 opacity-30 shadow-none'
-                      }`}
-                      title={language === 'ca' ? "Tancat" : "Cerrado"} 
-                    />
-                    <div 
-                      className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${
-                        globalEstatInscripcions === 'espera'
-                          ? 'bg-amber-500 shadow-[0_0_8px_#f59e0b] animate-pulse scale-110'
-                          : 'bg-amber-950/60 opacity-30 shadow-none'
-                      }`}
-                      title={language === 'ca' ? "Llista d'espera" : "Lista de espera"} 
-                    />
-                    <div 
-                      className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${
-                        globalEstatInscripcions === 'obertes'
-                          ? 'bg-emerald-500 shadow-[0_0_8px_#10b981] animate-pulse scale-110'
-                          : 'bg-emerald-950/60 opacity-30 shadow-none'
-                      }`}
-                      title={language === 'ca' ? "Obert" : "Abierto"} 
-                    />
-                  </div>
-                  
-                  <span className="leading-none mt-0.5 sm:mt-0">
-                    {badgeText}
-                  </span>
-                </motion.div>
+                <div className="flex flex-wrap gap-2.5 items-center">
+                  <motion.div
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.5, delay: 0.1 }}
+                    className={badgeClasses}
+                    style={badgeStyles}
+                    id="unified-status-badge-adult"
+                  >
+                    {renderMiniTrafficLight(finalEstatAdult)}
+                    <span className="leading-none mt-0.5 sm:mt-0">
+                      {adultBadgeText}
+                    </span>
+                  </motion.div>
+
+                  <motion.div
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.5, delay: 0.15 }}
+                    className={badgeClasses}
+                    style={badgeStyles}
+                    id="unified-status-badge-juvenil"
+                  >
+                    {renderMiniTrafficLight(finalEstatJuvenil)}
+                    <span className="leading-none mt-0.5 sm:mt-0">
+                      {juvenilBadgeText}
+                    </span>
+                  </motion.div>
+                </div>
               );
             })()}
           </div>
