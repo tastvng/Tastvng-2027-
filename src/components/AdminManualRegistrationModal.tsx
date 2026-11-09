@@ -583,7 +583,17 @@ export const AdminManualRegistrationModal: React.FC<AdminManualRegistrationModal
       }
     }
 
-    const isWaitlist = config.estatInscripcions === 'espera';
+    const isJuvenil = categoria === CategoriaParella.JUVENIL;
+    const normStatus = (v?: string) => {
+      const s = String(v || '').trim().toLowerCase();
+      if (s === 'espera' || s === 'llista_espera') return 'espera';
+      if (s === 'tancades') return 'tancades';
+      return 'obertes';
+    };
+    const categoryEstat = isJuvenil
+      ? normStatus(config.estatInscripcionsJuvenil || config.estatInscripcions)
+      : normStatus(config.estatInscripcionsAdult || config.estatInscripcions);
+    const isWaitlist = categoryEstat === 'espera';
 
     const novaInscripcio: Inscripcio = {
       id: 'ins-' + Math.random().toString(36).substr(2, 9),

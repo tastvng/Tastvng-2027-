@@ -89,6 +89,8 @@ export const CONFIG_INICIAL: SistemaConfig = {
   preuAdult: 90.00,
   preuJuvenil: 60.00,
   estatInscripcions: 'obertes',
+  estatInscripcionsAdult: 'obertes',
+  estatInscripcionsJuvenil: 'obertes',
   armilla_opcional: true,
   titolSeccioTarifes: 'Tarifes i Cànons 2027',
   tarifesDinamiques: [

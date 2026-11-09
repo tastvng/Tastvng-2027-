@@ -180,6 +180,8 @@ export interface SistemaConfig {
   textLegalRgpd?: string;
   textLegalRgpdES?: string;
   estatInscripcions?: 'obertes' | 'espera' | 'tancades';
+  estatInscripcionsAdult?: 'obertes' | 'espera' | 'tancades';
+  estatInscripcionsJuvenil?: 'obertes' | 'espera' | 'tancades';
   googleSheetSyncUrl?: string;
   googleSheetSyncActive?: boolean;
   cuestionariActiu?: boolean;

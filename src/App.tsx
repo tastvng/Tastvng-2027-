@@ -263,18 +263,38 @@ export default function App() {
       (async () => {
         try {
           if (isSupabaseConfigured) {
-            const dbConfig = await getSupabaseSetting<PortadaConfig | null>('tast_portada_config_2026', null);
-            if (dbConfig) {
-              const validated = ensureValidPortadaConfig(dbConfig, activeYear);
+            const [dbPortada, adultStatus, juvenilStatus, dbConfig] = await Promise.all([
+              getSupabaseSetting<PortadaConfig | null>('tast_portada_config_2026', null, true),
+              getSupabaseSetting<string | null>('categoria_adulta_estat', null, true),
+              getSupabaseSetting<string | null>('categoria_juvenil_estat', null, true),
+              getSupabaseSetting<SistemaConfig | null>('tast_config_2026', null, true),
+            ]);
+            if (dbPortada) {
+              const validated = ensureValidPortadaConfig(dbPortada, activeYear);
               setPortadaConfig(validated);
-              return;
             }
+            setConfig(prev => ({
+              ...prev,
+              ...(dbConfig || {}),
+              estatInscripcionsAdult: (adultStatus as any) || dbConfig?.estatInscripcionsAdult || prev.estatInscripcionsAdult,
+              estatInscripcionsJuvenil: (juvenilStatus as any) || dbConfig?.estatInscripcionsJuvenil || prev.estatInscripcionsJuvenil,
+            }));
+            return;
           }
           
           const saved = localStorage.getItem('tast_portada_config_2026');
           if (saved) {
             const validated = ensureValidPortadaConfig(JSON.parse(saved), activeYear);
             setPortadaConfig(validated);
+          }
+          const localAdult = localStorage.getItem('categoria_adulta_estat') as any;
+          const localJuvenil = localStorage.getItem('categoria_juvenil_estat') as any;
+          if (localAdult || localJuvenil) {
+            setConfig(prev => ({
+              ...prev,
+              estatInscripcionsAdult: localAdult || prev.estatInscripcionsAdult,
+              estatInscripcionsJuvenil: localJuvenil || prev.estatInscripcionsJuvenil,
+            }));
           }
         } catch (e) {
           console.warn("Handled error in handlePortadaChange:", e);
@@ -372,12 +392,18 @@ export default function App() {
     async function loadAllFromDatabase() {
       if (isSupabaseConfigured) {
         try {
-          // 1. Fetch Global Config
-          const dbConfig = await getSupabaseSetting<SistemaConfig | null>('tast_config_2026', null);
+          // 1. Fetch Global Config & Category Statuses
+          const [dbConfig, adultStatus, juvenilStatus] = await Promise.all([
+            getSupabaseSetting<SistemaConfig | null>('tast_config_2026', null),
+            getSupabaseSetting<string | null>('categoria_adulta_estat', null),
+            getSupabaseSetting<string | null>('categoria_juvenil_estat', null),
+          ]);
           if (dbConfig) {
             const mergedConfig: SistemaConfig = {
               ...CONFIG_INICIAL,
               ...dbConfig,
+              estatInscripcionsAdult: (adultStatus as any) || dbConfig.estatInscripcionsAdult || CONFIG_INICIAL.estatInscripcionsAdult,
+              estatInscripcionsJuvenil: (juvenilStatus as any) || dbConfig.estatInscripcionsJuvenil || CONFIG_INICIAL.estatInscripcionsJuvenil,
               tarifesDinamiques: (dbConfig.tarifesDinamiques && dbConfig.tarifesDinamiques.length > 0)
                 ? dbConfig.tarifesDinamiques
                 : CONFIG_INICIAL.tarifesDinamiques
@@ -725,6 +751,12 @@ export default function App() {
     if (newConfig.estatInscripcions) {
       localStorage.setItem('estat_inscripcio_global', newConfig.estatInscripcions);
     }
+    if (newConfig.estatInscripcionsAdult) {
+      localStorage.setItem('categoria_adulta_estat', newConfig.estatInscripcionsAdult);
+    }
+    if (newConfig.estatInscripcionsJuvenil) {
+      localStorage.setItem('categoria_juvenil_estat', newConfig.estatInscripcionsJuvenil);
+    }
     addLog("S'han modificat les tarifes i config.");
     syncWithGoogle(inscripcions, newConfig);
     if (isSupabaseConfigured) {
@@ -732,6 +764,12 @@ export default function App() {
         await saveSupabaseSetting('tast_config_2026', newConfig);
         if (newConfig.estatInscripcions) {
           await saveSupabaseSetting('estat_inscripcio_global', newConfig.estatInscripcions);
+        }
+        if (newConfig.estatInscripcionsAdult) {
+          await saveSupabaseSetting('categoria_adulta_estat', newConfig.estatInscripcionsAdult);
+        }
+        if (newConfig.estatInscripcionsJuvenil) {
+          await saveSupabaseSetting('categoria_juvenil_estat', newConfig.estatInscripcionsJuvenil);
         }
         addLog("✓ Configuració desada globalment a la base de dades d'settings.");
         showToast(language === 'ca' ? '✓ Configuració desada correctament' : '✓ Configuración guardada correctamente', 'success');
@@ -806,28 +844,54 @@ export default function App() {
     }, 1200); // give toast time to show up
   };
 
-  const getEstatInscripcioGlobalFromDatabase = async (): Promise<'obertes' | 'llista_espera'> => {
-    let globalStatus: string = config.estatInscripcions || 'obertes';
+  const getEstatInscripcioGlobalFromDatabase = async (categoria?: CategoriaParella | string): Promise<'obertes' | 'llista_espera'> => {
+    const isJuvenil = String(categoria || '').toUpperCase() === 'JUVENIL';
+    const specificKey = isJuvenil ? 'categoria_juvenil_estat' : 'categoria_adulta_estat';
+    const fallbackCategoryStatus = isJuvenil 
+      ? (config.estatInscripcionsJuvenil || config.estatInscripcions || 'obertes')
+      : (config.estatInscripcionsAdult || config.estatInscripcions || 'obertes');
+
+    let categoryStatus: string = fallbackCategoryStatus;
+
     if (isSupabaseConfigured) {
       try {
-        const dbStatus = await getSupabaseSetting<string>('estat_inscripcio_global', config.estatInscripcions || 'obertes');
-        if (dbStatus) globalStatus = dbStatus;
+        const dbStatus = await getSupabaseSetting<string>(specificKey, '', true);
+        if (dbStatus && dbStatus.trim()) {
+          categoryStatus = dbStatus.trim();
+        } else {
+          // Fallback to global setting if category-specific key does not exist
+          const globalDbStatus = await getSupabaseSetting<string>('estat_inscripcio_global', '', true);
+          if (globalDbStatus && globalDbStatus.trim()) {
+            categoryStatus = globalDbStatus.trim();
+          }
+        }
       } catch (e) {
-        console.error("Error reading global status from Supabase:", e);
+        console.error("Error reading category status from Supabase:", e);
       }
+    } else {
+      try {
+        const localStatus = localStorage.getItem(specificKey);
+        if (localStatus) {
+          categoryStatus = localStatus;
+        } else {
+          const globalLocal = localStorage.getItem('estat_inscripcio_global');
+          if (globalLocal) categoryStatus = globalLocal;
+        }
+      } catch {}
     }
     
     // Map 'espera', 'llista_espera', or 'tancades' to 'llista_espera', and 'obertes' to 'obertes'
-    if (globalStatus === 'espera' || globalStatus === 'llista_espera' || globalStatus === 'tancades') {
+    if (categoryStatus === 'espera' || categoryStatus === 'llista_espera' || categoryStatus === 'tancades') {
       return 'llista_espera';
     }
     return 'obertes';
   };
 
   const addRegistration = async (newReg: Inscripcio): Promise<{ ok: boolean; error?: string; code?: string; details?: any; hint?: string }> => {
-    // 1. Determine local registration status directly from global setting
-    const categoryStatus = await getEstatInscripcioGlobalFromDatabase();
+    // 1. Determine local registration status directly from category setting
+    const categoryStatus = await getEstatInscripcioGlobalFromDatabase(newReg.categoria);
     newReg.estatInscripcio = categoryStatus;
+    newReg.llistaEspera = categoryStatus === 'llista_espera';
 
     // 2. Fetch all latest inscriptions to calculate global position sequentially
     let latestInscripcions: Inscripcio[] = [];
@@ -1329,8 +1393,20 @@ export default function App() {
                 globalLogoColor={config.logoColor}
                 globalLogoText={config.logoText}
                 globalLogoUseImage={config.logoUseImage}
-                globalLogoImgUrl={config.logoImgUrl}
-                globalEstatInscripcions={config.estatInscripcions || 'obertes'}
+                globalEstatInscripcions={(() => {
+                  const norm = (v?: string) => {
+                    const s = String(v || '').trim().toLowerCase();
+                    if (s === 'espera' || s === 'llista_espera') return 'espera';
+                    if (s === 'tancades') return 'tancades';
+                    return 'obertes';
+                  };
+                  const adultEstat = norm(config.estatInscripcionsAdult || config.estatInscripcions);
+                  const juvenilEstat = norm(config.estatInscripcionsJuvenil || config.estatInscripcions);
+                  if (adultEstat === 'tancades' && juvenilEstat === 'tancades') return 'tancades';
+                  if (adultEstat === 'espera' && juvenilEstat === 'espera') return 'espera';
+                  if (adultEstat === 'obertes' || juvenilEstat === 'obertes') return 'obertes';
+                  return 'espera';
+                })()}
                 onEnterForm={() => setView('public')}
                 onGoToLogin={() => setView('login')}
               />

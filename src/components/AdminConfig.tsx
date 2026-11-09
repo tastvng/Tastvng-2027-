@@ -1460,6 +1460,8 @@ function syncEsmorzars_(ss, payload) {
       textLegalAutoritzacioMenors: textLegalAutoritzacioMenors,
       textLegalAutoritzacioMenorsES: textLegalAutoritzacioMenorsES,
       estatInscripcions: estatInscripcions,
+      estatInscripcionsAdult: config.estatInscripcionsAdult,
+      estatInscripcionsJuvenil: config.estatInscripcionsJuvenil,
       googleSheetSyncUrl: googleSheetSyncUrl.trim(),
       googleSheetSyncActive: googleSheetSyncActive,
       cuestionariActiu: cuestionariActiu,

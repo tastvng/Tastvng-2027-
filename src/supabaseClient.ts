@@ -332,6 +332,73 @@ export async function saveSupabaseSettings(config: any): Promise<boolean> {
   return saveSupabaseSetting('tast_portada_config_2026', config);
 }
 
+/**
+ * Reads the registration status for a given category ('ADULT' | 'JUVENIL') from Supabase/LocalStorage.
+ * Follows fallback hierarchy: categoria_*_estat -> tast_config_2026 -> estat_inscripcio_global -> 'obertes'.
+ */
+export async function getEstatCategoriaFromDatabase(categoria?: string): Promise<'obertes' | 'espera' | 'tancades'> {
+  const isJuvenil = String(categoria || '').toUpperCase() === 'JUVENIL';
+  const specificKey = isJuvenil ? 'categoria_juvenil_estat' : 'categoria_adulta_estat';
+
+  if (supabase) {
+    try {
+      const val = await getSupabaseSetting<string | null>(specificKey, null, true);
+      if (val && typeof val === 'string') {
+        const clean = val.trim().toLowerCase();
+        if (clean === 'obertes' || clean === 'espera' || clean === 'tancades') return clean;
+        if (clean === 'llista_espera') return 'espera';
+      }
+
+      // Fallback 1: check tast_config_2026
+      const sc = await getSupabaseSetting<any>('tast_config_2026', null, false);
+      if (sc) {
+        const catVal = isJuvenil ? sc.estatInscripcionsJuvenil : sc.estatInscripcionsAdult;
+        if (catVal === 'obertes' || catVal === 'espera' || catVal === 'tancades') return catVal;
+        if (catVal === 'llista_espera') return 'espera';
+      }
+
+      // Fallback 2: check global estat_inscripcio_global
+      const globalVal = await getSupabaseSetting<string | null>('estat_inscripcio_global', null, false);
+      if (globalVal && typeof globalVal === 'string') {
+        const clean = globalVal.trim().toLowerCase();
+        if (clean === 'obertes' || clean === 'espera' || clean === 'tancades') return clean;
+        if (clean === 'llista_espera') return 'espera';
+      }
+    } catch (e) {
+      console.warn(`[getEstatCategoriaFromDatabase] Error reading from Supabase for ${specificKey}:`, e);
+    }
+  }
+
+  // LocalStorage fallback
+  if (typeof localStorage !== 'undefined') {
+    try {
+      const localCat = localStorage.getItem(specificKey);
+      if (localCat) {
+        const clean = localCat.trim().toLowerCase();
+        if (clean === 'obertes' || clean === 'espera' || clean === 'tancades') return clean;
+        if (clean === 'llista_espera') return 'espera';
+      }
+
+      const scJson = localStorage.getItem('tast_config_2026');
+      if (scJson) {
+        const sc = JSON.parse(scJson);
+        const catVal = isJuvenil ? sc.estatInscripcionsJuvenil : sc.estatInscripcionsAdult;
+        if (catVal === 'obertes' || catVal === 'espera' || catVal === 'tancades') return catVal;
+        if (catVal === 'llista_espera') return 'espera';
+      }
+
+      const globalLocal = localStorage.getItem('estat_inscripcio_global');
+      if (globalLocal) {
+        const clean = globalLocal.trim().toLowerCase();
+        if (clean === 'obertes' || clean === 'espera' || clean === 'tancades') return clean;
+        if (clean === 'llista_espera') return 'espera';
+      }
+    } catch {}
+  }
+
+  return 'obertes';
+}
+
 /* ==========================================
  * REAL INSCRIPTIONS PERSISTENCE (SUPABASE)
  * ========================================== */

@@ -526,7 +526,7 @@ export default async function inscriptionsHandler(req: any, res: any) {
         pagaments: isAdminCaller ? (Array.isArray(reg.pagaments) ? reg.pagaments : []) : [],
         estatDni: reg.estatDni || 'PENDENT',
         entregaMaterial: reg.entregaMaterial || 'PENDENT',
-        estat_inscripcio: reg.estatInscripcio || reg.estat_inscripcio || 'obertes',
+        estat_inscripcio: isWaitlist ? 'espera' : (reg.estatInscripcio || reg.estat_inscripcio || 'obertes'),
         bandera: typeof reg.bandera === 'number' ? reg.bandera : 0,
         creadoEn: reg.creadoEn || nowIso,
         actualizadoEn: nowIso

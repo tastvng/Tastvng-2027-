@@ -278,19 +278,44 @@ export default function AdminPortada({ onAddLog }: AdminPortadaProps) {
   });
 
   const [estatInscripcions, setEstatInscripcions] = useState<'obertes' | 'espera' | 'tancades'>('obertes');
+  const [estatAdult, setEstatAdult] = useState<'obertes' | 'espera' | 'tancades'>('obertes');
+  const [estatJuvenil, setEstatJuvenil] = useState<'obertes' | 'espera' | 'tancades'>('obertes');
   const [activeTab, setActiveTab] = useState<'semaforo' | 'textos' | 'fondo'>('semaforo');
 
   // Load from Supabase on mount
   useEffect(() => {
     async function loadConfig() {
+      const norm = (v: any): 'obertes' | 'espera' | 'tancades' | null => {
+        if (!v) return null;
+        const s = String(v).trim().toLowerCase();
+        if (s === 'espera' || s === 'llista_espera') return 'espera';
+        if (s === 'tancades') return 'tancades';
+        if (s === 'obertes') return 'obertes';
+        return null;
+      };
+
       if (!isSupabaseConfigured) {
-        const scJson = localStorage.getItem('tast_config_2026');
-        if (scJson) {
-          try {
+        try {
+          const localAdult = norm(localStorage.getItem('categoria_adulta_estat'));
+          const localJuvenil = norm(localStorage.getItem('categoria_juvenil_estat'));
+          const localGlobal = norm(localStorage.getItem('estat_inscripcio_global'));
+          const scJson = localStorage.getItem('tast_config_2026');
+          let scAdult: any = null;
+          let scJuvenil: any = null;
+          let scGlobal: any = null;
+          if (scJson) {
             const sc = JSON.parse(scJson);
-            if (sc.estatInscripcions) setEstatInscripcions(sc.estatInscripcions);
-          } catch {}
-        }
+            scAdult = norm(sc.estatInscripcionsAdult);
+            scJuvenil = norm(sc.estatInscripcionsJuvenil);
+            scGlobal = norm(sc.estatInscripcions);
+          }
+          const finalGlobal = localGlobal || scGlobal || 'obertes';
+          const finalAdult = localAdult || scAdult || finalGlobal;
+          const finalJuvenil = localJuvenil || scJuvenil || finalGlobal;
+          setEstatAdult(finalAdult);
+          setEstatJuvenil(finalJuvenil);
+          setEstatInscripcions(finalAdult === 'tancades' && finalJuvenil === 'tancades' ? 'tancades' : (finalAdult === 'espera' && finalJuvenil === 'espera' ? 'espera' : 'obertes'));
+        } catch {}
         return;
       }
       try {
@@ -301,10 +326,20 @@ export default function AdminPortada({ onAddLog }: AdminPortadaProps) {
         }
         
         const { getSupabaseSetting } = await import('../supabaseClient');
-        const sc = await getSupabaseSetting('tast_config_2026', null);
-        if (sc && sc.estatInscripcions) {
-          setEstatInscripcions(sc.estatInscripcions);
-        }
+        const [sc, dbAdult, dbJuvenil, dbGlobal] = await Promise.all([
+          getSupabaseSetting<any>('tast_config_2026', null, true),
+          getSupabaseSetting<string | null>('categoria_adulta_estat', null, true),
+          getSupabaseSetting<string | null>('categoria_juvenil_estat', null, true),
+          getSupabaseSetting<string | null>('estat_inscripcio_global', null, true),
+        ]);
+
+        const fallbackGlobal = norm(dbGlobal) || norm(sc?.estatInscripcions) || 'obertes';
+        const adultVal = norm(dbAdult) || norm(sc?.estatInscripcionsAdult) || fallbackGlobal;
+        const juvenilVal = norm(dbJuvenil) || norm(sc?.estatInscripcionsJuvenil) || fallbackGlobal;
+
+        setEstatAdult(adultVal);
+        setEstatJuvenil(juvenilVal);
+        setEstatInscripcions(adultVal === 'tancades' && juvenilVal === 'tancades' ? 'tancades' : (adultVal === 'espera' && juvenilVal === 'espera' ? 'espera' : 'obertes'));
       } catch (e) {
         console.error("Error fetching admin config from Supabase:", e);
       }
@@ -483,71 +518,99 @@ export default function AdminPortada({ onAddLog }: AdminPortadaProps) {
   const [semaforSaveError, setSemaforSaveError] = useState<string | null>(null);
   const [semaforSaveSuccess, setSemaforSaveSuccess] = useState<boolean>(false);
 
-  const handleEstatInscripcionsChange = async (newState: 'obertes' | 'espera' | 'tancades') => {
-    setEstatInscripcions(newState);
+  const handleEstatCategoriaChange = async (
+    categoria: 'adult' | 'juvenil',
+    newState: 'obertes' | 'espera' | 'tancades'
+  ) => {
+    if (categoria === 'adult') {
+      setEstatAdult(newState);
+    } else {
+      setEstatJuvenil(newState);
+    }
     setSavingSemafor(true);
     setSemaforSaveError(null);
     setSemaforSaveSuccess(false);
 
+    const settingKey = categoria === 'adult' ? 'categoria_adulta_estat' : 'categoria_juvenil_estat';
+    const configProp = categoria === 'adult' ? 'estatInscripcionsAdult' : 'estatInscripcionsJuvenil';
+
+    const currentAdult = categoria === 'adult' ? newState : estatAdult;
+    const currentJuvenil = categoria === 'juvenil' ? newState : estatJuvenil;
+    const combinedGlobal = currentAdult === 'tancades' && currentJuvenil === 'tancades'
+      ? 'tancades'
+      : (currentAdult === 'espera' && currentJuvenil === 'espera' ? 'espera' : 'obertes');
+
+    setEstatInscripcions(combinedGlobal);
+
     try {
       // 1. Save to LocalStorage first
-      localStorage.setItem('estat_inscripcio_global', newState);
+      localStorage.setItem(settingKey, newState);
+      localStorage.setItem('estat_inscripcio_global', combinedGlobal);
+
       const scJson = localStorage.getItem('tast_config_2026');
       if (scJson) {
         try {
           const sc = JSON.parse(scJson);
-          sc.estatInscripcions = newState;
+          sc[configProp] = newState;
+          sc.estatInscripcions = combinedGlobal;
           localStorage.setItem('tast_config_2026', JSON.stringify(sc));
         } catch {}
       }
 
-      // Dispatch custom event to let App know configuration changed
+      // Dispatch custom event to let App & PublicForm know configuration changed
       window.dispatchEvent(new Event('portadaConfigChanged'));
+      window.dispatchEvent(new Event('sistemaConfigChanged'));
 
       // 2. Save to Supabase
       if (isSupabaseConfigured) {
         const { getSupabaseSetting, saveSupabaseSetting } = await import('../supabaseClient');
         
-        // Save the direct setting key estat_inscripcio_global
-        const successGlobal = await saveSupabaseSetting('estat_inscripcio_global', newState);
-        if (!successGlobal) {
-          throw new Error("No s'ha pogut canviar la clau 'estat_inscripcio_global' a Supabase.");
+        // Save the direct category setting key
+        const successKey = await saveSupabaseSetting(settingKey, newState);
+        if (!successKey) {
+          throw new Error(`No s'ha pogut canviar la clau '${settingKey}' a Supabase.`);
         }
 
-        // Also update the property inside the full system config 'tast_config_2026'
-        const sc = await getSupabaseSetting<any>('tast_config_2026', null);
+        // Also update tast_config_2026 and estat_inscripcio_global
+        const sc = await getSupabaseSetting<any>('tast_config_2026', null, true);
         if (sc) {
-          sc.estatInscripcions = newState;
+          sc[configProp] = newState;
+          sc.estatInscripcions = combinedGlobal;
           const successConfig = await saveSupabaseSetting('tast_config_2026', sc);
           if (!successConfig) {
             throw new Error("No s'ha pogut actualitzar la clau 'tast_config_2026' a Supabase.");
           }
         }
+        await saveSupabaseSetting('estat_inscripcio_global', combinedGlobal);
       }
 
       setSemaforSaveSuccess(true);
       setTimeout(() => setSemaforSaveSuccess(false), 3000);
+      const catLabel = categoria === 'adult'
+        ? (language === 'ca' ? 'Parella Adulta' : 'Pareja Adulta')
+        : (language === 'ca' ? 'Parella Juvenil' : 'Pareja Juvenil');
+
       showToast(
         language === 'ca'
-          ? `✓ Estat d'inscripcions actualitzat a: ${newState.toUpperCase()}`
-          : `✓ Estado de inscripciones actualizado a: ${newState.toUpperCase()}`,
+          ? `✓ ${catLabel}: Estat actualitzat a ${newState.toUpperCase()}`
+          : `✓ ${catLabel}: Estado actualizado a ${newState.toUpperCase()}`,
         'success'
       );
       saveLogger.log(
         'Admin Portada',
-        language === 'ca' ? `Actualitzar estat inscripcions: ${newState.toUpperCase()}` : `Actualizar estado inscripciones: ${newState.toUpperCase()}`,
+        language === 'ca' ? `Actualitzar estat ${catLabel}: ${newState.toUpperCase()}` : `Actualizar estado ${catLabel}: ${newState.toUpperCase()}`,
         'success',
         language === 'ca' ? 'Sincronitzat amb Supabase' : 'Sincronizado con Supabase'
       );
 
       if (onAddLog) {
         onAddLog(language === 'ca' 
-          ? `S'ha canviat l'estat de les inscripcions a: ${newState.toUpperCase()} a Supabase.` 
-          : `Se ha cambiado el estado de las inscripciones a: ${newState.toUpperCase()} en Supabase.`
+          ? `S'ha canviat l'estat de ${catLabel} a: ${newState.toUpperCase()} a Supabase.` 
+          : `Se ha cambiado el estado de ${catLabel} a: ${newState.toUpperCase()} en Supabase.`
         );
       }
     } catch (err: any) {
-      console.error("Error setting dynamic registration status:", err);
+      console.error(`Error canviant estat per a ${categoria}:`, err);
       const errorMsg = err.message || JSON.stringify(err);
       setSemaforSaveError(language === 'ca'
         ? `Error en desar a Supabase: ${errorMsg}`
@@ -561,7 +624,7 @@ export default function AdminPortada({ onAddLog }: AdminPortadaProps) {
       );
       saveLogger.log(
         'Admin Portada',
-        language === 'ca' ? `Actualitzar estat inscripcions: ${newState.toUpperCase()}` : `Actualizar estado inscripciones: ${newState.toUpperCase()}`,
+        language === 'ca' ? `Actualitzar estat ${categoria}: ${newState.toUpperCase()}` : `Actualizar estado ${categoria}: ${newState.toUpperCase()}`,
         'error',
         undefined,
         errorMsg
@@ -569,6 +632,11 @@ export default function AdminPortada({ onAddLog }: AdminPortadaProps) {
     } finally {
       setSavingSemafor(false);
     }
+  };
+
+  const handleEstatInscripcionsChange = async (newState: 'obertes' | 'espera' | 'tancades') => {
+    await handleEstatCategoriaChange('adult', newState);
+    await handleEstatCategoriaChange('juvenil', newState);
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -580,12 +648,16 @@ export default function AdminPortada({ onAddLog }: AdminPortadaProps) {
     // Save to localStorage as a fast local copy fallback
     localStorage.setItem('tast_portada_config_2026', JSON.stringify(configToSave));
     localStorage.setItem('estat_inscripcio_global', estatInscripcions);
+    localStorage.setItem('categoria_adulta_estat', estatAdult);
+    localStorage.setItem('categoria_juvenil_estat', estatJuvenil);
     
     const scJson = localStorage.getItem('tast_config_2026');
     if (scJson) {
       try {
         const sc = JSON.parse(scJson);
         sc.estatInscripcions = estatInscripcions;
+        sc.estatInscripcionsAdult = estatAdult;
+        sc.estatInscripcionsJuvenil = estatJuvenil;
         localStorage.setItem('tast_config_2026', JSON.stringify(sc));
       } catch {}
     }
@@ -597,16 +669,21 @@ export default function AdminPortada({ onAddLog }: AdminPortadaProps) {
         synced = await saveSupabaseSettings(configToSave);
         
         const { getSupabaseSetting, saveSupabaseSetting } = await import('../supabaseClient');
-        const sc = await getSupabaseSetting('tast_config_2026', null);
+        const sc = await getSupabaseSetting('tast_config_2026', null, true);
         if (sc) {
           sc.estatInscripcions = estatInscripcions;
+          sc.estatInscripcionsAdult = estatAdult;
+          sc.estatInscripcionsJuvenil = estatJuvenil;
           await saveSupabaseSetting('tast_config_2026', sc);
         }
         await saveSupabaseSetting('estat_inscripcio_global', estatInscripcions);
+        await saveSupabaseSetting('categoria_adulta_estat', estatAdult);
+        await saveSupabaseSetting('categoria_juvenil_estat', estatJuvenil);
       }
       
       // Dispatch custom event to let App know configuration changed
       window.dispatchEvent(new Event('portadaConfigChanged'));
+      window.dispatchEvent(new Event('sistemaConfigChanged'));
       
       setSaveSuccess(true);
       showToast(
@@ -1171,66 +1248,174 @@ export default function AdminPortada({ onAddLog }: AdminPortadaProps) {
                 </div>
               )}
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {/* Opció 1: Obertes - VERD */}
-                <button
-                  type="button"
-                  disabled={savingSemafor}
-                  onClick={() => handleEstatInscripcionsChange('obertes')}
-                  className={`w-full p-3 rounded-2xl border text-left transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
-                    estatInscripcions === 'obertes'
-                      ? 'bg-emerald-50 border-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.15)] font-black text-emerald-950'
-                      : 'bg-zinc-50 hover:bg-zinc-100 border-zinc-200 opacity-60'
-                  } disabled:cursor-not-allowed`}
-                  id="btn-semafor-obertes"
-                >
-                  <div className={`w-6 h-6 mb-2 rounded-full bg-emerald-500 relative shrink-0 ${estatInscripcions === 'obertes' ? 'animate-ping' : ''}`}>
-                    <div className="absolute inset-0 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981]" />
+              <div className="space-y-6">
+                {/* SEMÀFOR 1: PARELLA ADULTA */}
+                <div className="bg-zinc-50 border border-zinc-200 rounded-2xl p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="font-sans font-bold text-sm text-zinc-900 flex items-center gap-2">
+                      <span>👥</span> {language === 'ca' ? "Parella Adulta" : "Pareja Adulta"}
+                    </span>
+                    <span className={`text-[10px] font-mono font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full border ${
+                      estatAdult === 'obertes'
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
+                        : estatAdult === 'espera'
+                          ? 'bg-amber-50 text-amber-700 border-amber-300'
+                          : 'bg-rose-50 text-rose-700 border-rose-300'
+                    }`}>
+                      {estatAdult === 'obertes'
+                        ? (language === 'ca' ? "Obertes" : "Abiertas")
+                        : estatAdult === 'espera'
+                          ? (language === 'ca' ? "Llista d'espera" : "Lista de espera")
+                          : (language === 'ca' ? "Tancades" : "Cerradas")}
+                    </span>
                   </div>
-                  <span className="block font-sans font-bold text-xs text-zinc-850">
-                    {language === 'ca' ? "Inscripcions Obertes" : "Inscripciones Abiertas"}
-                  </span>
-                </button>
 
-                {/* Opció 2: Espera - TARONJA */}
-                <button
-                  type="button"
-                  disabled={savingSemafor}
-                  onClick={() => handleEstatInscripcionsChange('espera')}
-                  className={`w-full p-3 rounded-2xl border text-left transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
-                    estatInscripcions === 'espera'
-                      ? 'bg-amber-50 border-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.15)] font-black text-amber-950'
-                      : 'bg-zinc-50 hover:bg-zinc-100 border-zinc-200 opacity-60'
-                  } disabled:cursor-not-allowed`}
-                  id="btn-semafor-espera"
-                >
-                  <div className={`w-6 h-6 mb-2 rounded-full bg-amber-500 relative shrink-0 ${estatInscripcions === 'espera' ? 'animate-ping' : ''}`}>
-                    <div className="absolute inset-0 rounded-full bg-amber-500 shadow-[0_0_8px_#f59e0b]" />
-                  </div>
-                  <span className="block font-sans font-bold text-xs text-zinc-850">
-                    {language === 'ca' ? "Llista d'Espera" : "Lista de Espera"}
-                  </span>
-                </button>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {/* Adult - Obertes */}
+                    <button
+                      type="button"
+                      disabled={savingSemafor}
+                      onClick={() => handleEstatCategoriaChange('adult', 'obertes')}
+                      className={`w-full p-3 rounded-2xl border text-left transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
+                        estatAdult === 'obertes'
+                          ? 'bg-emerald-50 border-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.15)] font-black text-emerald-950'
+                          : 'bg-white hover:bg-zinc-100 border-zinc-200 opacity-60'
+                      } disabled:cursor-not-allowed`}
+                      id="btn-semafor-adult-obertes"
+                    >
+                      <div className={`w-5 h-5 mb-1.5 rounded-full bg-emerald-500 relative shrink-0 ${estatAdult === 'obertes' ? 'animate-ping' : ''}`}>
+                        <div className="absolute inset-0 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981]" />
+                      </div>
+                      <span className="block font-sans font-bold text-xs text-zinc-850">
+                        {language === 'ca' ? "Inscripcions Obertes" : "Inscripciones Abiertas"}
+                      </span>
+                    </button>
 
-                {/* Opció 3: Tancades - VERMELL */}
-                <button
-                  type="button"
-                  disabled={savingSemafor}
-                  onClick={() => handleEstatInscripcionsChange('tancades')}
-                  className={`w-full p-3 rounded-2xl border text-left transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
-                    estatInscripcions === 'tancades'
-                      ? 'bg-rose-50 border-rose-400 shadow-[0_0_20px_rgba(239,68,68,0.25)] font-black text-rose-950'
-                      : 'bg-zinc-50 hover:bg-zinc-100 border-zinc-200 opacity-60'
-                  } disabled:cursor-not-allowed`}
-                  id="btn-semafor-tancades"
-                >
-                  <div className={`w-6 h-6 mb-2 rounded-full bg-red-600 relative shrink-0 ${estatInscripcions === 'tancades' ? 'animate-pulse' : ''}`}>
-                    <div className="absolute inset-0 rounded-full bg-red-600 shadow-[0_0_12px_#ef4444]" />
+                    {/* Adult - Espera */}
+                    <button
+                      type="button"
+                      disabled={savingSemafor}
+                      onClick={() => handleEstatCategoriaChange('adult', 'espera')}
+                      className={`w-full p-3 rounded-2xl border text-left transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
+                        estatAdult === 'espera'
+                          ? 'bg-amber-50 border-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.15)] font-black text-amber-950'
+                          : 'bg-white hover:bg-zinc-100 border-zinc-200 opacity-60'
+                      } disabled:cursor-not-allowed`}
+                      id="btn-semafor-adult-espera"
+                    >
+                      <div className={`w-5 h-5 mb-1.5 rounded-full bg-amber-500 relative shrink-0 ${estatAdult === 'espera' ? 'animate-ping' : ''}`}>
+                        <div className="absolute inset-0 rounded-full bg-amber-500 shadow-[0_0_8px_#f59e0b]" />
+                      </div>
+                      <span className="block font-sans font-bold text-xs text-zinc-850">
+                        {language === 'ca' ? "Llista d'Espera" : "Lista de Espera"}
+                      </span>
+                    </button>
+
+                    {/* Adult - Tancades */}
+                    <button
+                      type="button"
+                      disabled={savingSemafor}
+                      onClick={() => handleEstatCategoriaChange('adult', 'tancades')}
+                      className={`w-full p-3 rounded-2xl border text-left transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
+                        estatAdult === 'tancades'
+                          ? 'bg-rose-50 border-rose-400 shadow-[0_0_20px_rgba(239,68,68,0.25)] font-black text-rose-950'
+                          : 'bg-white hover:bg-zinc-100 border-zinc-200 opacity-60'
+                      } disabled:cursor-not-allowed`}
+                      id="btn-semafor-adult-tancades"
+                    >
+                      <div className={`w-5 h-5 mb-1.5 rounded-full bg-red-600 relative shrink-0 ${estatAdult === 'tancades' ? 'animate-pulse' : ''}`}>
+                        <div className="absolute inset-0 rounded-full bg-red-600 shadow-[0_0_12px_#ef4444]" />
+                      </div>
+                      <span className="block font-sans font-bold text-xs text-zinc-850">
+                        {language === 'ca' ? "Inscripcions Tancades" : "Inscripciones Cerradas"}
+                      </span>
+                    </button>
                   </div>
-                  <span className="block font-sans font-bold text-xs text-zinc-850">
-                    {language === 'ca' ? "Inscripcions Tancades" : "Inscripciones Cerradas"}
-                  </span>
-                </button>
+                </div>
+
+                {/* SEMÀFOR 2: PARELLA JUVENIL */}
+                <div className="bg-zinc-50 border border-zinc-200 rounded-2xl p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="font-sans font-bold text-sm text-zinc-900 flex items-center gap-2">
+                      <span>🎒</span> {language === 'ca' ? "Parella Juvenil" : "Pareja Juvenil"}
+                    </span>
+                    <span className={`text-[10px] font-mono font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full border ${
+                      estatJuvenil === 'obertes'
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
+                        : estatJuvenil === 'espera'
+                          ? 'bg-amber-50 text-amber-700 border-amber-300'
+                          : 'bg-rose-50 text-rose-700 border-rose-300'
+                    }`}>
+                      {estatJuvenil === 'obertes'
+                        ? (language === 'ca' ? "Obertes" : "Abiertas")
+                        : estatJuvenil === 'espera'
+                          ? (language === 'ca' ? "Llista d'espera" : "Lista de espera")
+                          : (language === 'ca' ? "Tancades" : "Cerradas")}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {/* Juvenil - Obertes */}
+                    <button
+                      type="button"
+                      disabled={savingSemafor}
+                      onClick={() => handleEstatCategoriaChange('juvenil', 'obertes')}
+                      className={`w-full p-3 rounded-2xl border text-left transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
+                        estatJuvenil === 'obertes'
+                          ? 'bg-emerald-50 border-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.15)] font-black text-emerald-950'
+                          : 'bg-white hover:bg-zinc-100 border-zinc-200 opacity-60'
+                      } disabled:cursor-not-allowed`}
+                      id="btn-semafor-juvenil-obertes"
+                    >
+                      <div className={`w-5 h-5 mb-1.5 rounded-full bg-emerald-500 relative shrink-0 ${estatJuvenil === 'obertes' ? 'animate-ping' : ''}`}>
+                        <div className="absolute inset-0 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981]" />
+                      </div>
+                      <span className="block font-sans font-bold text-xs text-zinc-850">
+                        {language === 'ca' ? "Inscripcions Obertes" : "Inscripciones Abiertas"}
+                      </span>
+                    </button>
+
+                    {/* Juvenil - Espera */}
+                    <button
+                      type="button"
+                      disabled={savingSemafor}
+                      onClick={() => handleEstatCategoriaChange('juvenil', 'espera')}
+                      className={`w-full p-3 rounded-2xl border text-left transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
+                        estatJuvenil === 'espera'
+                          ? 'bg-amber-50 border-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.15)] font-black text-amber-950'
+                          : 'bg-white hover:bg-zinc-100 border-zinc-200 opacity-60'
+                      } disabled:cursor-not-allowed`}
+                      id="btn-semafor-juvenil-espera"
+                    >
+                      <div className={`w-5 h-5 mb-1.5 rounded-full bg-amber-500 relative shrink-0 ${estatJuvenil === 'espera' ? 'animate-ping' : ''}`}>
+                        <div className="absolute inset-0 rounded-full bg-amber-500 shadow-[0_0_8px_#f59e0b]" />
+                      </div>
+                      <span className="block font-sans font-bold text-xs text-zinc-850">
+                        {language === 'ca' ? "Llista d'Espera" : "Lista de Espera"}
+                      </span>
+                    </button>
+
+                    {/* Juvenil - Tancades */}
+                    <button
+                      type="button"
+                      disabled={savingSemafor}
+                      onClick={() => handleEstatCategoriaChange('juvenil', 'tancades')}
+                      className={`w-full p-3 rounded-2xl border text-left transition-all flex flex-col items-center justify-center text-center cursor-pointer ${
+                        estatJuvenil === 'tancades'
+                          ? 'bg-rose-50 border-rose-400 shadow-[0_0_20px_rgba(239,68,68,0.25)] font-black text-rose-950'
+                          : 'bg-white hover:bg-zinc-100 border-zinc-200 opacity-60'
+                      } disabled:cursor-not-allowed`}
+                      id="btn-semafor-juvenil-tancades"
+                    >
+                      <div className={`w-5 h-5 mb-1.5 rounded-full bg-red-600 relative shrink-0 ${estatJuvenil === 'tancades' ? 'animate-pulse' : ''}`}>
+                        <div className="absolute inset-0 rounded-full bg-red-600 shadow-[0_0_12px_#ef4444]" />
+                      </div>
+                      <span className="block font-sans font-bold text-xs text-zinc-850">
+                        {language === 'ca' ? "Inscripcions Tancades" : "Inscripciones Cerradas"}
+                      </span>
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           )}

@@ -58,25 +58,39 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
         setIsPriceLoading(true);
         const { getSupabaseSetting, isSupabaseConfigured, fetchSistemaConfig } = await import('../supabaseClient');
         if (isSupabaseConfigured) {
-          const dbConfig = await getSupabaseSetting<SistemaConfig | null>('tast_config_2026', null, true);
+          const [dbConfig, adultStatus, juvenilStatus] = await Promise.all([
+            getSupabaseSetting<SistemaConfig | null>('tast_config_2026', null, true),
+            getSupabaseSetting<string | null>('categoria_adulta_estat', null, true),
+            getSupabaseSetting<string | null>('categoria_juvenil_estat', null, true),
+          ]);
           if (isMounted) {
+            const extraState: Partial<SistemaConfig> = {};
+            if (adultStatus) extraState.estatInscripcionsAdult = (adultStatus === 'llista_espera' ? 'espera' : adultStatus) as any;
+            if (juvenilStatus) extraState.estatInscripcionsJuvenil = (juvenilStatus === 'llista_espera' ? 'espera' : juvenilStatus) as any;
+
             if (dbConfig && typeof dbConfig === 'object') {
-              setLiveConfig(prev => ({ ...prev, ...dbConfig }));
+              setLiveConfig(prev => ({ ...prev, ...dbConfig, ...extraState }));
               setPriceLoadError(null);
             } else {
               const sysConfig = await fetchSistemaConfig();
               if (sysConfig && Object.keys(sysConfig).length > 0) {
-                setLiveConfig(prev => ({ ...prev, ...sysConfig }));
+                setLiveConfig(prev => ({ ...prev, ...sysConfig, ...extraState }));
                 setPriceLoadError(null);
               } else if (config) {
-                setLiveConfig(config);
+                setLiveConfig(prev => ({ ...prev, ...config, ...extraState }));
                 setPriceLoadError(null);
               }
             }
           }
         } else if (config) {
           if (isMounted) {
-            setLiveConfig(config);
+            const localAdult = localStorage.getItem('categoria_adulta_estat') as any;
+            const localJuvenil = localStorage.getItem('categoria_juvenil_estat') as any;
+            setLiveConfig({
+              ...config,
+              estatInscripcionsAdult: localAdult || config.estatInscripcionsAdult,
+              estatInscripcionsJuvenil: localJuvenil || config.estatInscripcionsJuvenil
+            });
             setPriceLoadError(null);
           }
         } else {
@@ -113,10 +127,12 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
       loadOfficialConfig();
     };
 
+    window.addEventListener('portadaConfigChanged', handleConfigChange);
     window.addEventListener('sistemaConfigChanged', handleConfigChange);
     window.addEventListener('storage', handleConfigChange);
     return () => {
       isMounted = false;
+      window.removeEventListener('portadaConfigChanged', handleConfigChange);
       window.removeEventListener('sistemaConfigChanged', handleConfigChange);
       window.removeEventListener('storage', handleConfigChange);
     };
@@ -164,8 +180,39 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
     };
   }, []);
 
+  // Normalize status helper
+  const normEstat = (val?: string): 'obertes' | 'espera' | 'tancades' => {
+    if (!val) return 'obertes';
+    const s = String(val).toLowerCase().trim();
+    if (s === 'espera' || s === 'llista_espera') return 'espera';
+    if (s === 'tancades' || s === 'closed') return 'tancades';
+    return 'obertes';
+  };
+
+  const globalFallbackEstat = normEstat(liveConfig.estatInscripcions || config.estatInscripcions);
+  const adultEstat: 'obertes' | 'espera' | 'tancades' = normEstat(liveConfig.estatInscripcionsAdult || config.estatInscripcionsAdult || globalFallbackEstat);
+  const juvenilEstat: 'obertes' | 'espera' | 'tancades' = normEstat(liveConfig.estatInscripcionsJuvenil || config.estatInscripcionsJuvenil || globalFallbackEstat);
+
+  const isAdultTancada = adultEstat === 'tancades';
+  const isJuvenilTancada = juvenilEstat === 'tancades';
+  const bothTancades = isAdultTancada && isJuvenilTancada;
+
   // Form fields state
-  const [categoria, setCategoria] = useState<CategoriaParella>(CategoriaParella.ADULT);
+  const [categoria, setCategoria] = useState<CategoriaParella>(() => {
+    try {
+      const localAdult = localStorage.getItem('categoria_adulta_estat');
+      const localJuvenil = localStorage.getItem('categoria_juvenil_estat');
+      const a = normEstat(localAdult || config.estatInscripcionsAdult || config.estatInscripcions);
+      const j = normEstat(localJuvenil || config.estatInscripcionsJuvenil || config.estatInscripcions);
+      if (a === 'tancades' && j !== 'tancades') {
+        return CategoriaParella.JUVENIL;
+      }
+    } catch {}
+    return CategoriaParella.ADULT;
+  });
+
+  const currentCategoryEstat: 'obertes' | 'espera' | 'tancades' = categoria === CategoriaParella.JUVENIL ? juvenilEstat : adultEstat;
+  const isWaitlist = currentCategoryEstat === 'espera';
   
   // Dades de Contacte de la Parella (Únic per a la parella)
   const [emailContactoPareja, setEmailContactoPareja] = useState('');
@@ -226,6 +273,9 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
   };
 
   const handleSelectCategoria = (selectedCat: CategoriaParella) => {
+    if (selectedCat === CategoriaParella.ADULT && isAdultTancada) return;
+    if (selectedCat === CategoriaParella.JUVENIL && isJuvenilTancada) return;
+
     setCategoria(selectedCat);
     if (selectedCat === CategoriaParella.JUVENIL) {
       setC1EsMenor(true);
@@ -241,6 +291,15 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
       });
     }
   };
+
+  // Auto-switch to open category if current selected category becomes closed
+  useEffect(() => {
+    if (isAdultTancada && !isJuvenilTancada && categoria === CategoriaParella.ADULT) {
+      handleSelectCategoria(CategoriaParella.JUVENIL);
+    } else if (isJuvenilTancada && !isAdultTancada && categoria === CategoriaParella.JUVENIL) {
+      handleSelectCategoria(CategoriaParella.ADULT);
+    }
+  }, [isAdultTancada, isJuvenilTancada, categoria]);
 
   // Dynamic uniform/equipment selections state
   const [seleccionsUniforme, setSeleccionsUniforme] = useState<Record<string, { c1Talla: string; c2Talla: string; c1Quantitat: number; c2Quantitat: number; c1Tipus: 'compra' | 'lloguer'; c2Tipus: 'compra' | 'lloguer'; c1Vol?: boolean; c2Vol?: boolean }>>(() => {
@@ -1259,7 +1318,8 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
         metodePagament: null,
         estatDni: EstatVerificacio.PENDENT,
         entregaMaterial: EstatInscripcio.PENDENT,
-        llistaEspera: config.estatInscripcions === 'espera',
+        llistaEspera: isWaitlist,
+        estatInscripcio: isWaitlist ? 'llista_espera' : 'obertes',
         creadoEn: new Date().toISOString(),
         actualizadoEn: new Date().toISOString()
       };
@@ -1433,7 +1493,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
         </button>
       </div>
 
-      {config.estatInscripcions === 'tancades' ? (
+      {bothTancades ? (
         <div className="bg-white rounded-3xl border border-zinc-200 p-8 shadow-sm space-y-6 text-center max-w-2xl mx-auto py-12 animate-fadeIn" id="closed-registration-view">
           <div className="mx-auto w-20 h-20 bg-rose-100 rounded-full flex items-center justify-center relative">
             <div className="absolute inset-0 bg-rose-500 rounded-full animate-ping opacity-25" />
@@ -1480,7 +1540,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
       ) : (
         <form onSubmit={handleSubmetre} className="space-y-8">
           {/* LLISTA D'ESPERA WARNING BAR FOR 'espera' STATUS */}
-          {config.estatInscripcions === 'espera' && (
+          {isWaitlist && (
             <div className="bg-amber-50 rounded-3xl border border-amber-300 p-5 shadow-sm flex items-start gap-4 animate-fadeIn" id="waitlist-warning">
               <div className="w-10 h-10 bg-amber-100 rounded-full flex items-center justify-center text-amber-600 shrink-0">
                 <AlertTriangle size={20} className="animate-bounce" />
@@ -1491,8 +1551,8 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
                 </h4>
                 <p className="text-amber-700 text-xs leading-relaxed">
                   {language === 'ca'
-                    ? "L'aforament d'enguany ha superat el límit inicial. Encara podeu enviar el formulari: la vostra sol·licitud serà registrada amb èxit i s'afegirà a la llista d'espera oficial d'El Tast, en rigorós ordre d'arribada."
-                    : "El aforo de este año ha superado el límite inicial. Todavía podéis enviar el formulario: vuestra solicitud será registrada con éxito y se añadirá a la lista de espera oficial de El Tast, en riguroso orden de llegada."}
+                    ? "L'aforament per a aquesta categoria ha superat el límit inicial. Encara podeu enviar el formulari: la vostra sol·licitud serà registrada amb èxit i s'afegirà a la llista d'espera oficial d'El Tast, en rigorós ordre d'arribada."
+                    : "El aforo para esta categoría ha superado el límite inicial. Todavía podéis enviar el formulario: vuestra solicitud será registrada con éxito y se añadirá a la lista de espera oficial de El Tast, en riguroso orden de llegada."}
                 </p>
               </div>
             </div>
@@ -1518,7 +1578,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
             {(() => {
               const adultTarif = (liveConfig.tarifesDinamiques || []).find(t => t.actiu !== false && (t.tipus === 'categoria_adult' || t.id === 'adults'));
               const adultValor = adultTarif ? adultTarif.valor : (liveConfig.preuAdult ?? 0);
-              const isAdultDisabled = liveConfig.categoriaAdultaActiva === false || (adultTarif && adultTarif.actiu === false);
+              const isAdultDisabled = isAdultTancada || liveConfig.categoriaAdultaActiva === false || (adultTarif && adultTarif.actiu === false);
 
               return (
                 <div 
@@ -1543,11 +1603,23 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
                   id="card-cat-adult"
                 >
                   <div className="flex justify-between items-start mb-2">
-                    <span className={`text-xs font-bold font-mono ${isAdultDisabled ? 'text-zinc-600' : categoria === CategoriaParella.ADULT ? 'text-fuchsia-400' : 'text-zinc-500'}`}>
-                      {language === 'ca' ? 'CATEGORIA SÈNIOR' : 'CATEGORÍA SÉNIOR'} {isAdultDisabled && (language === 'ca' ? "(No actiu)" : "(Inactivo)")}
-                    </span>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className={`text-xs font-bold font-mono ${isAdultDisabled ? 'text-zinc-600' : categoria === CategoriaParella.ADULT ? 'text-fuchsia-400' : 'text-zinc-500'}`}>
+                        {language === 'ca' ? 'CATEGORIA SÈNIOR' : 'CATEGORÍA SÉNIOR'}
+                      </span>
+                      {isAdultTancada && (
+                        <span className="text-[10px] font-sans font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                          {language === 'ca' ? "Tancades" : "Cerradas"}
+                        </span>
+                      )}
+                      {!isAdultTancada && adultEstat === 'espera' && (
+                        <span className="text-[10px] font-sans font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                          {language === 'ca' ? "Llista d'espera" : "Lista de espera"}
+                        </span>
+                      )}
+                    </div>
                     {!isAdultDisabled && (
-                      <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${categoria === CategoriaParella.ADULT ? 'border-fuchsia-500' : 'border-zinc-500'}`}>
+                      <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 ${categoria === CategoriaParella.ADULT ? 'border-fuchsia-500' : 'border-zinc-500'}`}>
                         {categoria === CategoriaParella.ADULT && <div className="w-1.5 h-1.5 bg-fuchsia-500 rounded-full" />}
                       </div>
                     )}
@@ -1569,7 +1641,7 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
             {(() => {
               const juvenilTarif = (liveConfig.tarifesDinamiques || []).find(t => t.actiu !== false && (t.tipus === 'categoria_juvenil' || t.id === 'juvenils'));
               const juvenilValor = juvenilTarif ? juvenilTarif.valor : (liveConfig.preuJuvenil ?? 0);
-              const isJuvenilDisabled = liveConfig.categoriaJuvenilActiva === false || (juvenilTarif && juvenilTarif.actiu === false);
+              const isJuvenilDisabled = isJuvenilTancada || liveConfig.categoriaJuvenilActiva === false || (juvenilTarif && juvenilTarif.actiu === false);
 
               return (
                 <div 
@@ -1594,11 +1666,23 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
                   id="card-cat-juvenil"
                 >
                   <div className="flex justify-between items-start mb-2">
-                    <span className={`text-xs font-bold font-mono ${isJuvenilDisabled ? 'text-zinc-600' : categoria === CategoriaParella.JUVENIL ? 'text-fuchsia-400' : 'text-zinc-500'}`}>
-                      {language === 'ca' ? 'CATEGORIA JUNIOR' : 'CATEGORÍA JUNIOR'} {isJuvenilDisabled && (language === 'ca' ? "(No actiu)" : "(Inactivo)")}
-                    </span>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className={`text-xs font-bold font-mono ${isJuvenilDisabled ? 'text-zinc-600' : categoria === CategoriaParella.JUVENIL ? 'text-fuchsia-400' : 'text-zinc-500'}`}>
+                        {language === 'ca' ? 'CATEGORIA JUNIOR' : 'CATEGORÍA JUNIOR'}
+                      </span>
+                      {isJuvenilTancada && (
+                        <span className="text-[10px] font-sans font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                          {language === 'ca' ? "Tancades" : "Cerradas"}
+                        </span>
+                      )}
+                      {!isJuvenilTancada && juvenilEstat === 'espera' && (
+                        <span className="text-[10px] font-sans font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                          {language === 'ca' ? "Llista d'espera" : "Lista de espera"}
+                        </span>
+                      )}
+                    </div>
                     {!isJuvenilDisabled && (
-                      <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${categoria === CategoriaParella.JUVENIL ? 'border-fuchsia-500' : 'border-zinc-500'}`}>
+                      <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 ${categoria === CategoriaParella.JUVENIL ? 'border-fuchsia-500' : 'border-zinc-500'}`}>
                         {categoria === CategoriaParella.JUVENIL && <div className="w-1.5 h-1.5 bg-fuchsia-500 rounded-full" />}
                       </div>
                     )}
