@@ -1991,3 +1991,46 @@ export async function deleteAdminUser(id: string): Promise<{ success: boolean; e
   }
 }
 
+export interface CategoryAdmissionStatus {
+  admitted: number;
+  waitlist: number;
+  limit: number;
+  full: boolean;
+}
+
+export interface InscriptionsCategoryStatus {
+  adult: CategoryAdmissionStatus;
+  juvenil: CategoryAdmissionStatus;
+}
+
+/**
+ * Public endpoint helper to fetch admission counts and limits per category:
+ * /api/inscriptions?action=category-status
+ */
+export async function fetchCategoryAdmissionStatus(): Promise<InscriptionsCategoryStatus | null> {
+  try {
+    const res = await fetch('/api/inscriptions?action=category-status');
+    if (!res.ok) return null;
+    const json = await res.json();
+    if (!json || (!json.adult && !json.ok)) return null;
+
+    return {
+      adult: {
+        admitted: json.adult?.admitted ?? json.adult?.admitidas ?? json.adult?.admeses ?? 0,
+        waitlist: json.adult?.waitlist ?? json.adult?.espera ?? 0,
+        limit: json.adult?.limit ?? json.adult?.limite ?? 0,
+        full: Boolean(json.adult?.full ?? json.adult?.lleno)
+      },
+      juvenil: {
+        admitted: json.juvenil?.admitted ?? json.juvenil?.admitidas ?? json.juvenil?.admeses ?? 0,
+        waitlist: json.juvenil?.waitlist ?? json.juvenil?.espera ?? 0,
+        limit: json.juvenil?.limit ?? json.juvenil?.limite ?? 0,
+        full: Boolean(json.juvenil?.full ?? json.juvenil?.lleno)
+      }
+    };
+  } catch (err) {
+    console.warn("fetchCategoryAdmissionStatus exception:", err);
+    return null;
+  }
+}
+

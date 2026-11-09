@@ -180,6 +180,38 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
     };
   }, []);
 
+  // Admission Quota Status loaded from /api/inscriptions?action=category-status
+  const [admissionStatus, setAdmissionStatus] = useState<{
+    adult?: { full: boolean };
+    juvenil?: { full: boolean };
+  } | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    async function loadAdmissionStatus() {
+      try {
+        const { fetchCategoryAdmissionStatus } = await import('../supabaseClient');
+        const st = await fetchCategoryAdmissionStatus();
+        if (isMounted && st) {
+          setAdmissionStatus({
+            adult: { full: st.adult.full },
+            juvenil: { full: st.juvenil.full }
+          });
+        }
+      } catch {}
+    }
+    loadAdmissionStatus();
+
+    const handleConfigChange = () => {
+      loadAdmissionStatus();
+    };
+    window.addEventListener('portadaConfigChanged', handleConfigChange);
+    return () => {
+      isMounted = false;
+      window.removeEventListener('portadaConfigChanged', handleConfigChange);
+    };
+  }, []);
+
   // Normalize status helper
   const normEstat = (val?: string): 'obertes' | 'espera' | 'tancades' => {
     if (!val) return 'obertes';
@@ -190,8 +222,25 @@ export default function PublicForm({ config, onSubmit, onGoToLogin }: PublicForm
   };
 
   const globalFallbackEstat = normEstat(liveConfig.estatInscripcions || config.estatInscripcions);
-  const adultEstat: 'obertes' | 'espera' | 'tancades' = normEstat(liveConfig.estatInscripcionsAdult || config.estatInscripcionsAdult || globalFallbackEstat);
-  const juvenilEstat: 'obertes' | 'espera' | 'tancades' = normEstat(liveConfig.estatInscripcionsJuvenil || config.estatInscripcionsJuvenil || globalFallbackEstat);
+  const manualAdultEstat = normEstat(liveConfig.estatInscripcionsAdult || config.estatInscripcionsAdult || globalFallbackEstat);
+  const manualJuvenilEstat = normEstat(liveConfig.estatInscripcionsJuvenil || config.estatInscripcionsJuvenil || globalFallbackEstat);
+
+  // Effective status per category:
+  // - If manual is 'tancades' -> 'tancades'
+  // - If manual is 'espera' -> 'espera'
+  // - If manual is 'obertes' and quota is full -> 'espera'
+  // - Else -> 'obertes'
+  const adultEstat: 'obertes' | 'espera' | 'tancades' = manualAdultEstat === 'tancades'
+    ? 'tancades'
+    : (manualAdultEstat === 'espera' || Boolean(admissionStatus?.adult?.full))
+      ? 'espera'
+      : 'obertes';
+
+  const juvenilEstat: 'obertes' | 'espera' | 'tancades' = manualJuvenilEstat === 'tancades'
+    ? 'tancades'
+    : (manualJuvenilEstat === 'espera' || Boolean(admissionStatus?.juvenil?.full))
+      ? 'espera'
+      : 'obertes';
 
   const isAdultTancada = adultEstat === 'tancades';
   const isJuvenilTancada = juvenilEstat === 'tancades';

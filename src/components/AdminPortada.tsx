@@ -280,6 +280,31 @@ export default function AdminPortada({ onAddLog }: AdminPortadaProps) {
   const [estatInscripcions, setEstatInscripcions] = useState<'obertes' | 'espera' | 'tancades'>('obertes');
   const [estatAdult, setEstatAdult] = useState<'obertes' | 'espera' | 'tancades'>('obertes');
   const [estatJuvenil, setEstatJuvenil] = useState<'obertes' | 'espera' | 'tancades'>('obertes');
+  const [limitAdult, setLimitAdult] = useState<string>(() => {
+    try {
+      const v = localStorage.getItem('categoria_adulta_limit');
+      return (v && v !== '0') ? v : '';
+    } catch {
+      return '';
+    }
+  });
+  const [limitJuvenil, setLimitJuvenil] = useState<string>(() => {
+    try {
+      const v = localStorage.getItem('categoria_juvenil_limit');
+      return (v && v !== '0') ? v : '';
+    } catch {
+      return '';
+    }
+  });
+  const [savingLimitAdult, setSavingLimitAdult] = useState(false);
+  const [savingLimitJuvenil, setSavingLimitJuvenil] = useState(false);
+  const [categoryLiveCounts, setCategoryLiveCounts] = useState<{
+    adult: { admitted: number; waitlist: number };
+    juvenil: { admitted: number; waitlist: number };
+  }>({
+    adult: { admitted: 0, waitlist: 0 },
+    juvenil: { admitted: 0, waitlist: 0 }
+  });
   const [activeTab, setActiveTab] = useState<'semaforo' | 'textos' | 'fondo'>('semaforo');
 
   // Load from Supabase on mount
@@ -293,6 +318,26 @@ export default function AdminPortada({ onAddLog }: AdminPortadaProps) {
         if (s === 'obertes') return 'obertes';
         return null;
       };
+
+      // Load category live counts from public status endpoint
+      try {
+        const { fetchCategoryAdmissionStatus } = await import('../supabaseClient');
+        const status = await fetchCategoryAdmissionStatus();
+        if (status) {
+          setCategoryLiveCounts({
+            adult: { admitted: status.adult.admitted, waitlist: status.adult.waitlist },
+            juvenil: { admitted: status.juvenil.admitted, waitlist: status.juvenil.waitlist }
+          });
+          if (status.adult.limit > 0) {
+            setLimitAdult(String(status.adult.limit));
+          }
+          if (status.juvenil.limit > 0) {
+            setLimitJuvenil(String(status.juvenil.limit));
+          }
+        }
+      } catch (err) {
+        console.warn("Could not load initial category admission counts:", err);
+      }
 
       if (!isSupabaseConfigured) {
         try {
@@ -326,11 +371,13 @@ export default function AdminPortada({ onAddLog }: AdminPortadaProps) {
         }
         
         const { getSupabaseSetting } = await import('../supabaseClient');
-        const [sc, dbAdult, dbJuvenil, dbGlobal] = await Promise.all([
+        const [sc, dbAdult, dbJuvenil, dbGlobal, dbLimitAdult, dbLimitJuvenil] = await Promise.all([
           getSupabaseSetting<any>('tast_config_2026', null, true),
           getSupabaseSetting<string | null>('categoria_adulta_estat', null, true),
           getSupabaseSetting<string | null>('categoria_juvenil_estat', null, true),
           getSupabaseSetting<string | null>('estat_inscripcio_global', null, true),
+          getSupabaseSetting<any>('categoria_adulta_limit', null, true),
+          getSupabaseSetting<any>('categoria_juvenil_limit', null, true),
         ]);
 
         const fallbackGlobal = norm(dbGlobal) || norm(sc?.estatInscripcions) || 'obertes';
@@ -340,6 +387,17 @@ export default function AdminPortada({ onAddLog }: AdminPortadaProps) {
         setEstatAdult(adultVal);
         setEstatJuvenil(juvenilVal);
         setEstatInscripcions(adultVal === 'tancades' && juvenilVal === 'tancades' ? 'tancades' : (adultVal === 'espera' && juvenilVal === 'espera' ? 'espera' : 'obertes'));
+
+        if (dbLimitAdult !== null && dbLimitAdult !== undefined) {
+          const parsed = parseInt(String(dbLimitAdult), 10) || 0;
+          setLimitAdult(parsed > 0 ? String(parsed) : '');
+          localStorage.setItem('categoria_adulta_limit', String(parsed));
+        }
+        if (dbLimitJuvenil !== null && dbLimitJuvenil !== undefined) {
+          const parsed = parseInt(String(dbLimitJuvenil), 10) || 0;
+          setLimitJuvenil(parsed > 0 ? String(parsed) : '');
+          localStorage.setItem('categoria_juvenil_limit', String(parsed));
+        }
       } catch (e) {
         console.error("Error fetching admin config from Supabase:", e);
       }
@@ -639,17 +697,76 @@ export default function AdminPortada({ onAddLog }: AdminPortadaProps) {
     await handleEstatCategoriaChange('juvenil', newState);
   };
 
+  const handleSaveLimit = async (cat: 'adult' | 'juvenil', rawVal: string) => {
+    const isAdult = cat === 'adult';
+    const setSaving = isAdult ? setSavingLimitAdult : setSavingLimitJuvenil;
+    setSaving(true);
+    const key = isAdult ? 'categoria_adulta_limit' : 'categoria_juvenil_limit';
+    const num = Math.max(0, parseInt(rawVal.trim() || '0', 10) || 0);
+
+    try {
+      localStorage.setItem(key, String(num));
+      const { saveSupabaseSetting, fetchCategoryAdmissionStatus } = await import('../supabaseClient');
+      await saveSupabaseSetting(key, num);
+
+      // Also update tast_config_2026 if present
+      const scJson = localStorage.getItem('tast_config_2026');
+      if (scJson) {
+        try {
+          const sc = JSON.parse(scJson);
+          if (isAdult) sc.categoriaAdultaLimit = num;
+          else sc.categoriaJuvenilLimit = num;
+          localStorage.setItem('tast_config_2026', JSON.stringify(sc));
+        } catch {}
+      }
+
+      window.dispatchEvent(new Event('portadaConfigChanged'));
+      window.dispatchEvent(new Event('sistemaConfigChanged'));
+
+      showToast(
+        language === 'ca'
+          ? `✓ Límit per a ${isAdult ? 'Parella Adulta' : 'Parella Juvenil'} desat (${num > 0 ? num : 'sense límit'})`
+          : `✓ Límite para ${isAdult ? 'Pareja Adulta' : 'Pareja Juvenil'} guardado (${num > 0 ? num : 'sin límite'})`,
+        'success'
+      );
+
+      // Refresh live counts & status
+      const status = await fetchCategoryAdmissionStatus();
+      if (status) {
+        setCategoryLiveCounts({
+          adult: { admitted: status.adult.admitted, waitlist: status.adult.waitlist },
+          juvenil: { admitted: status.juvenil.admitted, waitlist: status.juvenil.waitlist }
+        });
+      }
+    } catch (err: any) {
+      console.error(`Error desant límit per a ${cat}:`, err);
+      showToast(
+        language === 'ca'
+          ? `❌ Error en desar el límit: ${err.message || err}`
+          : `❌ Error al guardar el límite: ${err.message || err}`,
+        'error'
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     
     const configToSave = ensureValidPortadaConfig(config, activeYear);
     setConfig(configToSave);
 
+    const numAdultLimit = Math.max(0, parseInt(String(limitAdult || '0'), 10) || 0);
+    const numJuvenilLimit = Math.max(0, parseInt(String(limitJuvenil || '0'), 10) || 0);
+
     // Save to localStorage as a fast local copy fallback
     localStorage.setItem('tast_portada_config_2026', JSON.stringify(configToSave));
     localStorage.setItem('estat_inscripcio_global', estatInscripcions);
     localStorage.setItem('categoria_adulta_estat', estatAdult);
     localStorage.setItem('categoria_juvenil_estat', estatJuvenil);
+    localStorage.setItem('categoria_adulta_limit', String(numAdultLimit));
+    localStorage.setItem('categoria_juvenil_limit', String(numJuvenilLimit));
     
     const scJson = localStorage.getItem('tast_config_2026');
     if (scJson) {
@@ -658,6 +775,8 @@ export default function AdminPortada({ onAddLog }: AdminPortadaProps) {
         sc.estatInscripcions = estatInscripcions;
         sc.estatInscripcionsAdult = estatAdult;
         sc.estatInscripcionsJuvenil = estatJuvenil;
+        sc.categoriaAdultaLimit = numAdultLimit;
+        sc.categoriaJuvenilLimit = numJuvenilLimit;
         localStorage.setItem('tast_config_2026', JSON.stringify(sc));
       } catch {}
     }
@@ -674,11 +793,15 @@ export default function AdminPortada({ onAddLog }: AdminPortadaProps) {
           sc.estatInscripcions = estatInscripcions;
           sc.estatInscripcionsAdult = estatAdult;
           sc.estatInscripcionsJuvenil = estatJuvenil;
+          sc.categoriaAdultaLimit = numAdultLimit;
+          sc.categoriaJuvenilLimit = numJuvenilLimit;
           await saveSupabaseSetting('tast_config_2026', sc);
         }
         await saveSupabaseSetting('estat_inscripcio_global', estatInscripcions);
         await saveSupabaseSetting('categoria_adulta_estat', estatAdult);
         await saveSupabaseSetting('categoria_juvenil_estat', estatJuvenil);
+        await saveSupabaseSetting('categoria_adulta_limit', numAdultLimit);
+        await saveSupabaseSetting('categoria_juvenil_limit', numJuvenilLimit);
       }
       
       // Dispatch custom event to let App know configuration changed
@@ -1331,6 +1454,58 @@ export default function AdminPortada({ onAddLog }: AdminPortadaProps) {
                       </span>
                     </button>
                   </div>
+
+                  {/* LÍMIT AUTOMÀTIC I CONTADOR EN VIVO: ADULTA */}
+                  <div className="pt-3 border-t border-zinc-200/80 space-y-2 text-left">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div>
+                        <label htmlFor="input-limit-adulta" className="block text-xs font-bold text-zinc-800">
+                          {language === 'ca' ? "Límit d'inscripcions admeses" : "Límite de inscripciones admitidas"}
+                        </label>
+                        <span className="text-[10px] text-zinc-500">
+                          {language === 'ca' ? "0 o buit = sense límit" : "0 o vacío = sin límite"}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          id="input-limit-adulta"
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={limitAdult}
+                          onChange={(e) => setLimitAdult(e.target.value)}
+                          placeholder="0"
+                          className="w-24 px-3 py-1.5 bg-white border border-zinc-200 focus:border-[#ff0090] rounded-xl text-xs font-mono font-bold text-zinc-800 focus:outline-none"
+                        />
+                        <button
+                          type="button"
+                          disabled={savingLimitAdult}
+                          onClick={() => handleSaveLimit('adult', limitAdult)}
+                          className="px-3 py-1.5 bg-[#ff0090] hover:bg-[#d9007a] text-white rounded-xl text-xs font-bold transition shadow-sm disabled:opacity-50 cursor-pointer"
+                        >
+                          {savingLimitAdult ? "..." : (language === 'ca' ? "Desar" : "Guardar")}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-zinc-100 rounded-lg text-[11px] font-mono text-zinc-700">
+                      <span className="font-bold text-zinc-900">
+                        {(() => {
+                          const lim = parseInt(String(limitAdult || '0'), 10) || 0;
+                          const adm = categoryLiveCounts.adult.admitted;
+                          const esp = categoryLiveCounts.adult.waitlist;
+                          if (lim > 0) {
+                            return language === 'ca'
+                              ? `Admeses: ${adm} / ${lim} · En espera: ${esp}`
+                              : `Admitidas: ${adm} / ${lim} · En espera: ${esp}`;
+                          }
+                          return language === 'ca'
+                            ? `Admeses: ${adm} · En espera: ${esp}`
+                            : `Admitidas: ${adm} · En espera: ${esp}`;
+                        })()}
+                      </span>
+                    </div>
+                  </div>
                 </div>
 
                 {/* SEMÀFOR 2: PARELLA JUVENIL */}
@@ -1414,6 +1589,58 @@ export default function AdminPortada({ onAddLog }: AdminPortadaProps) {
                         {language === 'ca' ? "Inscripcions Tancades" : "Inscripciones Cerradas"}
                       </span>
                     </button>
+                  </div>
+
+                  {/* LÍMIT AUTOMÀTIC I CONTADOR EN VIVO: JUVENIL */}
+                  <div className="pt-3 border-t border-zinc-200/80 space-y-2 text-left">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div>
+                        <label htmlFor="input-limit-juvenil" className="block text-xs font-bold text-zinc-800">
+                          {language === 'ca' ? "Límit d'inscripcions admeses" : "Límite de inscripciones admitidas"}
+                        </label>
+                        <span className="text-[10px] text-zinc-500">
+                          {language === 'ca' ? "0 o buit = sense límit" : "0 o vacío = sin límite"}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <input
+                          id="input-limit-juvenil"
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={limitJuvenil}
+                          onChange={(e) => setLimitJuvenil(e.target.value)}
+                          placeholder="0"
+                          className="w-24 px-3 py-1.5 bg-white border border-zinc-200 focus:border-[#ff0090] rounded-xl text-xs font-mono font-bold text-zinc-800 focus:outline-none"
+                        />
+                        <button
+                          type="button"
+                          disabled={savingLimitJuvenil}
+                          onClick={() => handleSaveLimit('juvenil', limitJuvenil)}
+                          className="px-3 py-1.5 bg-[#ff0090] hover:bg-[#d9007a] text-white rounded-xl text-xs font-bold transition shadow-sm disabled:opacity-50 cursor-pointer"
+                        >
+                          {savingLimitJuvenil ? "..." : (language === 'ca' ? "Desar" : "Guardar")}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-zinc-100 rounded-lg text-[11px] font-mono text-zinc-700">
+                      <span className="font-bold text-zinc-900">
+                        {(() => {
+                          const lim = parseInt(String(limitJuvenil || '0'), 10) || 0;
+                          const adm = categoryLiveCounts.juvenil.admitted;
+                          const esp = categoryLiveCounts.juvenil.waitlist;
+                          if (lim > 0) {
+                            return language === 'ca'
+                              ? `Admeses: ${adm} / ${lim} · En espera: ${esp}`
+                              : `Admitidas: ${adm} / ${lim} · En espera: ${esp}`;
+                          }
+                          return language === 'ca'
+                            ? `Admeses: ${adm} · En espera: ${esp}`
+                            : `Admitidas: ${adm} · En espera: ${esp}`;
+                        })()}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>

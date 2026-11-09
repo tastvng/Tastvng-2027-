@@ -257,9 +257,30 @@ export default function App() {
     loadConfigFromSupabase();
   }, [view, activeYear]);
 
+  const [categoryQuotaStatus, setCategoryQuotaStatus] = useState<{
+    adult?: { full: boolean };
+    juvenil?: { full: boolean };
+  } | null>(null);
+
   // Sync Portada state dynamically with localStorage & Supabase changes
   useEffect(() => {
+    const loadCategoryStatus = async () => {
+      try {
+        const { fetchCategoryAdmissionStatus } = await import('./supabaseClient');
+        const st = await fetchCategoryAdmissionStatus();
+        if (st) {
+          setCategoryQuotaStatus({
+            adult: { full: st.adult.full },
+            juvenil: { full: st.juvenil.full }
+          });
+        }
+      } catch {}
+    };
+
+    loadCategoryStatus();
+
     const handlePortadaChange = () => {
+      loadCategoryStatus();
       (async () => {
         try {
           if (isSupabaseConfigured) {
@@ -1394,15 +1415,17 @@ export default function App() {
                 globalLogoText={config.logoText}
                 globalLogoUseImage={config.logoUseImage}
                 estatAdult={(() => {
-                  const s = String(config.estatInscripcionsAdult || config.estatInscripcions || 'obertes').trim().toLowerCase();
-                  if (s === 'espera' || s === 'llista_espera') return 'espera';
-                  if (s === 'tancades') return 'tancades';
+                  const manual = String(config.estatInscripcionsAdult || config.estatInscripcions || 'obertes').trim().toLowerCase();
+                  if (manual === 'tancades') return 'tancades';
+                  if (manual === 'espera' || manual === 'llista_espera') return 'espera';
+                  if (categoryQuotaStatus?.adult?.full) return 'espera';
                   return 'obertes';
                 })()}
                 estatJuvenil={(() => {
-                  const s = String(config.estatInscripcionsJuvenil || config.estatInscripcions || 'obertes').trim().toLowerCase();
-                  if (s === 'espera' || s === 'llista_espera') return 'espera';
-                  if (s === 'tancades') return 'tancades';
+                  const manual = String(config.estatInscripcionsJuvenil || config.estatInscripcions || 'obertes').trim().toLowerCase();
+                  if (manual === 'tancades') return 'tancades';
+                  if (manual === 'espera' || manual === 'llista_espera') return 'espera';
+                  if (categoryQuotaStatus?.juvenil?.full) return 'espera';
                   return 'obertes';
                 })()}
                 onEnterForm={() => setView('public')}

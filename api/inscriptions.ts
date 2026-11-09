@@ -77,6 +77,14 @@ export function applyCorsHeaders(
 
 const rateLimitMaps = new Map<string, Map<string, { count: number; resetTime: number }>>();
 
+let cachedCategoryStatus: {
+  timestamp: number;
+  data: {
+    adult: { admitted: number; admitidas: number; admeses: number; waitlist: number; espera: number; limit: number; limite: number; full: boolean; lleno: boolean };
+    juvenil: { admitted: number; admitidas: number; admeses: number; waitlist: number; espera: number; limit: number; limite: number; full: boolean; lleno: boolean };
+  };
+} | null = null;
+
 export function checkRateLimit(
   bucket: string,
   key: string,
@@ -434,12 +442,60 @@ export default async function inscriptionsHandler(req: any, res: any) {
         rowId = crypto.randomUUID();
       }
 
+      const serverSupabase = getServerSupabase();
+      if (!serverSupabase) {
+        console.error("[INSERT error]: Supabase no està configurat al servidor (VITE_SUPABASE_URL absent)");
+        return res.status(500).json({
+          ok: false,
+          step: "database_insert",
+          error: "Supabase no està configurat al servidor (VITE_SUPABASE_URL absent).",
+          code: "CONFIG_ERROR"
+        });
+      }
+
       // 3. Determine if waitlist or normal category
-      const isWaitlist = reg.estatInscripcio === 'llista_espera' ||
+      let isWaitlist = reg.estatInscripcio === 'llista_espera' ||
                          reg.estatInscripcio === 'espera' ||
                          reg.estat_inscripcio === 'espera' ||
                          reg.estat_inscripcio === 'llista_espera' ||
                          Boolean(reg.llistaEspera);
+
+      // Automatic Category Quota Check (Point 2):
+      // If manual state was 'obertes', check if the category quota limit has been reached
+      let catLimit = 0;
+      if (!isWaitlist) {
+        try {
+          const limitKey = categoria === 'juvenil' ? 'categoria_juvenil_limit' : 'categoria_adulta_limit';
+          const { data: limitRow } = await serverSupabase
+            .from('settings')
+            .select('value')
+            .eq('key', limitKey)
+            .maybeSingle();
+
+          if (limitRow) {
+            const rawVal = (typeof limitRow.value === 'object' && limitRow.value !== null && 'value' in limitRow.value)
+              ? limitRow.value.value
+              : limitRow.value;
+            catLimit = Math.max(0, parseInt(String(rawVal ?? '0'), 10) || 0);
+          }
+
+          if (catLimit > 0) {
+            const { count, error: cntErr } = await serverSupabase
+              .from('inscripciones')
+              .select('id', { count: 'exact', head: true })
+              .ilike('categoria', categoria === 'juvenil' ? '%juvenil%' : '%adult%')
+              .or('estat_inscripcio.is.null,estat_inscripcio.not.in.(espera,llista_espera)');
+
+            if (!cntErr && typeof count === 'number' && count >= catLimit) {
+              console.log(`[CATEGORY_QUOTA_FULL] Category ${categoria} reached quota limit of ${catLimit} (current admitted: ${count}). Forcing waitlist.`);
+              isWaitlist = true;
+            }
+          }
+        } catch (limitErr) {
+          console.warn("Notice checking category quota limit before insert:", limitErr);
+        }
+      }
+
       const codeGroup = determineCodeGroup(categoria, isWaitlist);
       let codiSeguiment = String(reg.codiSeguiment || '').trim();
       // If code was not already pre-allocated or matches legacy format, initialize empty for atomic allocation
@@ -532,17 +588,6 @@ export default async function inscriptionsHandler(req: any, res: any) {
         actualizadoEn: nowIso
       };
 
-      const serverSupabase = getServerSupabase();
-      if (!serverSupabase) {
-        console.error("[INSERT error]: Supabase no està configurat al servidor (VITE_SUPABASE_URL absent)");
-        return res.status(500).json({
-          ok: false,
-          step: "database_insert",
-          error: "Supabase no està configurat al servidor (VITE_SUPABASE_URL absent).",
-          code: "CONFIG_ERROR"
-        });
-      }
-
       // 4. Before inserting, verify if another inscription already exists with the same email
       // and the exact same two members (Point 5). The same email with different couples is valid!
       try {
@@ -613,6 +658,57 @@ export default async function inscriptionsHandler(req: any, res: any) {
         });
       }
 
+      // 5.1 Concurrency & Quota overflow handling (Point 3):
+      // If inserted as admitted with an active limit, verify that its arrival order did not exceed the limit.
+      if (!isWaitlist && catLimit > 0) {
+        try {
+          const { data: admittedRows, error: postCountErr } = await serverSupabase
+            .from('inscripciones')
+            .select('id, creadoEn, codiSeguiment')
+            .ilike('categoria', categoria === 'juvenil' ? '%juvenil%' : '%adult%')
+            .or('estat_inscripcio.is.null,estat_inscripcio.not.in.(espera,llista_espera)')
+            .order('creadoEn', { ascending: true });
+
+          if (!postCountErr && Array.isArray(admittedRows)) {
+            const myIndex = admittedRows.findIndex((r: any) => r.id === insertedRow.id);
+            if (myIndex >= catLimit) {
+              console.warn(`[CONCURRENCY_QUOTA_OVERFLOW] Inscription ${insertedRow.id} exceeded limit ${catLimit} (pos ${myIndex + 1}). Reassigning to waitlist.`);
+
+              const { data: allCodes } = await serverSupabase
+                .from('inscripciones')
+                .select('codiSeguiment');
+              const codesList = (allCodes || []).map((r: any) => r.codiSeguiment).filter(Boolean);
+              const newWaitlistCode = allocateNextCode(codesList, 'ESPERA');
+
+              const nowUpdateIso = new Date().toISOString();
+              const { data: updatedRow, error: updateErr } = await serverSupabase
+                .from('inscripciones')
+                .update({
+                  estat_inscripcio: 'espera',
+                  codiSeguiment: newWaitlistCode,
+                  actualizadoEn: nowUpdateIso
+                })
+                .eq('id', insertedRow.id)
+                .select('id, codiSeguiment, posicio_global, categoria, c1Nom, c1Cognoms, c1Email, c1Telefon, c2Nom, c2Cognoms, c2Email, c2Telefon, preuCalculat, respostesCuestionari')
+                .single();
+
+              if (!updateErr && updatedRow) {
+                insertedRow = updatedRow;
+              } else {
+                insertedRow.codiSeguiment = newWaitlistCode;
+                insertedRow.estat_inscripcio = 'espera';
+              }
+              isWaitlist = true;
+            }
+          }
+        } catch (postCheckErr) {
+          console.warn("Notice checking concurrency quota overflow:", postCheckErr);
+        }
+      }
+
+      // Invalidate memory cache so subsequent category-status calls see fresh counts
+      cachedCategoryStatus = null;
+
       const confirmedCode = (insertedRow?.codiSeguiment || '').trim();
       const confirmedPosition = insertedRow?.posicio_global;
 
@@ -671,14 +767,135 @@ export default async function inscriptionsHandler(req: any, res: any) {
         id: insertedRow.id,
         codiSeguiment: confirmedCode,
         posicioGlobal: confirmedPosition,
+        isWaitlist: Boolean(isWaitlist),
+        estatInscripcio: isWaitlist ? 'espera' : 'obertes',
         mailSent: mailSentOk,
         mailEstat: mailSentOk ? 'enviat' : 'pendent',
         data: {
           ...insertedRow,
+          isWaitlist: Boolean(isWaitlist),
+          estat_inscripcio: isWaitlist ? 'espera' : (insertedRow?.estat_inscripcio || 'obertes'),
           codiSeguiment: confirmedCode,
           posicioGlobal: confirmedPosition
         }
       });
+    }
+
+    // ==========================================
+    // ROUTE: PUBLIC CATEGORY STATUS & ADMISSION QUOTAS (action=category-status)
+    // Protected against abuse: Soft IP rate limit + 30s memory cache + Cache-Control: public, max-age=30
+    // Strictly NO personal data: returns only admitted, waitlist, limit, and full booleans.
+    // ==========================================
+    if (action === 'category-status' || action === 'category_status' || action === 'estat-categories') {
+      if (res.setHeader) {
+        res.setHeader('Cache-Control', 'public, max-age=30, s-maxage=30');
+      }
+
+      // Soft rate limiting per IP (60 requests per 1 minute)
+      if (!checkRateLimit('cat-status', clientIp, 60, 60 * 1000)) {
+        return res.status(429).json({
+          ok: false,
+          error: "Massa peticions de comprovació d'aforament. Espereu uns segons."
+        });
+      }
+
+      const now = Date.now();
+      if (cachedCategoryStatus && (now - cachedCategoryStatus.timestamp < 30000)) {
+        return res.status(200).json({
+          ok: true,
+          ...cachedCategoryStatus.data
+        });
+      }
+
+      const serverSupabase = getServerSupabase();
+      if (!serverSupabase) {
+        return res.status(200).json({
+          ok: true,
+          adult: { admitted: 0, admitidas: 0, admeses: 0, waitlist: 0, espera: 0, limit: 0, limite: 0, full: false, lleno: false },
+          juvenil: { admitted: 0, admitidas: 0, admeses: 0, waitlist: 0, espera: 0, limit: 0, limite: 0, full: false, lleno: false }
+        });
+      }
+
+      try {
+        // 1. Fetch category limits from settings table
+        const { data: limitRows } = await serverSupabase
+          .from('settings')
+          .select('key, value')
+          .in('key', ['categoria_adulta_limit', 'categoria_juvenil_limit']);
+
+        const parseLimit = (key: string): number => {
+          const row = (limitRows || []).find((r: any) => r.key === key);
+          if (!row) return 0;
+          const raw = (typeof row.value === 'object' && row.value !== null && 'value' in row.value)
+            ? row.value.value
+            : row.value;
+          return Math.max(0, parseInt(String(raw ?? '0'), 10) || 0);
+        };
+
+        const adultLimit = parseLimit('categoria_adulta_limit');
+        const juvenilLimit = parseLimit('categoria_juvenil_limit');
+
+        // 2. Fetch all inscriptions' categoria and estat_inscripcio
+        const { data: insRows, error: insErr } = await serverSupabase
+          .from('inscripciones')
+          .select('categoria, estat_inscripcio');
+
+        if (insErr) {
+          console.error("[CATEGORY_STATUS] Error fetching inscriptions count:", insErr);
+          return res.status(500).json({ ok: false, error: insErr.message });
+        }
+
+        let adultAdmitted = 0;
+        let adultWaitlist = 0;
+        let juvenilAdmitted = 0;
+        let juvenilWaitlist = 0;
+
+        for (const r of (insRows || [])) {
+          const cat = String(r.categoria || 'adult').toLowerCase();
+          const isWait = r.estat_inscripcio === 'espera' || r.estat_inscripcio === 'llista_espera';
+          if (cat.includes('juvenil')) {
+            if (isWait) juvenilWaitlist++;
+            else juvenilAdmitted++;
+          } else {
+            if (isWait) adultWaitlist++;
+            else adultAdmitted++;
+          }
+        }
+
+        const adultFull = adultLimit > 0 && adultAdmitted >= adultLimit;
+        const juvenilFull = juvenilLimit > 0 && juvenilAdmitted >= juvenilLimit;
+
+        const payload = {
+          adult: {
+            admitted: adultAdmitted,
+            admitidas: adultAdmitted,
+            admeses: adultAdmitted,
+            waitlist: adultWaitlist,
+            espera: adultWaitlist,
+            limit: adultLimit,
+            limite: adultLimit,
+            full: adultFull,
+            lleno: adultFull
+          },
+          juvenil: {
+            admitted: juvenilAdmitted,
+            admitidas: juvenilAdmitted,
+            admeses: juvenilAdmitted,
+            waitlist: juvenilWaitlist,
+            espera: juvenilWaitlist,
+            limit: juvenilLimit,
+            limite: juvenilLimit,
+            full: juvenilFull,
+            lleno: juvenilFull
+          }
+        };
+
+        cachedCategoryStatus = { timestamp: now, data: payload };
+        return res.status(200).json({ ok: true, ...payload });
+      } catch (err: any) {
+        console.error("[CATEGORY_STATUS] Unexpected error:", err);
+        return res.status(500).json({ ok: false, error: err.message || "Error intern" });
+      }
     }
 
     // ==========================================
@@ -1288,6 +1505,8 @@ export default async function inscriptionsHandler(req: any, res: any) {
         });
       }
 
+      cachedCategoryStatus = null;
+
       // Record manual edit history if fields changed
       if (previousRow) {
         try {
@@ -1376,6 +1595,8 @@ export default async function inscriptionsHandler(req: any, res: any) {
           code: error.code
         });
       }
+
+      cachedCategoryStatus = null;
 
       return res.status(200).json({
         ok: true,

@@ -590,10 +590,30 @@ export const AdminManualRegistrationModal: React.FC<AdminManualRegistrationModal
       if (s === 'tancades') return 'tancades';
       return 'obertes';
     };
-    const categoryEstat = isJuvenil
+    const manualCategoryEstat = isJuvenil
       ? normStatus(config.estatInscripcionsJuvenil || config.estatInscripcions)
       : normStatus(config.estatInscripcionsAdult || config.estatInscripcions);
-    const isWaitlist = categoryEstat === 'espera';
+
+    // Check if category quota has been reached
+    let isQuotaFull = false;
+    const adultLimit = config.categoriaAdultaLimit || parseInt(localStorage.getItem('categoria_adulta_limit') || '0', 10) || 0;
+    const juvenilLimit = config.categoriaJuvenilLimit || parseInt(localStorage.getItem('categoria_juvenil_limit') || '0', 10) || 0;
+    const activeLimit = isJuvenil ? juvenilLimit : adultLimit;
+
+    if (activeLimit > 0 && Array.isArray(inscripcions)) {
+      const admittedCount = inscripcions.filter(i => {
+        const isCat = isJuvenil
+          ? (i.categoria === CategoriaParella.JUVENIL || String(i.categoria || '').toLowerCase().includes('juvenil'))
+          : (i.categoria === CategoriaParella.ADULT || !String(i.categoria || '').toLowerCase().includes('juvenil'));
+        const isWait = Boolean(i.llistaEspera) || i.estatInscripcio === 'llista_espera' || (i as any).estatInscripcio === 'espera' || (i as any).estat_inscripcio === 'espera';
+        return isCat && !isWait;
+      }).length;
+      if (admittedCount >= activeLimit) {
+        isQuotaFull = true;
+      }
+    }
+
+    const isWaitlist = manualCategoryEstat === 'espera' || isQuotaFull;
 
     const novaInscripcio: Inscripcio = {
       id: 'ins-' + Math.random().toString(36).substr(2, 9),

@@ -182,6 +182,8 @@ export interface SistemaConfig {
   estatInscripcions?: 'obertes' | 'espera' | 'tancades';
   estatInscripcionsAdult?: 'obertes' | 'espera' | 'tancades';
   estatInscripcionsJuvenil?: 'obertes' | 'espera' | 'tancades';
+  categoriaAdultaLimit?: number;
+  categoriaJuvenilLimit?: number;
   googleSheetSyncUrl?: string;
   googleSheetSyncActive?: boolean;
   cuestionariActiu?: boolean;
